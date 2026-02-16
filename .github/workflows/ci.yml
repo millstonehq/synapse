@@ -178,8 +178,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 22
-          registry-url: 'https://registry.npmjs.org'
+          node-version: 24
+
+      - name: Ensure npm supports trusted publishing
+        run: |
+          echo "Node: $(node --version)"
+          echo "npm: $(npm --version)"
+          npm install -g npm@latest
+          echo "npm (updated): $(npm --version)"
 
       - name: Check if version already published
         id: check
@@ -211,22 +217,22 @@ jobs:
       - name: Publish @millstone/synapse-schemas
         if: steps.check.outputs.needs_publish == 'true'
         working-directory: packages/schemas
-        run: npm publish --access public
+        run: npm publish --provenance --access public
 
       - name: Publish @millstone/synapse-cli
         if: steps.check.outputs.needs_publish == 'true'
         working-directory: packages/cli
-        run: npm publish --access public
+        run: npm publish --provenance --access public
 
       - name: Publish @millstone/synapse-context-mcp
         if: steps.check.outputs.needs_publish == 'true'
         working-directory: packages/context-mcp
-        run: npm publish --access public
+        run: npm publish --provenance --access public
 
       - name: Publish @millstone/synapse-site
         if: steps.check.outputs.needs_publish == 'true'
         working-directory: packages/site
-        run: npm publish --access public
+        run: npm publish --provenance --access public
 
       - name: Tag release
         if: steps.check.outputs.needs_publish == 'true'
