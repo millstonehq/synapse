@@ -12,7 +12,7 @@ import chalk from 'chalk';
 
 const SITE_DIR = resolve(import.meta.dirname);
 const QUARTZ_DIR = join(SITE_DIR, 'quartz');
-const PROJECT_ROOT = resolve(SITE_DIR, '..');
+const PROJECT_ROOT = resolve(SITE_DIR, '../..');
 const CONTENT_DIR = join(PROJECT_ROOT, 'content');
 
 function run(command: string, options: { cwd?: string; silent?: boolean } = {}) {
@@ -118,7 +118,7 @@ function setupQuartzSubmodule() {
   }
 
   console.log(chalk.blue('🔗 Linking to Synapse content directory...'));
-  symlinkSync('../../content', quartzContentPath);
+  symlinkSync('../../../content', quartzContentPath);
   console.log(chalk.green('  ✓ Created symlink: quartz/content -> ../../content'));
 
   // Add custom styles if they exist
