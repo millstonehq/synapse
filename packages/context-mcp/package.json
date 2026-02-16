@@ -1,6 +1,6 @@
 {
   "name": "@millstone/synapse-context-mcp",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "MCP server for Synapse framework - provides context management, code structure extraction, and Claude Code integration",
   "type": "module",
   "main": "dist/index.js",

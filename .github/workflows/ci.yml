@@ -163,71 +163,9 @@ jobs:
             exit 1
           fi
 
-  build-site:
-    name: Build Documentation Site
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-          submodules: recursive
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: 'npm'
-          cache-dependency-path: |
-            packages/site/package-lock.json
-            packages/site/quartz/package-lock.json
-
-      - name: Install site dependencies
-        working-directory: packages/site
-        run: npm install
-
-      - name: Install Quartz dependencies
-        working-directory: packages/site/quartz
-        run: npm ci
-
-      - name: Sync plugins
-        working-directory: packages/site
-        run: npm run sync-plugins
-
-      - name: Setup content for Quartz
-        run: |
-          # Quartz expects content in packages/site/quartz/content
-          # Remove any existing content directory/symlink
-          rm -rf packages/site/quartz/content
-          # Create symlink from our content directory (relative to symlink location)
-          ln -s ../../../content packages/site/quartz/content
-          echo "Created symlink: packages/site/quartz/content -> ../../../content"
-          ls -la packages/site/quartz/content/
-
-      - name: Build Quartz site
-        working-directory: packages/site
-        run: npm run build
-
-      - name: Check bundle info
-        working-directory: packages/site/quartz
-        run: npx quartz build --bundleInfo
-
-      - name: Generate build report
-        run: |
-          echo "## Site Build Report" >> $GITHUB_STEP_SUMMARY
-          echo "### Build Details" >> $GITHUB_STEP_SUMMARY
-          echo "- Node Version: $(node --version)" >> $GITHUB_STEP_SUMMARY
-          echo "- NPM Version: $(npm --version)" >> $GITHUB_STEP_SUMMARY
-          if [ -d "packages/site/quartz/public" ]; then
-            file_count=$(find packages/site/quartz/public -type f | wc -l)
-            echo "- Files Generated: $file_count" >> $GITHUB_STEP_SUMMARY
-            echo "- Build Size: $(du -sh packages/site/quartz/public | cut -f1)" >> $GITHUB_STEP_SUMMARY
-          fi
-
   publish:
     name: Publish to NPM
-    needs: [test-cli, validate-docs, build-site]
+    needs: [test-cli, validate-docs]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -242,14 +180,6 @@ jobs:
         with:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build packages for publishing
-        run: |
-          npm run build -w packages/cli
-          npm run build -w packages/context-mcp
 
       - name: Check if version already published
         id: check
@@ -267,6 +197,16 @@ jobs:
             echo "needs_publish=true" >> $GITHUB_OUTPUT
             echo "Will publish $LOCAL_VERSION (npm has $PUBLISHED)"
           fi
+
+      - name: Install dependencies
+        if: steps.check.outputs.needs_publish == 'true'
+        run: npm ci
+
+      - name: Build packages for publishing
+        if: steps.check.outputs.needs_publish == 'true'
+        run: |
+          npm run build -w packages/cli
+          npm run build -w packages/context-mcp
 
       - name: Publish @millstone/synapse-schemas
         if: steps.check.outputs.needs_publish == 'true'
