@@ -206,7 +206,8 @@ jobs:
 
       - name: Install dependencies
         if: steps.check.outputs.needs_publish == 'true'
-        run: npm ci
+        run: |
+          npm ci -w packages/schemas -w packages/cli -w packages/context-mcp -w packages/site --ignore-scripts
 
       - name: Build packages for publishing
         if: steps.check.outputs.needs_publish == 'true'
