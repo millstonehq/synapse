@@ -1,0 +1,47 @@
+# Test Case: PRD stale after feature scope change
+# Tests /sync-docs ability to detect that docs describe features
+# that have been removed or significantly changed.
+
+id: case_002_prd_feature_removal
+name: Update docs after pagination change
+description: |
+  The payments API history endpoint switched from offset-based pagination
+  to cursor-based pagination. The TDD and system doc describe the old
+  pagination approach. /sync-docs should detect the stale pagination
+  descriptions.
+
+task: |
+  The payments history endpoint has been changed from offset-based
+  to cursor-based pagination.
+  Key changes in the git diff:
+  - src/routes/payments.ts: GET /payments/history now accepts `cursor`
+    query parameter instead of `page`. Default limit changed from 20 to 20
+    (same). Response includes `hasMore` boolean instead of `totalPages`.
+  - src/services/payment.ts: getHistory() now uses cursor-based pagination
+    with `starting_after` for Stripe and cursor param for PayPal.
+
+  Run /sync-docs to find and update stale documentation.
+
+fixture: synapse_vault
+
+ground_truth:
+  expected_stale_docs:
+    - content/90_Architecture/TDDs/payments-api-tdd.md
+
+  acceptable_docs:
+    - content/100_Products/PRDs/payments-prd.md
+    - content/70_Systems/payments-system.md
+
+  expected_stale_sections:
+    payments-api-tdd:
+      - API Endpoints
+
+thresholds:
+  doc_recall: 1.0
+  doc_precision: 0.5
+  update_accuracy: 0.7
+  staleness_detection: 0.7
+  update_minimality: 0.7
+  sync_completeness: 0.8
+  mcp_search_usage: 0.7
+  performance_ms: 180000

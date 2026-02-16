@@ -1,0 +1,75 @@
+{
+  "type": "sop",
+  "displayName": "Standard Operating Procedure",
+  "sections": [
+    {
+      "id": "preconditions",
+      "title": "Preconditions",
+      "required": true,
+      "order": 1,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "materials-access",
+      "title": "Materials/Access",
+      "alternativeTitles": [
+        "Materials",
+        "Access"
+      ],
+      "required": true,
+      "order": 2,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "procedure",
+      "title": "Procedure",
+      "required": true,
+      "order": 3,
+      "shape": {
+        "type": "list",
+        "ordered": true,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "validation",
+      "title": "Validation",
+      "required": true,
+      "order": 4,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "code",
+          "heading",
+          "thematicBreak"
+        ]
+      }
+    },
+    {
+      "id": "rollback",
+      "title": "Rollback",
+      "required": true,
+      "order": 5,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "code",
+          "heading",
+          "thematicBreak"
+        ]
+      }
+    }
+  ]
+}

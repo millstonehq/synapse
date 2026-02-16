@@ -1,0 +1,63 @@
+# Test Case: TDD stale after adding PayPal provider
+# Tests /sync-docs ability to detect that the TDD describes Stripe-only
+# when the code now supports both Stripe and PayPal.
+
+id: case_001_tdd_api_change
+name: Update TDD after multi-provider payment support
+description: |
+  The payments API code has been updated to support both Stripe and PayPal
+  as payment providers. The TDD still describes a Stripe-only architecture.
+  /sync-docs should detect the TDD (and PRD, system doc) as stale and
+  update them to reflect the multi-provider support.
+
+task: |
+  The payments API has been updated to support PayPal alongside Stripe.
+  Key changes in the git diff:
+  - src/routes/payments.ts: POST /charge now accepts a `provider` field
+    (stripe or paypal), and validates it. The `paymentMethodId` is now optional.
+  - src/services/payment.ts: PaymentService now has chargeStripe() and
+    chargePayPal() private methods. The charge() method dispatches based on
+    provider. Refund auto-detects provider from charge ID prefix. History
+    aggregates from both providers.
+  - src/config/index.ts: Added paypal config section (clientId, secret, sandbox).
+
+  Run /sync-docs to find and update stale documentation.
+
+fixture: synapse_vault
+
+ground_truth:
+  # Docs that MUST be found as stale
+  expected_stale_docs:
+    - content/90_Architecture/TDDs/payments-api-tdd.md
+    - content/100_Products/PRDs/payments-prd.md
+
+  # Docs that are acceptable to flag (not wrong to flag)
+  acceptable_docs:
+    - content/70_Systems/payments-system.md
+
+  # Sections in the TDD that should be identified as stale
+  expected_stale_sections:
+    payments-api-tdd:
+      - Summary
+      - Architecture
+      - API Endpoints
+      - Configuration
+
+  # Sections in the PRD that should be identified as stale
+  expected_stale_sections_prd:
+    payments-prd:
+      - Summary
+      - In Scope
+      - Out of Scope
+      - Requirements
+      - Constraints
+
+thresholds:
+  doc_recall: 0.8
+  doc_precision: 0.5
+  update_accuracy: 0.7
+  staleness_detection: 0.7
+  update_minimality: 0.7
+  sync_completeness: 0.8
+  mcp_search_usage: 0.7
+  performance_ms: 180000

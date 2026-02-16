@@ -1,0 +1,30 @@
+{
+  "$id": "tdd.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-synapse": {
+    "folder": "90_Architecture/TDDs",
+    "displayLabel": "TDD",
+    "cmsCollection": "tdds"
+  },
+  "allOf": [
+    {
+      "$ref": "base.schema.json"
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "type": {
+      "const": "tdd"
+    },
+    "related_adrs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "type"
+  ],
+  "additionalProperties": false
+}

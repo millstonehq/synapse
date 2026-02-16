@@ -1,0 +1,54 @@
+{
+  "type": "standard",
+  "displayName": "Standard Document",
+  "sections": [
+    {
+      "id": "area",
+      "title": "Area",
+      "required": true,
+      "order": 1,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "thematicBreak"
+        ]
+      }
+    },
+    {
+      "id": "controls",
+      "title": "Controls",
+      "required": true,
+      "order": 2,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "compliance-mappings",
+      "title": "Compliance Mappings",
+      "required": true,
+      "order": 3,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "related-policies",
+      "title": "Related Policies",
+      "required": true,
+      "order": 4,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    }
+  ]
+}

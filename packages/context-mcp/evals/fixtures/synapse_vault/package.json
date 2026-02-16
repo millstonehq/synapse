@@ -1,0 +1,6 @@
+{
+  "name": "synapse-vault-fixture",
+  "version": "1.0.0",
+  "description": "Fixture vault for /sync-docs evaluation",
+  "private": true
+}

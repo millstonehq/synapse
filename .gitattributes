@@ -1,0 +1,15 @@
+# Fork-specific PDF assets (never merge deletions from upstream)
+tools/pdf/millstone*.png merge=ours
+tools/pdf/millstone*.css merge=ours
+tools/pdf/logos/millstone* merge=ours
+tools/pdf/company-registry.yaml merge=ours
+tools/pdf/glossary-standard.md merge=ours
+
+# Content directories (fork-specific, never merge from upstream)
+content/** merge=ours
+
+# Claude settings (fork-specific)
+.claude/settings.local.json merge=ours
+
+# Schemas can merge (but custom/ directories are protected)
+schemas/custom/** merge=ours

@@ -1,0 +1,65 @@
+{
+  "$id": "wiki.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "allOf": [
+    {
+      "$ref": "base.schema.json"
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "type": {
+      "const": "wiki"
+    },
+    "source_repo": {
+      "type": "string",
+      "description": "Full repo URL or owner/repo"
+    },
+    "commit_sha": {
+      "type": "string",
+      "description": "Git commit SHA at generation time"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this wiki page was generated"
+    },
+    "source_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Source files this page was generated from"
+    },
+    "generator": {
+      "type": "string",
+      "description": "Tool that generated this (e.g., 'deepwiki')"
+    },
+    "model": {
+      "type": "string",
+      "description": "LLM model used (e.g., 'gpt-4')"
+    },
+    "importance": {
+      "type": "string",
+      "enum": ["high", "medium", "low"]
+    },
+    "related_pages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "IDs of related wiki pages"
+    }
+  },
+  "required": [
+    "type",
+    "source_repo",
+    "generator"
+  ],
+  "additionalProperties": false,
+  "x-synapse": {
+    "folder": "75_Wikis",
+    "displayLabel": "Wiki",
+    "cmsCollection": "wikis"
+  }
+}

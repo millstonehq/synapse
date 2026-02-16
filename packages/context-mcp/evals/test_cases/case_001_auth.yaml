@@ -1,0 +1,56 @@
+# Test Case: Add Two-Factor Authentication
+# Tests /discover's ability to find auth-related context for extending existing auth
+
+id: case_001_auth
+name: Add Two-Factor Authentication
+description: |
+  A common task that requires understanding multiple related modules:
+  authentication, user models, middleware, and configuration.
+  The codebase already has JWT auth - this adds 2FA on top of it.
+
+task: |
+  Add two-factor authentication (2FA) to the login flow.
+  After users login with email/password, they should receive a TOTP
+  code via email. The existing JWT token should only be issued after
+  both password and TOTP code are verified.
+
+# Which fixture codebase to use (or 'synapse' for this repo)
+fixture: sample_api
+
+# Ground truth for deterministic metrics
+ground_truth:
+  # Files that MUST be selected for good recall (core login flow)
+  required_files:
+    - src/routes/auth.ts
+    - src/models/user.ts
+
+  # Files that SHOULD be selected (helpful but not critical)
+  recommended_files:
+    - src/services/token.ts
+    - src/services/user.ts
+    - src/middleware/auth.ts
+    - src/config/index.ts
+    - src/types/auth.ts
+
+  # Topics the architecture section should mention
+  architecture_topics:
+    - authentication
+    - two-factor
+    - user model
+    - login flow
+    - token service
+
+  # Expected relationship mappings
+  expected_relationships:
+    - "login route -> user service"
+    - "token service -> JWT"
+    - "user model -> password verification"
+
+# Scoring thresholds (override defaults)
+thresholds:
+  file_recall: 0.8
+  context_relevance: 0.7
+  architecture_clarity: 0.7
+  task_actionability: 0.7
+  handoff_completeness: 0.8
+  mcp_tool_usage: 0.7

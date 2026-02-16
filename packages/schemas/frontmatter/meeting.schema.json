@@ -1,0 +1,57 @@
+{
+  "$id": "meeting.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-synapse": {
+    "folder": "60_Meetings",
+    "displayLabel": "Meeting",
+    "cmsCollection": "meetings"
+  },
+  "allOf": [
+    {
+      "$ref": "base.schema.json"
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "type": {
+      "const": "meeting"
+    },
+    "company": {
+      "type": "string",
+      "minLength": 1
+    },
+    "topic": {
+      "type": "string",
+      "minLength": 1
+    },
+    "meeting_date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "our_attendees": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "their_attendees": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "related_docs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "type",
+    "company",
+    "topic",
+    "meeting_date"
+  ],
+  "additionalProperties": false
+}

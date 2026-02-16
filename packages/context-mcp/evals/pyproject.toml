@@ -1,0 +1,34 @@
+[project]
+name = "synapse-evals"
+version = "0.2.0"
+description = "Evaluation framework for /discover and /sync-docs slash commands"
+requires-python = ">=3.10"
+dependencies = [
+    "deepeval>=2.0.0",
+    "anthropic>=0.40.0",
+    "openai>=1.0.0",
+    "pyyaml>=6.0",
+    "rich>=13.0.0",
+    "orjson>=3.9.0",
+    "mcp>=1.0.0",
+]
+
+[project.scripts]
+discover-eval = "discover_evals.cli:main"
+sync-docs-eval = "sync_docs_evals.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["discover_evals", "sync_docs_evals"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+# Real MCP evals need 10+ minutes per test case (multiple Claude API turns)
+# Low-tier API keys may have 30K input tokens/min limits, requiring long waits
+timeout = 900
+# Mark slow tests so CI can skip them
+markers = [
+    "slow: marks tests that use real Claude API calls (deselect with '-m \"not slow\"')",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

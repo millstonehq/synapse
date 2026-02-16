@@ -1,0 +1,1477 @@
+{
+  "adr": {
+    "$id": "adr.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^ADR-\\d{4,}$"
+      },
+      "type": {
+        "const": "adr"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "review",
+          "approved",
+          "deprecated",
+          "proposed",
+          "accepted",
+          "superseded"
+        ]
+      },
+      "owner": {
+        "type": "string",
+        "minLength": 1
+      },
+      "created": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "summary": {
+        "type": "string"
+      },
+      "example": {
+        "type": "boolean"
+      },
+      "supersedes": {
+        "type": "string"
+      },
+      "superseded_by": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "type",
+      "title",
+      "status",
+      "owner",
+      "created",
+      "updated"
+    ],
+    "additionalProperties": false
+  },
+  "agreement": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Independent Contractor Agreement",
+    "type": "object",
+    "required": [
+      "id",
+      "type",
+      "title",
+      "status",
+      "owner",
+      "effective_date",
+      "parties",
+      "compensation",
+      "governing_law",
+      "venue",
+      "signatures"
+    ],
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "type": {
+        "const": "agreement"
+      },
+      "title": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string"
+      },
+      "owner": {
+        "type": "string"
+      },
+      "created": {
+        "type": "string"
+      },
+      "updated": {
+        "type": "string"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "effective_date": {
+        "type": "string"
+      },
+      "parties": {
+        "type": "object",
+        "required": [
+          "client",
+          "contractor"
+        ],
+        "properties": {
+          "client": {
+            "type": "object",
+            "required": [
+              "name",
+              "state",
+              "address"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "address": {
+                "type": "string"
+              }
+            }
+          },
+          "contractor": {
+            "type": "object",
+            "required": [
+              "name",
+              "state",
+              "address"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "address": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "compensation": {
+        "type": "object",
+        "required": [
+          "total"
+        ],
+        "properties": {
+          "total": {
+            "type": "number"
+          },
+          "in_kind": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "description",
+                "fair_market_value",
+                "delivery"
+              ],
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "fair_market_value": {
+                  "type": "number"
+                },
+                "delivery": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "milestones": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "amount",
+                "trigger",
+                "due_days"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "number"
+                },
+                "trigger": {
+                  "type": "string"
+                },
+                "due_days": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      },
+      "termination": {
+        "type": "object",
+        "properties": {
+          "convenience": {
+            "type": "object",
+            "properties": {
+              "notice_days": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      },
+      "governing_law": {
+        "type": "string"
+      },
+      "venue": {
+        "type": "string"
+      },
+      "signatures": {
+        "type": "object",
+        "required": [
+          "client_signatory",
+          "contractor_signatory"
+        ],
+        "properties": {
+          "client_signatory": {
+            "type": "string"
+          },
+          "contractor_signatory": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "additionalProperties": false
+  },
+  "capability": {
+    "$id": "capability.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "type": {
+        "const": "capability"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "review",
+          "approved",
+          "deprecated",
+          "proposed",
+          "accepted",
+          "superseded"
+        ]
+      },
+      "owner": {
+        "type": "string",
+        "minLength": 1
+      },
+      "created": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "summary": {
+        "type": "string"
+      },
+      "example": {
+        "type": "boolean"
+      },
+      "evidence_links": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "id",
+      "type",
+      "title",
+      "status",
+      "owner",
+      "created",
+      "updated"
+    ],
+    "additionalProperties": false
+  },
+  "meeting": {
+    "$id": "meeting.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "type": {
+        "const": "meeting"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "review",
+          "approved",
+          "deprecated",
+          "proposed",
+          "accepted",
+          "superseded"
+        ]
+      },
+      "owner": {
+        "type": "string",
+        "minLength": 1
+      },
+      "created": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "summary": {
+        "type": "string"
+      },
+      "example": {
+        "type": "boolean"
+      },
+      "company": {
+        "type": "string",
+        "minLength": 1
+      },
+      "topic": {
+        "type": "string",
+        "minLength": 1
+      },
+      "meeting_date": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "our_attendees": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "their_attendees": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "related_docs": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "id",
+      "type",
+      "title",
+      "status",
+      "owner",
+      "created",
+      "updated",
+      "company",
+      "topic",
+      "meeting_date"
+    ],
+    "additionalProperties": false
+  },
+  "policy": {
+    "$id": "policy.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "type": {
+        "const": "policy"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "review",
+          "approved",
+          "deprecated",
+          "proposed",
+          "accepted",
+          "superseded"
+        ]
+      },
+      "owner": {
+        "type": "string",
+        "minLength": 1
+      },
+      "created": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "summary": {
+        "type": "string"
+      },
+      "example": {
+        "type": "boolean"
+      },
+      "related_standards": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "id",
+      "type",
+      "title",
+      "status",
+      "owner",
+      "created",
+      "updated"
+    ],
+    "additionalProperties": false
+  },
+  "prd": {
+    "$id": "prd.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "type": {
+        "const": "prd"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "review",
+          "approved",
+          "deprecated",
+          "proposed",
+          "accepted",
+          "superseded"
+        ]
+      },
+      "owner": {
+        "type": "string",
+        "minLength": 1
+      },
+      "created": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "summary": {
+        "type": "string"
+      },
+      "example": {
+        "type": "boolean"
+      },
+      "related_prds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "related_tdds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "related_standards": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "id",
+      "type",
+      "title",
+      "status",
+      "owner",
+      "created",
+      "updated"
+    ],
+    "additionalProperties": false
+  },
+  "process": {
+    "$id": "process.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "type": {
+        "const": "process"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "review",
+          "approved",
+          "deprecated",
+          "proposed",
+          "accepted",
+          "superseded"
+        ]
+      },
+      "owner": {
+        "type": "string",
+        "minLength": 1
+      },
+      "created": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "summary": {
+        "type": "string"
+      },
+      "example": {
+        "type": "boolean"
+      },
+      "related_standards": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "related_prds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "related_tdds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "related_sops": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "related_systems": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "id",
+      "type",
+      "title",
+      "status",
+      "owner",
+      "created",
+      "updated"
+    ],
+    "additionalProperties": false
+  },
+  "reference": {
+    "$id": "reference.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "type": {
+        "const": "reference"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Title of the reference document"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "published",
+          "archived"
+        ],
+        "description": "Status of the reference document"
+      },
+      "owner": {
+        "type": "string",
+        "minLength": 1
+      },
+      "created": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "summary": {
+        "type": "string",
+        "description": "Brief description or excerpt"
+      },
+      "example": {
+        "type": "boolean"
+      },
+      "upstream_url": {
+        "type": "string",
+        "format": "uri",
+        "description": "Source URL where this reference content originates"
+      },
+      "source_prefix": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+$",
+        "description": "Manual override for source prefix in filename (e.g., 'claude-code', 'dora'). Only needed if automatic extraction from upstream_url fails or needs customization."
+      },
+      "last_synced": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Timestamp of when content was last synchronized from upstream"
+      },
+      "attribution": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Original author or organization"
+      },
+      "license": {
+        "type": "string",
+        "minLength": 1,
+        "description": "License under which the upstream content is distributed"
+      },
+      "upstream_version": {
+        "type": "string",
+        "description": "Version or commit hash from upstream source (optional)"
+      },
+      "category": {
+        "type": "string",
+        "enum": [
+          "documentation",
+          "api-reference",
+          "blog-post",
+          "standard",
+          "specification",
+          "tutorial",
+          "other"
+        ],
+        "description": "Category of external reference"
+      }
+    },
+    "required": [
+      "id",
+      "type",
+      "title",
+      "status",
+      "owner",
+      "created",
+      "updated",
+      "upstream_url",
+      "last_synced"
+    ],
+    "additionalProperties": false
+  },
+  "runbook": {
+    "$id": "runbook.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "type": {
+        "const": "runbook"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "review",
+          "approved",
+          "deprecated",
+          "proposed",
+          "accepted",
+          "superseded"
+        ]
+      },
+      "owner": {
+        "type": "string",
+        "minLength": 1
+      },
+      "created": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "summary": {
+        "type": "string"
+      },
+      "example": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "id",
+      "type",
+      "title",
+      "status",
+      "owner",
+      "created",
+      "updated"
+    ],
+    "additionalProperties": false
+  },
+  "scorecard": {
+    "$id": "scorecard.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "type": {
+        "const": "scorecard"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "review",
+          "approved",
+          "deprecated",
+          "proposed",
+          "accepted",
+          "superseded"
+        ]
+      },
+      "owner": {
+        "type": "string",
+        "minLength": 1
+      },
+      "created": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "summary": {
+        "type": "string"
+      },
+      "example": {
+        "type": "boolean"
+      },
+      "dimensions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "weight": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "rating": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 5
+            },
+            "evidence": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        "minItems": 1
+      },
+      "weighted_total": {
+        "type": "number",
+        "minimum": 0
+      },
+      "overall_summary": {
+        "type": "string",
+        "minLength": 1
+      },
+      "strengths": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "top_risks": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "recommendation": {
+        "type": "string",
+        "enum": [
+          "Proceed",
+          "Proceed with conditions",
+          "Do not proceed"
+        ]
+      },
+      "metrics": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
+      "risks": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "risk": {
+              "type": "string"
+            },
+            "severity": {
+              "type": "string",
+              "enum": [
+                "H",
+                "M",
+                "L"
+              ]
+            },
+            "likelihood": {
+              "type": "string",
+              "enum": [
+                "H",
+                "M",
+                "L"
+              ]
+            },
+            "owner": {
+              "type": "string"
+            },
+            "mitigation": {
+              "type": "string"
+            },
+            "due_date": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "risk",
+            "severity",
+            "likelihood"
+          ]
+        }
+      },
+      "action_plan": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "initiative": {
+              "type": "string"
+            },
+            "impact": {
+              "type": "string",
+              "enum": [
+                "H",
+                "M",
+                "L"
+              ]
+            },
+            "effort": {
+              "type": "string",
+              "enum": [
+                "H",
+                "M",
+                "L"
+              ]
+            },
+            "owner": {
+              "type": "string"
+            },
+            "milestones": {
+              "type": "string"
+            },
+            "dependencies": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "initiative"
+          ]
+        }
+      },
+      "related_docs": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "id",
+      "type",
+      "title",
+      "status",
+      "owner",
+      "created",
+      "updated",
+      "dimensions",
+      "overall_summary"
+    ],
+    "additionalProperties": false
+  },
+  "sop": {
+    "$id": "sop.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "type": {
+        "const": "sop"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "review",
+          "approved",
+          "deprecated",
+          "proposed",
+          "accepted",
+          "superseded"
+        ]
+      },
+      "owner": {
+        "type": "string",
+        "minLength": 1
+      },
+      "created": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "summary": {
+        "type": "string"
+      },
+      "example": {
+        "type": "boolean"
+      },
+      "related_process": {
+        "type": "string",
+        "minLength": 1
+      },
+      "related_prds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "related_standards": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "related_systems": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "id",
+      "type",
+      "title",
+      "status",
+      "owner",
+      "created",
+      "updated",
+      "related_process"
+    ],
+    "additionalProperties": false
+  },
+  "sow": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "sow.schema.json",
+    "title": "Statement of Work Schema",
+    "type": "object",
+    "required": [
+      "id",
+      "type",
+      "title",
+      "status",
+      "owner",
+      "created",
+      "updated"
+    ],
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "type": {
+        "const": "sow"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "review",
+          "approved",
+          "deprecated",
+          "proposed",
+          "accepted",
+          "superseded"
+        ]
+      },
+      "owner": {
+        "type": "string",
+        "minLength": 1
+      },
+      "created": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "summary": {
+        "type": "string"
+      },
+      "example": {
+        "type": "boolean"
+      },
+      "related_prds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "related_tdds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "agreement_date": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "standard": {
+    "$id": "standard.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "type": {
+        "const": "standard"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "review",
+          "approved",
+          "deprecated",
+          "proposed",
+          "accepted",
+          "superseded"
+        ]
+      },
+      "owner": {
+        "type": "string",
+        "minLength": 1
+      },
+      "created": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "summary": {
+        "type": "string"
+      },
+      "example": {
+        "type": "boolean"
+      },
+      "related_policies": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "related_systems": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "id",
+      "type",
+      "title",
+      "status",
+      "owner",
+      "created",
+      "updated"
+    ],
+    "additionalProperties": false
+  },
+  "system": {
+    "$id": "system.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "type": {
+        "const": "system"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "review",
+          "approved",
+          "deprecated",
+          "proposed",
+          "accepted",
+          "superseded"
+        ]
+      },
+      "owner": {
+        "type": "string",
+        "minLength": 1
+      },
+      "created": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "summary": {
+        "type": "string"
+      },
+      "example": {
+        "type": "boolean"
+      },
+      "owner_team": {
+        "type": "string",
+        "minLength": 1
+      },
+      "repos": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "runtime": {
+        "type": "string",
+        "minLength": 1
+      },
+      "sla": {
+        "type": "string"
+      },
+      "dependencies": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "runbooks": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "id",
+      "type",
+      "title",
+      "status",
+      "owner",
+      "created",
+      "updated",
+      "owner_team",
+      "runtime"
+    ],
+    "additionalProperties": false
+  },
+  "tdd": {
+    "$id": "tdd.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "type": {
+        "const": "tdd"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "review",
+          "approved",
+          "deprecated",
+          "proposed",
+          "accepted",
+          "superseded"
+        ]
+      },
+      "owner": {
+        "type": "string",
+        "minLength": 1
+      },
+      "created": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "summary": {
+        "type": "string"
+      },
+      "example": {
+        "type": "boolean"
+      },
+      "related_adrs": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "id",
+      "type",
+      "title",
+      "status",
+      "owner",
+      "created",
+      "updated"
+    ],
+    "additionalProperties": false
+  }
+}

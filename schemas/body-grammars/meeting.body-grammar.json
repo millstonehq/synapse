@@ -1,0 +1,93 @@
+{
+  "type": "meeting",
+  "displayName": "Meeting Notes",
+  "sections": [
+    {
+      "id": "meeting-details",
+      "title": "Meeting Details",
+      "required": true,
+      "order": 1,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "thematicBreak"
+        ]
+      }
+    },
+    {
+      "id": "observations-by-domain",
+      "title": "Observations by Domain",
+      "required": true,
+      "order": 2,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "key-metrics-data-points",
+      "title": "Key Metrics & Data Points",
+      "alternativeTitles": [
+        "Key Metrics and Data Points"
+      ],
+      "required": true,
+      "order": 3,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "preliminary-scorecard-hooks",
+      "title": "Preliminary Scorecard Hooks",
+      "required": true,
+      "order": 4,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "risks-and-mitigations",
+      "title": "Risks and Mitigations",
+      "required": true,
+      "order": 5,
+      "shape": {
+        "type": "table",
+        "requiredHeaders": [
+          "Risk",
+          "Severity",
+          "Likelihood",
+          "Owner",
+          "Mitigation",
+          "Due Date"
+        ],
+        "minRows": 1
+      }
+    },
+    {
+      "id": "decisions-next-steps",
+      "title": "Decisions & Next Steps",
+      "alternativeTitles": [
+        "Decisions and Next Steps"
+      ],
+      "required": true,
+      "order": 6,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "thematicBreak"
+        ]
+      }
+    }
+  ]
+}

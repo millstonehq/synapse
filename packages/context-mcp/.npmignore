@@ -1,0 +1,12 @@
+# Common .npmignore
+test/
+**/*.spec.ts
+**/*.test.ts
+coverage/
+src/
+tsconfig.json
+tsconfig.test.json
+jest.config.js
+*.tsbuildinfo
+.DS_Store
+node_modules/

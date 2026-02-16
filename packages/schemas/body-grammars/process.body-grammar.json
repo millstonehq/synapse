@@ -1,0 +1,107 @@
+{
+  "type": "process",
+  "displayName": "Process Document",
+  "sections": [
+    {
+      "id": "purpose",
+      "title": "Purpose",
+      "required": true,
+      "order": 1,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "thematicBreak"
+        ]
+      }
+    },
+    {
+      "id": "scope",
+      "title": "Scope",
+      "required": true,
+      "order": 2,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "thematicBreak"
+        ]
+      }
+    },
+    {
+      "id": "roles-and-responsibilities",
+      "title": "Roles and Responsibilities",
+      "required": true,
+      "order": 3,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "triggers",
+      "title": "Triggers",
+      "required": true,
+      "order": 4,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "table",
+          "thematicBreak"
+        ]
+      }
+    },
+    {
+      "id": "inputs",
+      "title": "Inputs",
+      "required": true,
+      "order": 5,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "outputs",
+      "title": "Outputs",
+      "required": true,
+      "order": 6,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "steps",
+      "title": "Steps",
+      "required": true,
+      "order": 7,
+      "shape": {
+        "type": "list",
+        "ordered": true,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "controls",
+      "title": "Controls",
+      "required": true,
+      "order": 8,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "launchers": [
+    {
+      "commandName": "sync",
+      "shortcutName": "Obsidian SYNC",
+      "inputTypes": [
+        "Selected Text"
+      ],
+      "separator": ","
+    }
+  ]
+}

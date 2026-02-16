@@ -1,0 +1,73 @@
+{
+  "type": "capability",
+  "displayName": "Capability Document",
+  "sections": [
+    {
+      "id": "domain",
+      "title": "Domain",
+      "required": true,
+      "order": 1,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "maturity",
+      "title": "Maturity (0–5)",
+      "alternativeTitles": [
+        "Maturity (0-5)",
+        "Maturity"
+      ],
+      "required": true,
+      "order": 2,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "thematicBreak"
+        ]
+      }
+    },
+    {
+      "id": "metrics",
+      "title": "Metrics",
+      "required": true,
+      "order": 3,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "evidence-links",
+      "title": "Evidence Links",
+      "required": true,
+      "order": 4,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "notes",
+      "title": "Notes",
+      "required": true,
+      "order": 5,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "thematicBreak"
+        ]
+      }
+    }
+  ]
+}

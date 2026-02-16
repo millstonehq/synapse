@@ -1,0 +1,35 @@
+{
+  "$id": "adr.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-synapse": {
+    "folder": "90_Architecture/ADRs",
+    "displayLabel": "ADR",
+    "cmsCollection": "adrs"
+  },
+  "allOf": [
+    {
+      "$ref": "base.schema.json"
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "type": {
+      "const": "adr"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^ADR-\\d{4,}$"
+    },
+    "supersedes": {
+      "type": "string"
+    },
+    "superseded_by": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "id"
+  ],
+  "additionalProperties": false
+}

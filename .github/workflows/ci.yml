@@ -1,0 +1,303 @@
+name: Synapse CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+jobs:
+  test-cli:
+    name: Test CLI Package
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        node-version: [20, 22, 24]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: packages/cli/package-lock.json
+
+      - name: Install CLI dependencies
+        working-directory: packages/cli
+        run: npm ci
+
+      - name: Check TypeScript types
+        working-directory: packages/cli
+        run: npm run check:types
+
+      - name: Build CLI
+        working-directory: packages/cli
+        run: npm run build
+
+      - name: Run unit tests
+        working-directory: packages/cli
+        run: npm test
+
+      - name: Link CLI globally (Unix)
+        if: runner.os != 'Windows'
+        working-directory: packages/cli
+        run: npm link
+
+      - name: Link CLI globally (Windows)
+        if: runner.os == 'Windows'
+        working-directory: packages/cli
+        run: npm link
+        shell: cmd
+
+      - name: Test CLI help command
+        run: synapse --help
+
+  validate-docs:
+    name: Validate Documentation
+    needs: test-cli
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: packages/cli/package-lock.json
+
+      - name: Install CLI dependencies
+        working-directory: packages/cli
+        run: npm ci
+
+      - name: Build CLI
+        working-directory: packages/cli
+        run: npm run build
+
+      - name: Link CLI globally
+        working-directory: packages/cli
+        run: npm link
+
+      - name: Get changed files (PR only)
+        if: github.event_name == 'pull_request'
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: |
+            content/**/*.md
+
+      - name: Validate content with strict mode
+        id: validate
+        run: |
+          # Run validation with JSON format, specifying the content directory
+          # Use || true to continue even if validation finds errors
+          synapse validate --dir content --strict --format json > validation-results.json 2>&1 || VALIDATION_EXIT_CODE=$?
+
+          # Debug: Show what was captured
+          echo "=== Validation exit code: ${VALIDATION_EXIT_CODE:-0} ==="
+          echo "=== First 1000 chars of validation-results.json ==="
+          head -c 1000 validation-results.json || echo "No output file"
+          echo ""
+
+          # Parse JSON results
+          if [ -f validation-results.json ] && [ -s validation-results.json ]; then
+            # Check if it's valid JSON first
+            if jq -e . validation-results.json > /dev/null 2>&1; then
+              errors=$(jq '.errors | length' validation-results.json)
+              warnings=$(jq '.warnings | length' validation-results.json)
+              total=$(jq '.summary.total' validation-results.json)
+              valid=$(jq '.summary.valid' validation-results.json)
+
+              echo "errors=$errors" >> $GITHUB_OUTPUT
+              echo "warnings=$warnings" >> $GITHUB_OUTPUT
+
+              echo "## Validation Results" >> $GITHUB_STEP_SUMMARY
+              echo "### Summary" >> $GITHUB_STEP_SUMMARY
+              echo "- Total Documents: $total" >> $GITHUB_STEP_SUMMARY
+              echo "- Valid: $valid" >> $GITHUB_STEP_SUMMARY
+              echo "- Errors: $errors" >> $GITHUB_STEP_SUMMARY
+              echo "- Warnings: $warnings" >> $GITHUB_STEP_SUMMARY
+
+              if [ "$errors" -gt 0 ]; then
+                echo "### ❌ Errors" >> $GITHUB_STEP_SUMMARY
+                echo '```json' >> $GITHUB_STEP_SUMMARY
+                jq '.errors[:10]' validation-results.json >> $GITHUB_STEP_SUMMARY
+                echo '```' >> $GITHUB_STEP_SUMMARY
+                # Don't exit yet - let's see all the errors first
+                # exit 1
+              fi
+
+              if [ "$warnings" -gt 0 ]; then
+                echo "### ⚠️ Warnings" >> $GITHUB_STEP_SUMMARY
+                echo '```json' >> $GITHUB_STEP_SUMMARY
+                jq '.warnings[:5]' validation-results.json >> $GITHUB_STEP_SUMMARY
+                echo '```' >> $GITHUB_STEP_SUMMARY
+              fi
+
+              if [ "$errors" -eq 0 ]; then
+                echo "✅ Validation passed" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "❌ Validation failed with $errors errors" >> $GITHUB_STEP_SUMMARY
+                exit 1
+              fi
+            else
+              echo "❌ Invalid JSON output from validation" >> $GITHUB_STEP_SUMMARY
+              echo "Output was:" >> $GITHUB_STEP_SUMMARY
+              cat validation-results.json >> $GITHUB_STEP_SUMMARY
+              exit 1
+            fi
+          else
+            echo "❌ Failed to generate validation results or empty file"
+            exit 1
+          fi
+
+  build-site:
+    name: Build Documentation Site
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: |
+            packages/site/package-lock.json
+            packages/site/quartz/package-lock.json
+
+      - name: Install site dependencies
+        working-directory: packages/site
+        run: npm install
+
+      - name: Install Quartz dependencies
+        working-directory: packages/site/quartz
+        run: npm ci
+
+      - name: Sync plugins
+        working-directory: packages/site
+        run: npm run sync-plugins
+
+      - name: Setup content for Quartz
+        run: |
+          # Quartz expects content in packages/site/quartz/content
+          # Remove any existing content directory/symlink
+          rm -rf packages/site/quartz/content
+          # Create symlink from our content directory (relative to symlink location)
+          ln -s ../../../content packages/site/quartz/content
+          echo "Created symlink: packages/site/quartz/content -> ../../../content"
+          ls -la packages/site/quartz/content/
+
+      - name: Build Quartz site
+        working-directory: packages/site
+        run: npm run build
+
+      - name: Check bundle info
+        working-directory: packages/site/quartz
+        run: npx quartz build --bundleInfo
+
+      - name: Generate build report
+        run: |
+          echo "## Site Build Report" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Details" >> $GITHUB_STEP_SUMMARY
+          echo "- Node Version: $(node --version)" >> $GITHUB_STEP_SUMMARY
+          echo "- NPM Version: $(npm --version)" >> $GITHUB_STEP_SUMMARY
+          if [ -d "packages/site/quartz/public" ]; then
+            file_count=$(find packages/site/quartz/public -type f | wc -l)
+            echo "- Files Generated: $file_count" >> $GITHUB_STEP_SUMMARY
+            echo "- Build Size: $(du -sh packages/site/quartz/public | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  publish:
+    name: Publish to NPM
+    needs: [test-cli, validate-docs, build-site]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build packages for publishing
+        run: |
+          npm run build -w packages/cli
+          npm run build -w packages/context-mcp
+
+      - name: Check if version already published
+        id: check
+        run: |
+          LOCAL_VERSION=$(node -p "require('./packages/cli/package.json').version")
+          echo "version=$LOCAL_VERSION" >> $GITHUB_OUTPUT
+
+          PUBLISHED=$(npm view @millstone/synapse-cli version 2>/dev/null || echo "none")
+          echo "published=$PUBLISHED" >> $GITHUB_OUTPUT
+
+          if [ "$LOCAL_VERSION" = "$PUBLISHED" ]; then
+            echo "needs_publish=false" >> $GITHUB_OUTPUT
+            echo "Version $LOCAL_VERSION already published — skipping"
+          else
+            echo "needs_publish=true" >> $GITHUB_OUTPUT
+            echo "Will publish $LOCAL_VERSION (npm has $PUBLISHED)"
+          fi
+
+      - name: Publish @millstone/synapse-schemas
+        if: steps.check.outputs.needs_publish == 'true'
+        working-directory: packages/schemas
+        run: npm publish --access public
+
+      - name: Publish @millstone/synapse-cli
+        if: steps.check.outputs.needs_publish == 'true'
+        working-directory: packages/cli
+        run: npm publish --access public
+
+      - name: Publish @millstone/synapse-context-mcp
+        if: steps.check.outputs.needs_publish == 'true'
+        working-directory: packages/context-mcp
+        run: npm publish --access public
+
+      - name: Publish @millstone/synapse-site
+        if: steps.check.outputs.needs_publish == 'true'
+        working-directory: packages/site
+        run: npm publish --access public
+
+      - name: Tag release
+        if: steps.check.outputs.needs_publish == 'true'
+        run: |
+          VERSION=${{ steps.check.outputs.version }}
+          git tag -f "v$VERSION"
+          git push origin "v$VERSION" --force
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.needs_publish == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.check.outputs.version }}
+          generate_release_notes: true

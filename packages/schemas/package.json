@@ -1,0 +1,44 @@
+{
+  "name": "@millstone/synapse-schemas",
+  "version": "0.5.2",
+  "description": "JSON Schema definitions for Synapse documentation framework",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./frontmatter/*": "./frontmatter/*",
+    "./body-grammars/*": "./body-grammars/*",
+    "./plugins/*": "./plugins/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "frontmatter/**/*.json",
+    "body-grammars/**/*",
+    "plugins/**/*.json",
+    "index.js",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/millstonehq/synapse.git",
+    "directory": "packages/schemas"
+  },
+  "homepage": "https://github.com/millstonehq/synapse#readme",
+  "bugs": {
+    "url": "https://github.com/millstonehq/synapse/issues"
+  },
+  "keywords": [
+    "synapse",
+    "schemas",
+    "json-schema",
+    "documentation",
+    "validation"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
+}

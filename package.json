@@ -1,0 +1,36 @@
+{
+  "name": "synapse-framework",
+  "version": "0.5.2",
+  "description": "Synapse documentation framework - monorepo with CLI, site generator, and MCP server",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present",
+    "validate": "npx synapse validate",
+    "format": "npm run format --workspaces --if-present",
+    "publish:all": "npm run build && npm publish --workspaces --access public",
+    "version:bump": "node scripts/bump-version.js"
+  },
+  "devDependencies": {
+    "@millstone/synapse-cli": "*",
+    "@millstone/synapse-site": "*",
+    "@millstone/synapse-context-mcp": "*"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "documentation",
+    "framework",
+    "monorepo",
+    "obsidian",
+    "quartz"
+  ],
+  "author": "Millstone",
+  "license": "MIT"
+}

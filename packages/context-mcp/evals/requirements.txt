@@ -1,0 +1,17 @@
+# DeepEval - LLM evaluation framework
+deepeval>=2.0.0
+
+# Anthropic SDK - for running /discover via Claude
+anthropic>=0.40.0
+
+# MCP SDK - for connecting to context-mcp server
+mcp>=1.0.0
+
+# For test case parsing
+pyyaml>=6.0
+
+# For timing and performance
+rich>=13.0.0
+
+# For results storage
+orjson>=3.9.0

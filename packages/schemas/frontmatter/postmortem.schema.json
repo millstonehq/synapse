@@ -1,0 +1,82 @@
+{
+  "$id": "postmortem.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "allOf": [
+    {
+      "$ref": "base.schema.json"
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "type": {
+      "const": "postmortem"
+    },
+    "incident_number": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique incident identifier (e.g., INC-4)"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["SEV-1", "SEV-2", "SEV-3", "SEV-4"],
+      "description": "Incident severity level"
+    },
+    "incident_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date the incident occurred"
+    },
+    "detection_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the incident was first detected"
+    },
+    "resolution_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the incident was fully resolved"
+    },
+    "total_duration": {
+      "type": "string",
+      "description": "Human-readable duration (e.g., '~3 hours')"
+    },
+    "affected_customers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of affected customers"
+    },
+    "revenue_impact": {
+      "type": "string",
+      "description": "Financial impact or empty string if none"
+    },
+    "related_sop": {
+      "type": "string",
+      "description": "Related standard operating procedure"
+    },
+    "action_items": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Follow-up action items"
+    },
+    "company": {
+      "type": "string",
+      "description": "Company name for PDF branding"
+    }
+  },
+  "required": [
+    "type",
+    "incident_number",
+    "severity",
+    "incident_date"
+  ],
+  "additionalProperties": false,
+  "x-synapse": {
+    "folder": "70_Postmortems",
+    "displayLabel": "Postmortem",
+    "cmsCollection": "postmortems"
+  }
+}

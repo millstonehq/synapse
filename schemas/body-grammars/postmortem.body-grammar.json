@@ -1,0 +1,116 @@
+{
+  "type": "postmortem",
+  "displayName": "Postmortem",
+  "sections": [
+    {
+      "id": "executive-summary",
+      "title": "Executive Summary",
+      "required": true,
+      "order": 1,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "thematicBreak"
+        ]
+      }
+    },
+    {
+      "id": "timeline",
+      "title": "Timeline",
+      "required": true,
+      "order": 2,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "table",
+          "thematicBreak"
+        ]
+      }
+    },
+    {
+      "id": "impact",
+      "title": "Impact",
+      "required": true,
+      "order": 3,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "table",
+          "thematicBreak"
+        ]
+      }
+    },
+    {
+      "id": "root-cause-analysis",
+      "title": "Root Cause Analysis",
+      "required": true,
+      "order": 4,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "code",
+          "thematicBreak"
+        ]
+      }
+    },
+    {
+      "id": "resolution",
+      "title": "Resolution",
+      "required": true,
+      "order": 5,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "code",
+          "thematicBreak"
+        ]
+      }
+    },
+    {
+      "id": "action-items",
+      "title": "Action Items",
+      "required": true,
+      "order": 6,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "table",
+          "thematicBreak"
+        ]
+      }
+    },
+    {
+      "id": "lessons-learned",
+      "title": "Lessons Learned",
+      "required": true,
+      "order": 7,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "thematicBreak"
+        ]
+      }
+    }
+  ]
+}

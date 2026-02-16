@@ -1,0 +1,30 @@
+{
+  "$id": "capability.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-synapse": {
+    "folder": "110_Capabilities",
+    "displayLabel": "Capability",
+    "cmsCollection": "capabilities"
+  },
+  "allOf": [
+    {
+      "$ref": "base.schema.json"
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "type": {
+      "const": "capability"
+    },
+    "evidence_links": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "type"
+  ],
+  "additionalProperties": false
+}

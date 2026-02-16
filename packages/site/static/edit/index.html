@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <title>Edit Documentation | Synapse</title>
+  <style>
+    /* Loading state styling */
+    .loading-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+    }
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #e0e0e0;
+      border-top-color: #284b63;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    .loading-text {
+      margin-top: 16px;
+      color: #666;
+      font-size: 14px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Validation error styling - positioned at bottom */
+    .validation-error {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #d32f2f;
+      color: white;
+      padding: 16px 24px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      z-index: 10000;
+      box-shadow: 0 -2px 8px rgba(0,0,0,0.2);
+    }
+    .validation-error h3 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .validation-error ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+    .validation-error li {
+      margin: 4px 0;
+    }
+    .validation-error button {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 4px 8px;
+    }
+
+    /* Save success notification - positioned at bottom */
+    .save-success {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #2e7d32;
+      color: white;
+      padding: 16px 24px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      z-index: 10000;
+      box-shadow: 0 -2px 8px rgba(0,0,0,0.2);
+    }
+    .save-success h3 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .save-success p {
+      margin: 0;
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    .save-success button {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 4px 8px;
+    }
+
+  </style>
+</head>
+<body>
+  <!-- Loading state shown while CMS initializes -->
+  <div id="loading" class="loading-container">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Loading editor...</div>
+  </div>
+
+  <!-- Decap CMS will mount here -->
+  <script src="https://unpkg.com/decap-cms@^3.1.0/dist/decap-cms.js"></script>
+
+  <!-- Validation bundle (built at build time) -->
+  <script type="module">
+    // Import validation context
+    const vaultIndex = await fetch('/static/edit/vault-index.json').then(r => r.json());
+    const schemas = await fetch('/static/edit/schemas/index.json').then(r => r.json());
+    const bodyGrammars = await fetch('/static/edit/body-grammars/index.json').then(r => r.json());
+
+    // Store validation context globally
+    window.validationContext = {
+      vaultIndex: vaultIndex.targets,
+      schemas,
+      bodyGrammars
+    };
+
+    // Hide loading once CMS loads
+    document.getElementById('loading').style.display = 'none';
+  </script>
+
+  <script>
+    // Wait for CMS to be available
+    function initCMS() {
+      if (typeof CMS === 'undefined') {
+        setTimeout(initCMS, 100);
+        return;
+      }
+
+      // Register custom preview styles to match Quartz theme
+      CMS.registerPreviewStyle(`
+        /* Base styles matching Quartz theme */
+        html, body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+          line-height: 1.6;
+          color: #4e4e4e;
+          background: #faf8f8;
+          padding: 2rem;
+          max-width: 800px;
+          margin: 0 auto;
+        }
+
+        /* Headings */
+        h1, h2, h3, h4, h5, h6 {
+          color: #2b2b2b;
+          font-weight: 600;
+          margin-top: 1.5em;
+          margin-bottom: 0.5em;
+          line-height: 1.3;
+        }
+        h1 { font-size: 2rem; border-bottom: 1px solid #e5e5e5; padding-bottom: 0.3em; }
+        h2 { font-size: 1.5rem; border-bottom: 1px solid #e5e5e5; padding-bottom: 0.2em; }
+        h3 { font-size: 1.25rem; }
+        h4 { font-size: 1.1rem; }
+
+        /* Paragraphs and text */
+        p { margin: 1em 0; }
+        strong { font-weight: 600; }
+        a { color: #284b63; text-decoration: none; font-weight: 600; }
+        a:hover { color: #84a59d; }
+
+        /* Lists */
+        ul, ol { padding-left: 1.5em; margin: 1em 0; }
+        li { margin: 0.25em 0; }
+        li > ul, li > ol { margin: 0.25em 0; }
+
+        /* Code */
+        code {
+          background: #e5e5e5;
+          padding: 0.2em 0.4em;
+          border-radius: 4px;
+          font-size: 0.9em;
+          font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+        }
+        pre {
+          background: #2b2b2b;
+          color: #faf8f8;
+          padding: 1em;
+          border-radius: 8px;
+          overflow-x: auto;
+          margin: 1em 0;
+        }
+        pre code {
+          background: transparent;
+          padding: 0;
+          color: inherit;
+        }
+
+        /* Blockquotes */
+        blockquote {
+          border-left: 4px solid #284b63;
+          margin: 1em 0;
+          padding: 0.5em 1em;
+          background: rgba(143, 159, 169, 0.15);
+          border-radius: 0 8px 8px 0;
+        }
+        blockquote p { margin: 0.5em 0; }
+
+        /* Tables */
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 1em 0;
+        }
+        th, td {
+          border: 1px solid #e5e5e5;
+          padding: 0.5em 0.75em;
+          text-align: left;
+        }
+        th {
+          background: #e5e5e5;
+          font-weight: 600;
+          color: #2b2b2b;
+        }
+        tr:nth-child(even) { background: rgba(143, 159, 169, 0.08); }
+
+        /* Horizontal rules */
+        hr {
+          border: none;
+          border-top: 2px solid #e5e5e5;
+          margin: 2em 0;
+        }
+
+        /* Images */
+        img {
+          max-width: 100%;
+          height: auto;
+          border-radius: 8px;
+        }
+      `, { raw: true });
+
+      // Register preSave validation hook
+      CMS.registerEventListener({
+        name: 'preSave',
+        handler: async function({ entry }) {
+          const context = window.validationContext;
+          if (!context) {
+            console.warn('Validation context not loaded, skipping validation');
+            return entry.get('data');
+          }
+
+          // Extract entry data
+          const data = entry.get('data').toJS();
+          const body = data.body || '';
+          const path = entry.get('path');
+
+          // Build frontmatter (everything except body)
+          const frontmatter = { ...data };
+          delete frontmatter.body;
+
+          // Import validation (dynamically since it's a module)
+          try {
+            const { validateDocument } = await import('/static/edit/validate.bundle.js');
+
+            const result = validateDocument(frontmatter, body, path, context);
+
+            if (!result.success) {
+              const errors = result.issues
+                .filter(i => i.type === 'error')
+                .map(i => i.message);
+
+              // Show error UI
+              showValidationErrors(errors);
+
+              // Block save by throwing
+              throw new Error('Validation failed. Please fix the errors above.');
+            }
+
+            // Clear any previous errors
+            clearValidationErrors();
+
+          } catch (error) {
+            if (error.message.includes('Validation failed')) {
+              throw error;
+            }
+            // If validation module fails to load, log but allow save
+            console.error('Validation error:', error);
+          }
+
+          return entry.get('data');
+        }
+      });
+
+      // Register postSave to show success message
+      CMS.registerEventListener({
+        name: 'postSave',
+        handler: function({ entry }) {
+          clearValidationErrors();
+          showSaveSuccess(entry.get('path'));
+          console.log('Document saved successfully:', entry.get('path'));
+        }
+      });
+
+      console.log('Synapse CMS validation initialized');
+
+      // Rename "Publish" buttons to "Save" for clarity
+      // (In our workflow, publish = save to git, which triggers deploy)
+      renamePublishButtons();
+    }
+
+    function renamePublishButtons() {
+      // Use MutationObserver to catch dynamically rendered buttons
+      const observer = new MutationObserver(() => {
+        // Find all buttons/elements containing "Publish" text
+        document.querySelectorAll('button, [role="button"], span').forEach(el => {
+          if (el.textContent === 'Publish') {
+            el.textContent = 'Save';
+          }
+          if (el.textContent === 'Publish now') {
+            el.textContent = 'Save now';
+          }
+          if (el.textContent === 'Publish and create new') {
+            el.textContent = 'Save and create new';
+          }
+          if (el.textContent === 'Publish and duplicate') {
+            el.textContent = 'Save and duplicate';
+          }
+        });
+      });
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true
+      });
+    }
+
+    function showValidationErrors(errors) {
+      clearValidationErrors();
+
+      const container = document.createElement('div');
+      container.className = 'validation-error';
+      container.id = 'validation-errors';
+      container.innerHTML = `
+        <h3>⚠️ Validation Errors</h3>
+        <ul>
+          ${errors.map(e => `<li>${escapeHtml(e)}</li>`).join('')}
+        </ul>
+        <button onclick="clearValidationErrors()" aria-label="Dismiss">×</button>
+      `;
+      document.body.appendChild(container);
+    }
+
+    function clearValidationErrors() {
+      const existing = document.getElementById('validation-errors');
+      if (existing) {
+        existing.remove();
+      }
+    }
+
+    function showSaveSuccess(path) {
+      clearSaveSuccess();
+
+      const container = document.createElement('div');
+      container.className = 'save-success';
+      container.id = 'save-success';
+      container.innerHTML = `
+        <h3>✓ Changes saved!</h3>
+        <p>The documentation site will update in approximately 2-3 minutes.</p>
+        <button onclick="clearSaveSuccess()" aria-label="Dismiss">×</button>
+      `;
+      document.body.appendChild(container);
+
+      // Auto-dismiss after 10 seconds
+      setTimeout(clearSaveSuccess, 10000);
+    }
+
+    function clearSaveSuccess() {
+      const existing = document.getElementById('save-success');
+      if (existing) {
+        existing.remove();
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Start CMS initialization
+    initCMS();
+  </script>
+</body>
+</html>

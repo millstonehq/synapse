@@ -1,0 +1,28 @@
+{
+  "$schema": "https://docs.claude.com/schemas/marketplace.json",
+  "name": "synapse-plugin-marketplace",
+  "owner": {
+    "name": "synapse-framework"
+  },
+  "version": "1.0.0",
+  "description": "A collection of Claude Code plugins for enterprise software delivery: documentation, engineering practices, and workflow automation",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/millstonehq/synapse"
+  },
+  "plugins": [
+    {
+      "name": "synapse-docs",
+      "description": "Skills and agents for documentation authoring, vault optimization, content curation, and knowledge graph management. Ideal for technical writers and documentation leads.",
+      "source": "./plugins/docs",
+      "tags": ["documentation", "obsidian", "knowledge-management", "content"]
+    }
+  ],
+  "maintainers": [
+    {
+      "name": "Synapse Framework Team",
+      "email": "maintainers@example.com"
+    }
+  ],
+  "license": "MIT"
+}

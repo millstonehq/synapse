@@ -1,0 +1,16 @@
+{
+  "type": "reference",
+  "displayName": "Reference",
+  "sections": [
+    {
+      "id": "content",
+      "title": "Content",
+      "required": false,
+      "order": 1,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": ["paragraph", "list", "code", "heading", "blockquote", "table"]
+      }
+    }
+  ]
+}

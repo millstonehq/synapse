@@ -1,0 +1,42 @@
+{
+  "$id": "prd.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-synapse": {
+    "folder": "100_Products/PRDs",
+    "displayLabel": "PRD",
+    "cmsCollection": "prds"
+  },
+  "allOf": [
+    {
+      "$ref": "base.schema.json"
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "type": {
+      "const": "prd"
+    },
+    "related_prds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "related_tdds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "related_standards": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "type"
+  ],
+  "additionalProperties": false
+}

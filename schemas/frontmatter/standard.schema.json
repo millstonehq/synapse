@@ -1,0 +1,36 @@
+{
+  "$id": "standard.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-synapse": {
+    "folder": "20_Standards",
+    "displayLabel": "Standard",
+    "cmsCollection": "standards"
+  },
+  "allOf": [
+    {
+      "$ref": "base.schema.json"
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "type": {
+      "const": "standard"
+    },
+    "related_policies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "related_systems": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "type"
+  ],
+  "additionalProperties": false
+}

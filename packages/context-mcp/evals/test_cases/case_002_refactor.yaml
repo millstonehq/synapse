@@ -1,0 +1,43 @@
+# Test Case: Refactor Token Service
+# Tests /discover's ability to scope a refactoring task
+
+id: case_002_refactor
+name: Refactor Token Service
+description: |
+  A refactoring task that requires understanding the current
+  implementation deeply before making changes.
+
+task: |
+  Refactor the TokenService to support multiple token stores.
+  Currently tokens are stateless JWTs, but we want to add
+  support for server-side token revocation via Redis.
+
+fixture: sample_api
+
+ground_truth:
+  required_files:
+    - src/services/token.ts
+    - src/config/index.ts
+
+  recommended_files:
+    - src/middleware/auth.ts
+    - src/types/auth.ts
+    - src/routes/auth.ts
+
+  architecture_topics:
+    - token service
+    - JWT tokens
+    - configuration
+    - middleware
+
+  expected_relationships:
+    - "token service -> config"
+    - "auth middleware -> token service"
+    - "auth routes -> token service"
+
+thresholds:
+  file_recall: 0.8
+  context_relevance: 0.7
+  architecture_clarity: 0.7
+  task_actionability: 0.7
+  mcp_tool_usage: 0.7

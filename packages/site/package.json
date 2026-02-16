@@ -1,0 +1,67 @@
+{
+  "name": "@millstone/synapse-site",
+  "version": "0.5.2",
+  "description": "Quartz 4 configuration for Synapse documentation site",
+  "type": "module",
+  "files": [
+    "dist/**/*",
+    "plugins/**/*",
+    "decap/**/*",
+    "static/**/*",
+    "*.ts",
+    "README.md"
+  ],
+  "scripts": {
+    "setup": "tsx setup-quartz.ts",
+    "sync-plugins": "tsx sync-plugins.ts",
+    "build:decap-config": "tsx decap/build-config.ts",
+    "build:decap": "npm run build:decap-config && tsx decap/generate-doc-types.ts && tsx decap/build-vault-index.ts && npm run build:validate-bundle",
+    "build:validate-bundle": "esbuild decap/validate-browser.ts --bundle --format=esm --outfile=static/edit/validate.bundle.js --platform=browser --target=es2020",
+    "build": "npm run sync-plugins && npm run build:decap && (cd quartz && npx quartz build) && npm run copy:decap",
+    "copy:decap": "cp -r static/edit quartz/quartz/static/",
+    "serve": "npm run sync-plugins && npm run build:decap && cd quartz && npx quartz build --serve",
+    "dev": "npm run sync-plugins && npm run build:decap && npm run copy:decap && cd quartz && npx quartz build --serve --port 8080",
+    "update-submodule": "git submodule update --remote --merge",
+    "clean": "rm -rf quartz/public quartz/.quartz-cache static/edit/*.json static/edit/schemas static/edit/body-grammars static/edit/validate.bundle.js decap/doc-types.generated.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/millstonehq/synapse.git",
+    "directory": "packages/site"
+  },
+  "homepage": "https://github.com/millstonehq/synapse#readme",
+  "bugs": {
+    "url": "https://github.com/millstonehq/synapse/issues"
+  },
+  "peerDependencies": {
+    "@millstone/synapse-cli": ">=0.1.0"
+  },
+  "keywords": [
+    "synapse",
+    "quartz",
+    "documentation",
+    "static-site"
+  ],
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "chalk": "^5.3.0",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "ajv": "^8.12.0",
+    "ajv-formats": "^2.1.1",
+    "fast-glob": "^3.3.2",
+    "js-yaml": "^4.1.1",
+    "remark-gfm": "^4.0.0",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

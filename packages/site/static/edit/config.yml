@@ -1,0 +1,1393 @@
+# Decap CMS Configuration - AUTO-GENERATED
+# DO NOT EDIT MANUALLY - Run 'npm run build:decap-config' to regenerate
+# Source: schemas/frontmatter/*.schema.json, schemas/body-grammars/*.body-grammar.json
+
+backend:
+  name: github
+  repo: OWNER/REPO
+  branch: main
+  auth_type: pkce
+  app_id: ""
+  api_root: https://api.github.com
+  base_url: https://github.com
+media_folder: content/_assets
+public_folder: /_assets
+local_backend: true
+site_url: /
+display_url: /
+logo_url: /static/logo.png
+collections:
+  - name: policies
+    label: 📜 Policies
+    label_singular: Policy
+    folder: content/10_Policies
+    create: true
+    nested:
+      depth: 10
+    slug: "{{slug}}"
+    extension: md
+    format: yaml-frontmatter
+    fields:
+      - label: Id
+        name: id
+        widget: string
+        required: true
+      - label: Title
+        name: title
+        widget: string
+        required: true
+      - label: Type
+        name: type
+        widget: hidden
+        required: true
+        default: policy
+      - label: Status
+        name: status
+        widget: select
+        required: true
+        options:
+          - draft
+          - review
+          - approved
+          - deprecated
+          - proposed
+          - accepted
+          - superseded
+        default: draft
+      - label: Owner
+        name: owner
+        widget: string
+        required: true
+      - label: Created
+        name: created
+        widget: datetime
+        required: true
+      - label: Updated
+        name: updated
+        widget: datetime
+        required: true
+      - label: Tags
+        name: tags
+        widget: list
+        required: false
+      - label: Summary
+        name: summary
+        widget: text
+        required: false
+      - label: Related Standards
+        name: related_standards
+        widget: list
+        required: false
+      - label: Body
+        name: body
+        widget: markdown
+        required: true
+        modes:
+          - raw
+        hint: "Required sections: Scope, Rationale, Policy Statements (bullet list), Related Standards (bullet list)"
+        default: |-
+          ## Scope
+
+          [Describe here...]
+
+          ## Rationale
+
+          [Describe here...]
+
+          ## Policy Statements
+
+          - Item one
+          - Item two
+
+          ## Related Standards
+
+          - Item one
+          - Item two
+  - name: standards
+    label: 📐 Standards
+    label_singular: Standard
+    folder: content/20_Standards
+    create: true
+    nested:
+      depth: 10
+    slug: "{{slug}}"
+    extension: md
+    format: yaml-frontmatter
+    fields:
+      - label: Id
+        name: id
+        widget: string
+        required: true
+      - label: Title
+        name: title
+        widget: string
+        required: true
+      - label: Type
+        name: type
+        widget: hidden
+        required: true
+        default: standard
+      - label: Status
+        name: status
+        widget: select
+        required: true
+        options:
+          - draft
+          - review
+          - approved
+          - deprecated
+          - proposed
+          - accepted
+          - superseded
+        default: draft
+      - label: Owner
+        name: owner
+        widget: string
+        required: true
+      - label: Created
+        name: created
+        widget: datetime
+        required: true
+      - label: Updated
+        name: updated
+        widget: datetime
+        required: true
+      - label: Tags
+        name: tags
+        widget: list
+        required: false
+      - label: Summary
+        name: summary
+        widget: text
+        required: false
+      - label: Related Policies
+        name: related_policies
+        widget: list
+        required: false
+      - label: Related Systems
+        name: related_systems
+        widget: list
+        required: false
+      - label: Body
+        name: body
+        widget: markdown
+        required: true
+        modes:
+          - raw
+        hint: >-
+          Required sections: Area, Controls (bullet list), Compliance Mappings (bullet list), Related Policies (bullet
+          list)
+        default: |-
+          ## Area
+
+          [Describe here...]
+
+          ## Controls
+
+          - Item one
+          - Item two
+
+          ## Compliance Mappings
+
+          - Item one
+          - Item two
+
+          ## Related Policies
+
+          - Item one
+          - Item two
+  - name: processes
+    label: 🔄 Processes
+    label_singular: Process
+    folder: content/30_Processes
+    create: true
+    nested:
+      depth: 10
+    slug: "{{slug}}"
+    extension: md
+    format: yaml-frontmatter
+    fields:
+      - label: Id
+        name: id
+        widget: string
+        required: true
+      - label: Title
+        name: title
+        widget: string
+        required: true
+      - label: Type
+        name: type
+        widget: hidden
+        required: true
+        default: process
+      - label: Status
+        name: status
+        widget: select
+        required: true
+        options:
+          - draft
+          - review
+          - approved
+          - deprecated
+          - proposed
+          - accepted
+          - superseded
+        default: draft
+      - label: Owner
+        name: owner
+        widget: string
+        required: true
+      - label: Created
+        name: created
+        widget: datetime
+        required: true
+      - label: Updated
+        name: updated
+        widget: datetime
+        required: true
+      - label: Tags
+        name: tags
+        widget: list
+        required: false
+      - label: Summary
+        name: summary
+        widget: text
+        required: false
+      - label: Related Standards
+        name: related_standards
+        widget: list
+        required: false
+      - label: Related Prds
+        name: related_prds
+        widget: list
+        required: false
+      - label: Related Tdds
+        name: related_tdds
+        widget: list
+        required: false
+      - label: Related Sops
+        name: related_sops
+        widget: list
+        required: false
+      - label: Related Systems
+        name: related_systems
+        widget: list
+        required: false
+      - label: Body
+        name: body
+        widget: markdown
+        required: true
+        modes:
+          - raw
+        hint: >-
+          Required sections: Purpose, Scope, Roles and Responsibilities (bullet list), Triggers, Inputs (bullet list),
+          Outputs (bullet list), Steps (numbered list), Controls (bullet list)
+        default: |-
+          ## Purpose
+
+          [Describe here...]
+
+          ## Scope
+
+          [Describe here...]
+
+          ## Roles and Responsibilities
+
+          - Item one
+          - Item two
+
+          ## Triggers
+
+          [Describe here...]
+
+          ## Inputs
+
+          - Item one
+          - Item two
+
+          ## Outputs
+
+          - Item one
+          - Item two
+
+          ## Steps
+
+          1. First item
+          2. Second item
+
+          ## Controls
+
+          - Item one
+          - Item two
+  - name: sops
+    label: 📋 SOPs
+    label_singular: SOP
+    folder: content/40_SOPs
+    create: true
+    nested:
+      depth: 10
+    slug: "{{slug}}"
+    extension: md
+    format: yaml-frontmatter
+    fields:
+      - label: Id
+        name: id
+        widget: string
+        required: true
+      - label: Title
+        name: title
+        widget: string
+        required: true
+      - label: Type
+        name: type
+        widget: hidden
+        required: true
+        default: sop
+      - label: Status
+        name: status
+        widget: select
+        required: true
+        options:
+          - draft
+          - review
+          - approved
+          - deprecated
+          - proposed
+          - accepted
+          - superseded
+        default: draft
+      - label: Owner
+        name: owner
+        widget: string
+        required: true
+      - label: Created
+        name: created
+        widget: datetime
+        required: true
+      - label: Updated
+        name: updated
+        widget: datetime
+        required: true
+      - label: Tags
+        name: tags
+        widget: list
+        required: false
+      - label: Summary
+        name: summary
+        widget: text
+        required: false
+      - label: Related Process
+        name: related_process
+        widget: string
+        required: true
+      - label: Related Prds
+        name: related_prds
+        widget: list
+        required: false
+      - label: Related Standards
+        name: related_standards
+        widget: list
+        required: false
+      - label: Related Systems
+        name: related_systems
+        widget: list
+        required: false
+      - label: Body
+        name: body
+        widget: markdown
+        required: true
+        modes:
+          - raw
+        hint: >-
+          Required sections: Preconditions (bullet list), Materials/Access (bullet list), Procedure (numbered list),
+          Validation, Rollback
+        default: |-
+          ## Preconditions
+
+          - Item one
+          - Item two
+
+          ## Materials/Access
+
+          - Item one
+          - Item two
+
+          ## Procedure
+
+          1. First item
+          2. Second item
+
+          ## Validation
+
+          [Describe here...]
+
+          ## Rollback
+
+          [Describe here...]
+  - name: runbooks
+    label: 🔧 Runbooks
+    label_singular: Runbook
+    folder: content/50_Runbooks
+    create: true
+    nested:
+      depth: 10
+    slug: "{{slug}}"
+    extension: md
+    format: yaml-frontmatter
+    fields:
+      - label: Id
+        name: id
+        widget: string
+        required: true
+      - label: Title
+        name: title
+        widget: string
+        required: true
+      - label: Type
+        name: type
+        widget: hidden
+        required: true
+        default: runbook
+      - label: Status
+        name: status
+        widget: select
+        required: true
+        options:
+          - draft
+          - review
+          - approved
+          - deprecated
+          - proposed
+          - accepted
+          - superseded
+        default: draft
+      - label: Owner
+        name: owner
+        widget: string
+        required: true
+      - label: Created
+        name: created
+        widget: datetime
+        required: true
+      - label: Updated
+        name: updated
+        widget: datetime
+        required: true
+      - label: Tags
+        name: tags
+        widget: list
+        required: false
+      - label: Summary
+        name: summary
+        widget: text
+        required: false
+      - label: Body
+        name: body
+        widget: markdown
+        required: true
+        modes:
+          - raw
+        hint: >-
+          Required sections: Service (bullet list), Alerts (bullet list), Diagnosis Steps (numbered list), Remediation
+          Steps (numbered list), Escalation, Dashboards (bullet list)
+        default: |-
+          ## Service
+
+          - Item one
+          - Item two
+
+          ## Alerts
+
+          - Item one
+          - Item two
+
+          ## Diagnosis Steps
+
+          1. First item
+          2. Second item
+
+          ## Remediation Steps
+
+          1. First item
+          2. Second item
+
+          ## Escalation
+
+          [Describe here...]
+
+          ## Dashboards
+
+          - Item one
+          - Item two
+  - name: meetings
+    label: 📅 Meetings
+    label_singular: Meeting
+    folder: content/60_Meetings
+    create: true
+    nested:
+      depth: 10
+    slug: "{{year}}-{{month}}-{{day}}-{{slug}}"
+    extension: md
+    format: yaml-frontmatter
+    fields:
+      - label: Id
+        name: id
+        widget: string
+        required: true
+      - label: Title
+        name: title
+        widget: string
+        required: true
+      - label: Type
+        name: type
+        widget: hidden
+        required: true
+        default: meeting
+      - label: Status
+        name: status
+        widget: select
+        required: true
+        options:
+          - draft
+          - review
+          - approved
+          - deprecated
+          - proposed
+          - accepted
+          - superseded
+        default: draft
+      - label: Owner
+        name: owner
+        widget: string
+        required: true
+      - label: Created
+        name: created
+        widget: datetime
+        required: true
+      - label: Updated
+        name: updated
+        widget: datetime
+        required: true
+      - label: Tags
+        name: tags
+        widget: list
+        required: false
+      - label: Summary
+        name: summary
+        widget: text
+        required: false
+      - label: Company
+        name: company
+        widget: string
+        required: true
+      - label: Topic
+        name: topic
+        widget: string
+        required: true
+      - label: Meeting Date
+        name: meeting_date
+        widget: datetime
+        required: true
+      - label: Our Attendees
+        name: our_attendees
+        widget: list
+        required: false
+      - label: Their Attendees
+        name: their_attendees
+        widget: list
+        required: false
+      - label: Related Docs
+        name: related_docs
+        widget: list
+        required: false
+      - label: Body
+        name: body
+        widget: markdown
+        required: true
+        modes:
+          - raw
+        hint: >-
+          Required sections: Meeting Details, Observations by Domain (bullet list), Key Metrics & Data Points (bullet
+          list), Preliminary Scorecard Hooks (bullet list), Risks and Mitigations, Decisions & Next Steps
+        default: |-
+          ## Meeting Details
+
+          [Describe here...]
+
+          ## Observations by Domain
+
+          - Item one
+          - Item two
+
+          ## Key Metrics & Data Points
+
+          - Item one
+          - Item two
+
+          ## Preliminary Scorecard Hooks
+
+          - Item one
+          - Item two
+
+          ## Risks and Mitigations
+
+          | Column 1 | Column 2 |
+          |----------|----------|
+          | Data | Data |
+
+          ## Decisions & Next Steps
+
+          [Describe here...]
+  - name: systems
+    label: 🖥️ Systems
+    label_singular: System
+    folder: content/75_Systems
+    create: true
+    nested:
+      depth: 10
+    slug: "{{slug}}"
+    extension: md
+    format: yaml-frontmatter
+    fields:
+      - label: Id
+        name: id
+        widget: string
+        required: true
+      - label: Title
+        name: title
+        widget: string
+        required: true
+      - label: Type
+        name: type
+        widget: hidden
+        required: true
+        default: system
+      - label: Status
+        name: status
+        widget: select
+        required: true
+        options:
+          - draft
+          - review
+          - approved
+          - deprecated
+          - proposed
+          - accepted
+          - superseded
+        default: draft
+      - label: Owner
+        name: owner
+        widget: string
+        required: true
+      - label: Created
+        name: created
+        widget: datetime
+        required: true
+      - label: Updated
+        name: updated
+        widget: datetime
+        required: true
+      - label: Tags
+        name: tags
+        widget: list
+        required: false
+      - label: Summary
+        name: summary
+        widget: text
+        required: false
+      - label: Owner Team
+        name: owner_team
+        widget: string
+        required: true
+      - label: Repos
+        name: repos
+        widget: list
+        required: false
+      - label: Runtime
+        name: runtime
+        widget: string
+        required: true
+      - label: Sla
+        name: sla
+        widget: string
+        required: false
+      - label: Dependencies
+        name: dependencies
+        widget: list
+        required: false
+      - label: Runbooks
+        name: runbooks
+        widget: list
+        required: false
+      - label: Body
+        name: body
+        widget: markdown
+        required: true
+        modes:
+          - raw
+        hint: >-
+          Required sections: Overview, Architecture, Repositories (bullet list), Runtime Environment, Dependencies
+          (bullet list)
+        default: |-
+          ## Overview
+
+          [Describe here...]
+
+          ## Architecture
+
+          [Describe here...]
+
+          ## Repositories
+
+          - Item one
+          - Item two
+
+          ## Runtime Environment
+
+          [Describe here...]
+
+          ## Dependencies
+
+          - Item one
+          - Item two
+  - name: scorecards
+    label: 📊 Scorecards
+    label_singular: Scorecard
+    folder: content/80_Scorecards
+    create: true
+    nested:
+      depth: 10
+    slug: "{{slug}}"
+    extension: md
+    format: yaml-frontmatter
+    fields:
+      - label: Id
+        name: id
+        widget: string
+        required: true
+      - label: Title
+        name: title
+        widget: string
+        required: true
+      - label: Type
+        name: type
+        widget: hidden
+        required: true
+        default: scorecard
+      - label: Status
+        name: status
+        widget: select
+        required: true
+        options:
+          - draft
+          - review
+          - approved
+          - deprecated
+          - proposed
+          - accepted
+          - superseded
+        default: draft
+      - label: Owner
+        name: owner
+        widget: string
+        required: true
+      - label: Created
+        name: created
+        widget: datetime
+        required: true
+      - label: Updated
+        name: updated
+        widget: datetime
+        required: true
+      - label: Tags
+        name: tags
+        widget: list
+        required: false
+      - label: Summary
+        name: summary
+        widget: text
+        required: false
+      - label: Dimensions
+        name: dimensions
+        widget: list
+        required: true
+      - label: Weighted Total
+        name: weighted_total
+        widget: string
+        required: false
+      - label: Overall Summary
+        name: overall_summary
+        widget: string
+        required: true
+      - label: Strengths
+        name: strengths
+        widget: list
+        required: false
+      - label: Top Risks
+        name: top_risks
+        widget: list
+        required: false
+      - label: Recommendation
+        name: recommendation
+        widget: select
+        required: false
+        options:
+          - Proceed
+          - Proceed with conditions
+          - Do not proceed
+        default: Proceed
+      - label: Metrics
+        name: metrics
+        widget: string
+        required: false
+      - label: Risks
+        name: risks
+        widget: list
+        required: false
+      - label: Action Plan
+        name: action_plan
+        widget: list
+        required: false
+      - label: Related Docs
+        name: related_docs
+        widget: list
+        required: false
+      - label: Body
+        name: body
+        widget: markdown
+        required: true
+        modes:
+          - raw
+        hint: >-
+          Required sections: Overall Summary, Dimensions, Strengths (bullet list), Top Risks (bullet list),
+          Recommendation, Action Plan
+        default: |-
+          ## Overall Summary
+
+          [Describe here...]
+
+          ## Dimensions
+
+          [Describe here...]
+
+          ## Strengths
+
+          - Item one
+          - Item two
+
+          ## Top Risks
+
+          - Item one
+          - Item two
+
+          ## Recommendation
+
+          [Describe here...]
+
+          ## Action Plan
+
+          [Describe here...]
+  - name: adrs
+    label: 🏗️ ADRs
+    label_singular: ADR
+    folder: content/90_Architecture/ADRs
+    create: true
+    nested:
+      depth: 10
+    slug: ADR-{{fields.adr_number}}-{{slug}}
+    extension: md
+    format: yaml-frontmatter
+    fields:
+      - label: Id
+        name: id
+        widget: string
+        required: true
+      - label: Title
+        name: title
+        widget: string
+        required: true
+      - label: Type
+        name: type
+        widget: hidden
+        required: true
+        default: adr
+      - label: Status
+        name: status
+        widget: select
+        required: true
+        options:
+          - proposed
+          - accepted
+          - deprecated
+          - superseded
+        default: proposed
+      - label: Owner
+        name: owner
+        widget: string
+        required: true
+      - label: Created
+        name: created
+        widget: datetime
+        required: true
+      - label: Updated
+        name: updated
+        widget: datetime
+        required: true
+      - label: Tags
+        name: tags
+        widget: list
+        required: false
+      - label: Summary
+        name: summary
+        widget: text
+        required: false
+      - label: Supersedes
+        name: supersedes
+        widget: string
+        required: false
+      - label: Superseded By
+        name: superseded_by
+        widget: string
+        required: false
+      - label: Body
+        name: body
+        widget: markdown
+        required: true
+        modes:
+          - raw
+        hint: "Required sections: Context, Decision, Consequences"
+        default: |-
+          ## Context
+
+          [Describe here...]
+
+          ## Decision
+
+          [Describe here...]
+
+          ## Consequences
+
+          [Describe here...]
+  - name: tdds
+    label: 📐 TDDs
+    label_singular: TDD
+    folder: content/90_Architecture/TDDs
+    create: true
+    nested:
+      depth: 10
+    slug: "{{slug}}"
+    extension: md
+    format: yaml-frontmatter
+    fields:
+      - label: Id
+        name: id
+        widget: string
+        required: true
+      - label: Title
+        name: title
+        widget: string
+        required: true
+      - label: Type
+        name: type
+        widget: hidden
+        required: true
+        default: tdd
+      - label: Status
+        name: status
+        widget: select
+        required: true
+        options:
+          - draft
+          - review
+          - approved
+          - deprecated
+          - proposed
+          - accepted
+          - superseded
+        default: draft
+      - label: Owner
+        name: owner
+        widget: string
+        required: true
+      - label: Created
+        name: created
+        widget: datetime
+        required: true
+      - label: Updated
+        name: updated
+        widget: datetime
+        required: true
+      - label: Tags
+        name: tags
+        widget: list
+        required: false
+      - label: Summary
+        name: summary
+        widget: text
+        required: false
+      - label: Related Adrs
+        name: related_adrs
+        widget: list
+        required: false
+      - label: Body
+        name: body
+        widget: markdown
+        required: true
+        modes:
+          - raw
+        hint: >-
+          Required sections: Summary, Overview, Architecture, Information Model, Interfaces, Files and Layout, Work
+          Plan, Risks and Mitigations
+        default: |-
+          ## Summary
+
+          [Describe here...]
+
+          ## Overview
+
+          [Describe here...]
+
+          ## Architecture
+
+          [Describe here...]
+
+          ## Information Model
+
+          [Describe here...]
+
+          ## Interfaces
+
+          [Describe here...]
+
+          ## Files and Layout
+
+          [Describe here...]
+
+          ## Work Plan
+
+          [Describe here...]
+
+          ## Risks and Mitigations
+
+          [Describe here...]
+  - name: prds
+    label: 📦 PRDs
+    label_singular: PRD
+    folder: content/100_Products/PRDs
+    create: true
+    nested:
+      depth: 10
+    slug: "{{slug}}"
+    extension: md
+    format: yaml-frontmatter
+    fields:
+      - label: Id
+        name: id
+        widget: string
+        required: true
+      - label: Title
+        name: title
+        widget: string
+        required: true
+      - label: Type
+        name: type
+        widget: hidden
+        required: true
+        default: prd
+      - label: Status
+        name: status
+        widget: select
+        required: true
+        options:
+          - draft
+          - review
+          - approved
+          - deprecated
+          - proposed
+          - accepted
+          - superseded
+        default: draft
+      - label: Owner
+        name: owner
+        widget: string
+        required: true
+      - label: Created
+        name: created
+        widget: datetime
+        required: true
+      - label: Updated
+        name: updated
+        widget: datetime
+        required: true
+      - label: Tags
+        name: tags
+        widget: list
+        required: false
+      - label: Summary
+        name: summary
+        widget: text
+        required: false
+      - label: Related Prds
+        name: related_prds
+        widget: list
+        required: false
+      - label: Related Tdds
+        name: related_tdds
+        widget: list
+        required: false
+      - label: Related Standards
+        name: related_standards
+        widget: list
+        required: false
+      - label: Body
+        name: body
+        widget: markdown
+        required: true
+        modes:
+          - raw
+        hint: >-
+          Required sections: Summary, Goals, In Scope (bullet list), Out of Scope (bullet list), Users and Flows,
+          Requirements, KPIs, Information Architecture, Data Model, Non-Functional, Constraints, Risks, Milestones
+        default: |-
+          ## Summary
+
+          [Describe here...]
+
+          ## Goals
+
+          [Describe here...]
+
+          ## In Scope
+
+          - Item one
+          - Item two
+
+          ## Out of Scope
+
+          - Item one
+          - Item two
+
+          ## Users and Flows
+
+          [Describe here...]
+
+          ## Requirements
+
+          [Describe here...]
+
+          ## KPIs
+
+          [Describe here...]
+
+          ## Information Architecture
+
+          [Describe here...]
+
+          ## Data Model
+
+          [Describe here...]
+
+          ## Non-Functional
+
+          [Describe here...]
+
+          ## Constraints
+
+          [Describe here...]
+
+          ## Risks
+
+          [Describe here...]
+
+          ## Milestones
+
+          [Describe here...]
+  - name: capabilities
+    label: 🎯 Capabilities
+    label_singular: Capability
+    folder: content/110_Capabilities
+    create: true
+    nested:
+      depth: 10
+    slug: "{{slug}}"
+    extension: md
+    format: yaml-frontmatter
+    fields:
+      - label: Id
+        name: id
+        widget: string
+        required: true
+      - label: Title
+        name: title
+        widget: string
+        required: true
+      - label: Type
+        name: type
+        widget: hidden
+        required: true
+        default: capability
+      - label: Status
+        name: status
+        widget: select
+        required: true
+        options:
+          - draft
+          - review
+          - approved
+          - deprecated
+          - proposed
+          - accepted
+          - superseded
+        default: draft
+      - label: Owner
+        name: owner
+        widget: string
+        required: true
+      - label: Created
+        name: created
+        widget: datetime
+        required: true
+      - label: Updated
+        name: updated
+        widget: datetime
+        required: true
+      - label: Tags
+        name: tags
+        widget: list
+        required: false
+      - label: Summary
+        name: summary
+        widget: text
+        required: false
+      - label: Evidence Links
+        name: evidence_links
+        widget: list
+        required: false
+      - label: Body
+        name: body
+        widget: markdown
+        required: true
+        modes:
+          - raw
+        hint: >-
+          Required sections: Domain (bullet list), Maturity (0–5), Metrics (bullet list), Evidence Links (bullet list),
+          Notes
+        default: |-
+          ## Domain
+
+          - Item one
+          - Item two
+
+          ## Maturity (0–5)
+
+          [Describe here...]
+
+          ## Metrics
+
+          - Item one
+          - Item two
+
+          ## Evidence Links
+
+          - Item one
+          - Item two
+
+          ## Notes
+
+          [Describe here...]
+  - name: references
+    label: 📚 References
+    label_singular: Reference
+    folder: content/200_References
+    create: true
+    nested:
+      depth: 10
+    slug: "{{slug}}"
+    extension: md
+    format: yaml-frontmatter
+    fields:
+      - label: Id
+        name: id
+        widget: string
+        required: true
+      - label: Title
+        name: title
+        widget: string
+        required: true
+      - label: Type
+        name: type
+        widget: hidden
+        required: true
+        default: reference
+      - label: Status
+        name: status
+        widget: select
+        required: true
+        options:
+          - draft
+          - published
+          - archived
+        default: draft
+      - label: Owner
+        name: owner
+        widget: string
+        required: true
+      - label: Created
+        name: created
+        widget: datetime
+        required: true
+      - label: Updated
+        name: updated
+        widget: datetime
+        required: true
+      - label: Tags
+        name: tags
+        widget: list
+        required: false
+      - label: Summary
+        name: summary
+        widget: text
+        required: false
+      - label: Upstream Url
+        name: upstream_url
+        widget: string
+        required: true
+      - label: Source Prefix
+        name: source_prefix
+        widget: string
+        required: false
+      - label: Last Synced
+        name: last_synced
+        widget: datetime
+        required: true
+      - label: Attribution
+        name: attribution
+        widget: string
+        required: false
+      - label: License
+        name: license
+        widget: string
+        required: false
+      - label: Upstream Version
+        name: upstream_version
+        widget: string
+        required: false
+      - label: Category
+        name: category
+        widget: select
+        required: false
+        options:
+          - documentation
+          - api-reference
+          - blog-post
+          - standard
+          - specification
+          - tutorial
+          - other
+        default: documentation
+      - label: Body
+        name: body
+        widget: markdown
+        required: true
+        modes:
+          - raw

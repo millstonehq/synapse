@@ -1,0 +1,30 @@
+{
+  "$id": "flow.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "allOf": [{ "$ref": "base.schema.json" }],
+  "type": "object",
+  "properties": {
+    "type": { "const": "flow" },
+    "source_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL to the original Tango workflow recording"
+    },
+    "feature_area": {
+      "type": "string",
+      "description": "Product area this flow covers (e.g. 'Project Management', 'Activity Summary')"
+    },
+    "related_prds": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Related PRD document IDs"
+    }
+  },
+  "required": ["type"],
+  "additionalProperties": false,
+  "x-synapse": {
+    "folder": "100_Products/Flows",
+    "displayLabel": "Flow",
+    "cmsCollection": "flows"
+  }
+}

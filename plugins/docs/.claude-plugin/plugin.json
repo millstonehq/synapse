@@ -1,0 +1,11 @@
+{
+  "name": "synapse-docs",
+  "version": "1.0.0",
+  "description": "Comprehensive documentation authoring framework with skills and agents for vault optimization, content curation, knowledge graph management, and automated documentation generation",
+  "author": {
+    "name": "Millstone",
+    "email": "engineering@millstone.ai"
+  },
+  "repository": "https://github.com/millstonehq/synapse",
+  "license": "MIT"
+}

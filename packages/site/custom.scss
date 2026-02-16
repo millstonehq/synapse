@@ -1,0 +1,390 @@
+// Custom styles for Synapse Documentation Framework
+// This file should be copied to site/quartz/quartz/styles/custom.scss
+
+// Document type badges - visual indicators for different doc types
+.meta {
+  &[data-type="policy"]::before {
+    content: "📋 Policy";
+    @include badge(var(--secondary));
+  }
+
+  &[data-type="standard"]::before {
+    content: "📐 Standard";
+    @include badge(var(--tertiary));
+  }
+
+  &[data-type="process"]::before {
+    content: "⚙️ Process";
+    @include badge(#5f7aa6);
+  }
+
+  &[data-type="sop"]::before {
+    content: "📝 SOP";
+    @include badge(#7aa65f);
+  }
+
+  &[data-type="runbook"]::before {
+    content: "🚀 Runbook";
+    @include badge(#a67a5f);
+  }
+
+  &[data-type="system"]::before {
+    content: "🖥️ System";
+    @include badge(#a65f7a);
+  }
+
+  &[data-type="adr"]::before {
+    content: "🏛️ ADR";
+    @include badge(#6b5b95);
+  }
+
+  &[data-type="prd"]::before {
+    content: "📱 PRD";
+    @include badge(#ff6f61);
+  }
+
+  &[data-type="capability"]::before {
+    content: "💡 Capability";
+    @include badge(#92a8d1);
+  }
+
+  &[data-type="tdd"]::before {
+    content: "🔧 TDD";
+    @include badge(#955251);
+  }
+}
+
+// Badge mixin
+@mixin badge($bg-color) {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  background: $bg-color;
+  color: var(--light);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  margin-right: 0.5rem;
+  font-weight: 500;
+}
+
+// Status indicators
+.status-indicator {
+  display: inline-block;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-left: 0.5rem;
+
+  &[data-status="draft"] {
+    background: #ffeaa7;
+    color: #2d3436;
+  }
+
+  &[data-status="review"] {
+    background: #74b9ff;
+    color: #2d3436;
+  }
+
+  &[data-status="approved"] {
+    background: #55efc4;
+    color: #2d3436;
+  }
+
+  &[data-status="active"] {
+    background: #00b894;
+    color: white;
+  }
+
+  &[data-status="deprecated"] {
+    background: #636e72;
+    color: white;
+  }
+}
+
+// Enhanced graph container
+.graph-container {
+  h3 {
+    font-weight: 600;
+    color: var(--secondary);
+    margin-bottom: 1rem;
+  }
+
+  #graph-container {
+    border-radius: 8px;
+    background: var(--highlight);
+    padding: 1rem;
+  }
+}
+
+// Enhanced backlinks section
+.backlinks {
+  h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--secondary);
+    border-bottom: 2px solid var(--lightgray);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  ul {
+    list-style: none;
+    padding: 0;
+
+    li {
+      margin-bottom: 0.5rem;
+      padding: 0.5rem;
+      background: var(--highlight);
+      border-radius: 4px;
+      transition: background 0.2s ease;
+
+      &:hover {
+        background: var(--lightgray);
+      }
+
+      a {
+        text-decoration: none;
+        color: var(--dark);
+
+        &:hover {
+          color: var(--secondary);
+        }
+      }
+    }
+  }
+}
+
+// Enhanced tag styling
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 1rem 0;
+
+  .tag-link {
+    padding: 0.2rem 0.6rem;
+    background: var(--highlight);
+    border-radius: 20px;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    color: var(--dark);
+
+    &:hover {
+      background: var(--tertiary);
+      color: var(--light);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    &::before {
+      content: "#";
+      opacity: 0.5;
+      margin-right: 2px;
+    }
+  }
+}
+
+// Explorer (file tree) enhancements
+.explorer {
+  .folder {
+    font-weight: 600;
+    color: var(--secondary);
+
+    &.collapsed > .collapse-icon::before {
+      content: "▶";
+    }
+
+    &.expanded > .collapse-icon::before {
+      content: "▼";
+    }
+  }
+
+  li.file {
+    &.active {
+      background: var(--highlight);
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      margin-left: -0.4rem;
+      margin-right: -0.4rem;
+    }
+  }
+}
+
+// Search input enhancements
+.search {
+  #search-bar {
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    border: 2px solid var(--lightgray);
+    background: var(--light);
+    width: 100%;
+    transition: border-color 0.2s ease;
+
+    &:focus {
+      outline: none;
+      border-color: var(--secondary);
+      box-shadow: 0 0 0 3px rgba(40, 75, 99, 0.1);
+    }
+  }
+
+  .search-results {
+    max-height: 400px;
+    overflow-y: auto;
+    margin-top: 1rem;
+    padding: 0.5rem;
+    background: var(--light);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    
+    .result-item {
+      padding: 0.5rem;
+      border-radius: 4px;
+      transition: background 0.2s ease;
+
+      &:hover {
+        background: var(--highlight);
+      }
+    }
+  }
+}
+
+// Table of contents improvements
+.toc {
+  .depth-1 {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+
+  .depth-2 {
+    padding-left: 1rem;
+    font-size: 0.95rem;
+  }
+
+  .depth-3 {
+    padding-left: 2rem;
+    font-size: 0.9rem;
+    opacity: 0.9;
+  }
+}
+
+// Breadcrumbs styling
+.breadcrumbs {
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+
+  .breadcrumb-element {
+    color: var(--gray);
+
+    &:not(:last-child)::after {
+      content: "›";
+      margin: 0 0.5rem;
+      color: var(--lightgray);
+    }
+
+    a {
+      color: var(--secondary);
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+}
+
+// ADR-specific styling
+article[data-type="adr"] {
+  .article-title::before {
+    content: attr(data-id);
+    display: block;
+    font-size: 0.8em;
+    color: var(--gray);
+    font-weight: normal;
+    margin-bottom: 0.5rem;
+  }
+}
+
+// Responsive adjustments
+@media (max-width: 768px) {
+  .meta[data-type]::before {
+    display: block;
+    margin-bottom: 0.5rem;
+    margin-right: 0;
+  }
+
+  .tags {
+    margin-top: 0.5rem;
+  }
+
+  .status-indicator {
+    display: block;
+    margin-left: 0;
+    margin-top: 0.5rem;
+    width: fit-content;
+  }
+
+  .explorer {
+    font-size: 0.95rem;
+  }
+}
+
+// Dark mode specific adjustments
+[saved-theme="dark"] {
+  .status-indicator {
+    &[data-status="draft"] {
+      background: #f39c12;
+      color: #2c3e50;
+    }
+
+    &[data-status="review"] {
+      background: #3498db;
+      color: #ecf0f1;
+    }
+
+    &[data-status="approved"] {
+      background: #27ae60;
+      color: #ecf0f1;
+    }
+  }
+
+  .search #search-bar {
+    background: var(--lightgray);
+    border-color: var(--gray);
+  }
+
+  .backlinks ul li {
+    background: rgba(255, 255, 255, 0.05);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+  }
+
+  .tag-link {
+    background: rgba(255, 255, 255, 0.05);
+
+    &:hover {
+      background: var(--secondary);
+    }
+  }
+}
+
+// Print styles
+@media print {
+  .graph-container,
+  .backlinks,
+  .search,
+  .explorer,
+  .darkmode,
+  .toc {
+    display: none !important;
+  }
+
+  article {
+    max-width: 100%;
+  }
+}

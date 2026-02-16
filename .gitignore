@@ -1,0 +1,211 @@
+# ========================================
+# Development & Dependencies
+# ========================================
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# ========================================
+# Build Outputs
+# ========================================
+
+# TypeScript/JavaScript builds
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Site/Documentation builds (Quartz)
+site/public/
+site/.quartz-cache/
+
+
+# ========================================
+# Logs & Debug
+# ========================================
+
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+dev-debug.log
+
+# ========================================
+# IDE & Editor
+# ========================================
+
+# VS Code
+.vscode/
+
+# IntelliJ/WebStorm
+.idea/
+*.iml
+
+# Sublime
+*.sublime-*
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Visual Studio
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Aider
+.aider*
+
+# ========================================
+# OS Files
+# ========================================
+
+# macOS
+.DS_Store
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+.directory
+
+# ========================================
+# Testing & Coverage
+# ========================================
+
+coverage/
+*.lcov
+.nyc_output/
+
+# ========================================
+# Cache & Temporary
+# ========================================
+
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+tmp/
+temp/
+.tmp/
+.npm
+.yarn-integrity
+
+# Scratch/research data (LLM outputs, iteration data)
+scratch/
+
+# ========================================
+# Obsidian
+# ========================================
+
+# User-specific workspace state
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+
+# Bundled plugin code (downloadable, not source)
+.obsidian/plugins/*/main.js
+.obsidian/plugins/*/styles.css
+
+# Obsidian trash
+.trash/
+
+# ========================================
+# Security - NEVER commit these
+# ========================================
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+*.cert
+*.pfx
+*.p12
+
+# SSH keys
+id_rsa
+id_rsa.pub
+id_dsa
+id_dsa.pub
+id_ecdsa
+id_ecdsa.pub
+id_ed25519
+id_ed25519.pub
+
+# ========================================
+# Database
+# ========================================
+
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# ========================================
+# Backup & Archives
+# ========================================
+
+*.backup
+*.bak
+*.orig
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# ========================================
+# Python (if any utility scripts)
+# ========================================
+
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+env/
+.venv/
+
+# ========================================
+# Project-specific
+# ========================================
+
+# Plugin marketplace - ignore custom extensions
+plugins/*/agents/custom/
+plugins/*/skills/custom/
+plugins/*/commands/custom/
+!plugins/*/agents/custom/.gitkeep
+!plugins/*/skills/custom/.gitkeep
+!plugins/*/commands/custom/.gitkeep
+
+# Decap CMS dependencies (if using)
+decap/node_modules/
+
+# CLI package specific
+packages/cli/dist/
+packages/cli/node_modules/
+
+# Keep these
+!content/templates/examples/*.yaml
+!content/schemas/*.json
+
+out/
+
+.secret
+.repoprompt
+.deepeval/
+
+settings.local.json

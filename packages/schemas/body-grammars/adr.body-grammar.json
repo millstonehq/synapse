@@ -1,0 +1,46 @@
+{
+  "type": "adr",
+  "displayName": "Architecture Decision Record",
+  "sections": [
+    {
+      "id": "context",
+      "title": "Context",
+      "required": true,
+      "order": 1,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": ["paragraph", "list", "heading", "thematicBreak"]
+      }
+    },
+    {
+      "id": "decision",
+      "title": "Decision",
+      "required": true,
+      "order": 2,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": ["paragraph", "list", "heading", "code", "thematicBreak"]
+      }
+    },
+    {
+      "id": "consequences",
+      "title": "Consequences",
+      "required": true,
+      "order": 3,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": ["paragraph", "list", "heading", "code", "table", "thematicBreak"]
+      }
+    },
+    {
+      "id": "alternatives-considered",
+      "title": "Alternatives Considered",
+      "required": false,
+      "order": 4,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": ["paragraph", "list", "heading", "code", "table", "thematicBreak"]
+      }
+    }
+  ]
+}

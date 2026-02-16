@@ -1,0 +1,77 @@
+{
+  "type": "runbook",
+  "displayName": "Runbook",
+  "sections": [
+    {
+      "id": "service",
+      "title": "Service",
+      "required": true,
+      "order": 1,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "alerts",
+      "title": "Alerts",
+      "required": true,
+      "order": 2,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "diagnosis-steps",
+      "title": "Diagnosis Steps",
+      "required": true,
+      "order": 3,
+      "shape": {
+        "type": "list",
+        "ordered": true,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "remediation-steps",
+      "title": "Remediation Steps",
+      "required": true,
+      "order": 4,
+      "shape": {
+        "type": "list",
+        "ordered": true,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "escalation",
+      "title": "Escalation",
+      "required": true,
+      "order": 5,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "table",
+          "thematicBreak"
+        ]
+      }
+    },
+    {
+      "id": "dashboards",
+      "title": "Dashboards",
+      "required": true,
+      "order": 6,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    }
+  ]
+}

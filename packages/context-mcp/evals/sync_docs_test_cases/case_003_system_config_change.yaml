@@ -1,0 +1,43 @@
+# Test Case: System doc stale after config/infra change
+# Tests /sync-docs ability to detect system doc staleness
+# when infrastructure configuration changes.
+
+id: case_003_system_config_change
+name: Update system doc after rate limit and config change
+description: |
+  The payments API rate limit was increased from 100 to 200 requests per
+  15 minutes, and PayPal config was added. The system doc and TDD still
+  reference the old rate limit and Stripe-only config.
+
+task: |
+  Infrastructure configuration changes to the payments API.
+  Key changes in the git diff:
+  - src/config/index.ts: rateLimit.max changed from 100 to 200.
+    Added paypal config block with clientId, secret, sandbox fields.
+  - No route or service logic changes.
+
+  Run /sync-docs to find and update stale documentation.
+
+fixture: synapse_vault
+
+ground_truth:
+  expected_stale_docs:
+    - content/70_Systems/payments-system.md
+
+  acceptable_docs:
+    - content/90_Architecture/TDDs/payments-api-tdd.md
+
+  expected_stale_sections:
+    payments-system:
+      - Configuration
+      - Rate Limiting
+
+thresholds:
+  doc_recall: 1.0
+  doc_precision: 0.5
+  update_accuracy: 0.7
+  staleness_detection: 0.7
+  update_minimality: 0.8
+  sync_completeness: 0.8
+  mcp_search_usage: 0.7
+  performance_ms: 180000

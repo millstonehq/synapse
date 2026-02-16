@@ -1,0 +1,82 @@
+{
+  "$id": "reference.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-synapse": {
+    "folder": "200_References",
+    "displayLabel": "Reference",
+    "cmsCollection": "references"
+  },
+  "allOf": [
+    {
+      "$ref": "base.schema.json"
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "type": {
+      "const": "reference"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Title of the reference document"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Brief description or excerpt"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "published", "archived"],
+      "description": "Status of the reference document"
+    },
+    "upstream_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Source URL where this reference content originates"
+    },
+    "source_prefix": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Manual override for source prefix in filename (e.g., 'claude-code', 'dora'). Only needed if automatic extraction from upstream_url fails or needs customization."
+    },
+    "last_synced": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of when content was last synchronized from upstream"
+    },
+    "attribution": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Original author or organization"
+    },
+    "license": {
+      "type": "string",
+      "minLength": 1,
+      "description": "License under which the upstream content is distributed"
+    },
+    "upstream_version": {
+      "type": "string",
+      "description": "Version or commit hash from upstream source (optional)"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "documentation",
+        "api-reference",
+        "blog-post",
+        "standard",
+        "specification",
+        "tutorial",
+        "other"
+      ],
+      "description": "Category of external reference"
+    }
+  },
+  "required": [
+    "type",
+    "upstream_url",
+    "last_synced"
+  ],
+  "additionalProperties": false
+}

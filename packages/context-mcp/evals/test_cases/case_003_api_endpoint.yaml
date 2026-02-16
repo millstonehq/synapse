@@ -1,0 +1,44 @@
+# Test Case: Add New API Endpoint
+# Tests /discover's ability to find patterns for adding new features
+
+id: case_003_api_endpoint
+name: Add Password Reset Endpoint
+description: |
+  Adding a new feature that follows existing patterns.
+  /discover should find similar auth endpoints as examples.
+
+task: |
+  Add a new API endpoint POST /auth/forgot-password that sends
+  a password reset email to the user. Follow the existing
+  authentication patterns in the codebase.
+
+fixture: sample_api
+
+ground_truth:
+  required_files:
+    - src/routes/auth.ts
+    - src/services/user.ts
+    - src/models/user.ts
+
+  recommended_files:
+    - src/services/token.ts
+    - src/middleware/validation.ts
+    - src/types/auth.ts
+
+  architecture_topics:
+    - routes
+    - user service
+    - user model
+    - authentication patterns
+
+  expected_relationships:
+    - "route -> user service"
+    - "user service -> model"
+    - "validation middleware -> route"
+
+thresholds:
+  file_recall: 0.8
+  context_relevance: 0.7
+  architecture_clarity: 0.7
+  task_actionability: 0.7
+  mcp_tool_usage: 0.7

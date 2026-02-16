@@ -1,0 +1,47 @@
+{
+  "$id": "guide.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "allOf": [
+    {
+      "$ref": "base.schema.json"
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "type": {
+      "const": "guide"
+    },
+    "audience": {
+      "type": "string",
+      "enum": ["internal", "customer", "partner"],
+      "description": "Target audience for this guide"
+    },
+    "version": {
+      "type": "string",
+      "description": "Version of the guide"
+    },
+    "related_systems": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Related system documents"
+    },
+    "related_sops": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Related SOPs"
+    }
+  },
+  "required": [
+    "type"
+  ],
+  "additionalProperties": false,
+  "x-synapse": {
+    "folder": "55_Guides",
+    "displayLabel": "Guide",
+    "cmsCollection": "guides"
+  }
+}

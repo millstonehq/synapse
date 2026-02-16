@@ -1,0 +1,49 @@
+# Test Case: Understand MCP Semantic Search
+# Tests /discover on the synapse repo itself - specifically the context-mcp server
+
+id: case_004_mcp_semantic_search
+name: Understand Semantic Search Implementation
+description: |
+  A real-world task on the synapse repo: understanding how semantic search
+  works in the context-mcp server. This tests /discover on actual code
+  rather than a mock fixture.
+
+task: |
+  Help me understand how semantic search works in the context-mcp server.
+  I want to add a new search mode that combines semantic + full-text search
+  with adjustable weighting. Show me the current implementation and where
+  I would need to make changes.
+
+# Use the actual synapse repo
+fixture: synapse
+
+ground_truth:
+  # Core files for semantic search implementation
+  required_files:
+    - packages/context-mcp/src/tools/semantic-search.ts
+    - packages/context-mcp/src/embeddings/vector-index.ts
+
+  # Related files that would help with the task
+  recommended_files:
+    - packages/context-mcp/src/tools/file-search.ts
+    - packages/context-mcp/src/server.ts
+    - packages/context-mcp/src/embeddings/embeddings-provider.ts
+    - packages/context-mcp/src/embeddings/index.ts
+
+  architecture_topics:
+    - semantic search
+    - embeddings
+    - hybrid search
+    - vector similarity
+
+  expected_relationships:
+    - "semantic-search -> embeddings"
+    - "server -> semantic-search tool"
+    - "file-search -> FTS5"
+
+thresholds:
+  file_recall: 0.7
+  context_relevance: 0.7
+  architecture_clarity: 0.7
+  task_actionability: 0.7
+  mcp_tool_usage: 0.7

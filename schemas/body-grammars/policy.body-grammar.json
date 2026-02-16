@@ -1,0 +1,58 @@
+{
+  "type": "policy",
+  "displayName": "Policy Document",
+  "sections": [
+    {
+      "id": "scope",
+      "title": "Scope",
+      "required": true,
+      "order": 1,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "thematicBreak"
+        ]
+      }
+    },
+    {
+      "id": "rationale",
+      "title": "Rationale",
+      "required": true,
+      "order": 2,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": [
+          "paragraph",
+          "list",
+          "heading",
+          "thematicBreak"
+        ]
+      }
+    },
+    {
+      "id": "policy-statements",
+      "title": "Policy Statements",
+      "required": true,
+      "order": 3,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    },
+    {
+      "id": "related-standards",
+      "title": "Related Standards",
+      "required": true,
+      "order": 4,
+      "shape": {
+        "type": "list",
+        "ordered": false,
+        "minItems": 1
+      }
+    }
+  ]
+}

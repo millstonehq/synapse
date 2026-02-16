@@ -1,0 +1,38 @@
+{
+  "type": "flow",
+  "displayName": "User Flow",
+  "sections": [
+    {
+      "id": "steps",
+      "title": "Steps",
+      "alternativeTitles": ["Workflow Steps", "Flow Steps"],
+      "required": true,
+      "order": 1,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": ["paragraph", "list", "heading", "code", "image", "thematicBreak"]
+      }
+    },
+    {
+      "id": "expected-results",
+      "title": "Expected Results",
+      "alternativeTitles": ["Expected Outcomes", "Results"],
+      "required": true,
+      "order": 2,
+      "shape": {
+        "type": "flow",
+        "allowedNodes": ["paragraph", "list", "heading", "thematicBreak", "image"]
+      }
+    },
+    {
+      "id": "user-info",
+      "title": "User Info",
+      "alternativeTitles": ["User Information", "Test Context"],
+      "required": true,
+      "order": 3,
+      "shape": {
+        "type": "table"
+      }
+    }
+  ]
+}

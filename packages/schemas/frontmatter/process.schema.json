@@ -1,0 +1,54 @@
+{
+  "$id": "process.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-synapse": {
+    "folder": "30_Processes",
+    "displayLabel": "Process",
+    "cmsCollection": "processes"
+  },
+  "allOf": [
+    {
+      "$ref": "base.schema.json"
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "type": {
+      "const": "process"
+    },
+    "related_standards": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "related_prds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "related_tdds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "related_sops": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "related_systems": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "type"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,47 @@
+{
+  "$id": "sop.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-synapse": {
+    "folder": "40_SOPs",
+    "displayLabel": "SOP",
+    "cmsCollection": "sops"
+  },
+  "allOf": [
+    {
+      "$ref": "base.schema.json"
+    }
+  ],
+  "type": "object",
+  "properties": {
+    "type": {
+      "const": "sop"
+    },
+    "related_process": {
+      "type": "string",
+      "minLength": 1
+    },
+    "related_prds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "related_standards": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "related_systems": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "type",
+    "related_process"
+  ],
+  "additionalProperties": false
+}
