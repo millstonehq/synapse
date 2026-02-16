@@ -74,13 +74,13 @@ const COLLECTIONS: Record<string, {
     name: 'postmortems',
     label: 'Postmortems',
     labelSingular: 'Postmortem',
-    folder: 'content/70_Postmortems',
+    folder: 'content/85_Postmortems',
   },
   report: {
     name: 'reports',
     label: 'Reports',
     labelSingular: 'Report',
-    folder: 'content/70_Reports',
+    folder: 'content/80_Reports',
   },
   system: {
     name: 'systems',

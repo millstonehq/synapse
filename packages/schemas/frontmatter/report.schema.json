@@ -129,7 +129,7 @@
   ],
   "additionalProperties": false,
   "x-synapse": {
-    "folder": "70_Reports",
+    "folder": "80_Reports",
     "displayLabel": "Report",
     "cmsCollection": "reports"
   }

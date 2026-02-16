@@ -1,6 +1,6 @@
 {
   "name": "synapse-framework",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "description": "Synapse documentation framework - monorepo with CLI, site generator, and MCP server",
   "private": true,
   "type": "module",

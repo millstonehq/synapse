@@ -1,89 +1,95 @@
 ---
-id: investment-review-meeting
+id: q1-architecture-review-meeting
 type: meeting
-title: Investment Committee Review Meeting — Acme Corp
-status: draft
-owner: Technology Operating Partner
-created: "2025-10-18T19:48:03.145Z"
-updated: "2025-10-18T19:48:03.145Z"
+title: Q1 Architecture Review - Acme Corp Platform
+status: approved
+owner: Principal Engineer
+created: '2025-01-15T00:00:00.000Z'
+updated: '2025-01-15T00:00:00.000Z'
 tags:
   - meeting
-  - diligence
-  - investment-committee
-  - series-b
-summary: Technical due diligence review meeting with investment committee to discuss Acme Corp acquisition.
+  - architecture
+  - quarterly-review
+summary: >-
+  Quarterly architecture review assessing Acme Corp platform health,
+  technical debt, and Q1 priorities. USE A MEETING doc to capture
+  structured notes from a significant meeting - observations across
+  domains, metrics reviewed, health assessments, risks identified, and
+  decisions made. Meeting docs answer "what was discussed and decided?"
+  They create a record that can be referenced by action items, TDDs,
+  and capability assessments. Compare: a Report synthesizes trends over
+  time; a Meeting doc captures a single session. Action items from
+  meetings often spawn TDDs, ADRs, or backlog tickets.
 company: Acme Corp
-topic: Technical Due Diligence Findings
-meeting_date: "2025-01-15T14:00:00.000Z"
+topic: Q1 Architecture Review and Technical Debt Assessment
+meeting_date: '2025-01-15T14:00:00.000Z'
 example: true
 ---
+
 ## Meeting Details
 
-- **Company**: Acme Corp
-- **Topic**: Technical Due Diligence Findings
-- **Date/Time**: 2025-01-15T14:00:00.000Z
-- **Attendees (ours)**: Technology Operating Partner, Investment Partner, Deal Team Lead
-- **Attendees (theirs)**: CTO, VP Engineering, CEO
-- **Context**: Series B investment opportunity in B2B SaaS platform with $20M ARR growing 80% YoY
+- **Project**: Acme Corp Platform
+- **Topic**: Q1 Architecture Review and Technical Debt Assessment
+- **Date/Time**: 2025-01-15 2:00 PM CT
+- **Attendees (engineering)**: Principal Engineer, Tech Lead (Backend), Tech Lead (Frontend), DevOps Lead
+- **Attendees (product)**: Head of Product, Product Manager
+- **Context**: Post-MVP review to assess platform health before scaling to MSP milestone. 3 engineers currently, ramping to 5 in Q1.
 
 ## Observations by Domain
 
-- **Leadership & Org**: Strong technical leadership with 15+ years experience, stable team with low attrition
-- **Product & Delivery**: Well-defined roadmap, consistent delivery velocity, good product-market fit
-- **Engineering & Quality**: Modern CI/CD pipeline, 75% test coverage, automated deployment process
-- **Architecture & Platform**: Microservices architecture, cloud-native, some technical debt in legacy components
-- **Security & Risk**: SOC2 compliant, regular pen testing, secrets management needs improvement
-- **SRE/Operations**: Good observability, SLOs defined, incident response process mature
-- **Data & Analytics**: Basic analytics, ML readiness low, data warehouse in progress
-- **Infra/Cost**: AWS costs growing faster than revenue, optimization opportunities identified
+- **Backend / API**: NestJS API is stable with good module separation. MikroORM migrations are clean. Entity relationships for CRM module are solid. However, the event system is still using direct service calls rather than the designed queue architecture - this needs to happen before MSP.
+- **Frontend / Web**: React + MUI component library is maturing. Data grid integration for pricing tables is working well. Auth flows are complete including MFA. Technical debt: some components are doing direct API calls instead of going through the service layer.
+- **Database**: PostgreSQL schema is well-normalized. Seeding infrastructure is comprehensive (7 seed scripts). Index coverage is adequate for current load but will need review at 10x scale. No read replica strategy yet.
+- **Infrastructure**: Docker Compose setup works for dev. No Kubernetes yet - needed before production. CI/CD pipeline runs tests but doesn't deploy automatically. Worktree-based parallel development workflow is proving effective.
+- **Testing**: Unit test coverage is at 65% for API, 40% for frontend. Integration tests exist for critical paths (auth, RBAC, estimates). E2E tests cover login and roles. Gap: no load testing or chaos testing.
+- **Security**: JWT auth with HTTP-only cookies is solid. RBAC system with Laratrust-style permissions is complete. MFA with trusted devices implemented. Gap: no secrets rotation policy, no dependency vulnerability scanning in CI.
 
 ## Key Metrics & Data Points
 
-- **DORA**: Deploy daily, lead time 2 days, CFR 8%, MTTR 2 hours
-- **Coverage %**: 75% unit, 45% integration
-- **Manual regression days**: 3 person-days
-- **EOL components**: 2 critical (PHP 7.4, Redis 5)
-- **Autoscaling coverage**: 60% of services
-- **Secrets management**: Using AWS Secrets Manager for 40% of secrets
-- **Bus factor**: 3 for critical systems
+- **Test coverage**: 65% unit (API), 40% unit (frontend), 12 integration test suites
+- **Build time**: CI pipeline runs in ~4 minutes
+- **Tech debt tickets**: 23 open, 8 rated high priority
+- **Dependency freshness**: 2 packages more than 1 major version behind (MikroORM, Vite)
+- **API endpoints**: 47 implemented, 31 remaining for MSP
+- **Entity count**: 28 MikroORM entities defined
 
 ## Preliminary Scorecard Hooks
 
-- Engineering Execution: 4/5 - Strong CI/CD and testing practices
-- Architecture: 3/5 - Good foundation but technical debt accumulating
-- Security: 3/5 - Compliant but gaps in secrets management
-- Leadership: 4/5 - Experienced team with good retention
+- API Architecture: 4/5 - Clean module boundaries, good patterns, event system needs migration to queues
+- Frontend Architecture: 3/5 - Component library maturing but service layer discipline is inconsistent
+- Data Layer: 4/5 - Well-normalized schema, comprehensive seeding, needs read replica strategy
+- Infrastructure: 2/5 - Dev-only setup, no production infrastructure yet, CI doesn't auto-deploy
+- Testing: 3/5 - Good critical path coverage, gaps in load testing and E2E breadth
+- Security: 4/5 - Strong auth implementation, RBAC complete, needs dependency scanning
 
 ## Risks and Mitigations
 
 | Risk | Severity | Likelihood | Owner | Mitigation | Due Date |
 |------|----------|------------|-------|------------|----------|
-| Technical debt in payment system | High | Medium | VP Engineering | Refactor in Q2 2025 | Sun Jun 29 2025 19:00:00 GMT-0500 (Central Daylight Time) |
-| Key person dependency on architect | Medium | Low | CTO | Knowledge transfer and documentation | Sun Mar 30 2025 19:00:00 GMT-0500 (Central Daylight Time) |
-| AWS costs scaling faster than revenue | Medium | High | VP Engineering | Cost optimization project | Thu Feb 27 2025 18:00:00 GMT-0600 (Central Standard Time) |
+| Event system on direct calls won't scale for MSP workflows | High | High | Tech Lead (Backend) | Implement SQS queue architecture per event-architecture-final TDD | 2025-02-28 |
+| No production infrastructure | High | Certain | DevOps Lead | Set up Kubernetes cluster, ArgoCD, monitoring stack | 2025-03-15 |
+| Frontend service layer inconsistency | Medium | Medium | Tech Lead (Frontend) | Establish and enforce service layer pattern, add lint rule | 2025-02-14 |
+| No dependency vulnerability scanning | Medium | Medium | DevOps Lead | Add Dependabot + npm audit to CI pipeline | 2025-01-31 |
 
 ## Decisions & Next Steps
 
 ### Decisions
 
-- Proceed with investment subject to technical debt remediation plan
-- Require quarterly technical reviews for first year
-- Allocate additional budget for senior engineering hires
+- Event system migration to SQS is the top engineering priority for Q1 - blocks MSP milestone
+- Production infrastructure (K8s + monitoring) must be ready by March 15
+- Hire a dedicated DevOps/SRE engineer in Q1 to own infrastructure
+- Adopt trunk-based development with feature flags instead of long-lived feature branches
 
 ### Action Items
 
-- Complete security audit of secrets management (Security Lead - Fri Feb 14 2025 18:00:00 GMT-0600 (Central Standard Time))
-- Deliver technical debt remediation roadmap (VP Engineering - Fri Jan 31 2025 18:00:00 GMT-0600 (Central Standard Time))
-- Implement AWS cost optimization recommendations (DevOps Lead - Fri Mar 14 2025 19:00:00 GMT-0500 (Central Daylight Time))
+- Create TDD for event system migration to SQS (Tech Lead Backend - 2025-01-22)
+- ADR for Kubernetes vs ECS decision (DevOps Lead - 2025-01-24)
+- Set up Dependabot and npm audit in CI (DevOps Lead - 2025-01-31)
+- Audit frontend components for direct API calls, create refactor tickets (Tech Lead Frontend - 2025-02-07)
+- Write load testing plan for payment and estimate flows (QA - 2025-02-14)
 
 ### Follow-ups
 
-- Monthly check-ins on technical debt progress
-- Quarterly DORA metrics review
-- Security posture assessment in 6 months
-
-### Related Documents
-
-- \[\[Technology Due Diligence Standard]]
-- \[\[CTO Interview SOP]]
-- \[\[Technology Due Diligence Analysis Process]]
+- Bi-weekly architecture sync to track event system migration progress
+- Monthly tech debt review (rotate facilitator across tech leads)
+- Next quarterly architecture review: April 15, 2025

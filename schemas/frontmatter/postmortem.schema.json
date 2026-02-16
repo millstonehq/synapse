@@ -75,7 +75,7 @@
   ],
   "additionalProperties": false,
   "x-synapse": {
-    "folder": "70_Postmortems",
+    "folder": "85_Postmortems",
     "displayLabel": "Postmortem",
     "cmsCollection": "postmortems"
   }
