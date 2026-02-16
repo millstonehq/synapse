@@ -248,3 +248,59 @@ jobs:
         with:
           tag_name: v${{ steps.check.outputs.version }}
           generate_release_notes: true
+
+  deploy-pages:
+    name: Deploy to GitHub Pages
+    needs: [test-cli, validate-docs]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install workspace dependencies
+        run: npm ci -w packages/schemas -w packages/cli -w packages/site --ignore-scripts
+
+      - name: Build CLI (needed by site build)
+        run: npm run build -w packages/cli
+
+      - name: Setup Quartz submodule
+        working-directory: packages/site
+        run: npx tsx setup-quartz.ts
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Build site
+        env:
+          QUARTZ_BASE_URL: ${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: npm run build -w packages/site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: packages/site/quartz/public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

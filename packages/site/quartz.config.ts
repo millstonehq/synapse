@@ -8,7 +8,12 @@ import { CustomHeaderFooter } from "./plugins/CustomHeaderFooter"
  * This file should be copied into the Quartz submodule root after initialization.
  * The configuration enables graph visualization, backlinks, and tags as required
  * by SYN-P1-T02.
+ *
+ * Environment overrides (used in CI for GitHub Pages deployment):
+ *   QUARTZ_BASE_URL - e.g. "millstonehq.github.io/synapse"
  */
+const baseUrl = process.env.QUARTZ_BASE_URL ?? "synapse.local"
+
 const config: QuartzConfig = {
   configuration: {
     pageTitle: "🧬 Synapse Documentation",
@@ -16,7 +21,7 @@ const config: QuartzConfig = {
     enablePopovers: true,
     analytics: null,
     locale: "en-US",
-    baseUrl: "synapse.local",
+    baseUrl,
     ignorePatterns: ["private", "templates", ".obsidian", "_assets", "examples/*.yaml"],
     defaultDateType: "created",
     theme: {
