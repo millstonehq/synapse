@@ -5,12 +5,13 @@ title: Payments Platform PRD
 status: approved
 owner: Product Manager
 created: "2025-05-01T00:00:00.000Z"
-updated: "2025-05-01T00:00:00.000Z"
+updated: "2026-02-19T00:00:00.000Z"
 tags:
   - prd
   - payments
   - stripe
-summary: Product requirements for the payment processing platform using Stripe.
+  - paypal
+summary: Product requirements for the payment processing platform supporting Stripe and PayPal.
 related_tdds:
   - payments-api-tdd
 related_standards: []
@@ -18,7 +19,7 @@ related_standards: []
 
 ## Summary
 
-The Payments Platform enables users to make purchases through credit card payments processed via Stripe. The platform provides charge, refund, and history functionality.
+The Payments Platform enables users to make purchases through credit card payments processed via multiple payment providers (Stripe and PayPal). The platform provides charge, refund, and history functionality.
 
 ## Goals
 
@@ -28,13 +29,13 @@ The Payments Platform enables users to make purchases through credit card paymen
 
 ## In Scope
 
-- Credit card payments via Stripe
+- Credit card payments via Stripe and PayPal
 - Full refunds
 - Payment history with pagination
 
 ## Out of Scope
 
-- Alternative payment providers (PayPal, Apple Pay, etc.)
+- Alternative payment providers (Apple Pay, Google Pay, etc.)
 - Partial refunds
 - Subscription/recurring billing
 - Invoice generation
@@ -44,22 +45,23 @@ The Payments Platform enables users to make purchases through credit card paymen
 ### Payment Flow
 
 1. User selects items and proceeds to checkout
-2. User enters credit card details (Stripe Elements)
-3. System creates a Stripe PaymentIntent
-4. On success, user sees confirmation
+2. User selects payment provider (Stripe or PayPal)
+3. User enters payment details (Stripe Elements or PayPal)
+4. System processes payment via selected provider
+5. On success, user sees confirmation
 
 ### Refund Flow
 
 1. User requests a refund through support
 2. Admin processes full refund via admin panel
-3. Stripe reverses the charge
+3. System reverses the charge via the original payment provider
 4. User receives refund notification
 
 ## Requirements
 
 ### Functional
 
-- FR-1: Users can pay with credit cards via Stripe
+- FR-1: Users can pay with credit cards via Stripe or PayPal
 - FR-2: Admins can process full refunds
 - FR-3: Users can view payment history (paginated)
 - FR-4: All payments require authentication
@@ -68,7 +70,7 @@ The Payments Platform enables users to make purchases through credit card paymen
 
 - NFR-1: Payment processing < 2 seconds
 - NFR-2: 99.9% availability
-- NFR-3: PCI DSS compliance via Stripe
+- NFR-3: PCI DSS compliance via payment providers
 
 ## KPIs
 
@@ -82,11 +84,12 @@ Single payment service with REST API. No complex multi-service architecture need
 
 ## Data Model
 
-Payments are stored in Stripe. Local database stores only references:
-- `chargeId`: Stripe PaymentIntent ID
+Payments are stored in the respective payment provider. Local database stores only references:
+- `chargeId`: Payment provider charge ID (Stripe PaymentIntent ID or PayPal Order ID)
 - `userId`: Internal user ID
 - `amount`: Charge amount
 - `status`: Payment status
+- `provider`: Payment provider used (stripe or paypal)
 
 ## Non-Functional
 
@@ -96,14 +99,15 @@ Payments are stored in Stripe. Local database stores only references:
 
 ## Constraints
 
-- Must use Stripe as the sole payment provider
-- Must comply with PCI DSS (handled by Stripe Elements)
+- Must support Stripe and PayPal as payment providers
+- Must comply with PCI DSS (handled by payment provider elements)
 - No direct credit card number storage
 
 ## Risks
 
-- Stripe downtime affects all payments
+- Payment provider downtime affects payments processed via that provider
 - Currency conversion complexity for international users
+- Provider-specific API differences require careful integration testing
 
 ## Milestones
 

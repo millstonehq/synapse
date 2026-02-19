@@ -26,6 +26,9 @@ rate limit delays between test cases.
 """
 
 import os
+import shutil
+import subprocess
+import tempfile
 import time
 import yaml
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -184,6 +187,113 @@ def discovery_results() -> dict[str, DiscoverResult]:
 
 
 # =========================================================================
+# Parallel baseline (no-MCP, no slash command) infrastructure
+# =========================================================================
+
+# Heavy directories to skip when copying workspace for baseline runs.
+# These aren't needed for code exploration and would make the copy slow.
+_BASELINE_COPY_IGNORE = shutil.ignore_patterns(
+    "node_modules", ".git", "dist", ".venv", "__pycache__", ".pytest_cache",
+    "*.egg-info", ".mypy_cache",
+)
+
+
+def _copy_workspace_for_baseline(fixture_name: str) -> Path:
+    """Copy workspace to an isolated temp dir, stripping MCP config files.
+
+    This ensures the baseline claude process can't auto-discover MCP servers
+    from .mcp.json files in the project tree. Heavy directories (node_modules,
+    .git, dist, .venv) are skipped to keep the copy fast.
+    """
+    original = _get_workspace_for_fixture(fixture_name)
+    tmpdir = tempfile.mkdtemp(prefix=f"discover_baseline_{fixture_name}_")
+    workspace = Path(tmpdir) / fixture_name
+    shutil.copytree(original, workspace, ignore=_BASELINE_COPY_IGNORE)
+
+    # Remove any .mcp.json files so claude won't auto-discover MCP servers
+    for mcp_json in workspace.rglob(".mcp.json"):
+        mcp_json.unlink()
+
+    # Init git repo so git commands don't fail
+    subprocess.run(
+        ["git", "init"], cwd=str(workspace),
+        capture_output=True, check=False,
+    )
+    subprocess.run(
+        ["git", "add", "-A"], cwd=str(workspace),
+        capture_output=True, check=False,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "baseline workspace", "--allow-empty"],
+        cwd=str(workspace), capture_output=True, check=False,
+    )
+    return workspace
+
+
+def _run_single_discovery_baseline(case_id: str) -> tuple[str, DiscoverResult]:
+    """Run baseline discovery for a single case (thread-safe).
+
+    Baseline mode: vanilla prompt, no slash command, no MCP tools.
+    Copies workspace to a temp dir with .mcp.json files stripped so
+    claude won't auto-discover MCP servers.
+    """
+    case = load_test_case(case_id)
+    fixture = case.get("fixture", "synapse")
+    use_cli = _should_use_cli()
+    use_mock = _should_use_mock()
+
+    workspace = _copy_workspace_for_baseline(fixture)
+    try:
+        runner = DiscoverRunner(
+            model="claude-sonnet-4-20250514",
+            workspace_dir=workspace,
+            use_mcp=False,
+            use_cli=use_cli,
+            baseline=True,
+        )
+
+        result = runner.run(
+            task=case["task"],
+            test_case_id=case_id,
+            mock_tools=use_mock,
+            max_turns=_get_max_turns(),
+        )
+        result.save(RESULTS_DIR)
+        return case_id, result
+    finally:
+        shutil.rmtree(workspace.parent, ignore_errors=True)
+
+
+@pytest.fixture(scope="session")
+def baseline_discovery_results() -> dict[str, DiscoverResult]:
+    """Run all baseline discoveries in parallel, return cached results."""
+    results: dict[str, DiscoverResult] = {}
+
+    with ThreadPoolExecutor(max_workers=len(ALL_CASE_IDS)) as executor:
+        futures = {
+            executor.submit(_run_single_discovery_baseline, cid): cid
+            for cid in ALL_CASE_IDS
+        }
+        for future in as_completed(futures):
+            case_id = futures[future]
+            try:
+                _, result = future.result()
+                results[case_id] = result
+            except Exception as e:
+                results[case_id] = DiscoverResult(
+                    test_case_id=case_id,
+                    run_id="error",
+                    timestamp="",
+                    task="",
+                    handoff_prompt="",
+                    mode="baseline",
+                    error=f"Baseline discovery thread failed: {type(e).__name__}: {e}",
+                )
+
+    return results
+
+
+# =========================================================================
 # Evaluation tests (parallel discovery, sequential metric evaluation)
 # =========================================================================
 
@@ -257,6 +367,77 @@ class TestDiscoverEvaluations:
             if failures:
                 pytest.fail(
                     f"GEval metrics failed for {case_id}:\n" + "\n".join(failures)
+                )
+
+
+# =========================================================================
+# Baseline (no-MCP, no slash command) tests
+# =========================================================================
+
+class TestDiscoverBaseline:
+    """
+    Baseline comparison tests for /discover.
+
+    Runs the same tasks with a vanilla prompt (no slash command workflow,
+    no MCP tools) to measure the value added by the structured approach.
+    """
+
+    @pytest.mark.baseline
+    @pytest.mark.parametrize("case_id", ALL_CASE_IDS)
+    def test_discover_baseline_case(
+        self, case_id: str, baseline_discovery_results: dict[str, DiscoverResult]
+    ):
+        """Evaluate baseline /discover output for a test case."""
+        case = load_test_case(case_id)
+        result = baseline_discovery_results[case_id]
+
+        # Fail fast if discovery itself errored
+        if result.error:
+            pytest.fail(f"Baseline discovery failed for {case_id}: {result.error}")
+
+        assert result.mode == "baseline"
+
+        # Build test case for deepeval
+        test_case = LLMTestCase(
+            input=case["task"],
+            actual_output=result.handoff_prompt,
+        )
+
+        # Skip MCP-specific metrics by passing tool_calls=None
+        metrics = get_standard_metrics(
+            expected_files=case["ground_truth"]["required_files"],
+            recommended_files=case["ground_truth"].get("recommended_files"),
+            tool_calls=None,
+            thresholds=case.get("thresholds"),
+        )
+
+        # Separate GEval from deterministic metrics
+        from deepeval.metrics import GEval
+        geval_metrics = [m for m in metrics if isinstance(m, GEval)]
+        deterministic_metrics = [m for m in metrics if not isinstance(m, GEval)]
+
+        # Deterministic metrics are instant
+        if deterministic_metrics:
+            assert_test(test_case, deterministic_metrics)
+
+        # GEval metrics: evaluate one at a time with rate limit spacing
+        if geval_metrics:
+            using_openai = bool(os.environ.get("OPENAI_API_KEY"))
+            default_delay = "3" if using_openai else "15"
+            delay = float(os.environ.get("DISCOVER_EVAL_METRIC_DELAY", default_delay))
+            failures = []
+            for metric in geval_metrics:
+                if delay > 0:
+                    time.sleep(delay)
+                metric.measure(test_case)
+                if not metric.is_successful():
+                    failures.append(
+                        f"  {metric.name}: score={metric.score:.2f} "
+                        f"(threshold={metric.threshold}), reason={metric.reason}"
+                    )
+            if failures:
+                pytest.fail(
+                    f"Baseline GEval metrics failed for {case_id}:\n" + "\n".join(failures)
                 )
 
 

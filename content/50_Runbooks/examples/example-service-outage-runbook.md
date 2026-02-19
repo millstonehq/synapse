@@ -25,7 +25,7 @@ example: true
 
 ## Service
 
-- **System**: [[SYSTEM-001|Payment Gateway Service]]
+- **System**: [[payments-api-system|Payments API]]
 - **Owner team**: Payments Engineering
 - **On-call rotation**: PagerDuty schedule "payments-oncall"
 - **Slack channel**: #payments-incidents

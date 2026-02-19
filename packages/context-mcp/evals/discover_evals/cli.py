@@ -37,7 +37,7 @@ RESULTS_DIR = EVALS_DIR / "results"
 console = Console()
 
 
-def cmd_run(case_id: str, tag: str = None, mock: bool = False, api: bool = False):
+def cmd_run(case_id: str, tag: str = None, mock: bool = False, api: bool = False, baseline: bool = False):
     """Run a single test case."""
     case_file = TEST_CASES_DIR / f"{case_id}.yaml"
     if not case_file.exists():
@@ -53,7 +53,7 @@ def cmd_run(case_id: str, tag: str = None, mock: bool = False, api: bool = False
     # Default to CLI mode (OAuth, 5x higher rate limits) unless --api or --mock
     use_cli = not api and not mock
     use_mcp = not use_cli and not mock
-    mode_label = "mock" if mock else ("API" if api else "CLI (OAuth)")
+    mode_label = "baseline" if baseline else ("mock" if mock else ("API" if api else "CLI (OAuth)"))
 
     console.print(f"[bold]Running:[/bold] {case['name']}")
     console.print(f"[dim]Mode: {mode_label} | {case['task'][:100]}...[/dim]")
@@ -66,6 +66,7 @@ def cmd_run(case_id: str, tag: str = None, mock: bool = False, api: bool = False
         mock_tools=mock,
         use_cli=use_cli,
         use_mcp=use_mcp,
+        baseline=baseline,
     )
 
     if result.error:
@@ -91,7 +92,7 @@ def cmd_run(case_id: str, tag: str = None, mock: bool = False, api: bool = False
     return 0
 
 
-def cmd_run_all(tag: str = None, mock: bool = False, api: bool = False):
+def cmd_run_all(tag: str = None, mock: bool = False, api: bool = False, baseline: bool = False):
     """Run all test cases."""
     cases = list(TEST_CASES_DIR.glob("*.yaml"))
     if not cases:
@@ -104,7 +105,7 @@ def cmd_run_all(tag: str = None, mock: bool = False, api: bool = False):
     for case_file in cases:
         case_id = case_file.stem
         console.print(f"\n[cyan]>>> {case_id}[/cyan]")
-        exit_code = cmd_run(case_id, tag, mock, api)
+        exit_code = cmd_run(case_id, tag, mock, api, baseline)
         results.append((case_id, exit_code))
 
     # Summary
@@ -195,6 +196,10 @@ def main():
         "--api", action="store_true",
         help="Use direct API key instead of CLI (OAuth). Default is CLI mode with higher rate limits.",
     )
+    run_parser.add_argument(
+        "--baseline", action="store_true",
+        help="Run baseline (no slash command, no MCP tools) for comparison.",
+    )
 
     # run-all command
     run_all_parser = subparsers.add_parser("run-all", help="Run all test cases")
@@ -203,6 +208,10 @@ def main():
     run_all_parser.add_argument(
         "--api", action="store_true",
         help="Use direct API key instead of CLI (OAuth). Default is CLI mode with higher rate limits.",
+    )
+    run_all_parser.add_argument(
+        "--baseline", action="store_true",
+        help="Run baseline (no slash command, no MCP tools) for comparison.",
     )
 
     # compare command
@@ -220,9 +229,9 @@ def main():
     args = parser.parse_args()
 
     if args.command == "run":
-        sys.exit(cmd_run(args.case_id, args.tag, args.mock, args.api))
+        sys.exit(cmd_run(args.case_id, args.tag, args.mock, args.api, args.baseline))
     elif args.command == "run-all":
-        sys.exit(cmd_run_all(args.tag, args.mock, args.api))
+        sys.exit(cmd_run_all(args.tag, args.mock, args.api, args.baseline))
     elif args.command == "compare":
         sys.exit(cmd_compare(args.baseline, args.experiment, args.output))
     elif args.command == "list-cases":

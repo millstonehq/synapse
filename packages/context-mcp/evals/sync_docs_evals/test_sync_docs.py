@@ -26,6 +26,9 @@ rate limit delays.
 """
 
 import os
+import shutil
+import subprocess
+import tempfile
 import time
 import yaml
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -66,7 +69,7 @@ def _get_workspace_for_fixture(fixture_name: str) -> Path:
     return DEFAULT_WORKSPACE
 
 
-DEFAULT_MAX_TURNS = 40
+DEFAULT_MAX_TURNS = 75
 MOCK_MAX_TURNS = 10
 
 
@@ -105,29 +108,73 @@ def get_all_test_cases() -> list[str]:
 # Parallel sync-docs infrastructure
 # =========================================================================
 
+def _copy_fixture_to_tmpdir(fixture_name: str, strip_mcp: bool = False) -> Path:
+    """Copy fixture to an isolated temp directory. Returns the temp workspace path.
+
+    Initializes a git repo in the copy so that git commands in sync-docs
+    don't fail. The caller is responsible for cleaning up the temp dir.
+
+    Args:
+        fixture_name: Name of the fixture directory to copy.
+        strip_mcp: If True, remove .mcp.json files so claude won't
+                   auto-discover MCP servers (used for baseline runs).
+    """
+    original = _get_workspace_for_fixture(fixture_name)
+    tmpdir = tempfile.mkdtemp(prefix=f"sync_docs_{fixture_name}_")
+    workspace = Path(tmpdir) / fixture_name
+    shutil.copytree(original, workspace)
+
+    if strip_mcp:
+        for mcp_json in workspace.rglob(".mcp.json"):
+            mcp_json.unlink()
+
+    # Init git repo so `git diff` and other git commands don't error out.
+    # The task text provides the diff description, so empty diff is fine.
+    subprocess.run(
+        ["git", "init"], cwd=str(workspace),
+        capture_output=True, check=False,
+    )
+    subprocess.run(
+        ["git", "add", "-A"], cwd=str(workspace),
+        capture_output=True, check=False,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "fixture baseline", "--allow-empty"],
+        cwd=str(workspace), capture_output=True, check=False,
+    )
+    return workspace
+
+
 def _run_single_sync(case_id: str) -> tuple[str, SyncDocsResult]:
-    """Run sync-docs for a single case (thread-safe)."""
+    """Run sync-docs for a single case (thread-safe).
+
+    Each case gets its own copy of the fixture directory to prevent
+    contamination between parallel runs.
+    """
     case = load_test_case(case_id)
     fixture = case.get("fixture", "synapse_vault")
-    workspace = _get_workspace_for_fixture(fixture)
     use_cli = _should_use_cli()
     use_mock = _should_use_mock()
 
-    runner = SyncDocsRunner(
-        model="claude-sonnet-4-20250514",
-        workspace_dir=workspace,
-        use_mcp=not use_mock and not use_cli,
-        use_cli=use_cli,
-    )
+    workspace = _copy_fixture_to_tmpdir(fixture)
+    try:
+        runner = SyncDocsRunner(
+            model="claude-sonnet-4-20250514",
+            workspace_dir=workspace,
+            use_mcp=not use_mock and not use_cli,
+            use_cli=use_cli,
+        )
 
-    result = runner.run(
-        task=case["task"],
-        test_case_id=case_id,
-        mock_tools=use_mock,
-        max_turns=_get_max_turns(),
-    )
-    result.save(RESULTS_DIR)
-    return case_id, result
+        result = runner.run(
+            task=case["task"],
+            test_case_id=case_id,
+            mock_tools=use_mock,
+            max_turns=_get_max_turns(),
+        )
+        result.save(RESULTS_DIR)
+        return case_id, result
+    finally:
+        shutil.rmtree(workspace.parent, ignore_errors=True)
 
 
 @pytest.fixture(scope="session")
@@ -159,6 +206,70 @@ def sync_docs_results() -> dict[str, SyncDocsResult]:
 
 
 # =========================================================================
+# Parallel baseline (no-MCP, no slash command) infrastructure
+# =========================================================================
+
+def _run_single_sync_baseline(case_id: str) -> tuple[str, SyncDocsResult]:
+    """Run baseline sync-docs for a single case (thread-safe).
+
+    Baseline mode: vanilla prompt, no slash command, no MCP tools.
+    Each case gets its own copy of the fixture directory.
+    """
+    case = load_test_case(case_id)
+    fixture = case.get("fixture", "synapse_vault")
+
+    workspace = _copy_fixture_to_tmpdir(fixture, strip_mcp=True)
+    try:
+        runner = SyncDocsRunner(
+            model="claude-sonnet-4-20250514",
+            workspace_dir=workspace,
+            use_mcp=False,
+            use_cli=_should_use_cli(),
+            baseline=True,
+        )
+
+        result = runner.run(
+            task=case["task"],
+            test_case_id=case_id,
+            mock_tools=_should_use_mock(),
+            max_turns=_get_max_turns(),
+        )
+        result.save(RESULTS_DIR)
+        return case_id, result
+    finally:
+        shutil.rmtree(workspace.parent, ignore_errors=True)
+
+
+@pytest.fixture(scope="session")
+def baseline_sync_docs_results() -> dict[str, SyncDocsResult]:
+    """Run all baseline sync-docs evals in parallel, return cached results."""
+    results: dict[str, SyncDocsResult] = {}
+
+    with ThreadPoolExecutor(max_workers=len(ALL_CASE_IDS)) as executor:
+        futures = {
+            executor.submit(_run_single_sync_baseline, cid): cid
+            for cid in ALL_CASE_IDS
+        }
+        for future in as_completed(futures):
+            case_id = futures[future]
+            try:
+                _, result = future.result()
+                results[case_id] = result
+            except Exception as e:
+                results[case_id] = SyncDocsResult(
+                    test_case_id=case_id,
+                    run_id="error",
+                    timestamp="",
+                    task="",
+                    sync_output="",
+                    mode="baseline",
+                    error=f"Baseline sync thread failed: {type(e).__name__}: {e}",
+                )
+
+    return results
+
+
+# =========================================================================
 # Evaluation tests
 # =========================================================================
 
@@ -182,17 +293,19 @@ class TestSyncDocsEvaluations:
         if result.error:
             pytest.fail(f"Sync-docs failed for {case_id}: {result.error}")
 
-        test_case = LLMTestCase(
-            input=case["task"],
-            actual_output=result.sync_output,
-        )
-
-        metrics = get_standard_metrics(
+        metrics, expected_output = get_standard_metrics(
             expected_docs=case["ground_truth"]["expected_stale_docs"],
             acceptable_docs=case["ground_truth"].get("acceptable_docs"),
+            ground_truth=case["ground_truth"],
             tool_calls=result.tool_calls,
             duration_ms=result.total_duration_ms,
             thresholds=case.get("thresholds"),
+        )
+
+        test_case = LLMTestCase(
+            input=case["task"],
+            actual_output=result.sync_output,
+            expected_output=expected_output,
         )
 
         # Separate GEval from deterministic metrics
@@ -206,7 +319,7 @@ class TestSyncDocsEvaluations:
 
         # Run GEval metrics sequentially with rate limit delays
         if geval_metrics:
-            delay = float(os.environ.get("SYNC_DOCS_EVAL_METRIC_DELAY", "15"))
+            delay = float(os.environ.get("SYNC_DOCS_EVAL_METRIC_DELAY", "1"))
             failures = []
             for metric in geval_metrics:
                 if delay > 0:
@@ -220,6 +333,76 @@ class TestSyncDocsEvaluations:
             if failures:
                 pytest.fail(
                     f"GEval metrics failed for {case_id}:\n" + "\n".join(failures)
+                )
+
+
+# =========================================================================
+# Baseline (no-MCP, no slash command) tests
+# =========================================================================
+
+class TestSyncDocsBaseline:
+    """
+    Baseline comparison tests for /sync-docs.
+
+    Runs the same tasks with a vanilla prompt (no slash command workflow,
+    no MCP tools) to measure the value added by the structured approach.
+    """
+
+    @pytest.mark.baseline
+    @pytest.mark.parametrize("case_id", ALL_CASE_IDS)
+    def test_sync_docs_baseline_case(
+        self, case_id: str, baseline_sync_docs_results: dict[str, SyncDocsResult]
+    ):
+        """Evaluate baseline /sync-docs output for a test case."""
+        case = load_test_case(case_id)
+        result = baseline_sync_docs_results[case_id]
+
+        if result.error:
+            pytest.fail(f"Baseline sync-docs failed for {case_id}: {result.error}")
+
+        assert result.mode == "baseline"
+
+        # Skip MCP-specific metrics by passing tool_calls=None
+        metrics, expected_output = get_standard_metrics(
+            expected_docs=case["ground_truth"]["expected_stale_docs"],
+            acceptable_docs=case["ground_truth"].get("acceptable_docs"),
+            ground_truth=case["ground_truth"],
+            tool_calls=None,
+            duration_ms=result.total_duration_ms,
+            thresholds=case.get("thresholds"),
+        )
+
+        test_case = LLMTestCase(
+            input=case["task"],
+            actual_output=result.sync_output,
+            expected_output=expected_output,
+        )
+
+        # Separate GEval from deterministic metrics
+        from deepeval.metrics import GEval
+        geval_metrics = [m for m in metrics if isinstance(m, GEval)]
+        deterministic_metrics = [m for m in metrics if not isinstance(m, GEval)]
+
+        # Run deterministic metrics
+        if deterministic_metrics:
+            assert_test(test_case, deterministic_metrics)
+
+        # Run GEval metrics sequentially with rate limit delays
+        if geval_metrics:
+            delay = float(os.environ.get("SYNC_DOCS_EVAL_METRIC_DELAY", "1"))
+            failures = []
+            for metric in geval_metrics:
+                if delay > 0:
+                    time.sleep(delay)
+                metric.measure(test_case)
+                if not metric.is_successful():
+                    failures.append(
+                        f"  {metric.name}: score={metric.score:.2f} "
+                        f"(threshold={metric.threshold}), reason={metric.reason}"
+                    )
+            if failures:
+                pytest.fail(
+                    f"Baseline GEval metrics failed for {case_id}:\n" + "\n".join(failures)
                 )
 
 
@@ -294,7 +477,7 @@ def test_smoke():
     assert runner_cli.client is None
 
     if _has_eval_key():
-        metrics = get_standard_metrics(
+        metrics, expected_output = get_standard_metrics(
             expected_docs=["content/90_Architecture/TDDs/test-tdd.md"],
         )
         assert len(metrics) > 0

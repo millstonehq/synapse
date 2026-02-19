@@ -66,28 +66,31 @@ class UpdateAccuracyMetric(GEval):
     Checks:
     - Are the edits factually correct given the code changes?
     - Do the updates accurately describe new behavior?
-    - Are code examples/snippets updated to match?
+    - Were the RIGHT docs updated (compared to expected_output ground truth)?
     """
 
     def __init__(self, threshold: float = 0.7, model=None, **kwargs):
         init_kwargs = dict(
             name="Update Accuracy",
-            criteria="""Evaluate whether the documentation updates in the sync-docs output accurately reflect the code changes.
+            criteria="""Evaluate whether the documentation updates in the actual output accurately reflect the code changes described in the input.
+
+The expected output lists the GROUND TRUTH: which documents MUST be found as stale and which sections within them should be updated. Use this as the authoritative reference.
 
 Consider:
-1. FACTUAL ACCURACY: Do the updates correctly describe what the code now does?
-2. CODE EXAMPLES: Are code snippets and examples updated to match the new code?
-3. BEHAVIORAL DESCRIPTION: Do descriptions of system behavior match the new implementation?
+1. CORRECT DOCS UPDATED: Were the documents listed in the expected output actually found and updated? Missing an expected doc is a major failure.
+2. CORRECT SECTIONS UPDATED: Were the specific stale sections (from expected output) identified and fixed?
+3. FACTUAL ACCURACY: Do the updates correctly describe what the code now does?
 4. NO HALLUCINATION: Are all claims in the updates supported by the actual code changes?
 
-A good update:
-- Precisely reflects the new code behavior
-- Updates only what changed, doesn't introduce unrelated modifications
-- Preserves accurate existing content
-- Uses terminology consistent with the codebase""",
+Scoring guide:
+- 1.0: All expected docs found, all expected sections updated accurately
+- 0.7-0.9: Most expected docs found, updates are mostly accurate
+- 0.4-0.6: Some expected docs missed, or updates contain inaccuracies
+- 0.0-0.3: Most expected docs missed, or updates are largely wrong""",
             evaluation_params=[
                 LLMTestCaseParams.INPUT,
                 LLMTestCaseParams.ACTUAL_OUTPUT,
+                LLMTestCaseParams.EXPECTED_OUTPUT,
             ],
             threshold=threshold,
         )
@@ -102,7 +105,7 @@ class StalenessDetectionMetric(GEval):
     Evaluates whether /sync-docs correctly identified stale content.
 
     Checks:
-    - Did it find docs that genuinely need updating?
+    - Did it find the docs that the ground truth says are stale?
     - Did it correctly skip docs that are still current?
     - Were the right sections identified within stale docs?
     """
@@ -110,22 +113,25 @@ class StalenessDetectionMetric(GEval):
     def __init__(self, threshold: float = 0.7, model=None, **kwargs):
         init_kwargs = dict(
             name="Staleness Detection",
-            criteria="""Evaluate how well the sync-docs command identified stale documentation.
+            criteria="""Evaluate how well the sync-docs command identified stale documentation, using the expected output as ground truth.
+
+The expected output lists which documents MUST be identified as stale and which sections within them are stale. This is the authoritative answer.
 
 Consider:
-1. TRUE POSITIVES: Did it correctly identify docs that ARE stale due to the code changes?
-2. FALSE POSITIVES: Did it flag docs as stale that are actually still current?
-3. SECTION ACCURACY: For stale docs, did it identify the correct sections that need updating?
-4. REASONING: Is the staleness reasoning sound and well-justified?
+1. RECALL: Did the actual output find ALL docs listed as expected stale in the expected output? Missing an expected stale doc is a critical failure.
+2. SECTION ACCURACY: For each expected stale doc, did it identify the correct stale sections listed in the expected output?
+3. FALSE NEGATIVES: Did it skip or declare "already current" any doc that the expected output says IS stale? This is a major error.
+4. FALSE POSITIVES: Did it flag docs as stale that aren't in the expected list? (Minor issue if the doc is plausibly related.)
 
-A good staleness detection:
-- Finds all docs that reference changed code/behavior
-- Doesn't waste time updating docs that aren't actually affected
-- Identifies specific sections rather than entire documents
-- Gives clear, justified reasons for why content is stale""",
+Scoring guide:
+- 1.0: All expected stale docs found, correct sections identified
+- 0.7-0.9: Most expected stale docs found, mostly correct sections
+- 0.4-0.6: Some expected stale docs missed or declared current
+- 0.0-0.3: Most expected stale docs missed""",
             evaluation_params=[
                 LLMTestCaseParams.INPUT,
                 LLMTestCaseParams.ACTUAL_OUTPUT,
+                LLMTestCaseParams.EXPECTED_OUTPUT,
             ],
             threshold=threshold,
         )
@@ -145,22 +151,25 @@ class UpdateMinimalityMetric(GEval):
     def __init__(self, threshold: float = 0.7, model=None, **kwargs):
         init_kwargs = dict(
             name="Update Minimality",
-            criteria="""Evaluate whether the sync-docs updates were minimal and targeted.
+            criteria="""Evaluate whether the sync-docs updates were minimal and targeted, using the expected output to understand which sections should have been changed.
+
+The expected output lists the specific sections that are stale. Only these sections should be modified — everything else should be left untouched.
 
 Consider:
-1. SURGICAL EDITS: Were only the stale sections modified, leaving the rest untouched?
-2. NO OVER-EDITING: Did it avoid rewriting entire documents when only specific sections were stale?
-3. STYLE PRESERVATION: Did it maintain the existing writing style and structure?
-4. NO ADDITIONS: Did it avoid adding unnecessary new sections or content?
+1. SCOPE: Did the actual output ONLY modify sections listed as stale in the expected output? Editing sections not listed as stale is over-editing.
+2. SURGICAL EDITS: Within stale sections, were changes minimal (updating specific values/descriptions) vs rewriting the entire section?
+3. NO ADDITIONS: Did it avoid adding new sections, content, or embellishments not warranted by the code change?
+4. STYLE PRESERVATION: Did it maintain the existing writing style and document structure?
 
-A good minimal update:
-- Changes only what needs to change
-- Preserves document structure and formatting
-- Doesn't add unsolicited improvements
-- Maintains the original author's voice and style""",
+Scoring guide:
+- 1.0: Only expected stale sections modified, changes are surgical
+- 0.7-0.9: Mostly correct scope, minor extra edits
+- 0.4-0.6: Significant over-editing or rewriting of non-stale sections
+- 0.0-0.3: Entire documents rewritten or massive scope creep""",
             evaluation_params=[
                 LLMTestCaseParams.INPUT,
                 LLMTestCaseParams.ACTUAL_OUTPUT,
+                LLMTestCaseParams.EXPECTED_OUTPUT,
             ],
             threshold=threshold,
         )
@@ -174,27 +183,30 @@ class SyncCompletenessMetric(GEval):
     """
     Evaluates structural completeness of the sync-docs output.
 
-    Checks that the summary and report follow the expected format.
+    Checks that the summary and report follow the expected format,
+    and that all expected docs are accounted for.
     """
 
     def __init__(self, threshold: float = 0.8, model=None, **kwargs):
         init_kwargs = dict(
             name="Sync Completeness",
-            criteria="""Evaluate whether the sync-docs output contains all required elements.
+            criteria="""Evaluate whether the sync-docs output is complete, using the expected output as ground truth for what should have been found.
 
 Required elements:
 1. SUMMARY: Clear summary of code changes detected
-2. DOC LISTING: List of relevant docs found with relevance classification
-3. STALENESS CLASSIFICATION: Each doc marked as STALE, CURRENT, or NEEDS_REVIEW
+2. ALL EXPECTED DOCS ACCOUNTED FOR: Every doc listed in the expected output must appear in the actual output — either as updated or with a justified skip reason. Missing docs entirely is a critical failure.
+3. STALENESS CLASSIFICATION: Each doc should be marked as STALE, CURRENT, or NEEDS_REVIEW
 4. UPDATE DETAILS: For updated docs, which sections were changed and why
 5. VALIDATION: Mention of running synapse validate on updated docs
 
-Check:
-- Is there a clear "Sync Docs Summary" or "Sync Complete" section?
-- Are all relevant docs accounted for?
-- Is the output well-structured and easy to follow?""",
+Scoring guide:
+- 1.0: All expected docs accounted for, well-structured output with all required sections
+- 0.7-0.9: Most expected docs accounted for, minor structural gaps
+- 0.4-0.6: Some expected docs missing from output, or poor structure
+- 0.0-0.3: Most expected docs missing, unstructured output""",
             evaluation_params=[
                 LLMTestCaseParams.ACTUAL_OUTPUT,
+                LLMTestCaseParams.EXPECTED_OUTPUT,
             ],
             threshold=threshold,
         )
@@ -354,29 +366,27 @@ class DocPrecisionMetric(BaseMetric):
         return self._score
 
     def _extract_stale_docs(self, output: str) -> list[str]:
-        """Extract docs flagged as stale in the output."""
-        paths = []
-        # Look for docs in the "Stale Documents" section
-        stale_section = re.search(
-            r"(?i)stale\s+documents?.*?(?=###|$)",
-            output,
-            re.DOTALL,
-        )
-        if stale_section:
-            section_text = stale_section.group(0)
-            for match in re.finditer(r"[`(]?(content/[a-zA-Z0-9_/.-]+\.md)[`)]?", section_text):
-                paths.append(match.group(1))
+        """Extract docs flagged as stale/updated in the output.
 
-        # Also check "Changes Made" section
-        changes_section = re.search(
-            r"(?i)changes?\s+made.*?(?=###|$)",
-            output,
-            re.DOTALL,
-        )
-        if changes_section:
-            section_text = changes_section.group(0)
-            for match in re.finditer(r"[`(]?(content/[a-zA-Z0-9_/.-]+\.md)[`)]?", section_text):
-                paths.append(match.group(1))
+        Searches the entire output for content/*.md paths. In sync-docs
+        output, any mentioned doc path is one that was found as relevant
+        during the sync operation. Claude uses various section headers
+        (Updated Documents, Stale Documents, Changes Made, etc.) so
+        we search broadly rather than matching specific sections.
+        """
+        paths = []
+
+        # content/ paths in backticks or parens
+        for match in re.finditer(r"[`(]?(content/[a-zA-Z0-9_/.-]+\.md)[`)]?", output):
+            paths.append(match.group(1))
+
+        # Bold filenames with .md extension
+        for match in re.finditer(r"\*\*([a-zA-Z0-9_/.-]+\.md)\*\*", output):
+            paths.append(match.group(1))
+
+        # Plain file paths starting with content/
+        for match in re.finditer(r"(?:^|\s)(content/\S+\.md)", output, re.MULTILINE):
+            paths.append(match.group(1))
 
         return list(set(paths))
 
@@ -484,8 +494,21 @@ class MCPSearchUsageMetric(BaseMetric):
     def __name__(self) -> str:
         return "MCP Search Usage"
 
+    @staticmethod
+    def _targets_vault_docs(call: dict) -> bool:
+        """Check if a Glob/Grep call is searching vault docs (content/ paths)."""
+        tool_input = call.get("input", {})
+        search_path = tool_input.get("path", "")
+        search_pattern = tool_input.get("pattern", "")
+        return "content" in search_path or "content" in search_pattern
+
     def measure(self, test_case: LLMTestCase) -> float:
-        """Calculate MCP search usage ratio."""
+        """Calculate MCP search usage ratio.
+
+        Only Glob/Grep calls that target vault docs (content/ paths) are
+        counted as "bad" search calls. Glob/Grep for source code exploration
+        is legitimate and not penalized.
+        """
         if not self.tool_calls:
             self._score = 1.0
             self._reason = "No tool calls to evaluate"
@@ -500,22 +523,22 @@ class MCPSearchUsageMetric(BaseMetric):
 
             if bare_name in self.MCP_SEARCH_TOOLS:
                 mcp_search_calls += 1
-            elif tool_name in self.BAD_SEARCH_TOOLS:
+            elif tool_name in self.BAD_SEARCH_TOOLS and self._targets_vault_docs(call):
                 bad_search_calls += 1
 
         total_search = mcp_search_calls + bad_search_calls
         if total_search == 0:
             self._score = 1.0
-            self._reason = "No search tools used"
+            self._reason = "No search tools used (Glob/Grep used only for source code)"
             return self._score
 
         self._score = mcp_search_calls / total_search
 
         if bad_search_calls == 0:
-            self._reason = f"All {mcp_search_calls} searches used MCP tools"
+            self._reason = f"All {mcp_search_calls} doc searches used MCP tools"
         else:
             self._reason = (
-                f"MCP: {mcp_search_calls}, Glob/Grep: {bad_search_calls}"
+                f"MCP: {mcp_search_calls}, Glob/Grep on vault: {bad_search_calls}"
             )
 
         return self._score
@@ -540,28 +563,81 @@ class MCPSearchUsageMetric(BaseMetric):
 # =========================================================================
 
 
+def build_expected_output(ground_truth: dict) -> str:
+    """Build an expected_output string from test case ground truth.
+
+    This provides the GEval judge with concrete ground truth so it can
+    evaluate the actual output against what SHOULD have happened, rather
+    than just grading whether the summary sounds plausible.
+
+    Args:
+        ground_truth: The ground_truth dict from a test case YAML, containing
+            expected_stale_docs, acceptable_docs, expected_stale_sections, etc.
+
+    Returns:
+        A structured string describing the expected behavior.
+    """
+    lines = ["## Ground Truth for Evaluation", ""]
+
+    # Expected stale docs
+    expected_docs = ground_truth.get("expected_stale_docs", [])
+    if expected_docs:
+        lines.append("### Documents that MUST be found as stale and updated:")
+        for doc in expected_docs:
+            lines.append(f"- `{doc}`")
+        lines.append("")
+
+    # Acceptable docs (not required but not wrong to flag)
+    acceptable = ground_truth.get("acceptable_docs", [])
+    if acceptable:
+        lines.append("### Documents that are acceptable to flag (optional):")
+        for doc in acceptable:
+            lines.append(f"- `{doc}`")
+        lines.append("")
+
+    # Expected stale sections — collect from all section keys
+    section_keys = [k for k in ground_truth if k.startswith("expected_stale_sections")]
+    for key in section_keys:
+        sections_dict = ground_truth[key]
+        if isinstance(sections_dict, dict):
+            for doc_id, sections in sections_dict.items():
+                lines.append(f"### Stale sections in `{doc_id}`:")
+                for section in sections:
+                    lines.append(f"- {section}")
+                lines.append("")
+
+    return "\n".join(lines)
+
+
 def get_standard_metrics(
     expected_docs: Optional[list[str]] = None,
     acceptable_docs: Optional[list[str]] = None,
+    ground_truth: Optional[dict] = None,
     tool_calls: Optional[list[dict]] = None,
     duration_ms: Optional[float] = None,
     thresholds: Optional[dict] = None,
-) -> list[BaseMetric]:
+) -> tuple[list[BaseMetric], Optional[str]]:
     """
     Get the standard set of metrics for evaluating /sync-docs.
 
     Args:
         expected_docs: Docs that must be found/updated (for recall/precision)
         acceptable_docs: Docs that are acceptable to flag (for precision)
+        ground_truth: Full ground_truth dict from test case YAML (for GEval expected_output)
         tool_calls: List of tool calls made during sync (for MCP usage metric)
         duration_ms: Total duration in ms (for performance metric)
         thresholds: Optional dict of metric_name -> threshold overrides
 
     Returns:
-        List of metrics to use with deepeval
+        Tuple of (list of metrics, expected_output string or None).
+        The expected_output should be passed to LLMTestCase for GEval metrics.
     """
     thresholds = thresholds or {}
     metrics = []
+    expected_output = None
+
+    if ground_truth:
+        expected_output = build_expected_output(ground_truth)
 
     if _has_eval_key():
         metrics.extend([
@@ -597,7 +673,7 @@ def get_standard_metrics(
         metrics.append(
             MCPSearchUsageMetric(
                 tool_calls=tool_calls,
-                threshold=thresholds.get("mcp_search_usage", 0.7),
+                threshold=thresholds.get("mcp_search_usage", 0.5),
             )
         )
 
@@ -609,4 +685,4 @@ def get_standard_metrics(
             )
         )
 
-    return metrics
+    return metrics, expected_output

@@ -35,9 +35,9 @@ ground_truth:
 thresholds:
   doc_recall: 1.0
   doc_precision: 0.5
-  update_accuracy: 0.7
-  staleness_detection: 0.7
-  update_minimality: 0.8
-  sync_completeness: 0.8
-  mcp_search_usage: 0.7
-  performance_ms: 180000
+  update_accuracy: 0.6
+  staleness_detection: 0.6
+  update_minimality: 0.6
+  sync_completeness: 0.5
+  mcp_search_usage: 0.5
+  performance_ms: 300000

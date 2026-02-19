@@ -66,6 +66,9 @@ class DiscoverResult:
     # Raw conversation for debugging
     messages: list[dict] = field(default_factory=list)
 
+    # Mode: "mcp" (default) or "baseline" (no slash command, no MCP)
+    mode: str = "mcp"
+
     # Any errors that occurred
     error: Optional[str] = None
 
@@ -75,7 +78,7 @@ class DiscoverResult:
     def save(self, results_dir: Path) -> Path:
         """Save result to JSON file."""
         results_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"{self.test_case_id}_{self.run_id}.json"
+        filename = f"{self.test_case_id}_{self.mode}_{self.run_id}.json"
         filepath = results_dir / filename
         with open(filepath, "wb") as f:
             f.write(orjson.dumps(self.to_dict(), option=orjson.OPT_INDENT_2))
@@ -131,6 +134,21 @@ class DiscoverRunner:
     - tool_handler=fn: Custom tool handler function
     """
 
+    # Baseline prompt: same output format, no slash command workflow, no MCP tools
+    BASELINE_PROMPT = (
+        "You are a software engineer. Explore this codebase and build a comprehensive\n"
+        "handoff prompt for another developer to work on the task described below.\n\n"
+        "Your output MUST be a handoff prompt with these sections:\n"
+        "- # Task — Clear restatement of the task\n"
+        "- # Architecture — Relevant codebase structure and key modules\n"
+        "- # Selected Code Context — Actual code inline (not just file references)\n"
+        "- # Relationships — Dependencies and data flows between components\n"
+        "- # Ambiguities — Factual observations about unclear requirements, or \"None\"\n"
+        "- # Implementation Notes — Context about why these code sections are relevant\n\n"
+        "Include actual code inline in the Selected Code Context section, not just\n"
+        "file paths. The handoff should be self-contained.\n"
+    )
+
     def __init__(
         self,
         api_key: Optional[str] = None,
@@ -139,6 +157,7 @@ class DiscoverRunner:
         workspace_dir: Optional[Path] = None,
         use_mcp: bool = False,
         use_cli: bool = False,
+        baseline: bool = False,
     ):
         """
         Initialize the runner.
@@ -150,10 +169,12 @@ class DiscoverRunner:
             workspace_dir: Workspace directory for MCP server
             use_mcp: If True, use real MCP server for tool calls
             use_cli: If True, use claude CLI subprocess (OAuth auth, 5x higher rate limits)
+            baseline: If True, use vanilla prompt without slash command or MCP tools
         """
         self.use_cli = use_cli
         self.model = model
         self.use_mcp = use_mcp
+        self.baseline = baseline
 
         # Find the discover.md prompt
         if discover_prompt_path:
@@ -474,35 +495,36 @@ class DiscoverRunner:
         run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S")
         start_time = time.perf_counter()
 
+        mode = "baseline" if self.baseline else "mcp"
         result = DiscoverResult(
             test_case_id=test_case_id,
             run_id=run_id,
             timestamp=datetime.now().isoformat(),
             task=task,
             handoff_prompt="",
+            mode=mode,
         )
 
         tmp_files = []
         try:
-            # Build system prompt with discover instructions
-            discover_prompt = self._load_discover_prompt()
-            system_prompt = (
-                "You are executing the /discover slash command.\n\n"
-                f"{discover_prompt}\n\n"
-                f"ARGUMENTS: {task}\n\n"
-                "When you have completed discovery and built the handoff prompt, "
-                "output it as your final message.\n"
-                "The handoff prompt should be self-contained with all code inline."
-            )
-
-            # Write temp MCP config (only temp file needed)
-            mcp_config = self._build_mcp_config()
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".json", delete=False
-            ) as f:
-                json.dump(mcp_config, f)
-                mcp_config_path = f.name
-                tmp_files.append(mcp_config_path)
+            if self.baseline:
+                system_prompt = (
+                    f"{self.BASELINE_PROMPT}\n\n"
+                    f"TASK: {task}\n\n"
+                    "When you have completed discovery and built the handoff prompt, "
+                    "output it as your final message.\n"
+                    "The handoff prompt should be self-contained with all code inline."
+                )
+            else:
+                discover_prompt = self._load_discover_prompt()
+                system_prompt = (
+                    "You are executing the /discover slash command.\n\n"
+                    f"{discover_prompt}\n\n"
+                    f"ARGUMENTS: {task}\n\n"
+                    "When you have completed discovery and built the handoff prompt, "
+                    "output it as your final message.\n"
+                    "The handoff prompt should be self-contained with all code inline."
+                )
 
             cmd = [
                 "claude",
@@ -510,19 +532,45 @@ class DiscoverRunner:
                 "--output-format", "stream-json",
                 "--verbose",
                 "--model", self.model,
-                "--mcp-config", mcp_config_path,
                 "--append-system-prompt", system_prompt,
                 "--max-turns", str(max_turns),
                 "--dangerously-skip-permissions",
-                "-p", f"Execute /discover for: {task}",
             ]
 
+            if self.baseline:
+                # Ignore all MCP servers (from ~/.claude.json, .mcp.json, etc.)
+                cmd.append("--strict-mcp-config")
+                # Prevent Skill tool from loading slash commands that reference MCP
+                cmd.append("--disable-slash-commands")
+                # Explicitly block MCP tool calls and skip project settings
+                cmd.extend(["--disallowedTools", "mcp__context-helper-synapse__*"])
+                cmd.extend(["--setting-sources", "user"])
+            else:
+                mcp_config = self._build_mcp_config()
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".json", delete=False
+                ) as f:
+                    json.dump(mcp_config, f)
+                    mcp_config_path = f.name
+                    tmp_files.append(mcp_config_path)
+                cmd.extend(["--mcp-config", mcp_config_path])
+
+            prompt_text = (
+                f"Explore this codebase and build a handoff prompt for: {task}"
+                if self.baseline
+                else f"Execute /discover for: {task}"
+            )
+            cmd.extend(["-p", prompt_text])
+
+            # Strip CLAUDECODE env var to allow nested subprocess execution
+            env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
             proc = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=timeout_seconds,
                 cwd=str(self.workspace_dir),
+                env=env,
             )
 
             if proc.returncode != 0:
@@ -610,26 +658,38 @@ class DiscoverRunner:
         run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S")
         start_time = time.perf_counter()
 
+        mode = "baseline" if self.baseline else "mcp"
         result = DiscoverResult(
             test_case_id=test_case_id,
             run_id=run_id,
             timestamp=datetime.now().isoformat(),
             task=task,
             handoff_prompt="",
+            mode=mode,
         )
 
-        # Start MCP client if using real MCP
+        # Start MCP client if using real MCP (skip for baseline)
         mcp_client: Optional[SyncMCPClient] = None
-        if self.use_mcp and not tool_handler and not mock_tools:
+        if not self.baseline and self.use_mcp and not tool_handler and not mock_tools:
             mcp_client = SyncMCPClient([str(self.workspace_dir)])
             mcp_client.__enter__()
 
         try:
-            # Load discover prompt
-            discover_prompt = self._load_discover_prompt()
+            if self.baseline:
+                system_prompt = (
+                    f"{self.BASELINE_PROMPT}\n\n"
+                    f"TASK: {task}\n\n"
+                    "When you have completed discovery and built the handoff prompt, "
+                    "output it as your final message.\n"
+                    "The handoff prompt should be self-contained with all code inline."
+                )
+                tools = []
+            else:
+                # Load discover prompt
+                discover_prompt = self._load_discover_prompt()
 
-            # Build system prompt
-            system_prompt = f"""You are executing the /discover slash command.
+                # Build system prompt
+                system_prompt = f"""You are executing the /discover slash command.
 
 {discover_prompt}
 
@@ -638,17 +698,22 @@ ARGUMENTS: {task}
 When you have completed discovery and built the handoff prompt, output it as your final message.
 The handoff prompt should be self-contained with all code inline."""
 
-            # Build tools - prefer real schemas from MCP server when available
-            if mcp_client:
-                try:
-                    tools = self._get_tools_from_mcp(mcp_client)
-                except Exception:
+                # Build tools - prefer real schemas from MCP server when available
+                if mcp_client:
+                    try:
+                        tools = self._get_tools_from_mcp(mcp_client)
+                    except Exception:
+                        tools = self._build_mcp_tools()
+                else:
                     tools = self._build_mcp_tools()
-            else:
-                tools = self._build_mcp_tools()
 
             # Initial message
-            messages = [{"role": "user", "content": f"Execute /discover for: {task}"}]
+            prompt_text = (
+                f"Explore this codebase and build a handoff prompt for: {task}"
+                if self.baseline
+                else f"Execute /discover for: {task}"
+            )
+            messages = [{"role": "user", "content": prompt_text}]
 
             # Conversation loop
             # Pacing between calls (env var in seconds, 0 = no pacing, let SDK retry)
@@ -903,6 +968,7 @@ def run_discovery(
     results_dir: Optional[Path] = None,
     mock_tools: bool = False,
     use_cli: bool = False,
+    baseline: bool = False,
     **kwargs,
 ) -> DiscoverResult:
     """Convenience function to run /discover and save results.
@@ -913,9 +979,10 @@ def run_discovery(
         results_dir: Directory to save results (None to skip saving)
         mock_tools: If True, use mock tool responses (API mode only)
         use_cli: If True, use claude CLI subprocess (OAuth, higher rate limits)
+        baseline: If True, use vanilla prompt without slash command or MCP tools
         **kwargs: Additional args passed to DiscoverRunner.__init__
     """
-    runner = DiscoverRunner(use_cli=use_cli, **kwargs)
+    runner = DiscoverRunner(use_cli=use_cli, baseline=baseline, **kwargs)
     result = runner.run(task=task, test_case_id=test_case_id, mock_tools=mock_tools)
 
     if results_dir:

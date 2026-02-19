@@ -1,3 +1,10 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["discover_evals*", "sync_docs_evals*"]
+
 [project]
 name = "synapse-evals"
 version = "0.2.0"
@@ -27,6 +34,7 @@ timeout = 900
 # Mark slow tests so CI can skip them
 markers = [
     "slow: marks tests that use real Claude API calls (deselect with '-m \"not slow\"')",
+    "baseline: marks baseline (no-MCP, no slash command) comparison tests",
 ]
 
 [tool.ruff]

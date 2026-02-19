@@ -28,6 +28,9 @@ class RunSummary:
     test_case_id: str
     timestamp: str
 
+    # Mode: "mcp" or "baseline"
+    mode: str
+
     # Scores (from deepeval)
     scores: dict[str, float]
 
@@ -51,6 +54,7 @@ class RunSummary:
             run_id=data.get("run_id", "unknown"),
             test_case_id=data.get("test_case_id", "unknown"),
             timestamp=data.get("timestamp", ""),
+            mode=data.get("mode", "mcp"),
             scores=data.get("scores", {}),
             total_duration_ms=data.get("total_duration_ms", 0),
             input_tokens=data.get("input_tokens", 0),

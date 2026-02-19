@@ -33,50 +33,94 @@ This command detects code changes via `git diff`, uses the context-helper-synaps
 
 Use the **context-helper-synapse MCP tools** to search the vault efficiently. Do NOT use Glob or Grep to scan docs — use the indexed search tools instead.
 
-1. **Build search queries** from the code changes. For each significant change, construct queries targeting:
-   - Changed file paths and module names
-   - Function/class/interface names that were modified
-   - API routes, config keys, or system names that changed
-   - Domain concepts (e.g., "authentication", "payments", "deployment")
+**CRITICAL**: You MUST run multiple searches with different query strategies. A single search will miss docs that use different vocabulary (e.g., a TDD describes "architecture" while a PRD describes "requirements" — both may be stale from the same code change). Do NOT stop searching after finding the first relevant doc.
 
-2. **Run semantic searches** to find related vault docs:
-   ```
-   mcp__context-helper-synapse__semantic_search({
-     query: "description of what changed",
-     filter: { extensions: ["md"] },
-     include_content: true,
-     max_results: 20
-   })
-   ```
-   Run multiple semantic searches with different queries to cover all aspects of the change. For example, if the diff touches auth routes and user models, search for both "authentication login flow" and "user model schema".
+#### Step 1: Build search queries
 
-3. **Run file searches** for direct references:
-   ```
-   mcp__context-helper-synapse__file_search({
-     pattern: "changed-function-name",
-     mode: "content",
-     filter: { extensions: ["md"] },
-     include_content: true,
-     max_results: 20
-   })
-   ```
-   Search for specific identifiers from the diff (function names, file paths, API routes) that might appear in documentation.
+From the code changes, identify:
+- **Domain keywords**: The business domain (e.g., "payments", "authentication", "deployment")
+- **Identifiers**: Function names, class names, file paths, API routes, config keys
+- **Concepts**: What the change does at a high level (e.g., "multi-provider payment processing")
 
-4. **Read candidate docs** using the MCP read tool:
-   ```
-   mcp__context-helper-synapse__read_file({
-     path: "content/90_Architecture/TDDs/some-tdd.md"
-   })
-   ```
-   For each doc surfaced by search, read its full content to parse frontmatter and assess relevance.
+#### Step 2: Run semantic searches (minimum 3 queries)
 
-5. **Score relevance** of each document against the code changes:
-   - **Direct reference**: Doc mentions a changed file path, function, class, or API route → HIGH
-   - **Cross-reference**: Doc has related_* fields pointing to docs that are directly affected → MEDIUM
-   - **Tag/topic match**: Doc tags or title overlap with the domain of the changes → LOW
-   - **No match**: Skip entirely
+Run AT LEAST 3 semantic searches targeting different document types and vocabulary:
 
-6. **Filter to relevant docs** — keep only HIGH and MEDIUM relevance. If no docs are relevant, inform the user and stop.
+```
+# Query 1: Domain + technical terms (finds system docs, TDDs)
+mcp__context-helper-synapse__semantic_search({
+  query: "technical design architecture of [domain]",
+  filter: { extensions: ["md"] }, include_content: true, max_results: 20
+})
+
+# Query 2: Domain + product terms (finds PRDs, capability docs)
+mcp__context-helper-synapse__semantic_search({
+  query: "[domain] product requirements features scope",
+  filter: { extensions: ["md"] }, include_content: true, max_results: 20
+})
+
+# Query 3: Specific to what changed (finds directly referencing docs)
+mcp__context-helper-synapse__semantic_search({
+  query: "[specific description of the code change]",
+  filter: { extensions: ["md"] }, include_content: true, max_results: 20
+})
+```
+
+Fire all 3+ queries in parallel. Collect the union of all results — do not deduplicate until after reading.
+
+#### Step 3: Run file searches for direct references
+
+Search for specific identifiers from the diff that might appear in documentation:
+```
+mcp__context-helper-synapse__file_search({
+  pattern: "changed-function-name",
+  mode: "content",
+  filter: { extensions: ["md"] }, include_content: true, max_results: 20
+})
+```
+
+Also search for the domain keyword broadly across all content:
+```
+mcp__context-helper-synapse__file_search({
+  pattern: "[domain-keyword]",
+  mode: "content",
+  filter: { extensions: ["md"] }, include_content: true, max_results: 20
+})
+```
+
+#### Step 4: Completeness check with file tree
+
+After collecting search results, verify you haven't missed anything:
+```
+mcp__context-helper-synapse__get_file_tree({ type: "files", path: "content", max_depth: 4 })
+```
+
+Scan the file tree for any docs whose **path or filename** contains domain keywords but that didn't appear in your search results. Read these docs to check relevance — search results can miss docs that use different vocabulary.
+
+#### Step 5: Read ALL candidate docs
+
+For every unique doc surfaced by steps 2-4, read the full content:
+```
+mcp__context-helper-synapse__read_file({
+  path: "content/90_Architecture/TDDs/some-tdd.md"
+})
+```
+
+Parse frontmatter to extract `type`, `tags`, `related_*` fields, and `summary`.
+
+#### Step 6: Follow cross-references
+
+For each doc you read, check its `related_tdds`, `related_adrs`, `related_standards`, and other `related_*` frontmatter fields. If any referenced doc hasn't been read yet, read it — cross-referenced docs are likely affected by the same changes.
+
+#### Step 7: Score relevance and filter
+
+Score each document against the code changes:
+- **Direct reference**: Doc mentions a changed file path, function, class, or API route → HIGH
+- **Cross-reference**: Doc has `related_*` fields pointing to affected docs → MEDIUM
+- **Domain overlap**: Doc tags, title, or content overlap with the domain of the changes → MEDIUM
+- **No match**: Skip entirely
+
+Keep all HIGH and MEDIUM docs. If no docs are relevant, inform the user and stop.
 
 ### Phase 3: Analyze Staleness
 
