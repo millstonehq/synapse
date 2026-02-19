@@ -70,129 +70,6 @@
       }
     ]
   },
-  "agreement": {
-    "type": "agreement",
-    "displayName": "Agreement",
-    "sections": [
-      {
-        "id": "parties",
-        "title": "Parties",
-        "required": true,
-        "order": 1,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "list",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      },
-      {
-        "id": "services",
-        "title": "Services",
-        "required": true,
-        "order": 2,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "list",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      },
-      {
-        "id": "compensation",
-        "title": "Compensation",
-        "required": true,
-        "order": 3,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "list",
-            "table",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      },
-      {
-        "id": "term-and-termination",
-        "title": "Term and Termination",
-        "required": true,
-        "order": 4,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "list",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      },
-      {
-        "id": "independent-contractor",
-        "title": "Independent Contractor",
-        "required": true,
-        "order": 5,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      },
-      {
-        "id": "intellectual-property",
-        "title": "Intellectual Property",
-        "required": true,
-        "order": 6,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      },
-      {
-        "id": "confidentiality",
-        "title": "Confidentiality",
-        "required": true,
-        "order": 7,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      },
-      {
-        "id": "governing-law-and-venue",
-        "title": "Governing Law and Venue",
-        "required": true,
-        "order": 8,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      }
-    ]
-  },
   "capability": {
     "type": "capability",
     "displayName": "Capability Document",
@@ -261,6 +138,89 @@
             "list",
             "heading",
             "thematicBreak"
+          ]
+        }
+      }
+    ]
+  },
+  "flow": {
+    "type": "flow",
+    "displayName": "User Flow",
+    "sections": [
+      {
+        "id": "steps",
+        "title": "Steps",
+        "alternativeTitles": [
+          "Flow Steps",
+          "Workflow Steps"
+        ],
+        "required": true,
+        "order": 1,
+        "shape": {
+          "type": "flow",
+          "allowedNodes": [
+            "paragraph",
+            "list",
+            "heading",
+            "code",
+            "image",
+            "thematicBreak"
+          ]
+        }
+      },
+      {
+        "id": "expected-results",
+        "title": "Expected Results",
+        "alternativeTitles": [
+          "Expected Outcomes",
+          "Results"
+        ],
+        "required": true,
+        "order": 2,
+        "shape": {
+          "type": "flow",
+          "allowedNodes": [
+            "paragraph",
+            "list",
+            "heading",
+            "thematicBreak",
+            "image"
+          ]
+        }
+      },
+      {
+        "id": "user-info",
+        "title": "User Info",
+        "alternativeTitles": [
+          "User Information",
+          "Test Context"
+        ],
+        "required": true,
+        "order": 3,
+        "shape": {
+          "type": "table"
+        }
+      }
+    ]
+  },
+  "guide": {
+    "type": "guide",
+    "displayName": "Guide",
+    "sections": [
+      {
+        "id": "content",
+        "title": "Content",
+        "required": false,
+        "order": 1,
+        "shape": {
+          "type": "flow",
+          "allowedNodes": [
+            "paragraph",
+            "list",
+            "code",
+            "heading",
+            "blockquote",
+            "table"
           ]
         }
       }
@@ -413,6 +373,122 @@
           "type": "list",
           "ordered": false,
           "minItems": 1
+        }
+      }
+    ]
+  },
+  "postmortem": {
+    "type": "postmortem",
+    "displayName": "Postmortem",
+    "sections": [
+      {
+        "id": "executive-summary",
+        "title": "Executive Summary",
+        "required": true,
+        "order": 1,
+        "shape": {
+          "type": "flow",
+          "allowedNodes": [
+            "paragraph",
+            "list",
+            "heading",
+            "thematicBreak"
+          ]
+        }
+      },
+      {
+        "id": "timeline",
+        "title": "Timeline",
+        "required": true,
+        "order": 2,
+        "shape": {
+          "type": "flow",
+          "allowedNodes": [
+            "paragraph",
+            "list",
+            "heading",
+            "table",
+            "thematicBreak"
+          ]
+        }
+      },
+      {
+        "id": "impact",
+        "title": "Impact",
+        "required": true,
+        "order": 3,
+        "shape": {
+          "type": "flow",
+          "allowedNodes": [
+            "paragraph",
+            "list",
+            "heading",
+            "table",
+            "thematicBreak"
+          ]
+        }
+      },
+      {
+        "id": "root-cause-analysis",
+        "title": "Root Cause Analysis",
+        "required": true,
+        "order": 4,
+        "shape": {
+          "type": "flow",
+          "allowedNodes": [
+            "paragraph",
+            "list",
+            "heading",
+            "code",
+            "thematicBreak"
+          ]
+        }
+      },
+      {
+        "id": "resolution",
+        "title": "Resolution",
+        "required": true,
+        "order": 5,
+        "shape": {
+          "type": "flow",
+          "allowedNodes": [
+            "paragraph",
+            "list",
+            "heading",
+            "code",
+            "thematicBreak"
+          ]
+        }
+      },
+      {
+        "id": "action-items",
+        "title": "Action Items",
+        "required": true,
+        "order": 6,
+        "shape": {
+          "type": "flow",
+          "allowedNodes": [
+            "paragraph",
+            "list",
+            "heading",
+            "table",
+            "thematicBreak"
+          ]
+        }
+      },
+      {
+        "id": "lessons-learned",
+        "title": "Lessons Learned",
+        "required": true,
+        "order": 7,
+        "shape": {
+          "type": "flow",
+          "allowedNodes": [
+            "paragraph",
+            "list",
+            "heading",
+            "thematicBreak"
+          ]
         }
       }
     ]
@@ -767,6 +843,29 @@
       }
     ]
   },
+  "report": {
+    "type": "report",
+    "displayName": "Report",
+    "sections": [
+      {
+        "id": "content",
+        "title": "Content",
+        "required": false,
+        "order": 1,
+        "shape": {
+          "type": "flow",
+          "allowedNodes": [
+            "paragraph",
+            "list",
+            "code",
+            "heading",
+            "blockquote",
+            "table"
+          ]
+        }
+      }
+    ]
+  },
   "runbook": {
     "type": "runbook",
     "displayName": "Runbook",
@@ -844,94 +943,6 @@
       }
     ]
   },
-  "scorecard": {
-    "type": "scorecard",
-    "displayName": "Scorecard",
-    "sections": [
-      {
-        "id": "overall-summary",
-        "title": "Overall Summary",
-        "required": true,
-        "order": 1,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      },
-      {
-        "id": "dimensions",
-        "title": "Dimensions",
-        "required": true,
-        "order": 2,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "list",
-            "table",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      },
-      {
-        "id": "strengths",
-        "title": "Strengths",
-        "required": true,
-        "order": 3,
-        "shape": {
-          "type": "list",
-          "ordered": false,
-          "minItems": 1
-        }
-      },
-      {
-        "id": "top-risks",
-        "title": "Top Risks",
-        "required": true,
-        "order": 4,
-        "shape": {
-          "type": "list",
-          "ordered": false,
-          "minItems": 1
-        }
-      },
-      {
-        "id": "recommendation",
-        "title": "Recommendation",
-        "required": true,
-        "order": 5,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      },
-      {
-        "id": "action-plan",
-        "title": "Action Plan",
-        "required": true,
-        "order": 6,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "list",
-            "table",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      }
-    ]
-  },
   "sop": {
     "type": "sop",
     "displayName": "Standard Operating Procedure",
@@ -1000,195 +1011,6 @@
             "paragraph",
             "list",
             "code",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      }
-    ]
-  },
-  "sow": {
-    "type": "sow",
-    "displayName": "Statement of Work",
-    "sections": [
-      {
-        "id": "objective",
-        "title": "Objective",
-        "required": true,
-        "order": 1,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      },
-      {
-        "id": "scope-of-work",
-        "title": "Scope of Work",
-        "required": true,
-        "order": 2,
-        "shape": {
-          "type": "list",
-          "ordered": false,
-          "minItems": 1
-        }
-      },
-      {
-        "id": "deliverables",
-        "title": "Deliverables",
-        "required": true,
-        "order": 3,
-        "shape": {
-          "type": "list",
-          "ordered": false,
-          "minItems": 1
-        }
-      },
-      {
-        "id": "out-of-scope",
-        "title": "Out of Scope",
-        "required": true,
-        "order": 4,
-        "shape": {
-          "type": "list",
-          "ordered": false,
-          "minItems": 1
-        }
-      },
-      {
-        "id": "timeline-and-milestones",
-        "title": "Timeline and Milestones",
-        "required": true,
-        "order": 5,
-        "shape": {
-          "type": "milestoneList",
-          "requireH3": true,
-          "requiredSubsections": [
-            "Deliverables",
-            "Acceptance Criteria"
-          ],
-          "requiredFields": [
-            "Duration",
-            "Payment"
-          ]
-        }
-      },
-      {
-        "id": "overall-acceptance-criteria",
-        "title": "Overall Acceptance Criteria",
-        "required": true,
-        "order": 6,
-        "shape": {
-          "type": "list",
-          "ordered": false,
-          "minItems": 1
-        }
-      },
-      {
-        "id": "assumptions",
-        "title": "Assumptions",
-        "required": true,
-        "order": 7,
-        "shape": {
-          "type": "list",
-          "ordered": false,
-          "minItems": 1
-        }
-      },
-      {
-        "id": "dependencies",
-        "title": "Dependencies",
-        "required": true,
-        "order": 8,
-        "shape": {
-          "type": "list",
-          "ordered": false,
-          "minItems": 1
-        }
-      },
-      {
-        "id": "risks-and-mitigations",
-        "title": "Risks and Mitigations",
-        "required": true,
-        "order": 9,
-        "shape": {
-          "type": "list",
-          "ordered": false,
-          "minItems": 1
-        }
-      },
-      {
-        "id": "change-control",
-        "title": "Change Control",
-        "required": true,
-        "order": 10,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      },
-      {
-        "id": "pricing-and-payment-terms",
-        "title": "Pricing and Payment Terms",
-        "required": true,
-        "order": 11,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "list",
-            "table",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      },
-      {
-        "id": "ip-and-confidentiality",
-        "title": "IP and Confidentiality",
-        "required": true,
-        "order": 12,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      },
-      {
-        "id": "communication-cadence",
-        "title": "Communication Cadence",
-        "required": true,
-        "order": 13,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "list",
-            "heading",
-            "thematicBreak"
-          ]
-        }
-      },
-      {
-        "id": "parties",
-        "title": "Parties",
-        "required": true,
-        "order": 14,
-        "shape": {
-          "type": "flow",
-          "allowedNodes": [
-            "paragraph",
-            "list",
             "heading",
             "thematicBreak"
           ]
@@ -1524,6 +1346,29 @@
             "table",
             "heading",
             "thematicBreak"
+          ]
+        }
+      }
+    ]
+  },
+  "wiki": {
+    "type": "wiki",
+    "displayName": "Wiki",
+    "sections": [
+      {
+        "id": "content",
+        "title": "Content",
+        "required": false,
+        "order": 1,
+        "shape": {
+          "type": "flow",
+          "allowedNodes": [
+            "paragraph",
+            "list",
+            "code",
+            "heading",
+            "blockquote",
+            "table"
           ]
         }
       }

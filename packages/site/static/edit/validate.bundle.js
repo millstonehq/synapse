@@ -2040,38 +2040,28 @@ var require_fast_deep_equal = __commonJS({
   "../../node_modules/fast-deep-equal/index.js"(exports, module) {
     "use strict";
     module.exports = function equal(a, b) {
-      if (a === b)
-        return true;
+      if (a === b) return true;
       if (a && b && typeof a == "object" && typeof b == "object") {
-        if (a.constructor !== b.constructor)
-          return false;
+        if (a.constructor !== b.constructor) return false;
         var length, i, keys;
         if (Array.isArray(a)) {
           length = a.length;
-          if (length != b.length)
-            return false;
+          if (length != b.length) return false;
           for (i = length; i-- !== 0; )
-            if (!equal(a[i], b[i]))
-              return false;
+            if (!equal(a[i], b[i])) return false;
           return true;
         }
-        if (a.constructor === RegExp)
-          return a.source === b.source && a.flags === b.flags;
-        if (a.valueOf !== Object.prototype.valueOf)
-          return a.valueOf() === b.valueOf();
-        if (a.toString !== Object.prototype.toString)
-          return a.toString() === b.toString();
+        if (a.constructor === RegExp) return a.source === b.source && a.flags === b.flags;
+        if (a.valueOf !== Object.prototype.valueOf) return a.valueOf() === b.valueOf();
+        if (a.toString !== Object.prototype.toString) return a.toString() === b.toString();
         keys = Object.keys(a);
         length = keys.length;
-        if (length !== Object.keys(b).length)
-          return false;
+        if (length !== Object.keys(b).length) return false;
         for (i = length; i-- !== 0; )
-          if (!Object.prototype.hasOwnProperty.call(b, keys[i]))
-            return false;
+          if (!Object.prototype.hasOwnProperty.call(b, keys[i])) return false;
         for (i = length; i-- !== 0; ) {
           var key = keys[i];
-          if (!equal(a[key], b[key]))
-            return false;
+          if (!equal(a[key], b[key])) return false;
         }
         return true;
       }
@@ -3227,8 +3217,7 @@ var require_utils = __commonJS({
     function findToken(str, token) {
       let ind = 0;
       for (let i = 0; i < str.length; i++) {
-        if (str[i] === token)
-          ind++;
+        if (str[i] === token) ind++;
       }
       return ind;
     }
@@ -3686,8 +3675,7 @@ var require_fast_uri = __commonJS({
       const options = Object.assign({}, opts);
       const uriTokens = [];
       const schemeHandler = getSchemeHandler(options.scheme || component.scheme);
-      if (schemeHandler && schemeHandler.serialize)
-        schemeHandler.serialize(component, options);
+      if (schemeHandler && schemeHandler.serialize) schemeHandler.serialize(component, options);
       if (component.path !== void 0) {
         if (!options.skipEscape) {
           component.path = escape(component.path);
@@ -13551,7 +13539,7 @@ var CallableInstance = (
    * @param {string | symbol} property
    * @returns {(...parameters: Array<unknown>) => unknown}
    */
-  function(property) {
+  (function(property) {
     const self = this;
     const constr = self.constructor;
     const proto = (
@@ -13566,7 +13554,7 @@ var CallableInstance = (
     };
     Object.setPrototypeOf(apply, proto);
     return apply;
-  }
+  })
 );
 
 // ../../node_modules/unified/lib/index.js
@@ -14274,8 +14262,7 @@ function splice(list3, start, remove, items) {
     parameters.unshift(start, remove);
     list3.splice(...parameters);
   } else {
-    if (remove)
-      list3.splice(start, remove);
+    if (remove) list3.splice(start, remove);
     while (chunkStart < items.length) {
       parameters = items.slice(chunkStart, chunkStart + 1e4);
       parameters.unshift(start, 0);
@@ -14312,8 +14299,7 @@ function syntaxExtension(all2, extension2) {
     let code3;
     if (right) {
       for (code3 in right) {
-        if (!hasOwnProperty.call(left, code3))
-          left[code3] = [];
+        if (!hasOwnProperty.call(left, code3)) left[code3] = [];
         const value = right[code3];
         constructs(
           // @ts-expect-error Looks like a list.
@@ -14528,8 +14514,7 @@ function initializeDocument(effects) {
     return effects.check(containerConstruct, thereIsANewContainer, thereIsNoNewContainer)(code3);
   }
   function thereIsANewContainer(code3) {
-    if (childFlow)
-      closeFlow();
+    if (childFlow) closeFlow();
     exitContainers(continued);
     return documentContinued(code3);
   }
@@ -14549,8 +14534,7 @@ function initializeDocument(effects) {
   }
   function flowStart(code3) {
     if (code3 === null) {
-      if (childFlow)
-        closeFlow();
+      if (childFlow) closeFlow();
       exitContainers(0);
       effects.consume(code3);
       return;
@@ -14582,11 +14566,9 @@ function initializeDocument(effects) {
   }
   function writeToChild(token, endOfFile) {
     const stream = self.sliceStream(token);
-    if (endOfFile)
-      stream.push(null);
+    if (endOfFile) stream.push(null);
     token.previous = childToken;
-    if (childToken)
-      childToken.next = token;
+    if (childToken) childToken.next = token;
     childToken = token;
     childFlow.defineSkip(token.start);
     childFlow.write(stream);
@@ -15454,8 +15436,7 @@ var SpliceBuffer = class {
     if (index2 < 0 || index2 >= this.left.length + this.right.length) {
       throw new RangeError("Cannot access index `" + index2 + "` in a splice buffer of size `" + (this.left.length + this.right.length) + "`");
     }
-    if (index2 < this.left.length)
-      return this.left[index2];
+    if (index2 < this.left.length) return this.left[index2];
     return this.right[this.right.length - index2 + this.left.length - 1];
   }
   /**
@@ -15521,8 +15502,7 @@ var SpliceBuffer = class {
     const count = deleteCount || 0;
     this.setCursor(Math.trunc(start));
     const removed = this.right.splice(this.right.length - count, Number.POSITIVE_INFINITY);
-    if (items)
-      chunkedPush(this.left, items);
+    if (items) chunkedPush(this.left, items);
     return removed.reverse();
   }
   /**
@@ -15602,8 +15582,7 @@ var SpliceBuffer = class {
    *   Nothing.
    */
   setCursor(n) {
-    if (n === this.left.length || n > this.left.length && this.right.length === 0 || n < 0 && this.left.length === 0)
-      return;
+    if (n === this.left.length || n > this.left.length && this.right.length === 0 || n < 0 && this.left.length === 0) return;
     if (n < this.left.length) {
       const removed = this.left.splice(n, Number.POSITIVE_INFINITY);
       chunkedPush(this.right, removed.reverse());
@@ -15989,8 +15968,7 @@ function factoryLabel(effects, ok3, nok, type, markerType, stringType) {
       return atBreak(code3);
     }
     effects.consume(code3);
-    if (!seen)
-      seen = !markdownSpace(code3);
+    if (!seen) seen = !markdownSpace(code3);
     return code3 === 92 ? labelEscape : labelInside;
   }
   function labelEscape(code3) {
@@ -17722,8 +17700,7 @@ function resolveAllLineSuffixes(events, context) {
             size++;
             bufferIndex--;
           }
-          if (bufferIndex)
-            break;
+          if (bufferIndex) break;
           bufferIndex = -1;
         } else if (chunk === -2) {
           tabs = true;
@@ -18133,34 +18110,32 @@ function serializeChunks(chunks, expandTabs) {
     let value;
     if (typeof chunk === "string") {
       value = chunk;
-    } else
-      switch (chunk) {
-        case -5: {
-          value = "\r";
-          break;
-        }
-        case -4: {
-          value = "\n";
-          break;
-        }
-        case -3: {
-          value = "\r\n";
-          break;
-        }
-        case -2: {
-          value = expandTabs ? " " : "	";
-          break;
-        }
-        case -1: {
-          if (!expandTabs && atTab)
-            continue;
-          value = " ";
-          break;
-        }
-        default: {
-          value = String.fromCharCode(chunk);
-        }
+    } else switch (chunk) {
+      case -5: {
+        value = "\r";
+        break;
       }
+      case -4: {
+        value = "\n";
+        break;
+      }
+      case -3: {
+        value = "\r\n";
+        break;
+      }
+      case -2: {
+        value = expandTabs ? " " : "	";
+        break;
+      }
+      case -1: {
+        if (!expandTabs && atTab) continue;
+        value = " ";
+        break;
+      }
+      default: {
+        value = String.fromCharCode(chunk);
+      }
+    }
     atTab = chunk === -2;
     result.push(value);
   }
@@ -18254,8 +18229,7 @@ function preprocess() {
           case 9: {
             next = Math.ceil(column / 4) * 4;
             chunks.push(-2);
-            while (column++ < next)
-              chunks.push(-1);
+            while (column++ < next) chunks.push(-1);
             break;
           }
           case 10: {
@@ -18272,10 +18246,8 @@ function preprocess() {
       startPosition = endPosition + 1;
     }
     if (end) {
-      if (atCarriageReturn)
-        chunks.push(-5);
-      if (buffer)
-        chunks.push(buffer);
+      if (atCarriageReturn) chunks.push(-5);
+      if (buffer) chunks.push(buffer);
       chunks.push(null);
     }
     return chunks;
@@ -18519,8 +18491,7 @@ function compiler(options) {
           while (tailIndex--) {
             const tailEvent = events[tailIndex];
             if (tailEvent[1].type === "lineEnding" || tailEvent[1].type === "lineEndingBlank") {
-              if (tailEvent[0] === "exit")
-                continue;
+              if (tailEvent[0] === "exit") continue;
               if (lineIndex) {
                 events[lineIndex][1].type = "lineEndingBlank";
                 listSpread = true;
@@ -18564,8 +18535,7 @@ function compiler(options) {
     return open;
     function open(token) {
       enter.call(this, create(token), token);
-      if (and)
-        and.call(this, token);
+      if (and) and.call(this, token);
     }
   }
   function buffer() {
@@ -18589,8 +18559,7 @@ function compiler(options) {
   function closer(and) {
     return close;
     function close(token) {
-      if (and)
-        and.call(this, token);
+      if (and) and.call(this, token);
       exit3.call(this, token);
     }
   }
@@ -18636,8 +18605,7 @@ function compiler(options) {
     node2.meta = data2;
   }
   function onexitcodefencedfence() {
-    if (this.data.flowCodeInside)
-      return;
+    if (this.data.flowCodeInside) return;
     this.buffer();
     this.data.flowCodeInside = true;
   }
@@ -19069,7 +19037,7 @@ var convert = (
    * @param {Test} [test]
    * @returns {Check}
    */
-  function(test) {
+  (function(test) {
     if (test === null || test === void 0) {
       return ok2;
     }
@@ -19090,7 +19058,7 @@ var convert = (
       return typeFactory(test);
     }
     throw new Error("Expected function, string, or object as test");
-  }
+  })
 );
 function anyFactory(tests) {
   const checks = [];
@@ -19102,8 +19070,7 @@ function anyFactory(tests) {
   function any(...parameters) {
     let index3 = -1;
     while (++index3 < checks.length) {
-      if (checks[index3].apply(this, parameters))
-        return true;
+      if (checks[index3].apply(this, parameters)) return true;
     }
     return false;
   }
@@ -19122,8 +19089,7 @@ function propertiesFactory(check) {
     );
     let key;
     for (key in check) {
-      if (nodeAsRecord[key] !== checkAsRecord[key])
-        return false;
+      if (nodeAsRecord[key] !== checkAsRecord[key]) return false;
     }
     return true;
   }
@@ -19433,8 +19399,7 @@ function findUrl(_, protocol, domain2, path2, match) {
     return false;
   }
   const parts = splitUrl(domain2 + path2);
-  if (!parts[0])
-    return false;
+  if (!parts[0]) return false;
   const result = {
     type: "link",
     title: null,
@@ -20307,8 +20272,7 @@ function inlineCode(node2, _, state) {
     const pattern = state.unsafe[index2];
     const expression = state.compilePattern(pattern);
     let match;
-    if (!pattern.atBreak)
-      continue;
+    if (!pattern.atBreak) continue;
     while (match = expression.exec(value)) {
       let position2 = match.index;
       if (value.charCodeAt(position2) === 10 && value.charCodeAt(position2 - 1) === 13) {
@@ -21028,10 +20992,8 @@ var code2 = 48;
 while (code2 < 123) {
   text4[code2] = emailAutolink;
   code2++;
-  if (code2 === 58)
-    code2 = 65;
-  else if (code2 === 91)
-    code2 = 97;
+  if (code2 === 58) code2 = 65;
+  else if (code2 === 91) code2 = 97;
 }
 text4[43] = emailAutolink;
 text4[45] = emailAutolink;
@@ -21463,8 +21425,7 @@ function tokenizeGfmFootnoteCall(effects, ok3, nok) {
     return callStart;
   }
   function callStart(code3) {
-    if (code3 !== 94)
-      return nok(code3);
+    if (code3 !== 94) return nok(code3);
     effects.enter("gfmFootnoteCallMarker");
     effects.consume(code3);
     effects.exit("gfmFootnoteCallMarker");
@@ -21681,14 +21642,12 @@ function gfmStrikethrough(options) {
     function more(code3) {
       const before = classifyCharacter(previous3);
       if (code3 === 126) {
-        if (size > 1)
-          return nok(code3);
+        if (size > 1) return nok(code3);
         effects.consume(code3);
         size++;
         return more;
       }
-      if (size < 2 && !single)
-        return nok(code3);
+      if (size < 2 && !single) return nok(code3);
       const token = effects.exit("strikethroughSequenceTemporary");
       const after = classifyCharacter(code3);
       token._open = !after || after === 2 && Boolean(before);
@@ -21827,10 +21786,8 @@ function tokenizeTable(effects, ok3, nok) {
     while (index2 > -1) {
       const type = self.events[index2][1].type;
       if (type === "lineEnding" || // Note: markdown-rs uses `whitespace` instead of `linePrefix`
-      type === "linePrefix")
-        index2--;
-      else
-        break;
+      type === "linePrefix") index2--;
+      else break;
     }
     const tail = index2 > -1 ? self.events[index2][1].type : null;
     const next = tail === "tableHead" || tail === "tableRow" ? bodyRowStart : headRowBefore;
@@ -22294,27 +22251,50 @@ function remarkGfm(options) {
   toMarkdownExtensions.push(gfmToMarkdown(settings));
 }
 
-// decap/validate-browser.ts
+// decap/doc-types.generated.ts
 var DOC_TYPES = [
   "adr",
-  "agreement",
   "capability",
+  "flow",
+  "guide",
   "meeting",
   "policy",
+  "postmortem",
   "prd",
   "process",
   "reference",
+  "report",
   "runbook",
-  "scorecard",
   "sop",
-  "sow",
   "standard",
   "system",
-  "tdd"
+  "tdd",
+  "wiki"
 ];
 function isDocType(value) {
   return DOC_TYPES.includes(value);
 }
+var TEMPLATE_REGISTRY = {
+  "adr": { folder: "90_Architecture/ADRs" },
+  "capability": { folder: "110_Capabilities" },
+  "flow": { folder: "100_Products/Flows" },
+  "guide": { folder: "55_Guides" },
+  "meeting": { folder: "60_Meetings" },
+  "policy": { folder: "10_Policies" },
+  "postmortem": { folder: "85_Postmortems" },
+  "prd": { folder: "100_Products/PRDs" },
+  "process": { folder: "30_Processes" },
+  "reference": { folder: "200_References" },
+  "report": { folder: "80_Reports" },
+  "runbook": { folder: "50_Runbooks" },
+  "sop": { folder: "40_SOPs" },
+  "standard": { folder: "20_Standards" },
+  "system": { folder: "70_Systems" },
+  "tdd": { folder: "90_Architecture/TDDs" },
+  "wiki": { folder: "75_Wikis" }
+};
+
+// decap/validate-browser.ts
 function validateSchema(frontmatter, schema) {
   const issues = [];
   const cleanSchema = { ...schema };
@@ -22621,23 +22601,6 @@ function validateCrossLinks(frontmatter, body, vaultIndex) {
   }
   return issues;
 }
-var TEMPLATE_REGISTRY = {
-  "adr": { folder: "90_Architecture/ADRs" },
-  "agreement": { folder: "120_Legal/agreements" },
-  "capability": { folder: "110_Capabilities" },
-  "meeting": { folder: "60_Meetings" },
-  "policy": { folder: "10_Policies" },
-  "prd": { folder: "100_Products/PRDs" },
-  "process": { folder: "30_Processes" },
-  "reference": { folder: "200_References" },
-  "runbook": { folder: "50_Runbooks" },
-  "scorecard": { folder: "80_Scorecards" },
-  "sop": { folder: "40_SOPs" },
-  "sow": { folder: "120_Legal/SOWs" },
-  "standard": { folder: "20_Standards" },
-  "system": { folder: "70_Systems" },
-  "tdd": { folder: "90_Architecture/TDDs" }
-};
 function validateNaming(filePath, frontmatter) {
   const issues = [];
   const docType = frontmatter.type;
@@ -22708,6 +22671,7 @@ function validateDocument(frontmatter, body, filePath, context) {
 var validate_browser_default = validateDocument;
 export {
   DOC_TYPES,
+  TEMPLATE_REGISTRY,
   validate_browser_default as default,
   extractWikilinks,
   isDocType,

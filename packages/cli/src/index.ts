@@ -7,6 +7,7 @@ import { scaffoldCommand } from "./commands/scaffold.js";
 import { generatePdfCommand } from "./commands/generate-pdf.js";
 import { initCommand } from "./commands/init.js";
 import { fetchReferenceCommand } from "./commands/fetch-reference.js";
+import { generateCommand } from "./commands/generate.js";
 import { getDocTypes } from "./lib/type-registry.js";
 
 // Parse command line arguments
@@ -80,6 +81,7 @@ Commands:
   format          Format documentation files according to body grammar rules
   index           Generate the homepage index.md with navigation
   scaffold        Create a new document from a template
+  generate        Generate synthetic example documents from titles.json
   generate-pdf    Generate a PDF from YAML data and template
   fetch-reference Fetch and convert external URL to markdown
 
@@ -137,6 +139,16 @@ Scaffold Command:
     --target-dir <path> Output directory (default: content/{type folder})
     --force             Overwrite existing files
 
+Generate Command:
+  synapse generate <titles.json> [options]
+
+  Generate synthetic example documents from a titles manifest.
+  Titles.json is an array of { type, title, domain } objects.
+
+  Options:
+    --dir <path>        Content root directory (default: cwd)
+    --force             Overwrite existing files
+
 Generate PDF Command:
   synapse generate-pdf [options]
 
@@ -166,6 +178,7 @@ Examples:
   synapse index
   synapse scaffold --type adr --title "Use React for Frontend"
   synapse scaffold --type policy --title "Security Policy" --owner "Security Team"
+  synapse generate titles.json --force
   synapse generate-pdf --input data.yaml --output document.pdf
 `);
 }
@@ -204,6 +217,10 @@ async function main(): Promise<void> {
 
       case "scaffold":
         await scaffoldCommand(parsedArgs);
+        break;
+
+      case "generate":
+        await generateCommand(parsedArgs);
         break;
 
       case "generate-pdf":

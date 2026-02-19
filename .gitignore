@@ -209,3 +209,7 @@ out/
 .deepeval/
 
 settings.local.json
+
+# Generation artifacts (ephemeral, used by synapse generate)
+.synapse-generate/
+titles.json

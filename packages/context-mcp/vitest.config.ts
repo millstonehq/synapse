@@ -19,5 +19,13 @@ export default defineConfig({
     testTimeout: 60000, // Some tests need time for indexing
     hookTimeout: 60000,
     globalSetup: './tests/setup.ts',
+    server: {
+      deps: {
+        // @continuedev/core is ESM but uses extensionless relative imports
+        // (e.g. "../util/parameters") which Node cannot resolve natively.
+        // Inlining lets Vite's resolver handle the missing .js extensions.
+        inline: ['@continuedev/core'],
+      },
+    },
   },
 });

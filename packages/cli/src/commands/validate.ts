@@ -417,6 +417,21 @@ export async function validate(options: {
       existingFiles.add(path.basename(file, ".md"));
     }
 
+    // Also index documents by their frontmatter id field so that
+    // wikilinks like [[SYSTEM-001]] resolve even when the filename
+    // is SYSTEM-001-payment-gateway-service.md
+    for (const file of allVaultFiles) {
+      try {
+        const content = await fs.readFile(file, "utf-8");
+        const { frontmatter } = parseDocument(content);
+        if (frontmatter?.id) {
+          existingFiles.add(frontmatter.id);
+        }
+      } catch {
+        // Skip files that can't be parsed
+      }
+    }
+
     // Validate each file
     for (const file of files) {
       const issues = await validateDocument(

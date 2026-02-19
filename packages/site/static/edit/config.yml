@@ -519,6 +519,90 @@ collections:
 
           - Item one
           - Item two
+  - name: guides
+    label: Guides
+    label_singular: Guide
+    folder: content/55_Guides
+    create: true
+    nested:
+      depth: 10
+    slug: "{{slug}}"
+    extension: md
+    format: yaml-frontmatter
+    fields:
+      - label: Id
+        name: id
+        widget: string
+        required: true
+      - label: Title
+        name: title
+        widget: string
+        required: true
+      - label: Type
+        name: type
+        widget: hidden
+        required: true
+        default: guide
+      - label: Status
+        name: status
+        widget: select
+        required: true
+        options:
+          - draft
+          - review
+          - approved
+          - deprecated
+          - proposed
+          - accepted
+          - superseded
+        default: draft
+      - label: Owner
+        name: owner
+        widget: string
+        required: true
+      - label: Created
+        name: created
+        widget: datetime
+        required: true
+      - label: Updated
+        name: updated
+        widget: datetime
+        required: true
+      - label: Tags
+        name: tags
+        widget: list
+        required: false
+      - label: Summary
+        name: summary
+        widget: text
+        required: false
+      - label: Audience
+        name: audience
+        widget: select
+        required: false
+        options:
+          - internal
+          - customer
+          - partner
+        default: internal
+      - label: Version
+        name: version
+        widget: string
+        required: false
+      - label: Related Systems
+        name: related_systems
+        widget: list
+        required: false
+      - label: Related Sops
+        name: related_sops
+        widget: list
+        required: false
+      - label: Body
+        name: body
+        widget: markdown
+        required: true
+        modes:
+          - raw
   - name: meetings
     label: 📅 Meetings
     label_singular: Meeting
@@ -638,6 +722,293 @@ collections:
           ## Decisions & Next Steps
 
           [Describe here...]
+  - name: postmortems
+    label: Postmortems
+    label_singular: Postmortem
+    folder: content/85_Postmortems
+    create: true
+    nested:
+      depth: 10
+    slug: "{{slug}}"
+    extension: md
+    format: yaml-frontmatter
+    fields:
+      - label: Id
+        name: id
+        widget: string
+        required: true
+      - label: Title
+        name: title
+        widget: string
+        required: true
+      - label: Type
+        name: type
+        widget: hidden
+        required: true
+        default: postmortem
+      - label: Status
+        name: status
+        widget: select
+        required: true
+        options:
+          - draft
+          - review
+          - approved
+          - deprecated
+          - proposed
+          - accepted
+          - superseded
+        default: draft
+      - label: Owner
+        name: owner
+        widget: string
+        required: true
+      - label: Created
+        name: created
+        widget: datetime
+        required: true
+      - label: Updated
+        name: updated
+        widget: datetime
+        required: true
+      - label: Tags
+        name: tags
+        widget: list
+        required: false
+      - label: Summary
+        name: summary
+        widget: text
+        required: false
+      - label: Incident Number
+        name: incident_number
+        widget: string
+        required: true
+      - label: Severity
+        name: severity
+        widget: select
+        required: true
+        options:
+          - SEV-1
+          - SEV-2
+          - SEV-3
+          - SEV-4
+        default: SEV-1
+      - label: Incident Date
+        name: incident_date
+        widget: string
+        required: true
+      - label: Detection Time
+        name: detection_time
+        widget: datetime
+        required: false
+      - label: Resolution Time
+        name: resolution_time
+        widget: datetime
+        required: false
+      - label: Total Duration
+        name: total_duration
+        widget: string
+        required: false
+      - label: Affected Customers
+        name: affected_customers
+        widget: list
+        required: false
+      - label: Revenue Impact
+        name: revenue_impact
+        widget: string
+        required: false
+      - label: Related Sop
+        name: related_sop
+        widget: string
+        required: false
+      - label: Action Items
+        name: action_items
+        widget: list
+        required: false
+      - label: Company
+        name: company
+        widget: string
+        required: false
+      - label: Body
+        name: body
+        widget: markdown
+        required: true
+        modes:
+          - raw
+        hint: >-
+          Required sections: Executive Summary, Timeline, Impact, Root Cause Analysis, Resolution, Action Items, Lessons
+          Learned
+        default: |-
+          ## Executive Summary
+
+          [Describe here...]
+
+          ## Timeline
+
+          [Describe here...]
+
+          ## Impact
+
+          [Describe here...]
+
+          ## Root Cause Analysis
+
+          [Describe here...]
+
+          ## Resolution
+
+          [Describe here...]
+
+          ## Action Items
+
+          [Describe here...]
+
+          ## Lessons Learned
+
+          [Describe here...]
+  - name: reports
+    label: Reports
+    label_singular: Report
+    folder: content/80_Reports
+    create: true
+    nested:
+      depth: 10
+    slug: "{{slug}}"
+    extension: md
+    format: yaml-frontmatter
+    fields:
+      - label: Id
+        name: id
+        widget: string
+        required: true
+      - label: Title
+        name: title
+        widget: string
+        required: true
+      - label: Type
+        name: type
+        widget: hidden
+        required: true
+        default: report
+      - label: Status
+        name: status
+        widget: select
+        required: true
+        options:
+          - draft
+          - review
+          - approved
+          - deprecated
+          - proposed
+          - accepted
+          - superseded
+        default: draft
+      - label: Owner
+        name: owner
+        widget: string
+        required: true
+      - label: Created
+        name: created
+        widget: datetime
+        required: true
+      - label: Updated
+        name: updated
+        widget: datetime
+        required: true
+      - label: Tags
+        name: tags
+        widget: list
+        required: false
+      - label: Summary
+        name: summary
+        widget: text
+        required: false
+      - label: Company
+        name: company
+        widget: string
+        required: true
+      - label: Report Month
+        name: report_month
+        widget: string
+        required: true
+      - label: Report Type
+        name: report_type
+        widget: select
+        required: true
+        options:
+          - company
+          - portfolio
+          - analytics
+        default: company
+      - label: Companies Included
+        name: companies_included
+        widget: list
+        required: false
+      - label: Portfolio Health Summary
+        name: portfolio_health_summary
+        widget: string
+        required: false
+      - label: Cross Portfolio Themes
+        name: cross_portfolio_themes
+        widget: list
+        required: false
+      - label: Overall Health
+        name: overall_health
+        widget: select
+        required: false
+        options:
+          - excellent
+          - good
+          - fair
+          - poor
+          - critical
+        default: excellent
+      - label: Confidence
+        name: confidence
+        widget: select
+        required: false
+        options:
+          - high
+          - medium
+          - low
+        default: high
+      - label: Active Initiatives Count
+        name: active_initiatives_count
+        widget: string
+        required: false
+      - label: Critical Risks Count
+        name: critical_risks_count
+        widget: string
+        required: false
+      - label: Board Attention Required
+        name: board_attention_required
+        widget: boolean
+        required: false
+      - label: Generated Date
+        name: generated_date
+        widget: datetime
+        required: false
+      - label: Data Source Meeting Notes
+        name: data_source_meeting_notes
+        widget: list
+        required: false
+      - label: Brand Theme
+        name: brand_theme
+        widget: select
+        required: false
+        options:
+        - letterhead
+        default: letterhead
+      - label: Consultant Attribution
+        name: consultant_attribution
+        widget: string
+        required: false
+      - label: Body
+        name: body
+        widget: markdown
+        required: true
+        modes:
+          - raw
   - name: systems
     label: 🖥️ Systems
     label_singular: System
@@ -750,10 +1121,10 @@ collections:
 
           - Item one
           - Item two
-  - name: scorecards
-    label: 📊 Scorecards
-    label_singular: Scorecard
-    folder: content/80_Scorecards
+  - name: wikis
+    label: Wikis
+    label_singular: Wiki
+    folder: content/75_Wikis
     create: true
     nested:
       depth: 10
@@ -773,7 +1144,7 @@ collections:
         name: type
         widget: hidden
         required: true
-        default: scorecard
+        default: wiki
       - label: Status
         name: status
         widget: select
@@ -807,49 +1178,41 @@ collections:
         name: summary
         widget: text
         required: false
-      - label: Dimensions
-        name: dimensions
-        widget: list
-        required: true
-      - label: Weighted Total
-        name: weighted_total
-        widget: string
-        required: false
-      - label: Overall Summary
-        name: overall_summary
+      - label: Source Repo
+        name: source_repo
         widget: string
         required: true
-      - label: Strengths
-        name: strengths
+      - label: Commit Sha
+        name: commit_sha
+        widget: string
+        required: false
+      - label: Generated At
+        name: generated_at
+        widget: datetime
+        required: false
+      - label: Source Files
+        name: source_files
         widget: list
         required: false
-      - label: Top Risks
-        name: top_risks
-        widget: list
+      - label: Generator
+        name: generator
+        widget: string
+        required: true
+      - label: Model
+        name: model
+        widget: string
         required: false
-      - label: Recommendation
-        name: recommendation
+      - label: Importance
+        name: importance
         widget: select
         required: false
         options:
-          - Proceed
-          - Proceed with conditions
-          - Do not proceed
-        default: Proceed
-      - label: Metrics
-        name: metrics
-        widget: string
-        required: false
-      - label: Risks
-        name: risks
-        widget: list
-        required: false
-      - label: Action Plan
-        name: action_plan
-        widget: list
-        required: false
-      - label: Related Docs
-        name: related_docs
+          - high
+          - medium
+          - low
+        default: high
+      - label: Related Pages
+        name: related_pages
         widget: list
         required: false
       - label: Body
@@ -858,35 +1221,6 @@ collections:
         required: true
         modes:
           - raw
-        hint: >-
-          Required sections: Overall Summary, Dimensions, Strengths (bullet list), Top Risks (bullet list),
-          Recommendation, Action Plan
-        default: |-
-          ## Overall Summary
-
-          [Describe here...]
-
-          ## Dimensions
-
-          [Describe here...]
-
-          ## Strengths
-
-          - Item one
-          - Item two
-
-          ## Top Risks
-
-          - Item one
-          - Item two
-
-          ## Recommendation
-
-          [Describe here...]
-
-          ## Action Plan
-
-          [Describe here...]
   - name: adrs
     label: 🏗️ ADRs
     label_singular: ADR
