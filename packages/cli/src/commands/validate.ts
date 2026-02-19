@@ -267,9 +267,14 @@ async function validateDocument(
     }
 
     // Validate body structure (AST-based validation)
+    // Support compound body grammar keys: e.g. report_type: analytics → "report-analytics"
     if (bodyRules) {
       const relativePath = path.relative(contentDir, filePath);
-      const bodyIssues = validateBody(body, bodyRules, docType, relativePath);
+      const subType = frontmatter.report_type as string | undefined;
+      const compoundType = subType && bodyRules.documentTypes[`${docType}-${subType}`]
+        ? `${docType}-${subType}`
+        : docType;
+      const bodyIssues = validateBody(body, bodyRules, compoundType, relativePath);
 
       // Map body validation issues to include file path
       issues.push(

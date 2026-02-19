@@ -43,8 +43,12 @@ async function formatDocument(
       return { modified: false };
     }
 
-    // Format the body
-    const formattedBody = formatBody(body, bodyRules, type);
+    // Format the body (support compound body grammar keys)
+    const subType = frontmatter?.report_type as string | undefined;
+    const effectiveType = subType && bodyRules.documentTypes[`${type}-${subType}`]
+      ? `${type}-${subType}`
+      : type;
+    const formattedBody = formatBody(body, bodyRules, effectiveType);
 
     // Check if body changed
     const modified = formattedBody.trim() !== body.trim();

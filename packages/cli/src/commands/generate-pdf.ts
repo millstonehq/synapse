@@ -161,7 +161,7 @@ export async function generatePdf(options: GeneratePdfOptions): Promise<void> {
     companyLogo: companyLogoDataUrl,
     company: companyName || '',
     date: new Date().toISOString().split('T')[0],
-    attribution: theme.attribution || data.consultant_attribution || '',
+    attribution: data.consultant_attribution ?? theme.attribution ?? '',
     footerLogo: footerLogoDataUrl,
     isDraft,
     theme: theme.name,
