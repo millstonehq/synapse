@@ -754,47 +754,71 @@ async function validateMcpConfig(filePath: string): Promise<PluginValidationIssu
         });
       }
 
-      // Check required fields
-      if (!server.command) {
-        issues.push({
-          type: "error",
-          code: "MCP_MISSING_COMMAND",
-          message: `Server "${serverName}" missing required field "command"`,
-          file: filePath,
-          field: `mcpServers.${serverName}.command`,
-        });
-      }
+      // Check required fields based on transport type
+      const isHttpTransport = server.type === "http" || server.type === "sse";
 
-      if (!server.args) {
-        issues.push({
-          type: "error",
-          code: "MCP_MISSING_ARGS",
-          message: `Server "${serverName}" missing required field "args"`,
-          file: filePath,
-          field: `mcpServers.${serverName}.args`,
-        });
-      }
+      if (isHttpTransport) {
+        // HTTP/SSE transport: requires url
+        if (!server.url) {
+          issues.push({
+            type: "error",
+            code: "MCP_MISSING_URL",
+            message: `Server "${serverName}" with type "${server.type}" missing required field "url"`,
+            file: filePath,
+            field: `mcpServers.${serverName}.url`,
+          });
+        } else if (typeof server.url !== "string") {
+          issues.push({
+            type: "error",
+            code: "MCP_INVALID_URL",
+            message: `Server "${serverName}" url must be a string`,
+            file: filePath,
+            field: `mcpServers.${serverName}.url`,
+          });
+        }
+      } else {
+        // Stdio transport (default): requires command and args
+        if (!server.command) {
+          issues.push({
+            type: "error",
+            code: "MCP_MISSING_COMMAND",
+            message: `Server "${serverName}" missing required field "command"`,
+            file: filePath,
+            field: `mcpServers.${serverName}.command`,
+          });
+        }
 
-      // Validate command is string
-      if (server.command && typeof server.command !== "string") {
-        issues.push({
-          type: "error",
-          code: "MCP_INVALID_COMMAND",
-          message: `Server "${serverName}" command must be a string`,
-          file: filePath,
-          field: `mcpServers.${serverName}.command`,
-        });
-      }
+        if (!server.args) {
+          issues.push({
+            type: "error",
+            code: "MCP_MISSING_ARGS",
+            message: `Server "${serverName}" missing required field "args"`,
+            file: filePath,
+            field: `mcpServers.${serverName}.args`,
+          });
+        }
 
-      // Validate args is array
-      if (server.args && !Array.isArray(server.args)) {
-        issues.push({
-          type: "error",
-          code: "MCP_INVALID_ARGS",
-          message: `Server "${serverName}" args must be an array`,
-          file: filePath,
-          field: `mcpServers.${serverName}.args`,
-        });
+        // Validate command is string
+        if (server.command && typeof server.command !== "string") {
+          issues.push({
+            type: "error",
+            code: "MCP_INVALID_COMMAND",
+            message: `Server "${serverName}" command must be a string`,
+            file: filePath,
+            field: `mcpServers.${serverName}.command`,
+          });
+        }
+
+        // Validate args is array
+        if (server.args && !Array.isArray(server.args)) {
+          issues.push({
+            type: "error",
+            code: "MCP_INVALID_ARGS",
+            message: `Server "${serverName}" args must be an array`,
+            file: filePath,
+            field: `mcpServers.${serverName}.args`,
+          });
+        }
       }
 
       // Warn if metadata is missing
