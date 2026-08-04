@@ -166,7 +166,15 @@ jobs:
   publish:
     name: Publish to NPM
     needs: [test-cli, validate-docs]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Also runs on workflow_dispatch so a release can be kicked off by hand.
+    # Pushes to main have not been reliably triggering this workflow (0.7.2
+    # merged to main and produced no run at all), which left a merged version
+    # bump unpublishable. The publish step is still idempotent — it compares the
+    # local version against the registry and skips when they match — so a manual
+    # run on an already-published version is a no-op rather than a failure.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: write
