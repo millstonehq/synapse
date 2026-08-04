@@ -1,6 +1,6 @@
 {
   "name": "@millstone/synapse-schemas",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "JSON Schema definitions for Synapse documentation framework",
   "type": "module",
   "main": "index.js",
