@@ -438,6 +438,77 @@ Should be named SKILL.md
       );
     });
 
+    it("should accept supporting markdown beside and beneath SKILL.md", async () => {
+      // The skills spec encourages supporting files: reference material sits
+      // either next to SKILL.md or under references/, scripts/, examples/.
+      // Flagging those as "misnamed skills" broke every skill shipping docs.
+      const testDir = path.join(fixturesDir, "skill-with-references");
+      await fs.ensureDir(testDir);
+      await fs.ensureDir(path.join(testDir, ".claude-plugin"));
+
+      await fs.writeJson(path.join(testDir, ".claude-plugin/marketplace.json"), {
+        name: "test-marketplace",
+        owner: { name: "Test Owner" },
+        version: "1.0.0",
+        description: "A test marketplace",
+        repository: { type: "git", url: "https://github.com/test/test" },
+        plugins: [
+          {
+            name: "test-plugin",
+            description: "Test plugin",
+            source: "./plugins/test-plugin",
+            tags: ["test"]
+          }
+        ],
+        license: "MIT"
+      });
+
+      const pluginDir = path.join(testDir, "plugins/test-plugin");
+      await fs.ensureDir(pluginDir);
+      await fs.ensureDir(path.join(pluginDir, ".claude-plugin"));
+      await fs.writeJson(path.join(pluginDir, ".claude-plugin/plugin.json"), {
+        name: "test-plugin",
+        version: "1.0.0",
+        description: "Test plugin",
+        author: { name: "Test Author" },
+        repository: "https://github.com/test/test",
+        license: "MIT"
+      });
+
+      await fs.ensureDir(path.join(pluginDir, "skills/test-skill/references"));
+      await fs.writeFile(
+        path.join(pluginDir, "skills/test-skill/SKILL.md"),
+        `---
+name: test-skill
+description: A test skill that ships reference material
+---
+
+# Test Skill
+
+See [the checklist](references/checklist.md) and [notes](notes.md).
+`
+      );
+      // Supporting file in a subdirectory.
+      await fs.writeFile(
+        path.join(pluginDir, "skills/test-skill/references/checklist.md"),
+        "# Checklist\n\n- item\n"
+      );
+      // Supporting file directly beside SKILL.md.
+      await fs.writeFile(
+        path.join(pluginDir, "skills/test-skill/notes.md"),
+        "# Notes\n\nExtended reference.\n"
+      );
+
+      const result = await validatePluginMarketplace(testDir, schemasDir);
+
+      expect(result.issues).not.toContainEqual(
+        expect.objectContaining({ code: "SKILL_INVALID_FILENAME" })
+      );
+      expect(result.success).toBe(true);
+      // The skill is counted once, not once per markdown file.
+      expect(result.componentsValidated.skills).toBe(1);
+    });
+
     it("should report error for invalid hook type", async () => {
       const testDir = path.join(fixturesDir, "invalid-hook");
       await fs.ensureDir(testDir);
