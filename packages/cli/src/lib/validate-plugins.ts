@@ -989,20 +989,49 @@ export async function validatePluginMarketplace(
       // Find all markdown files in skills directories
       const allSkillFiles = await glob("**/*.md", { cwd: skillsDir });
       const validSkillFiles = await glob("**/SKILL.md", { cwd: skillsDir });
-      
-      // Report incorrectly named skill files
-      for (const file of allSkillFiles) {
-        const filename = path.basename(file);
-        if (filename !== "SKILL.md") {
+
+      // A skill is skills/<name>/SKILL.md. Every OTHER markdown file in that
+      // directory is supporting material — reference docs, checklists, style
+      // guides — which the skills spec encourages, whether it sits beside
+      // SKILL.md or under references/, scripts/, examples/.
+      //
+      // This previously flagged every one of those as a misnamed skill, so any
+      // skill shipping documentation failed validation with one error per file.
+      // The real defect it should catch is a skill directory that has markdown
+      // but no SKILL.md at all — a skill nothing can load.
+      const skillDirs = new Set(
+        allSkillFiles
+          .map((file) => file.split(path.sep)[0])
+          .filter((dir) => !dir.endsWith(".md")),
+      );
+      const dirsWithSkillFile = new Set(
+        validSkillFiles.map((file) => file.split(path.sep)[0]),
+      );
+
+      for (const dir of skillDirs) {
+        if (!dirsWithSkillFile.has(dir)) {
           allIssues.push({
             type: "error",
             code: "SKILL_INVALID_FILENAME",
-            message: `Skill file must be named "SKILL.md" (found: "${filename}")`,
+            message: `Skill directory "${dir}" contains markdown but no SKILL.md`,
+            file: path.join(skillsDir, dir),
+          });
+        }
+      }
+
+      // Markdown loose in skills/ belongs to no skill and cannot be loaded.
+      for (const file of allSkillFiles) {
+        if (!file.includes(path.sep)) {
+          allIssues.push({
+            type: "error",
+            code: "SKILL_INVALID_FILENAME",
+            message: `Markdown in skills/ must live in a skill directory alongside a SKILL.md (found: "${file}")`,
             file: path.join(skillsDir, file),
           });
         }
       }
-      
+
+
       // Validate properly named skill files
       for (const file of validSkillFiles) {
         const filePath = path.join(skillsDir, file);

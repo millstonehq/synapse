@@ -1,6 +1,6 @@
 {
   "name": "@millstone/synapse-cli",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Synapse documentation framework CLI",
   "type": "module",
   "main": "dist/index.js",
