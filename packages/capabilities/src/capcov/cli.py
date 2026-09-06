@@ -269,6 +269,10 @@ def cmd_report(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     actual = sys.argv[1:] if argv is None else argv
+    if actual and actual[0] == "outcomes":
+        from .outcomes import main as outcomes_main
+
+        return outcomes_main(actual[1:])
     if actual and actual[0] == "flows":
         from .flows.cli import main as flows_main
 
@@ -277,6 +281,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--quiet", action="store_true")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("flows", help="source obligations, flow planning, and browser outcome evidence")
+    sub.add_parser("outcomes", help="scoped behavior obligations and fresh pytest evidence")
 
     def common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--target", default=".", help="the project root")
