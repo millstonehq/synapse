@@ -9,7 +9,8 @@
     "decap/**/*",
     "static/**/*",
     "*.ts",
-    "README.md"
+    "README.md",
+    "quartz-package-lock.json"
   ],
   "scripts": {
     "setup": "tsx setup-quartz.ts",
@@ -46,20 +47,20 @@
     "static-site"
   ],
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "chalk": "^5.3.0",
-    "esbuild": "^0.25.0",
-    "tsx": "^4.0.0",
-    "typescript": "^5.3.0"
+    "@types/node": "^20.19.43",
+    "chalk": "^5.6.2",
+    "esbuild": "^0.25.12",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "ajv": "^8.12.0",
+    "ajv": "^8.20.0",
     "ajv-formats": "^2.1.1",
-    "fast-glob": "^3.3.2",
-    "js-yaml": "^4.1.1",
-    "remark-gfm": "^4.0.0",
+    "fast-glob": "^3.3.3",
+    "js-yaml": "^4.3.2",
+    "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
-    "unified": "^11.0.0"
+    "unified": "^11.0.5"
   },
   "engines": {
     "node": ">=20.0.0"

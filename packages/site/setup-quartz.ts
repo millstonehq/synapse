@@ -55,9 +55,22 @@ function setupQuartzSubmodule() {
     });
   }
 
-  // Install Quartz dependencies
+  // Keep security updates reproducible without editing the upstream submodule.
+  const lockPath = join(SITE_DIR, 'quartz-package-lock.json');
+  const locked = JSON.parse(readFileSync(lockPath, 'utf-8'));
+  const packagePath = join(QUARTZ_DIR, 'package.json');
+  const quartzPackage = JSON.parse(readFileSync(packagePath, 'utf-8'));
+  if (quartzPackage.version !== locked.packages[''].version) {
+    throw new Error('Quartz version changed: refresh quartz-package-lock.json before setup');
+  }
+  quartzPackage.dependencies = locked.packages[''].dependencies;
+  quartzPackage.devDependencies = locked.packages[''].devDependencies;
+  writeFileSync(packagePath, JSON.stringify(quartzPackage, null, 2) + '\n');
+  copyFileSync(lockPath, join(QUARTZ_DIR, 'package-lock.json'));
+
+  // Install the reviewed dependency graph, including patched Sharp and TOML.
   console.log(chalk.blue('📦 Installing Quartz dependencies...'));
-  run('npm install', { cwd: QUARTZ_DIR });
+  run('npm ci --ignore-scripts', { cwd: QUARTZ_DIR });
 
   // Copy our configuration files
   console.log(chalk.blue('⚙️  Applying Synapse configuration...'));

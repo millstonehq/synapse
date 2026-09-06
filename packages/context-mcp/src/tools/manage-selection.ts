@@ -1,7 +1,7 @@
 import type { SelectionManager, SelectionMode, Slice } from '../selection/SelectionManager.js';
 
 export interface ManageSelectionArgs {
-  op: 'get' | 'add' | 'remove' | 'set' | 'clear' | 'preview' | 'promote' | 'demote';
+  op: 'get' | 'add' | 'remove' | 'set' | 'clear' | 'preview';
   paths?: string[];
   mode?: SelectionMode;
   slices?: Array<{
@@ -50,6 +50,12 @@ export async function manageSelectionTool(
     }
   }
 
+  if (!['get', 'add', 'remove', 'set', 'clear', 'preview'].includes(args.op)) {
+    throw new Error(`Unsupported selection operation: ${args.op}`);
+  }
+  if (args.mode && !['full', 'slices'].includes(args.mode)) {
+    throw new Error(`Unsupported selection mode: ${args.mode}`);
+  }
   switch (args.op) {
     case 'add':
       // Handle adding full files
@@ -102,18 +108,6 @@ export async function manageSelectionTool(
         content: preview.content,
         totalTokens: preview.tokens,
       };
-
-    case 'promote':
-      for (const path of args.paths || []) {
-        await manager.promote(path);
-      }
-      break;
-
-    case 'demote':
-      for (const path of args.paths || []) {
-        await manager.demote(path);
-      }
-      break;
 
     case 'get':
     default:

@@ -118,6 +118,20 @@ jobs:
       - name: Test CLI help command
         run: synapse --help
 
+  test-context-mcp:
+    name: Test context MCP package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run check:types -w packages/context-mcp
+      - run: npm run build -w packages/context-mcp
+      - run: npm test -w packages/context-mcp
+
   validate-docs:
     name: Validate Documentation
     needs: test-cli
@@ -147,14 +161,6 @@ jobs:
       - name: Link CLI globally
         working-directory: packages/cli
         run: npm link
-
-      - name: Get changed files (PR only)
-        if: github.event_name == 'pull_request'
-        id: changed-files
-        uses: tj-actions/changed-files@v44
-        with:
-          files: |
-            content/**/*.md
 
       - name: Validate content with strict mode
         id: validate
@@ -223,7 +229,7 @@ jobs:
 
   publish:
     name: Publish to NPM
-    needs: [test-cli, validate-docs]
+    needs: [test-cli, test-context-mcp, validate-docs]
     # Also runs on workflow_dispatch so a release can be kicked off by hand.
     # Pushes to main have not been reliably triggering this workflow (0.7.2
     # merged to main and produced no run at all), which left a merged version

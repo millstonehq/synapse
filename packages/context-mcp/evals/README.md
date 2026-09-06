@@ -1,3 +1,5 @@
+> Historical evaluation harness: Continue-backed search tools were removed in September 2026. Scenarios requiring `file_search`, `semantic_search`, `get_code_structure`, or `index_code` need a replacement backend before reuse.
+
 # /discover Command Evaluation Framework
 
 Pure Python evaluation framework for testing `/discover` efficacy using [DeepEval](https://deepeval.com/).

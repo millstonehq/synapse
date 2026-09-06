@@ -1,6 +1,7 @@
 import fsExtra from 'fs-extra';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { inlinePdfImages, renderPdfDiagrams } from '../lib/pdf-assets.js';
 import { chromium } from 'playwright-chromium';
 import { registerDefaultHelpers } from '../lib/templates.js';
 import { loadSchema, validateFrontmatter } from '../lib/schemas.js';
@@ -90,7 +91,10 @@ export async function generatePdf(options: GeneratePdfOptions): Promise<void> {
   console.log(c.blue('🔄 Converting markdown to HTML'));
   const inputDir = path.dirname(path.resolve(options.input));
   const projectRoot = path.resolve(inputDir, '../..');
-  const htmlContent = await markdownToHtml(markdownBody, projectRoot);
+
+  const htmlContent = await inlinePdfImages(
+    await markdownToHtml(markdownBody, projectRoot), inputDir
+  );
 
   // Resolve theme
   const theme = resolveTheme(options.theme, data.brand_theme as string | undefined);
@@ -153,7 +157,7 @@ export async function generatePdf(options: GeneratePdfOptions): Promise<void> {
   const Handlebars = (await import('handlebars')).default;
   const compiled = Handlebars.compile(templateHtml);
 
-  let finalHtml = compiled({
+  const finalHtml = compiled({
     title: data.title || 'Document',
     body: htmlContent,
     css,
@@ -167,86 +171,31 @@ export async function generatePdf(options: GeneratePdfOptions): Promise<void> {
     theme: theme.name,
   });
 
-  // Inject Mermaid rendering script
-  const mermaidScript = `
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-    <script>
-      document.addEventListener('DOMContentLoaded', async () => {
-        mermaid.initialize({
-          startOnLoad: false,
-          theme: 'default',
-          flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
-          securityLevel: 'loose'
-        });
-        const codeBlocks = document.querySelectorAll('pre code.language-mermaid');
-        for (let i = 0; i < codeBlocks.length; i++) {
-          const codeBlock = codeBlocks[i];
-          const pre = codeBlock.parentElement;
-          const diagramCode = codeBlock.textContent;
-          const container = document.createElement('div');
-          container.className = 'mermaid-diagram';
-          container.id = 'mermaid-diagram-' + i;
-          try {
-            const { svg } = await mermaid.render(container.id + '-svg', diagramCode);
-            container.innerHTML = svg;
-            pre.parentNode.replaceChild(container, pre);
-          } catch (err) {
-            console.error('Mermaid rendering error:', err);
-          }
-        }
-        window.mermaidRendered = true;
-      });
-    </script>
-    <style>
-      .mermaid-diagram {
-        display: flex;
-        justify-content: center;
-        margin: 1.5rem 0;
-        overflow-x: auto;
-      }
-      .mermaid-diagram svg {
-        max-width: 100%;
-        height: auto;
-      }
-    </style>`;
-
-  if (finalHtml.includes('</head>')) {
-    finalHtml = finalHtml.replace('</head>', mermaidScript + '\n</head>');
-  } else {
-    finalHtml = finalHtml.replace('</body>', mermaidScript + '\n</body>');
-  }
-
-  // Generate PDF with Playwright
   console.log(c.blue('🖨️  Generating PDF with Playwright'));
   const browser = await chromium.launch();
-  const page = await browser.newPage();
-  await page.setContent(finalHtml, { waitUntil: 'networkidle' });
-
-  // Wait for Mermaid diagrams to render
-  console.log(c.blue('📊 Waiting for Mermaid diagrams...'));
   try {
-    await page.waitForFunction(() => (window as any).mermaidRendered === true, { timeout: 30000 });
-    console.log(c.green('✓ Mermaid diagrams rendered'));
-  } catch {
-    console.log(c.yellow('⚠️  Mermaid rendering timeout (may have no diagrams)'));
+    const page = await browser.newPage();
+    await page.setContent(finalHtml, { waitUntil: 'load' });
+    await renderPdfDiagrams(page);
+    await page.evaluate('Promise.all([document.fonts.ready, ...Array.from(document.images, img => img.decode())])');
+
+    // Ensure output directory exists
+    await fs.ensureDir(path.dirname(options.output));
+
+    await page.pdf({
+      path: options.output,
+      format: 'Letter',
+      margin: {
+        top: '0.5in',
+        right: '0.75in',
+        bottom: '0.5in',
+        left: '0.75in',
+      },
+      printBackground: true,
+    });
+  } finally {
+    await browser.close();
   }
-
-  // Ensure output directory exists
-  await fs.ensureDir(path.dirname(options.output));
-
-  await page.pdf({
-    path: options.output,
-    format: 'Letter',
-    margin: {
-      top: '0.5in',
-      right: '0.75in',
-      bottom: '0.5in',
-      left: '0.75in',
-    },
-    printBackground: true,
-  });
-
-  await browser.close();
 
   console.log(c.green(`✅ PDF generated: ${options.output}`));
 }

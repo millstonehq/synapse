@@ -66,13 +66,13 @@ Available document types: adr, agreement, capability, meeting, policy, prd, proc
 
 ### generate-pdf
 
-Generate a PDF from YAML data and template.
+Generate a PDF from Markdown with YAML frontmatter. Local images are embedded relative to the input file. Mermaid diagrams render using the installed package, with no CDN or global Mermaid CLI. Invalid diagrams and unreadable images fail the command instead of producing an incomplete PDF.
 
 ```bash
 synapse generate-pdf [options]
 
 Options:
-  --input <path>      Input YAML data file (required)
+  --input <path>      Input Markdown file (required)
   --output <path>     Output PDF file path (required)
   --logo <path>       Logo image path (optional)
   --company <name>    Company name for letterhead (optional)

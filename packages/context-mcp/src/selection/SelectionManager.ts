@@ -2,7 +2,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { TokenCounter } from '../utils/token-counter.js';
 
-export type SelectionMode = 'full' | 'slices' | 'codemap_only';
+export type SelectionMode = 'full' | 'slices';
 
 export interface Slice {
   startLine: number;
@@ -155,11 +155,6 @@ export class SelectionManager {
             }
             break;
 
-          case 'codemap_only':
-            // For codemap_only, we'll just show the file path
-            // TODO: Add actual code structure extraction in V2
-            parts.push(`\`\`\`${selected.path} (structure only)\n// Code structure extraction not yet implemented\n\`\`\``);
-            break;
         }
       } catch (error) {
         console.error(`Error reading file ${selected.path}:`, error);
@@ -176,28 +171,6 @@ export class SelectionManager {
     const content = await this.getContent();
     const tokens = this.tokenCounter.count(content);
     return { content, tokens };
-  }
-
-  /**
-   * Promote codemap_only to full content
-   */
-  async promote(path: string): Promise<void> {
-    const selected = this.selection.get(path);
-    if (selected && selected.mode === 'codemap_only') {
-      selected.mode = 'full';
-      this.selection.set(path, selected);
-    }
-  }
-
-  /**
-   * Demote full content to codemap_only
-   */
-  async demote(path: string): Promise<void> {
-    const selected = this.selection.get(path);
-    if (selected && selected.mode === 'full') {
-      selected.mode = 'codemap_only';
-      this.selection.set(path, selected);
-    }
   }
 
   /**

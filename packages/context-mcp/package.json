@@ -1,7 +1,7 @@
 {
   "name": "@millstone/synapse-context-mcp",
   "version": "0.7.2",
-  "description": "MCP server for Synapse framework - provides context management, code structure extraction, and Claude Code integration",
+  "description": "MCP server for file reading, context selection, and token counting",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -12,14 +12,12 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc; node bundle-continue.js",
-    "build:verbose": "tsc",
-    "build:bundle": "node bundle-continue.js",
+    "build": "tsc",
+    "check:types": "tsc --noEmit",
     "build:clean": "rm -rf dist && npm run build",
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:continue-compat": "vitest run --reporter=verbose tests/continue-compat/",
     "prepublishOnly": "npm run build:clean"
   },
   "publishConfig": {
@@ -38,25 +36,21 @@
     "synapse",
     "mcp",
     "context",
-    "code-structure",
     "ai"
   ],
   "author": "Millstone",
   "license": "MIT",
   "dependencies": {
-    "@continuedev/core": "^1.1.0",
-    "@modelcontextprotocol/sdk": "^1.26.0",
-    "glob": "^11.0.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "glob": "^11.1.0",
     "ignore": "^6.0.2",
-    "tiktoken": "^1.0.17"
+    "tiktoken": "^1.0.22"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/uuid": "^10.0.0",
-    "esbuild": "^0.25.0",
-    "tsx": "^4.20.6",
-    "typescript": "^5.3.0",
-    "vitest": "^3.0.0"
+    "@types/node": "^20.19.43",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
   },
   "engines": {
     "node": ">=20.0.0"

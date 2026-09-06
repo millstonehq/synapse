@@ -5,10 +5,10 @@ import { ContextMCPServer } from './server.js';
 /**
  * Entry point for Context MCP Server
  *
- * Uses Continue's FTS5 search and tree-sitter for fast, accurate code analysis.
+ * Provides file reading, selection management, and token-counted context.
  *
  * Environment Variables:
- * - WORKSPACE_DIRS: Comma-separated list of directories to index (e.g., "/path/to/repoA,/path/to/synapse")
+ * - WORKSPACE_DIRS: Comma-separated list of workspace directories (e.g., "/path/to/repoA,/path/to/synapse")
  * - WORKSPACE_DIR: Single directory (legacy, used if WORKSPACE_DIRS not set)
  *
  * Falls back to process.cwd() if neither is set.
@@ -34,7 +34,7 @@ async function main() {
 
   console.error(`Starting Context MCP Server for ${workspaceDirs.length} workspace(s):`);
   workspaceDirs.forEach(dir => console.error(`  - ${dir}`));
-  console.error('Features: FTS5 search (BM25), Tree-sitter code structure');
+  console.error('Features: file tree, file reading, selection, workspace context');
 
   try {
     const server = new ContextMCPServer(workspaceDirs);

@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directories:
+      - /
+      - /packages/cli
+      - /packages/context-mcp
+      - /packages/site
+    schedule:
+      interval: weekly
+    groups:
+      compatible-updates:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: uv
+    directory: /packages/capabilities
+    schedule:
+      interval: weekly
