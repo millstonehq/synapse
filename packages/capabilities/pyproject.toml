@@ -1,0 +1,39 @@
+[project]
+name = "synapse-capabilities"
+version = "0.1.0"
+description = "Capability coverage: derive what a system can do, map each to a test, fail when they drift"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+license = "MIT"
+license-files = ["LICENSE"]
+
+[project.urls]
+Repository = "https://github.com/millstonehq/synapse"
+Documentation = "https://github.com/millstonehq/synapse/tree/main/packages/capabilities"
+
+# discover / reconcile / gate / map are stdlib-only ON PURPOSE. They are the
+# half that runs in CI. A check which
+# cannot run must not print ok. A gate with no dependencies cannot take the
+# skip path.
+#
+# The probe is the half that needs the TARGET's libraries -- sqlalchemy and a
+# web framework -- and it imports them lazily, inside the install functions, so
+# `capcov gate` never pays for them.
+
+[project.optional-dependencies]
+probe-python = ["sqlalchemy>=2.0", "pytest>=8"]
+
+[project.scripts]
+capcov = "capcov.cli:main"
+synapse-capabilities = "capcov.cli:main"
+
+[project.entry-points.pytest11]
+capcov = "capcov.probes.pytest_probe"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

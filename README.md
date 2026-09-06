@@ -69,6 +69,14 @@ This monorepo contains the following packages:
 | [@millstone/synapse-schemas](packages/schemas/) | JSON Schema definitions for frontmatter, body grammars, and plugins |
 | [@millstone/synapse-site](packages/site/) | Quartz 4 static site generator configuration |
 | [@millstone/synapse-context-mcp](packages/context-mcp/) | MCP server for AI-assisted documentation |
+| [synapse-capabilities](packages/capabilities/) | Python capability discovery, flow planning, and evidence coverage engine |
+
+The optional [capability engine](packages/capabilities/) is a standalone Python
+package maintained in this monorepo. It shares Synapse CI and GitHub release
+infrastructure while retaining its own version and no Node runtime dependency.
+Normal documentation validation does not run application tests. See the
+[capability mapping design](content/90_Architecture/TDDs/capability-mapping-and-model-based-testing.md)
+for package boundaries and evidence limits.
 
 ## Configuration
 
