@@ -43,7 +43,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "glob": "^11.1.0",
-    "ignore": "^6.0.2",
+    "ignore": "^7.0.8",
     "tiktoken": "^1.0.22"
   },
   "devDependencies": {
