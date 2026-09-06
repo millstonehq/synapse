@@ -61,7 +61,7 @@ jobs:
           name: capability-distributions
           path: dist
       - name: Publish tested Python distributions
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           fail_on_unmatched_files: true
@@ -316,7 +316,7 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.check.outputs.needs_publish == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.check.outputs.version }}
           generate_release_notes: true
