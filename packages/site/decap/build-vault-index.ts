@@ -157,7 +157,9 @@ async function copySchemas(schemasDir: string, outputDir: string): Promise<void>
 async function main(): Promise<void> {
   // Determine paths
   const projectRoot = path.resolve(__dirname, '../../..');
-  const contentDir = path.join(projectRoot, 'content');
+  const contentDir = process.env.SYNAPSE_EXAMPLES_ONLY === 'true'
+    ? path.join(__dirname, '../quartz/content')
+    : path.join(projectRoot, 'content');
   const schemasDir = path.join(projectRoot, 'schemas');
   const outputDir = path.join(__dirname, '../static/edit');
 

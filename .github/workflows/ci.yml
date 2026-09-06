@@ -360,13 +360,21 @@ jobs:
         working-directory: packages/site
         run: npx tsx setup-quartz.ts
 
+      - name: Test example publication boundary
+        run: npm test -w packages/site
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
       - name: Build site
         env:
+          SYNAPSE_EXAMPLES_ONLY: 'true'
           QUARTZ_BASE_URL: ${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
         run: npm run build -w packages/site
+
+      - name: Verify example-only publication
+        working-directory: packages/site
+        run: npx tsx verify-examples.ts
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

@@ -192,3 +192,15 @@ The graph visualization will show the relationships between:
 - SOPs and their parent processes
 - Runbooks and their systems
 - ADRs and their related documents
+### Public example site
+
+The repository's GitHub Pages workflow builds with `SYNAPSE_EXAMPLES_ONLY=true`.
+This stages only Markdown under an `examples/` directory with boolean
+`example: true` frontmatter, excluding `draft: true`. It generates a demo landing
+page and builds the CMS document index from that same staged content. Raw vault
+assets, symlinks, and other documents are excluded. Keep any future public assets
+in an explicitly reviewed publication path before extending this allowlist.
+Normal builds without this environment variable continue to render the full vault.
+
+GitHub Pages settings are managed by Mill's `XGitHubRepository/synapse` resource;
+GitHub Actions builds and deploys the site at https://millstonehq.github.io/synapse/.

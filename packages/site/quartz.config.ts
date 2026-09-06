@@ -64,14 +64,14 @@ const config: QuartzConfig = {
       Plugin.CreatedModifiedDate({
         priority: ["frontmatter", "filesystem"],
       }),
-      CustomHeaderFooter({
+      ...(process.env.SYNAPSE_EXAMPLES_ONLY === "true" ? [] : [CustomHeaderFooter({
         baseUrl: "/edit",
         position: "both",
         showIcon: true,
         showAuthoringGuide: true,
         showHomeLink: true,
         showEditInCMS: true,
-      }) as any, // Cast to any since we can't import Quartz types from submodule
+      }) as any]), // The public demo uses Quartz navigation without vault-specific links.
       Plugin.SyntaxHighlighting({
         theme: {
           light: "github-light",

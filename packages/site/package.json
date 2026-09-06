@@ -18,12 +18,13 @@
     "build:decap-config": "tsx decap/build-config.ts",
     "build:decap": "npm run build:decap-config && tsx decap/generate-doc-types.ts && tsx decap/build-vault-index.ts && npm run build:validate-bundle",
     "build:validate-bundle": "esbuild decap/validate-browser.ts --bundle --format=esm --outfile=static/edit/validate.bundle.js --platform=browser --target=es2020",
-    "build": "npm run sync-plugins && npm run build:decap && (cd quartz && npx quartz build) && npm run copy:decap",
+    "build": "npm run sync-plugins && npm run build:decap && npm run copy:decap && (cd quartz && npx quartz build)",
     "copy:decap": "cp -r static/edit quartz/quartz/static/",
     "serve": "npm run sync-plugins && npm run build:decap && cd quartz && npx quartz build --serve",
     "dev": "npm run sync-plugins && npm run build:decap && npm run copy:decap && cd quartz && npx quartz build --serve --port 8080",
     "update-submodule": "git submodule update --remote --merge",
-    "clean": "rm -rf quartz/public quartz/.quartz-cache static/edit/*.json static/edit/schemas static/edit/body-grammars static/edit/validate.bundle.js decap/doc-types.generated.ts"
+    "clean": "rm -rf quartz/public quartz/.quartz-cache static/edit/*.json static/edit/schemas static/edit/body-grammars static/edit/validate.bundle.js decap/doc-types.generated.ts",
+    "test": "tsx --test test/*.test.ts"
   },
   "publishConfig": {
     "access": "public"
