@@ -61,6 +61,7 @@ def load_exemptions(path: Path | None) -> tuple[dict[str, dict], list[Failure]]:
 def gate(coverage: dict, exemptions_path: Path | None) -> list[Failure]:
     exemptions, failures = load_exemptions(exemptions_path)
     used: set[str] = set()
+    explained_runtime_only: set[str] = set()
 
     for row in coverage["rows"]:
         entity, cell = row["entity"], row["cell"]
@@ -86,6 +87,8 @@ def gate(coverage: dict, exemptions_path: Path | None) -> list[Failure]:
                 )
             else:
                 used.add(entity)
+                if cell == "runtime_only":
+                    explained_runtime_only.add(entity)
         elif exemption is not None:
             used.add(entity)
             failures.append(
@@ -116,12 +119,19 @@ def gate(coverage: dict, exemptions_path: Path | None) -> list[Failure]:
             used.add(name)
 
     for orphan in coverage["orphan_tests"]:
+        # A generated/dynamic table can be observed by a legitimate test without
+        # appearing in the static inventory. The exact, validated runtime-only
+        # exemption already accounts for that observation. Keep it in the report
+        # without failing it twice; stale/missing-row exemptions cannot reach here.
+        if orphan["entity"] in explained_runtime_only:
+            continue
         failures.append(
             Failure(
                 "orphan-test",
                 orphan["test"],
-                f"exercises {orphan['entity']!r}, which no longer exists. The "
-                "capability was removed and its test kept passing.",
+                f"exercises {orphan['entity']!r}, which is not declared in this inventory. "
+                "It may be generated, dynamic, or removed; inspect the source and runtime "
+                "evidence before classifying it.",
             )
         )
 
