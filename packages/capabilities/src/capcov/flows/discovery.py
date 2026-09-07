@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 
 from .model import digest
+from .openapi import derive as derive_openapi
 from .zoho import derive as derive_zoho
 
 
@@ -155,6 +156,18 @@ def discover(config_path: Path) -> dict:
                 ):
                     add(f"boundary:python:{category}", "unresolved", config_path.name, 1)
                 python_limits_added = True
+        elif kind == "openapi-json":
+            relative = adapter["document"]
+            document = source(relative)
+            obligations.extend(derive_openapi(document.read_text(), relative, adapter.get("prefix", "")))
+            graphs.append({
+                "edges": [], "census": [],
+                "unresolved": [{
+                    "source": {"file": relative, "line": 1},
+                    "reason": "OpenAPI references have not been resolved by this adapter",
+                }],
+            })
+            analysed_files.add(relative)
         elif kind == "zoho-export":
             relative = adapter["export"]
             export = source(relative)
