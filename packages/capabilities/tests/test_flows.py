@@ -333,6 +333,34 @@ class FlowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "absence assertion"):
             plan(model, "browser")
 
+    def test_drag_is_preserved_and_bound_to_evidence(self) -> None:
+        inventory, model = fixture()
+        commands = model["transitions"][0]["bindings"]["browser"]["commands"]
+        command = {"op": "drag", "selector": "#drawing", "from": [0.1, 0.2], "to": [0.8, 0.7]}
+        commands.insert(0, command)
+        execution_plan = plan(model, "browser")
+        self.assertEqual(execution_plan["scenarios"][0]["steps"][0]["commands"][0], command)
+        run = evidence(inventory, execution_plan)
+        self.assertTrue(reconcile(inventory, model, execution_plan, run)["complete"])
+        command["to"] = [0.7, 0.7]
+        with self.assertRaises(ValueError):
+            reconcile(inventory, model, plan(model, "browser"), run)
+
+    def test_drag_requires_bounded_distinct_numeric_pairs(self) -> None:
+        for point in (None, [], [0], [0, 1, 2], [True, 0], ["0", 0],
+                      [-0.1, 0], [1.1, 0], [float("nan"), 0], [float("inf"), 0]):
+            with self.subTest(point=point):
+                _, model = fixture()
+                model["transitions"][0]["bindings"]["browser"]["commands"].insert(
+                    0, {"op": "drag", "selector": "#drawing", "from": point, "to": [1, 1]})
+                with self.assertRaisesRegex(ValueError, "drag requires"):
+                    plan(model, "browser")
+        _, model = fixture()
+        model["transitions"][0]["bindings"]["browser"]["commands"].insert(
+            0, {"op": "drag", "selector": "#drawing", "from": [0, 0], "to": [0, 0]})
+        with self.assertRaisesRegex(ValueError, "drag requires"):
+            plan(model, "browser")
+
     def test_confirmation_is_preserved_and_bound_to_evidence(self) -> None:
         inventory, model = fixture()
         commands = model["transitions"][0]["bindings"]["browser"]["commands"]
