@@ -87,7 +87,7 @@ class FourCellsTest(unittest.TestCase):
         )
         self.assertEqual(result["rows"][0]["untested_operations"], ["delete"])
 
-    def test_a_test_for_a_deleted_capability_is_an_orphan(self) -> None:
+    def test_a_test_for_an_undeclared_entity_is_reported(self) -> None:
         _, result = self.cells(
             [], [], [obs("gone", "GET /gone", tests=["tests/test_gone.py::test_it"])],
             surfaces=["GET /gone"],
@@ -180,6 +180,57 @@ class GateTest(unittest.TestCase):
             self.coverage([], orphans=[{"test": "t::x", "entity": "gone"}]), None
         )
         self.assertEqual(self.rules(failures), ["orphan-test"])
+
+    def migration_observation(self) -> dict:
+        return reconcile(
+            capabilities([], []),
+            observed([obs("schema_version", "test:t::migrate", ("create", "read"), ("t::migrate",))]),
+        )
+
+    def test_explained_runtime_only_test_entity_remains_visible_without_duplicate_failure(self) -> None:
+        report = self.migration_observation()
+        path = self.exemptions(
+            '[[exempt]]\nentity="schema_version"\ncell="runtime_only"\n'
+            'date="2026-09-07"\nreason="Migration framework maintains its version table."\n'
+        )
+        self.assertEqual(gate(report, path), [])
+        self.assertEqual(report["summary"]["runtime_only"], 1)
+        self.assertEqual(report["orphan_tests"], [{"test": "t::migrate", "entity": "schema_version"}])
+        self.assertFalse(report["rows"][0]["declared"])
+
+    def test_undeclared_test_entity_does_not_imply_historical_deletion(self) -> None:
+        failures = gate(self.migration_observation(), None)
+        self.assertEqual(self.rules(failures), ["orphan-test", "unexplained-runtime_only"])
+        detail = next(f.detail for f in failures if f.rule == "orphan-test")
+        self.assertIn("not declared in this inventory", detail)
+        self.assertNotIn("no longer exists", detail)
+
+    def test_wrong_cell_exemption_does_not_waive_test_entity(self) -> None:
+        path = self.exemptions(
+            '[[exempt]]\nentity="schema_version"\ncell="neither"\n'
+            'date="2026-09-07"\nreason="Incorrect classification."\n'
+        )
+        self.assertEqual(
+            self.rules(gate(self.migration_observation(), path)),
+            ["orphan-test", "stale-exemption"],
+        )
+
+    def test_entity_exemption_does_not_waive_undiscovered_surface(self) -> None:
+        report = self.migration_observation()
+        report["unknown_surfaces"] = [{"surface": "worker:migrate", "entities": ["schema_version"]}]
+        path = self.exemptions(
+            '[[exempt]]\nentity="schema_version"\ncell="runtime_only"\n'
+            'date="2026-09-07"\nreason="Migration version table."\n'
+        )
+        self.assertEqual(self.rules(gate(report, path)), ["undiscovered-surface"])
+
+    def test_exemption_without_matching_runtime_row_does_not_waive_test_entity(self) -> None:
+        path = self.exemptions(
+            '[[exempt]]\nentity="schema_version"\ncell="runtime_only"\n'
+            'date="2026-09-07"\nreason="Migration version table."\n'
+        )
+        report = self.coverage([], orphans=[{"test": "t::migrate", "entity": "schema_version"}])
+        self.assertEqual(self.rules(gate(report, path)), ["orphan-test", "unused-exemption"])
 
 
 if __name__ == "__main__":

@@ -90,9 +90,9 @@ def reconcile(capabilities: dict, observed: dict) -> dict:
             }
         )
 
-    # A test that exercised an entity nothing declares any more. This is the
-    # deleted capability whose test keeps passing against something that is
-    # gone, and it is invisible to every coverage number in the ordinary sense.
+    # Test observations absent from the static inventory. Keep the legacy
+    # artifact key, but absence alone cannot establish historical deletion:
+    # generated infrastructure and dynamic tables have the same shape here.
     orphan_tests = []
     for entity, row in sorted(runtime_by_entity.items()):
         if entity not in entities:

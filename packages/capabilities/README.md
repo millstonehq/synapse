@@ -45,6 +45,15 @@ capcov gate coverage.json --exemptions capcov.exemptions.toml
 capcov report coverage.json
 ```
 
+Runtime-only tables remain visible even when the consumer records an exact,
+dated exemption explaining their origin (for example a migration framework's
+version table). A valid exemption accounts for the corresponding test observation
+once; it does not mark the table statically discovered or waive an unknown entry
+point. Missing reasons, changed cells and obsolete exemptions still fail. The
+legacy `orphan_tests` report key means a test observed an undeclared entity; one
+inventory cannot prove that the entity was deleted. Do not infer historical
+removal from that label or treat an accounted gap as a demonstrated business outcome.
+
 Flow coverage retains the source obligation denominator and checks observed
 outcomes against a reviewed behavior model:
 
