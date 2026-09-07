@@ -160,6 +160,13 @@ def discover(config_path: Path) -> dict:
             relative = adapter["document"]
             document = source(relative)
             obligations.extend(derive_openapi(document.read_text(), relative, adapter.get("prefix", "")))
+            graphs.append({
+                "edges": [], "census": [],
+                "unresolved": [{
+                    "source": {"file": relative, "line": 1},
+                    "reason": "OpenAPI references have not been resolved by this adapter",
+                }],
+            })
             analysed_files.add(relative)
         elif kind == "zoho-export":
             relative = adapter["export"]

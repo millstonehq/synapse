@@ -133,8 +133,8 @@ The supported method and Path Item rules come from the
 
 Run the existing `flows discover` and `flows catalog` commands on this config.
 Operations become candidate flow families with missing outcomes, fixtures and
-bindings. Whole-document declaration accounting and behavioral completeness remain
-false. A fresh exported contract hashes the snapshot; it does not prove the
+bindings. Whole-document declaration accounting, reference resolution and behavioral
+completeness remain false. A fresh exported contract hashes the snapshot; it does not prove the
 snapshot belongs to the running build. The consumer must bind export, build and
 execution provenance in its local recipe.
 

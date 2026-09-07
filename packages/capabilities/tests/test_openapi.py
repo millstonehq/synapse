@@ -40,6 +40,7 @@ class OpenAPIInventoryTests(unittest.TestCase):
             self.assertIn("confirmed-business-outcome", catalog["families"][0]["missing"])
             self.assertFalse(catalog["behaviorally_complete"])
             self.assertFalse(catalog["declarations_accounted"])
+            self.assertFalse(catalog["references_resolved"])
             document.write_text(document.read_text() + "\n")
             self.assertNotEqual(inventory["sources"], discover(config)["sources"])
 
