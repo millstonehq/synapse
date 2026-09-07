@@ -81,6 +81,27 @@ Consumer runners must implement zero matches (including hidden elements for a
 browser), not merely invisibility, and record the ID only after the check passes.
 Existing text assertions retain their current contract.
 
+Browser consumers can select a native option by its exact value and attach one
+or more fixture files:
+
+```json
+{"op": "select", "selector": "select[name=vendor]", "value": "fixture-vendor"}
+{"op": "upload", "selector": "input[type=file]", "files": ["fixtures/invoice.png"]}
+```
+
+`select.value` must be a string (including an empty option value). `upload.files`
+is a nonempty list of repository-relative POSIX paths, without absolute paths,
+drive prefixes, backslashes, empty/dot/parent components or NULs. Both commands
+require a selector and retain their exact inputs in the plan. Neither is an
+assertion: a binding still needs a separate observable outcome assertion.
+
+Planning does not read or upload files. A consumer must resolve each file within
+its declared repository root, reject escaping symlinks, and require its content
+hash in the run's source inventory before transfer. Uploads belong to the intended
+application origin; redirecting to authentication must not change the destination
+of fixture data. Unsupported consumer operations fail execution rather than being
+silently ignored. The model does not invent upload contents or vendor/store values.
+
 Missing adapters, unconfirmed meaning, absent bindings, unreachable states,
 unmapped obligations, and insufficient evidence remain gaps. A baseline can
 permit reviewed gaps without calling them covered. A passing browser navigation
