@@ -72,6 +72,14 @@ unmapped obligations, and insufficient evidence remain gaps. A baseline can
 permit reviewed gaps without calling them covered. A passing browser navigation
 does not prove persistence, authorization, external delivery, or product parity.
 
+Python branch and exception candidates retain their parent HTTP surface. A mapped
+candidate requires that parent request in the same execution step, together with
+the declared outcome assertions; observing the route in another step is not
+enough. Missing or invalid parent references fail reconciliation. The candidate
+ID is a source obligation, never a URL the runner should fabricate. HTTP presence
+alone does not distinguish which branch ran: consumer-reviewed assertions still
+have to establish the intended outcome.
+
 ## Current support
 
 - Python/FastAPI/SQLAlchemy entity discovery and runtime probes.
