@@ -67,7 +67,9 @@ def validate(model: dict) -> None:
                     not c.get("path", "").startswith("/") or c["path"].startswith("//")
                 ):
                     raise ValueError(f"{name}/{target}: goto must be an absolute local path")
-                if c["op"] not in {"goto", "remember-path", "visit-path"} and not c.get("selector"):
+                if (c["op"] not in {"goto", "remember-path", "visit-path"}
+                    and not (c["op"] == "assert" and c.get("mode") == "http")
+                    and not c.get("selector")):
                     raise ValueError(f"{name}/{target}: selector required")
                 if c["op"] in {"remember-path", "visit-path"} and (
                     not isinstance(c.get("name"), str)
@@ -102,8 +104,26 @@ def validate(model: dict) -> None:
                     )
                 if c["op"] == "assert":
                     mode = c.get("mode", "text")
-                    if not isinstance(mode, str) or mode not in {"text", "absent", "download"}:
+                    if not isinstance(mode, str) or mode not in {"text", "absent", "download", "http"}:
                         raise ValueError(f"{name}/{target}: unsupported assertion mode {mode!r}")
+                    if mode == "http":
+                        form = c.get("form", {})
+                        path = c.get("path")
+                        if (
+                            not isinstance(c.get("method"), str) or c["method"] not in {"GET", "POST"}
+                            or not isinstance(path, str)
+                            or not re.fullmatch(r"/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]*", path)
+                            or type(c.get("expect_status")) is not int
+                            or not (200 <= c["expect_status"] <= 299 or 400 <= c["expect_status"] <= 599)
+                            or not isinstance(c.get("text"), str) or not c["text"]
+                            or not isinstance(form, dict) or len(form) > 32
+                            or any(not isinstance(k, str) or not 1 <= len(k) <= 128
+                                   or not isinstance(v, str) or len(v) > 4096
+                                   for k, v in form.items())
+                            or (c["method"] == "GET" and "form" in c)
+                            or any(k in c for k in ("selector", "file", "files", "name", "value", "refresh_timeout_ms", "headers", "body"))
+                        ):
+                            raise ValueError(f"{name}/{target}: invalid HTTP assertion path, method, response or form")
                     if mode == "text" and not c.get("text"):
                         raise ValueError(f"{name}/{target}: content assertion required")
                     if mode == "absent" and "text" in c:

@@ -365,3 +365,25 @@ saved resource and the final response must match `expect_status`; a login redire
 is not a resource-access refusal. Invalid captures and unresolved names fail,
 without a guessed/default path. Models must describe the capture prerequisites
 and identity changes. Planning does not invent a resource URL or perform requests.
+
+
+A reviewed direct HTTP response can be an assertion, including a denied mutation:
+
+```json
+{"op":"assert","mode":"http","id":"price-refused","method":"POST","path":"/items/1/base","form":{"price":"4.99"},"expect_status":403,"text":"not permitted"}
+```
+
+This initial contract supports GET and form-encoded POST on literal application
+paths composed of letters, digits, underscores, hyphens and single slashes. It
+excludes queries, fragments, encoded paths, alternate origins, arbitrary headers
+and raw bodies. GET has no form. Form keys/values are strings with bounded sizes.
+Expected statuses are 200–299 or 400–599; response text must be nonempty.
+
+Consumers must use the scenario's current authenticated session, confine the
+request to a reviewed application endpoint, send it once, reject redirects, and
+bound both transfer time and complete response bytes. They must verify exact
+response URL/status and the declared body text before recording assertion
+evidence, and record the actual request for route reconciliation. A DOM assertion
+elsewhere is not response evidence. No retries or refresh are permitted, including
+for writes. The planner performs no requests. An expected denial alone does not
+prove absence of side effects; model follow-up state checks where required.
