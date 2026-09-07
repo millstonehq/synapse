@@ -327,3 +327,20 @@ accidental stale evidence reuse; the runner/test code is trusted, and this is no
 cryptographic attestation of an external service or proof of the deployed build.
 Execution/reset/cleanup remain the consumer fixture's responsibility. A timeout
 fails the run; consumers must own cleanup for subprocesses their fixtures start.
+
+
+A download can itself be an observable assertion against a reviewed expected file:
+
+```json
+{"op": "assert", "mode": "download", "id": "export-bytes", "selector": "a.export", "file": "fixtures/expected.csv"}
+```
+
+The expected file uses a canonical repository-relative POSIX path, with the same
+confinement and enrolled-byte requirements as upload fixtures. The consumer must
+perform the selected download, require successful completion and compare its
+complete bytes with the checked expected bytes before emitting the assertion ID.
+A link, filename, prefix match, or successful HTTP response alone is insufficient.
+`text` and `refresh_timeout_ms` are invalid for this mode; download actions are
+never automatically retried. The consumer owns origin restrictions and bounded
+transfer/size handling, and must reject the mode if it cannot honor that contract.
+Planning neither reads the expected file nor downloads anything.

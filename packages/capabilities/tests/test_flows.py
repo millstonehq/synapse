@@ -324,6 +324,31 @@ class FlowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "refresh_timeout_ms"):
             plan(model, "browser")
 
+    def test_download_assertion_requires_exact_planned_evidence(self) -> None:
+        inventory, model = fixture()
+        command = {"op": "assert", "mode": "download", "id": "export-bytes",
+                   "selector": "a.export", "file": "fixtures/expected.csv"}
+        model["transitions"][0]["bindings"]["browser"]["commands"] = [command]
+        execution_plan = plan(model, "browser")
+        self.assertEqual(execution_plan["scenarios"][0]["steps"][0]["commands"], [command])
+        run = evidence(inventory, execution_plan)
+        self.assertTrue(reconcile(inventory, model, execution_plan, run)["complete"])
+        run["scenarios"][0]["assertions"] = []
+        self.assertFalse(reconcile(inventory, model, execution_plan, run)["complete"])
+
+    def test_download_assertion_rejects_unsafe_or_contradictory_inputs(self) -> None:
+        for fields in ({}, {"file": "../x"}, {"file": "/tmp/x"}, {"file": "C:/x"},
+                       {"file": "a/./b"}, {"file": "a//b"}, {"file": []},
+                       {"file": "a.csv", "text": "partial"},
+                       {"file": "a.csv", "refresh_timeout_ms": 1000}):
+            with self.subTest(fields=fields):
+                _, model = fixture()
+                model["transitions"][0]["bindings"]["browser"]["commands"] = [
+                    {"op": "assert", "mode": "download", "id": "download",
+                     "selector": "a.export", **fields}]
+                with self.assertRaisesRegex(ValueError, "download assertion"):
+                    plan(model, "browser")
+
     def test_duplicate_transition_is_rejected(self) -> None:
         _, model = fixture()
         model["transitions"].append(copy.deepcopy(model["transitions"][0]))

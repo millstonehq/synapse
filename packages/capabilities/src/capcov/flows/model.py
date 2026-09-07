@@ -13,6 +13,15 @@ def digest(value: object) -> str:
     ).hexdigest()
 
 
+def repository_path(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value.strip())
+        and not any(part in {"", ".", ".."} for part in value.split("/"))
+        and not any(char in value for char in ("\\", ":", "\0"))
+    )
+
+
 def validate(model: dict) -> None:
     if model.get("version") != 1:
         raise ValueError("flow model version must be 1")
@@ -64,11 +73,7 @@ def validate(model: dict) -> None:
                 if c["op"] == "upload":
                     files = c.get("files")
                     if not isinstance(files, list) or not files or any(
-                        not isinstance(path, str)
-                        or not path.strip()
-                        or any(part in {"", ".", ".."} for part in path.split("/"))
-                        or any(char in path for char in ("\\", ":", "\0"))
-                        for path in files
+                        not repository_path(path) for path in files
                     ):
                         raise ValueError(
                             f"{name}/{target}: upload requires repository-relative POSIX file paths"
@@ -83,12 +88,20 @@ def validate(model: dict) -> None:
                     )
                 if c["op"] == "assert":
                     mode = c.get("mode", "text")
-                    if not isinstance(mode, str) or mode not in {"text", "absent"}:
+                    if not isinstance(mode, str) or mode not in {"text", "absent", "download"}:
                         raise ValueError(f"{name}/{target}: unsupported assertion mode {mode!r}")
                     if mode == "text" and not c.get("text"):
                         raise ValueError(f"{name}/{target}: content assertion required")
                     if mode == "absent" and "text" in c:
                         raise ValueError(f"{name}/{target}: absence assertion cannot carry text")
+                    if mode == "download" and (
+                        not repository_path(c.get("file"))
+                        or "text" in c
+                        or "refresh_timeout_ms" in c
+                    ):
+                        raise ValueError(
+                            f"{name}/{target}: download assertion requires a repository-relative expected file, without text or refresh"
+                        )
 
 
 def enabled(t: dict, state: frozenset[str]) -> bool:
