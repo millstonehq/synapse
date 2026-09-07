@@ -295,6 +295,35 @@ class FlowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "absence assertion"):
             plan(model, "browser")
 
+    def test_refresh_assertion_preserves_deadline_and_requires_evidence(self) -> None:
+        inventory, model = fixture()
+        command = model["transitions"][0]["bindings"]["browser"]["commands"][0]
+        command["refresh_timeout_ms"] = 20_000
+        execution_plan = plan(model, "browser")
+        self.assertEqual(execution_plan["scenarios"][0]["steps"][0]["commands"][0], command)
+        run = evidence(inventory, execution_plan)
+        self.assertTrue(reconcile(inventory, model, execution_plan, run)["complete"])
+        run["scenarios"][0]["assertions"] = []
+        self.assertFalse(reconcile(inventory, model, execution_plan, run)["complete"])
+        command["refresh_timeout_ms"] = 10_000
+        with self.assertRaises(ValueError):
+            reconcile(inventory, model, plan(model, "browser"), run)
+
+    def test_refresh_requires_a_bounded_integer_deadline_on_an_assertion(self) -> None:
+        for timeout in (None, True, False, 0, -1, 60_001, 1.5, "20000", []):
+            with self.subTest(timeout=timeout):
+                _, model = fixture()
+                command = model["transitions"][0]["bindings"]["browser"]["commands"][0]
+                command["refresh_timeout_ms"] = timeout
+                with self.assertRaisesRegex(ValueError, "refresh_timeout_ms"):
+                    plan(model, "browser")
+        _, model = fixture()
+        model["transitions"][0]["bindings"]["browser"]["commands"].insert(
+            0, {"op": "click", "selector": "button", "refresh_timeout_ms": 1000}
+        )
+        with self.assertRaisesRegex(ValueError, "refresh_timeout_ms"):
+            plan(model, "browser")
+
     def test_duplicate_transition_is_rejected(self) -> None:
         _, model = fixture()
         model["transitions"].append(copy.deepcopy(model["transitions"][0]))
