@@ -144,6 +144,15 @@ It does not establish which handler is mounted or qualify an omitted handler.
 Consumers must reconcile source ownership as well as method/path, and retain
 unresolved declarations. Duplicate IDs within a namespace still fail discovery.
 
+Explicit `add_api_route` calls are also inventoried when the path and method
+list are literal and the endpoint is an unshadowed module-defined function.
+Omitted methods mean GET. Each declared method retains the callback's branch and
+exception candidates and the registration's source location. Dynamic paths,
+methods, imported/attribute callbacks, shadowed names and expanded keyword
+arguments remain unresolved obligations; no application code is executed.
+This is a conservative source rule, not proof of runtime mounting or framework
+object identity. Runtime reconciliation remains required.
+
 ## OpenAPI operation inventory
 
 An HTTP service in any language can supply a local OpenAPI JSON document:
