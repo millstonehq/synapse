@@ -81,6 +81,21 @@ Consumer runners must implement zero matches (including hidden elements for a
 browser), not merely invisibility, and record the ID only after the check passes.
 Existing text assertions retain their current contract.
 
+A consumer may support bounded refresh while awaiting an asynchronous outcome:
+
+```json
+{"op": "assert", "id": "review-ready", "selector": "main", "text": "Ready for review", "refresh_timeout_ms": 20000}
+```
+
+`refresh_timeout_ms` is an integer from 1 through 60000, valid only on assertions.
+It requests repeated reads of the current view until the assertion succeeds,
+under one total deadline covering refreshes, checks and delays. It must never
+repeat earlier action commands or resubmit a mutation. Browser consumers must
+restrict refresh to a reviewed, same-application GET view and fail if navigation
+leaves that view or origin. Consumers that cannot honor this contract must reject
+the option. A timeout or unsuccessful refresh supplies no assertion evidence;
+planning itself performs no waiting, browser work or network requests.
+
 Browser consumers can select a native option by its exact value and attach one
 or more fixture files:
 

@@ -73,6 +73,14 @@ def validate(model: dict) -> None:
                         raise ValueError(
                             f"{name}/{target}: upload requires repository-relative POSIX file paths"
                         )
+                if "refresh_timeout_ms" in c and (
+                    c["op"] != "assert"
+                    or type(c["refresh_timeout_ms"]) is not int
+                    or not 1 <= c["refresh_timeout_ms"] <= 60_000
+                ):
+                    raise ValueError(
+                        f"{name}/{target}: refresh_timeout_ms requires an assertion and 1..60000 integer milliseconds"
+                    )
                 if c["op"] == "assert":
                     mode = c.get("mode", "text")
                     if not isinstance(mode, str) or mode not in {"text", "absent"}:
