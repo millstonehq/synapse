@@ -413,3 +413,18 @@ that click, match the message exactly, apply the declared action, and fail on a
 missing or mismatched dialog within a bounded deadline. It must not silently
 accept prompts, alerts or arbitrary confirmation messages. Planning does not
 open or answer a browser dialog.
+
+
+An element-relative mouse drag is explicit as well:
+
+```json
+{"op":"drag","selector":"#drawing","from":[0.1,0.2],"to":[0.8,0.7]}
+```
+
+Coordinates are numeric x/y fractions of the rendered element bounds, from zero
+to one. Both pairs are required and must differ; booleans, non-finite values and
+out-of-bounds coordinates are rejected. Consumers must resolve the element,
+bring it into view, verify that both endpoints can be hit within it, and perform
+an actual mouse press/move/release. They must release the button on failure and
+must not replace the gesture with direct application-state mutation. Subsequent
+assertions still establish the outcome; declaring a drag grants no coverage.

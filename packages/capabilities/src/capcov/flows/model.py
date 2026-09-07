@@ -61,7 +61,7 @@ def validate(model: dict) -> None:
             if len(set(assertion_ids)) != len(assertion_ids):
                 raise ValueError(f"{name}/{target}: duplicate assertion")
             for c in commands:
-                if c.get("op") not in {"goto", "fill", "click", "select", "upload", "assert", "remember-path", "visit-path"}:
+                if c.get("op") not in {"goto", "fill", "click", "drag", "select", "upload", "assert", "remember-path", "visit-path"}:
                     raise ValueError(f"{name}/{target}: unsupported command {c.get('op')}")
                 if c["op"] == "goto" and (
                     not c.get("path", "").startswith("/") or c["path"].startswith("//")
@@ -84,6 +84,18 @@ def validate(model: dict) -> None:
                     raise ValueError(f"{name}/{target}: visit-path requires an expected HTTP status")
                 if c["op"] == "remember-path" and "expect_status" in c:
                     raise ValueError(f"{name}/{target}: remembering a path performs no HTTP request")
+                if c["op"] == "drag":
+                    points = (c.get("from"), c.get("to"))
+                    if any(
+                        not isinstance(point, list) or len(point) != 2
+                        or any(type(value) not in (int, float) or not 0 <= value <= 1
+                               for value in point)
+                        for point in points
+                    ) or points[0] == points[1]:
+                        raise ValueError(
+                            f"{name}/{target}: drag requires distinct from/to coordinate "
+                            "pairs within the element's normalized 0..1 bounds"
+                        )
                 if "confirmation" in c:
                     confirmation = c["confirmation"]
                     if (
