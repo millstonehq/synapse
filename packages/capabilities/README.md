@@ -67,6 +67,20 @@ capcov flows report coverage.json plan.json --out report.md
 capcov flows gate coverage.json
 ```
 
+Assertions use `mode: "text"` by default and require visible matching text. A
+negative assertion can instead require that its selector match nothing:
+
+```json
+{"op": "assert", "mode": "absent", "id": "no-privileged-control", "selector": "form[data-privileged]"}
+```
+
+An absence assertion carries no `text` field. Unknown or contradictory modes
+fail planning. Its unique assertion ID is still mandatory execution evidence in
+every applicable step; declaring absence in the model is not a passing result.
+Consumer runners must implement zero matches (including hidden elements for a
+browser), not merely invisibility, and record the ID only after the check passes.
+Existing text assertions retain their current contract.
+
 Missing adapters, unconfirmed meaning, absent bindings, unreachable states,
 unmapped obligations, and insufficient evidence remain gaps. A baseline can
 permit reviewed gaps without calling them covered. A passing browser navigation
