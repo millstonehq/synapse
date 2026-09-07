@@ -69,6 +69,44 @@ def evidence(inventory: dict, execution_plan: dict) -> dict:
     }
 
 
+class StateBudgetTests(unittest.TestCase):
+    def test_explicit_budget_preserves_full_plan_and_reconciliation(self):
+        inventory, model = fixture()
+        default = plan(model, "browser")
+        expanded = plan(model, "browser", 20000)
+        self.assertEqual(expanded.pop("max_states"), 20000)
+        self.assertEqual(expanded, default)
+        expanded["max_states"] = 20000
+        self.assertTrue(reconcile(inventory, model, expanded, evidence(inventory, expanded))["complete"])
+        expanded["scenarios"].pop()
+        with self.assertRaisesRegex(ValueError, "derived scenarios"):
+            reconcile(inventory, model, expanded, None)
+
+    def test_invalid_or_exhausted_budget_never_emits_a_plan(self):
+        _, model = fixture()
+        for budget in [0, -1, True, 1.5, "20000", None]:
+            with self.subTest(budget=budget), self.assertRaisesRegex(ValueError, "positive integer"):
+                plan(model, "browser", budget)
+        with self.assertRaisesRegex(ValueError, "state budget exceeded"):
+            plan(model, "browser", 2)
+        self.assertEqual(plan(model, "browser", 3)["states_explored"], 3)
+
+    def test_cli_budget_and_reconciliation_reject_understated_limit(self):
+        inventory, model = fixture()
+        with tempfile.TemporaryDirectory() as directory:
+            source, output = Path(directory) / "model.json", Path(directory) / "plan.json"
+            source.write_text(json.dumps(model))
+            args = ["plan", str(source), "--target", "browser", "--out", str(output)]
+            self.assertEqual(main([*args, "--max-states", "2"]), 1)
+            self.assertFalse(output.exists())
+            self.assertEqual(main([*args, "--max-states", "3"]), 0)
+            generated = json.loads(output.read_text())
+            self.assertEqual(generated["max_states"], 3)
+            generated["max_states"] = 2
+            with self.assertRaisesRegex(ValueError, "state budget exceeded"):
+                reconcile(inventory, model, generated, None)
+
+
 class FlowTests(unittest.TestCase):
     def test_every_declared_outcome_requires_its_own_evidence(self) -> None:
         inventory, model = fixture()

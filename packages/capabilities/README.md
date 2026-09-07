@@ -387,3 +387,12 @@ evidence, and record the actual request for route reconciliation. A DOM assertio
 elsewhere is not response evidence. No retries or refresh are permitted, including
 for writes. The planner performs no requests. An expected denial alone does not
 prove absence of side effects; model follow-up state checks where required.
+
+
+Planning defaults to 10,000 reachable fact states. For larger reviewed models,
+use `capcov flows plan model.json --target local --max-states 20000 --out plan.json`.
+The positive integer limit bounds exploration; exhaustion still fails without
+emitting a complete plan. Non-default limits are recorded in the plan and used
+when coverage independently re-derives its scenarios. Raising this budget adds
+no coverage and does not waive unreachable targets or missing evidence. Default
+plans retain their existing artifact shape.
