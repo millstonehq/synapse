@@ -34,6 +34,7 @@ def discover(config_path: Path) -> dict:
     graphs = []
     source_census = []
     analysed_files: set[str] = set()
+    python_limits_added = False
 
     def source(relative: str) -> Path:
         path = (root / relative).resolve()
@@ -142,13 +143,18 @@ def discover(config_path: Path) -> dict:
                                 )
             if not route_count:
                 raise ValueError("no routes discovered in the configured Python sources")
-            for category in (
-                "called-function-branches",
-                "mounted-route-confirmation",
-                "roles-and-configurations",
-                "external-effects",
-            ):
-                add(f"boundary:python:{category}", "unresolved", config_path.name, 1)
+            # These limits describe the combined Python inventory. Multiple
+            # router prefixes must not duplicate them; actual surface collisions
+            # remain errors in the final duplicate-ID check below.
+            if not python_limits_added:
+                for category in (
+                    "called-function-branches",
+                    "mounted-route-confirmation",
+                    "roles-and-configurations",
+                    "external-effects",
+                ):
+                    add(f"boundary:python:{category}", "unresolved", config_path.name, 1)
+                python_limits_added = True
         elif kind == "zoho-export":
             relative = adapter["export"]
             export = source(relative)

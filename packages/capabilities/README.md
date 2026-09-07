@@ -80,6 +80,12 @@ ID is a source obligation, never a URL the runner should fabricate. HTTP presenc
 alone does not distinguish which branch ran: consumer-reviewed assertions still
 have to establish the intended outcome.
 
+Separate `python-routes` adapters can declare different router prefixes, including
+multiple mounts of the same source. Each mount keeps its own surface and branch
+obligations. The four Python discovery limits apply once to the combined
+inventory; mounted-route confirmation must account for every discovered mount.
+Overlapping declarations of the same HTTP surface remain an error.
+
 ## Current support
 
 - Python/FastAPI/SQLAlchemy entity discovery and runtime probes.

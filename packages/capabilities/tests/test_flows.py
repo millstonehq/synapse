@@ -342,6 +342,38 @@ class FlowTests(unittest.TestCase):
             route.write_text('@router.get("/new")\ndef new():\n    return 1\n')
             self.assertNotEqual(inventory, discover(config))
 
+    def test_multiple_python_mounts_preserve_surfaces_and_shared_limits(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "routes.py").write_text(
+                '@router.get("/items")\ndef items():\n'
+                '    if allowed:\n        return []\n    return None\n'
+            )
+            config = root / "discovery.json"
+            settings = {
+                "scope": "two-mounts", "root": ".",
+                "adapters": [
+                    {"kind": "python-routes", "files": ["routes.py"], "prefix": prefix}
+                    for prefix in ("/portal", "/admin")
+                ],
+            }
+            config.write_text(json.dumps(settings))
+            inventory = discover(config)
+            surfaces = {o["id"] for o in inventory["obligations"] if o["kind"] == "surface"}
+            self.assertEqual(surfaces, {"http:GET /portal/items", "http:GET /admin/items"})
+            branches = [o for o in inventory["obligations"] if o["kind"] == "branch-candidate"]
+            self.assertEqual(len(branches), 4)
+            self.assertEqual({o["surface"] for o in branches}, surfaces)
+            limits = [o for o in inventory["obligations"] if o["kind"] == "unresolved"]
+            self.assertEqual(len(limits), 4)
+            self.assertIn("boundary:python:mounted-route-confirmation", {o["id"] for o in limits})
+            # Only global discovery limits are shared. Colliding route declarations
+            # still fail instead of silently shrinking the coverage denominator.
+            settings["adapters"][1]["prefix"] = "/portal"
+            config.write_text(json.dumps(settings))
+            with self.assertRaisesRegex(ValueError, "duplicate obligation IDs"):
+                discover(config)
+
     def test_unknown_adapter_does_not_produce_empty_green(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "discovery.json"
