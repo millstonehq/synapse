@@ -333,6 +333,39 @@ class FlowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "absence assertion"):
             plan(model, "browser")
 
+    def test_confirmation_is_preserved_and_bound_to_evidence(self) -> None:
+        inventory, model = fixture()
+        commands = model["transitions"][0]["bindings"]["browser"]["commands"]
+        command = {"op": "click", "selector": "button.delete",
+                   "confirmation": {"message": "Delete this sample?", "action": "dismiss"}}
+        commands.insert(0, command)
+        execution_plan = plan(model, "browser")
+        self.assertEqual(execution_plan["scenarios"][0]["steps"][0]["commands"][0], command)
+        run = evidence(inventory, execution_plan)
+        self.assertTrue(reconcile(inventory, model, execution_plan, run)["complete"])
+        command["confirmation"]["action"] = "accept"
+        with self.assertRaises(ValueError):
+            reconcile(inventory, model, plan(model, "browser"), run)
+
+    def test_confirmation_contract_rejects_ambiguous_commands(self) -> None:
+        invalid = [None, True, {}, {"message": "x"}, {"message": "", "action": "accept"},
+                   {"message": "x" * 1025, "action": "accept"},
+                   {"message": 1, "action": "accept"},
+                   {"message": "x", "action": True}, {"message": "x", "action": "guess"},
+                   {"message": "x", "action": "accept", "prompt": "value"}]
+        for confirmation in invalid:
+            with self.subTest(confirmation=confirmation):
+                _, model = fixture()
+                model["transitions"][0]["bindings"]["browser"]["commands"].insert(
+                    0, {"op": "click", "selector": "button", "confirmation": confirmation})
+                with self.assertRaisesRegex(ValueError, "confirmation"):
+                    plan(model, "browser")
+        _, model = fixture()
+        model["transitions"][0]["bindings"]["browser"]["commands"][0]["confirmation"] = {
+            "message": "x", "action": "accept"}
+        with self.assertRaisesRegex(ValueError, "confirmation"):
+            plan(model, "browser")
+
     def test_refresh_assertion_preserves_deadline_and_requires_evidence(self) -> None:
         inventory, model = fixture()
         command = model["transitions"][0]["bindings"]["browser"]["commands"][0]
