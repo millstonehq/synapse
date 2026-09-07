@@ -349,6 +349,37 @@ class FlowTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "download assertion"):
                     plan(model, "browser")
 
+    def test_http_assertion_preserves_reviewed_request_and_requires_evidence(self) -> None:
+        inventory, model = fixture()
+        command = {"op": "assert", "mode": "http", "id": "refused",
+                   "method": "POST", "path": "/items/1/base", "form": {"price": "4.99"},
+                   "expect_status": 403, "text": "not permitted"}
+        model["transitions"][0]["bindings"]["browser"]["commands"] = [command]
+        execution_plan = plan(model, "browser")
+        self.assertEqual(execution_plan["scenarios"][0]["steps"][0]["commands"], [command])
+        run = evidence(inventory, execution_plan)
+        self.assertTrue(reconcile(inventory, model, execution_plan, run)["complete"])
+        run["scenarios"][0]["assertions"] = []
+        self.assertFalse(reconcile(inventory, model, execution_plan, run)["complete"])
+
+    def test_http_assertion_rejects_ambiguous_or_unsafe_requests(self) -> None:
+        bad = [{"path": p} for p in [None, [], "//host/x", "https://host/x", "/x?token=y", "/x#f", "/a/../b", "/x%2fy", "/a//b"]]
+        bad += [{"expect_status": s} for s in [True, "403", 199, 302, 600, 403.5]]
+        bad += [{"method": []}, {"method": "DELETE"}, {"method": "get"}, {"text": ""}, {"text": []},
+                {"form": []}, {"form": {"x": 1}}, {"form": {"": "x"}},
+                {"form": {"x": "a" * 4097}}, {"method": "GET"},
+                {"selector": "body"}, {"headers": {}}, {"body": "x"},
+                {"refresh_timeout_ms": 10}]
+        for fields in bad:
+            with self.subTest(fields=fields):
+                _, model = fixture()
+                command = {"op": "assert", "mode": "http", "id": "refused", "method": "POST",
+                           "path": "/items/1", "form": {"x": "y"}, "expect_status": 403,
+                           "text": "refused", **fields}
+                model["transitions"][0]["bindings"]["browser"]["commands"] = [command]
+                with self.assertRaisesRegex(ValueError, "HTTP assertion"):
+                    plan(model, "browser")
+
     def test_saved_paths_are_actions_and_preserve_expected_status(self) -> None:
         inventory, model = fixture()
         commands = model["transitions"][0]["bindings"]["browser"]["commands"]
