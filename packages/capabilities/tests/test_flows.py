@@ -262,6 +262,39 @@ class FlowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "assertion"):
             plan(model, "browser")
 
+    def test_absence_assertions_are_planned_and_require_execution(self) -> None:
+        inventory, model = fixture()
+        command = {
+            "op": "assert", "mode": "absent", "id": "no-privileged-control",
+            "selector": "form[data-privileged]",
+        }
+        model["transitions"][0]["bindings"]["browser"]["commands"] = [command]
+        execution_plan = plan(model, "browser")
+        for scenario in execution_plan["scenarios"]:
+            self.assertEqual(scenario["steps"][0]["commands"], [command])
+        run = evidence(inventory, execution_plan)
+        self.assertTrue(reconcile(inventory, model, execution_plan, run)["complete"])
+        run["scenarios"][0]["assertions"].remove("0:login:no-privileged-control")
+        result = reconcile(inventory, model, execution_plan, run)
+        self.assertFalse(result["complete"])
+        self.assertTrue(result["failures"])
+
+    def test_unknown_assertion_modes_fail_closed(self) -> None:
+        for mode in ("missing", True, None, []):
+            with self.subTest(mode=mode):
+                _, model = fixture()
+                command = model["transitions"][0]["bindings"]["browser"]["commands"][0]
+                command["mode"] = mode
+                with self.assertRaisesRegex(ValueError, "assertion mode"):
+                    plan(model, "browser")
+
+    def test_absence_assertion_cannot_also_claim_text(self) -> None:
+        _, model = fixture()
+        command = model["transitions"][0]["bindings"]["browser"]["commands"][0]
+        command["mode"] = "absent"
+        with self.assertRaisesRegex(ValueError, "absence assertion"):
+            plan(model, "browser")
+
     def test_duplicate_transition_is_rejected(self) -> None:
         _, model = fixture()
         model["transitions"].append(copy.deepcopy(model["transitions"][0]))

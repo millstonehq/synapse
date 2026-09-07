@@ -59,8 +59,14 @@ def validate(model: dict) -> None:
                     raise ValueError(f"{name}/{target}: goto must be an absolute local path")
                 if c["op"] != "goto" and not c.get("selector"):
                     raise ValueError(f"{name}/{target}: selector required")
-                if c["op"] == "assert" and not c.get("text"):
-                    raise ValueError(f"{name}/{target}: content assertion required")
+                if c["op"] == "assert":
+                    mode = c.get("mode", "text")
+                    if not isinstance(mode, str) or mode not in {"text", "absent"}:
+                        raise ValueError(f"{name}/{target}: unsupported assertion mode {mode!r}")
+                    if mode == "text" and not c.get("text"):
+                        raise ValueError(f"{name}/{target}: content assertion required")
+                    if mode == "absent" and "text" in c:
+                        raise ValueError(f"{name}/{target}: absence assertion cannot carry text")
 
 
 def enabled(t: dict, state: frozenset[str]) -> bool:
