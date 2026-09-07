@@ -100,11 +100,56 @@ obligations. The four Python discovery limits apply once to the combined
 inventory; mounted-route confirmation must account for every discovered mount.
 Overlapping declarations of the same HTTP surface remain an error.
 
+## OpenAPI operation inventory
+
+An HTTP service in any language can supply a local OpenAPI JSON document:
+
+```json
+{
+  "scope": "Declared API operations; runtime and business behavior unconfirmed",
+  "root": ".",
+  "adapters": [
+    {"kind": "openapi-json", "document": "openapi.json", "prefix": "/v1"}
+  ]
+}
+```
+
+The adapter supports OpenAPI 3.0.x and 3.1.x JSON and inventories all eight inline
+HTTP operation methods. Each surface retains the document hash and JSON pointer;
+line 1 identifies the document, not an inferred operation line. The optional
+prefix defaults to empty and must be reviewed against the deployment. Server URLs
+are never fetched or selected. Export the contract locally using the application's
+own recipe; this adapter performs no network requests and adds no dependencies.
+
+This is an operation inventory, not a full OpenAPI validator. It does not resolve
+Path Item references or invent methods for empty/filtered paths: each stays an
+explicit gap. It also retains boundaries for runtime/omitted routes, business
+outcomes, authorization/configurations, schema/reference behavior, server bindings,
+and callbacks/webhooks/extensions. Descriptions, examples, operation IDs and server
+values are not copied into reports. Duplicate JSON members, unsupported versions,
+invalid path/operation shapes and equivalent templated paths fail discovery.
+The supported method and Path Item rules come from the
+[OpenAPI 3.1 specification](https://spec.openapis.org/oas/v3.1.0.html#path-item-object).
+
+Run the existing `flows discover` and `flows catalog` commands on this config.
+Operations become candidate flow families with missing outcomes, fixtures and
+bindings. Whole-document declaration accounting and behavioral completeness remain
+false. A fresh exported contract hashes the snapshot; it does not prove the
+snapshot belongs to the running build. The consumer must bind export, build and
+execution provenance in its local recipe.
+
+Keep contract and source inventories separate when comparing them: overlapping
+HTTP surfaces still fail if configured in one inventory. Agreement does not prove
+completeness, and differences need investigation. In a local Storekeeper probe,
+the contract exposed 60 operations versus 25 in the selected source-flow scope:
+all 25 matched, while 35 additional operations mostly belonged to inherited
+administration and portal/auth code. None received coverage merely from discovery.
+
 ## Current support
 
 - Python/FastAPI/SQLAlchemy entity discovery and runtime probes.
 - Opt-in literal SQLite table declarations, with unbound query diagnostics.
-- Python route source obligations and Zoho Creator export discovery.
+- Python route source obligations, OpenAPI JSON operations, and Zoho Creator export discovery.
 - Required/forbidden fact-state planning with explicit blocked transitions.
 - Consumer execution commands with fresh run nonces and source/model/plan hashes.
 - Exact scenario/assertion reconciliation, per-step HTTP evidence, and gap gates.
