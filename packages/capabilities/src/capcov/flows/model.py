@@ -273,6 +273,11 @@ def reconcile(inventory: dict, model: dict, execution_plan: dict, run: dict | No
                 claimed_outcomes.setdefault((obligation, outcome), set()).add(t["id"])
     passed = set()
     resolved_boundaries = set()
+    execution_scope = (run or {}).get("execution_scope", "full")
+    if execution_scope not in ("full", "diagnostic"):
+        raise ValueError("unknown execution scope")
+    if execution_scope == "diagnostic":
+        failures.append("diagnostic execution does not qualify coverage")
     if run is not None:
         if run.get("plan_sha256") != digest(execution_plan):
             raise ValueError("run was produced from a different plan")
@@ -286,7 +291,10 @@ def reconcile(inventory: dict, model: dict, execution_plan: dict, run: dict | No
             if name.startswith("http:") and item.get("kind") == "surface"
         }
         mounted = set(run.get("mounted_surfaces", []))
-        if static_http and mounted == static_http and run.get("status") == "passed":
+        if (
+            static_http and mounted == static_http and run.get("status") == "passed"
+            and execution_scope == "full"
+        ):
             resolved_boundaries.add("boundary:python:mounted-route-confirmation")
         elif mounted:
             for name in sorted(mounted - static_http):
@@ -328,7 +336,8 @@ def reconcile(inventory: dict, model: dict, execution_plan: dict, run: dict | No
                 and run.get("status") == "passed"
                 and not missing_surfaces
             ):
-                passed.update(s["transition"] for s in scenario["steps"])
+                if execution_scope == "full":
+                    passed.update(s["transition"] for s in scenario["steps"])
             else:
                 failures.append(f"missing outcome evidence: {scenario['id']}")
     rows = []
@@ -369,6 +378,7 @@ def reconcile(inventory: dict, model: dict, execution_plan: dict, run: dict | No
         "scope": model["scope"],
         "target": execution_plan["target"],
         "assurance": (run or {}).get("assurance", "unexecuted"),
+        "execution_scope": execution_scope,
         "rows": rows,
         "blocked": execution_plan["blocked"],
         "failures": failures,
