@@ -108,6 +108,40 @@ class StateBudgetTests(unittest.TestCase):
 
 
 class FlowTests(unittest.TestCase):
+    def test_diagnostic_execution_never_qualifies_even_when_all_scenarios_pass(self) -> None:
+        inventory, model = fixture()
+        generated = plan(model, "browser")
+        run = evidence(inventory, generated)
+        self.assertTrue(reconcile(inventory, model, generated, run)["complete"])
+        run["execution_scope"] = "diagnostic"
+        result = reconcile(inventory, model, generated, run)
+        self.assertEqual(result["summary"]["covered"], 0)
+        self.assertFalse(result["complete"])
+        self.assertIn("diagnostic execution does not qualify coverage", result["failures"])
+        run["scenarios"] = run["scenarios"][:1]
+        self.assertEqual(reconcile(inventory, model, generated, run)["summary"]["covered"], 0)
+
+    def test_execution_scope_validation_and_mount_credit(self) -> None:
+        inventory, model = fixture()
+        inventory["obligations"].extend([
+            {"id": "http:GET /", "kind": "surface"},
+            {"id": "boundary:python:mounted-route-confirmation", "kind": "unresolved"},
+        ])
+        generated = plan(model, "browser")
+        run = evidence(inventory, generated)
+        run["mounted_surfaces"] = ["http:GET /"]
+        run["execution_scope"] = "full"
+        result = reconcile(inventory, model, generated, run)
+        self.assertTrue(any(row["resolution"] == "runtime-mount-census" for row in result["rows"]))
+        run["execution_scope"] = "diagnostic"
+        result = reconcile(inventory, model, generated, run)
+        self.assertEqual(result["summary"]["covered"], 0)
+        self.assertTrue(all(row["resolution"] is None for row in result["rows"]))
+        for scope in (None, "selected", "", False, []):
+            with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, "execution scope"):
+                run["execution_scope"] = scope
+                reconcile(inventory, model, generated, run)
+
     def test_every_declared_outcome_requires_its_own_evidence(self) -> None:
         inventory, model = fixture()
         inventory["obligations"][0]["outcomes"] = ["allowed", "denied"]

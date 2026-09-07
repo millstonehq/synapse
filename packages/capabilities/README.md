@@ -415,6 +415,18 @@ accept prompts, alerts or arbitrary confirmation messages. Planning does not
 open or answer a browser dialog.
 
 
+Run evidence may declare `execution_scope: "diagnostic"` when a consumer selects
+only one journey for debugging. Such a run can have `status: "passed"`, meaning
+the selected execution succeeded, but reconciliation awards **zero coverage**,
+does not resolve runtime-mount boundaries, and remains incomplete. This applies
+even if the diagnostic happens to execute every planned scenario. Missing scope
+defaults to `"full"` for existing runners; an explicit scope must be `"full"` or
+`"diagnostic"`, otherwise reconciliation rejects it. Consumers must preserve the
+full plan and its digest when selecting diagnostic scenarios and retain all steps
+of a selected journey. This flag neither selects scenarios nor supplies their
+prerequisites; selection remains a consumer runner responsibility. Plan, source
+identity, assertion and request-evidence checks still apply.
+
 An element-relative mouse drag is explicit as well:
 
 ```json
