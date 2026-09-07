@@ -85,6 +85,13 @@ def discover(config_path: Path) -> dict:
     for adapter in config["adapters"]:
         kind = adapter["kind"]
         if kind == "python-routes":
+            namespace = adapter.get("source_namespace")
+            if namespace is not None and (
+                not isinstance(namespace, str)
+                or not namespace
+                or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for c in namespace)
+            ):
+                raise ValueError("source_namespace must be a nonempty identifier")
             files = set(adapter.get("files", []))
             for pattern in adapter.get("globs", []):
                 discovered = {
@@ -118,8 +125,12 @@ def discover(config_path: Path) -> dict:
                             )
                             continue
                         route = adapter.get("prefix", "") + str(dec.args[0].value)
-                        name = f"http:{dec.func.attr.upper()} {route}"
-                        add(name, "surface", relative, dec.lineno, handler=node.name)
+                        http_surface = f"http:{dec.func.attr.upper()} {route}"
+                        name = f"python:{namespace}:{http_surface}" if namespace else http_surface
+                        metadata = {"handler": node.name}
+                        if namespace:
+                            metadata["http_surface"] = http_surface
+                        add(name, "surface", relative, dec.lineno, **metadata)
                         route_count += 1
                         # Both outcomes of an if, and each exception handler, are
                         # obligations until linked to a meaningful scenario.

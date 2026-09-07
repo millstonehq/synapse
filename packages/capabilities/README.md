@@ -136,6 +136,14 @@ obligations. The four Python discovery limits apply once to the combined
 inventory; mounted-route confirmation must account for every discovered mount.
 Overlapping declarations of the same HTTP surface remain an error.
 
+When different source handlers intentionally declare the same method/path (for
+example a replaced legacy router), assign their adapters distinct
+`source_namespace` identifiers. This preserves separate surface and branch IDs;
+surface records retain `http_surface` for comparison with runtime registrations.
+It does not establish which handler is mounted or qualify an omitted handler.
+Consumers must reconcile source ownership as well as method/path, and retain
+unresolved declarations. Duplicate IDs within a namespace still fail discovery.
+
 ## OpenAPI operation inventory
 
 An HTTP service in any language can supply a local OpenAPI JSON document:

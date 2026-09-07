@@ -652,6 +652,39 @@ class FlowTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "duplicate obligation IDs"):
                 discover(config)
 
+    def test_source_namespaces_preserve_colliding_handlers_and_branches(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ("legacy", "replacement"):
+                (root / f"{name}.py").write_text(
+                    '@router.get("/items")\ndef items():\n'
+                    '    if allowed:\n        return []\n    return None\n'
+                )
+            config = root / "discovery.json"
+            settings = {"scope": "source-declarations", "root": ".", "adapters": [
+                {"kind": "python-routes", "files": [f"{name}.py"], "source_namespace": name}
+                for name in ("legacy", "replacement")
+            ]}
+            config.write_text(json.dumps(settings))
+            inventory = discover(config)
+            surfaces = [o for o in inventory["obligations"] if o["kind"] == "surface"]
+            self.assertEqual({o["http_surface"] for o in surfaces}, {"http:GET /items"})
+            ids = {o["id"] for o in surfaces}
+            self.assertEqual(ids, {f"python:{name}:http:GET /items" for name in ("legacy", "replacement")})
+            branches = [o for o in inventory["obligations"] if o["kind"] == "branch-candidate"]
+            self.assertEqual(len(branches), 4)
+            self.assertEqual({o["surface"] for o in branches}, ids)
+            # Qualification cannot silently coalesce declarations in the same namespace.
+            settings["adapters"][1]["source_namespace"] = "legacy"
+            config.write_text(json.dumps(settings))
+            with self.assertRaisesRegex(ValueError, "duplicate obligation IDs"):
+                discover(config)
+            for invalid in ("", "has:separator", "white space", 42):
+                settings["adapters"][1]["source_namespace"] = invalid
+                config.write_text(json.dumps(settings))
+                with self.assertRaisesRegex(ValueError, "source_namespace"):
+                    discover(config)
+
     def test_unknown_adapter_does_not_produce_empty_green(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "discovery.json"
