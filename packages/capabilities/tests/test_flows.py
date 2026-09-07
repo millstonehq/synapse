@@ -349,6 +349,33 @@ class FlowTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "download assertion"):
                     plan(model, "browser")
 
+    def test_saved_paths_are_actions_and_preserve_expected_status(self) -> None:
+        inventory, model = fixture()
+        commands = model["transitions"][0]["bindings"]["browser"]["commands"]
+        commands[:0] = [{"op": "remember-path", "name": "invoice"},
+                       {"op": "visit-path", "name": "invoice", "expect_status": 404}]
+        execution_plan = plan(model, "browser")
+        self.assertEqual(execution_plan["scenarios"][0]["steps"][0]["commands"], commands)
+        run = evidence(inventory, execution_plan)
+        self.assertTrue(reconcile(inventory, model, execution_plan, run)["complete"])
+        commands.pop()
+        with self.assertRaisesRegex(ValueError, "assertion"):
+            plan(model, "browser")
+
+    def test_saved_paths_reject_invalid_names_statuses_and_ambiguous_sources(self) -> None:
+        invalid = [{"op": "remember-path", "name": value}
+                   for value in (None, "", "a/b", "a.b", "A", "a" * 65, True)]
+        invalid += [{"op": "visit-path", "name": "invoice", "expect_status": value}
+                    for value in (None, True, "404", 199, 600, 200.5)]
+        invalid += [{"op": "remember-path", "name": "invoice", "path": "/fallback"},
+                    {"op": "remember-path", "name": "invoice", "expect_status": 200}]
+        for command in invalid:
+            with self.subTest(command=command):
+                _, model = fixture()
+                model["transitions"][0]["bindings"]["browser"]["commands"].insert(0, command)
+                with self.assertRaises(ValueError):
+                    plan(model, "browser")
+
     def test_duplicate_transition_is_rejected(self) -> None:
         _, model = fixture()
         model["transitions"].append(copy.deepcopy(model["transitions"][0]))

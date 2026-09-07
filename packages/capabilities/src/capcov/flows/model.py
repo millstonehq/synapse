@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections import deque
 
 
@@ -60,14 +61,27 @@ def validate(model: dict) -> None:
             if len(set(assertion_ids)) != len(assertion_ids):
                 raise ValueError(f"{name}/{target}: duplicate assertion")
             for c in commands:
-                if c.get("op") not in {"goto", "fill", "click", "select", "upload", "assert"}:
+                if c.get("op") not in {"goto", "fill", "click", "select", "upload", "assert", "remember-path", "visit-path"}:
                     raise ValueError(f"{name}/{target}: unsupported command {c.get('op')}")
                 if c["op"] == "goto" and (
                     not c.get("path", "").startswith("/") or c["path"].startswith("//")
                 ):
                     raise ValueError(f"{name}/{target}: goto must be an absolute local path")
-                if c["op"] != "goto" and not c.get("selector"):
+                if c["op"] not in {"goto", "remember-path", "visit-path"} and not c.get("selector"):
                     raise ValueError(f"{name}/{target}: selector required")
+                if c["op"] in {"remember-path", "visit-path"} and (
+                    not isinstance(c.get("name"), str)
+                    or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", c["name"])
+                    or any(key in c for key in ("selector", "path", "value"))
+                ):
+                    raise ValueError(f"{name}/{target}: saved path requires an unambiguous name")
+                if c["op"] == "visit-path" and (
+                    type(c.get("expect_status")) is not int
+                    or not 200 <= c["expect_status"] <= 599
+                ):
+                    raise ValueError(f"{name}/{target}: visit-path requires an expected HTTP status")
+                if c["op"] == "remember-path" and "expect_status" in c:
+                    raise ValueError(f"{name}/{target}: remembering a path performs no HTTP request")
                 if c["op"] == "select" and not isinstance(c.get("value"), str):
                     raise ValueError(f"{name}/{target}: select requires a string option value")
                 if c["op"] == "upload":
