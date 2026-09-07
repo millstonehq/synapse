@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 
 from .model import digest
+from .python_routes import explicit_routes
 from .openapi import derive as derive_openapi
 from .zoho import derive as derive_zoho
 
@@ -85,6 +86,13 @@ def discover(config_path: Path) -> dict:
     for adapter in config["adapters"]:
         kind = adapter["kind"]
         if kind == "python-routes":
+            namespace = adapter.get("source_namespace")
+            if namespace is not None and (
+                not isinstance(namespace, str)
+                or not namespace
+                or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for c in namespace)
+            ):
+                raise ValueError("source_namespace must be a nonempty identifier")
             files = set(adapter.get("files", []))
             for pattern in adapter.get("globs", []):
                 discovered = {
@@ -118,8 +126,12 @@ def discover(config_path: Path) -> dict:
                             )
                             continue
                         route = adapter.get("prefix", "") + str(dec.args[0].value)
-                        name = f"http:{dec.func.attr.upper()} {route}"
-                        add(name, "surface", relative, dec.lineno, handler=node.name)
+                        http_surface = f"http:{dec.func.attr.upper()} {route}"
+                        name = f"python:{namespace}:{http_surface}" if namespace else http_surface
+                        metadata = {"handler": node.name}
+                        if namespace:
+                            metadata["http_surface"] = http_surface
+                        add(name, "surface", relative, dec.lineno, **metadata)
                         route_count += 1
                         # Both outcomes of an if, and each exception handler, are
                         # obligations until linked to a meaningful scenario.
@@ -142,6 +154,32 @@ def discover(config_path: Path) -> dict:
                                     child.lineno,
                                     surface=name,
                                 )
+                for call, path, methods, handler in explicit_routes(tree):
+                    route_count += 1
+                    if handler is None:
+                        prefix = f"{namespace}:" if namespace else ""
+                        add(
+                            f"python:{prefix}{relative}:registration:{call.lineno}:{call.col_offset}",
+                            "unresolved", relative, call.lineno,
+                            reason="explicit route path, methods or handler cannot be resolved statically",
+                        )
+                        continue
+                    for method in methods:
+                        http_surface = f"http:{method} {adapter.get('prefix', '')}{path}"
+                        name = f"python:{namespace}:{http_surface}" if namespace else http_surface
+                        metadata = {"handler": handler.name}
+                        if namespace:
+                            metadata["http_surface"] = http_surface
+                        add(name, "surface", relative, call.lineno, **metadata)
+                        for child in ast.walk(handler):
+                            if isinstance(child, ast.If):
+                                signature = digest(ast.dump(child.test))[:12]
+                                for outcome in ("true", "false"):
+                                    add(f"{name}:branch:{signature}:{child.lineno}:{outcome}",
+                                        "branch-candidate", relative, child.lineno, surface=name)
+                            elif isinstance(child, ast.ExceptHandler):
+                                add(f"{name}:except:{child.lineno}", "exception-candidate",
+                                    relative, child.lineno, surface=name)
             if not route_count:
                 raise ValueError("no routes discovered in the configured Python sources")
             # These limits describe the combined Python inventory. Multiple
