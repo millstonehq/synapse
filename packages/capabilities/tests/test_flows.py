@@ -145,6 +145,50 @@ class FlowTests(unittest.TestCase):
                 coverage.write_text(json.dumps({"complete": True, "failures": []}))
                 self.assertEqual(main(args), 1)
 
+    def test_branch_and_exception_use_parent_route_http_evidence(self) -> None:
+        for kind in ("branch-candidate", "exception-candidate"):
+            with self.subTest(kind=kind):
+                inventory, model = fixture()
+                route = "http:POST /edit"
+                candidate = route + ":" + kind + ":7"
+                inventory["obligations"].extend([
+                    {"id": route, "kind": "surface"},
+                    {"id": candidate, "kind": kind, "surface": route},
+                ])
+                model["transitions"][0]["obligations"].append(route)
+                model["transitions"][1]["obligations"].append(candidate)
+                execution_plan = plan(model, "browser")
+                run = evidence(inventory, execution_plan)
+                for scenario, result in zip(execution_plan["scenarios"], run["scenarios"], strict=True):
+                    result["observed_requests"] = [
+                        {"step": f"{i}:{step['transition']}", "surface": route}
+                        for i, step in enumerate(scenario["steps"])
+                        if step["transition"] in {"login", "edit"}
+                    ]
+                result = reconcile(inventory, model, execution_plan, run)
+                self.assertTrue(result["complete"], result["failures"])
+                # A claimed branch still needs the real parent request in the
+                # same step; another scenario/step cannot supply that evidence.
+                for result in run["scenarios"]:
+                    result["observed_requests"] = [
+                        request for request in result["observed_requests"]
+                        if not request["step"].endswith(":edit")
+                    ]
+                result = reconcile(inventory, model, execution_plan, run)
+                self.assertFalse(result["complete"])
+                self.assertEqual(
+                    next(row["status"] for row in result["rows"] if row["id"] == candidate),
+                    "unproven",
+                )
+
+    def test_http_candidate_without_valid_parent_is_rejected(self) -> None:
+        inventory, model = fixture()
+        inventory["obligations"].append({
+            "id": "http:POST /edit:except:7", "kind": "exception-candidate",
+        })
+        with self.assertRaisesRegex(ValueError, "parent surface"):
+            reconcile(inventory, model, plan(model, "browser"), None)
+
     def test_run_rejects_success_without_fresh_evidence(self) -> None:
         inventory, model = fixture()
         with tempfile.TemporaryDirectory() as directory:

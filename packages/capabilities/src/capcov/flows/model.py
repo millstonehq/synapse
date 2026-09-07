@@ -144,6 +144,17 @@ def reconcile(inventory: dict, model: dict, execution_plan: dict, run: dict | No
         raise ValueError("duplicate inventory obligations")
     if not obligations:
         raise ValueError("empty inventory cannot establish completeness")
+    # Branch/exception IDs share the http: namespace, but are not URLs. Their
+    # request evidence belongs to the declared parent route. Never discard a
+    # missing parent and accidentally waive the HTTP evidence requirement.
+    for name, item in obligations.items():
+        if name.startswith("http:"):
+            parent = name if item.get("kind") == "surface" else item.get("surface")
+            if (
+                not isinstance(parent, str) or not parent.startswith("http:")
+                or obligations.get(parent, {}).get("kind") != "surface"
+            ):
+                raise ValueError(f"invalid or missing parent surface: {name}")
     mapped: dict[str, set[str]] = {}
     claimed_outcomes: dict[tuple[str, str], set[str]] = {}
     for t in model["transitions"]:
@@ -189,9 +200,9 @@ def reconcile(inventory: dict, model: dict, execution_plan: dict, run: dict | No
             missing_surfaces = []
             for i, step in enumerate(scenario["steps"]):
                 expected_surfaces = {
-                    o
+                    o if obligations[o].get("kind") == "surface" else obligations[o]["surface"]
                     for o in by_transition[step["transition"]]["obligations"]
-                    if o.startswith("http:")
+                    if o.startswith("http:") and o in obligations
                 }
                 actual_surfaces = {
                     o["surface"]
