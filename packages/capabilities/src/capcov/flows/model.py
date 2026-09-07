@@ -51,7 +51,7 @@ def validate(model: dict) -> None:
             if len(set(assertion_ids)) != len(assertion_ids):
                 raise ValueError(f"{name}/{target}: duplicate assertion")
             for c in commands:
-                if c.get("op") not in {"goto", "fill", "click", "assert"}:
+                if c.get("op") not in {"goto", "fill", "click", "select", "upload", "assert"}:
                     raise ValueError(f"{name}/{target}: unsupported command {c.get('op')}")
                 if c["op"] == "goto" and (
                     not c.get("path", "").startswith("/") or c["path"].startswith("//")
@@ -59,6 +59,20 @@ def validate(model: dict) -> None:
                     raise ValueError(f"{name}/{target}: goto must be an absolute local path")
                 if c["op"] != "goto" and not c.get("selector"):
                     raise ValueError(f"{name}/{target}: selector required")
+                if c["op"] == "select" and not isinstance(c.get("value"), str):
+                    raise ValueError(f"{name}/{target}: select requires a string option value")
+                if c["op"] == "upload":
+                    files = c.get("files")
+                    if not isinstance(files, list) or not files or any(
+                        not isinstance(path, str)
+                        or not path.strip()
+                        or any(part in {"", ".", ".."} for part in path.split("/"))
+                        or any(char in path for char in ("\\", ":", "\0"))
+                        for path in files
+                    ):
+                        raise ValueError(
+                            f"{name}/{target}: upload requires repository-relative POSIX file paths"
+                        )
                 if c["op"] == "assert":
                     mode = c.get("mode", "text")
                     if not isinstance(mode, str) or mode not in {"text", "absent"}:
