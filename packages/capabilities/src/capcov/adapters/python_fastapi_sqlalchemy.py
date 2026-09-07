@@ -23,6 +23,8 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import sqlite_literals
+
 NAME = "python-fastapi-sqlalchemy"
 
 HTTP_METHODS = ("get", "post", "put", "patch", "delete", "head", "options", "trace")
@@ -281,7 +283,9 @@ def _is_app_object(module: Module, local: str) -> bool:
 class _FunctionWalker(ast.NodeVisitor):
     """One pass per module: direct entity refs, call edges, blind spots."""
 
-    def __init__(self, module: Module, entity_symbols: dict[str, str]) -> None:
+    def __init__(
+        self, module: Module, entity_symbols: dict[str, str], sqlite_ddl: bool = False
+    ) -> None:
         self.module = module
         self.entity_symbols = entity_symbols  # local name -> table
         self.stack: list[str] = []
@@ -291,6 +295,8 @@ class _FunctionWalker(ast.NodeVisitor):
         self.unresolved: list[dict] = []
         self.blind: list[dict] = []
         self.evidence: dict[str, list[dict]] = {}
+        self.sqlite_ddl = sqlite_ddl
+        self.sql_entities: list[dict] = []
 
     # -- scope
 
@@ -353,6 +359,20 @@ class _FunctionWalker(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> None:
         here = self._current
         fn = node.func
+        sql = sqlite_literals.inspect_call(node) if self.sqlite_ddl else None
+        if sql is not None:
+            tables, kind = sql
+            for table in tables:
+                self.sql_entities.append({
+                    "name": table, "symbol": None, "module": self.module.dotted,
+                    "file": self.module.rel, "line": node.lineno,
+                    "declaration_kind": "sqlite_literal_ddl",
+                })
+            self.blind.append({
+                "kind": kind, "expr": _render(fn), "file": self.module.rel,
+                "line": node.lineno, "in": here, "resolved_name": None,
+                "blind": True,
+            })
         # blind spots -- recorded whether or not we are inside a function, since
         # a module-level getattr is just as invisible.
         callee_name = (
@@ -496,6 +516,9 @@ def discover(source_root: Path, target: Path, name_match: bool = True) -> dict:
     entities, symbol_to_table = discover_entities(modules)
     surfaces = discover_surfaces(modules)
     config = read_config(target)
+    sqlite_ddl = config.get("capcov", {}).get("sqlite_ddl", False)
+    if not isinstance(sqlite_ddl, bool):
+        raise ValueError("[capcov] sqlite_ddl must be a boolean")
     surfaces = surfaces + declared_entry_points(config)
 
     direct: dict[str, set[str]] = {}
@@ -517,8 +540,15 @@ def discover(source_root: Path, target: Path, name_match: bool = True) -> dict:
             mod, _, sym = qualified.partition(":")
             if mod == module.dotted:
                 local[sym] = table
-        walker = _FunctionWalker(module, local)
+        walker = _FunctionWalker(module, local, sqlite_ddl=sqlite_ddl)
         walker.visit(module.tree)
+        # Preserve ORM declarations when both styles name the same entity. DDL
+        # creates a denominator obligation, never a route or CRUD binding.
+        known_entities = {entity["name"] for entity in entities}
+        for entity in walker.sql_entities:
+            if entity["name"] not in known_entities:
+                entities.append(entity)
+                known_entities.add(entity["name"])
         direct.update(walker.direct)
         for key, callees in walker.calls.items():
             calls.setdefault(key, set()).update(callees)
@@ -600,6 +630,7 @@ def discover(source_root: Path, target: Path, name_match: bool = True) -> dict:
             ambiguous.append({**call, "candidates": candidates, "why": "ambiguous name"})
 
     blind.sort(key=lambda b: (b["file"], b["line"]))
+    entities.sort(key=lambda e: e["name"])
     ambiguous.sort(key=lambda u: (u["file"], u["line"]))
 
     return {

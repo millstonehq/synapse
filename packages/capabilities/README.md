@@ -75,6 +75,7 @@ does not prove persistence, authorization, external delivery, or product parity.
 ## Current support
 
 - Python/FastAPI/SQLAlchemy entity discovery and runtime probes.
+- Opt-in literal SQLite table declarations, with unbound query diagnostics.
 - Python route source obligations and Zoho Creator export discovery.
 - Required/forbidden fact-state planning with explicit blocked transitions.
 - Consumer execution commands with fresh run nonces and source/model/plan hashes.
@@ -84,6 +85,39 @@ Go/React discovery, a general-purpose browser exploration agent, and automatic
 semantic inference are not implemented. Synapse documentation validation does
 not run this engine. Optional document projection and `synapse capabilities`
 CLI integration are follow-up work.
+
+### Direct SQLite declarations
+
+For a Python target using direct SQLite calls, add to `capcov.toml`:
+
+```toml
+[capcov]
+adapter = "python-fastapi-sqlalchemy"
+source = "src"
+sqlite_ddl = true
+```
+
+This adds literal `CREATE [TEMP] TABLE [IF NOT EXISTS] name (...)` declarations
+inside `execute`, `executemany`, and `executescript` calls to the entity inventory.
+It reads Python/SQL tokens without importing or running the application. Comments
+and string contents cannot create table declarations. Declaration records carry
+file/line evidence and `declaration_kind = "sqlite_literal_ddl"`; duplicate table
+names retain their first declaration (an existing ORM declaration takes priority).
+
+Opting in asserts these SQL-shaped method calls are relevant to the target; this
+pass does not infer the receiver's runtime type. It deliberately creates no CRUD
+or route binding. Every candidate call stays in `blind_spots`: literal statements
+as `literal_sql_unbound`, computed SQL or ORM expressions as
+`computed_sql_or_expression`. Parameter values and SQL text are not emitted.
+Unsupported declarations (virtual tables, `AS SELECT`, single-quoted names),
+external SQL files, and connections outside the source scope remain outside this
+declaration subset. Schema qualifications are retained, but entity keys do not
+distinguish separate databases with identical table names.
+
+The runtime probe still observes SQLAlchemy, not direct `sqlite3` operations.
+New declarations with neither route bindings nor runtime evidence correctly stay
+in the `neither` cell. This feature expands the denominator; it does not establish
+SQLite coverage or solve query/receiver analysis.
 
 ## Development and releases
 
