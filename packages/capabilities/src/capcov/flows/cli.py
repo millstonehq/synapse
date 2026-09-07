@@ -43,6 +43,8 @@ def main(argv: list[str]) -> int:
     p.add_argument("--target", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--check", action="store_true")
+    p.add_argument("--max-states", type=int, default=10000,
+                   help="positive reachable-state budget; exhaustion fails without a complete plan")
     catalog = sub.add_parser(
         "catalog", help="derive flow families and source dependency candidates"
     )
@@ -94,7 +96,7 @@ def main(argv: list[str]) -> int:
                 out.parent.mkdir(parents=True, exist_ok=True)
                 out.write_text(render_catalog(result, args.focus))
         elif args.command == "plan":
-            result = plan(read(args.model), args.target)
+            result = plan(read(args.model), args.target, args.max_states)
         elif args.command == "run":
             if not runner:
                 raise ValueError("run requires a runner command after --")

@@ -148,6 +148,8 @@ def advance(t: dict, state: frozenset[str]) -> frozenset[str]:
 
 def plan(model: dict, target: str, max_states: int = 10000) -> dict:
     """Shortest prerequisite path to every transition; bounds fail explicitly."""
+    if type(max_states) is not int or max_states < 1:
+        raise ValueError("max_states must be a positive integer")
     validate(model)
     initial = frozenset(model.get("initial", []))
     queue = deque([(initial, [])])
@@ -202,6 +204,7 @@ def plan(model: dict, target: str, max_states: int = 10000) -> dict:
             if name not in paths
         ],
         "states_explored": len(seen),
+        **({"max_states": max_states} if max_states != 10000 else {}),
     }
 
 
@@ -211,7 +214,7 @@ def reconcile(inventory: dict, model: dict, execution_plan: dict, run: dict | No
     failures = []
     if execution_plan["model_sha256"] != digest(model):
         raise ValueError("plan was built from a different model")
-    expected = plan(model, execution_plan["target"])
+    expected = plan(model, execution_plan["target"], execution_plan.get("max_states", 10000))
     if expected != execution_plan:
         raise ValueError("plan does not match the derived scenarios")
     obligations = {o["id"]: o for o in inventory["obligations"]}
