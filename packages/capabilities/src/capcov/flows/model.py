@@ -84,6 +84,20 @@ def validate(model: dict) -> None:
                     raise ValueError(f"{name}/{target}: visit-path requires an expected HTTP status")
                 if c["op"] == "remember-path" and "expect_status" in c:
                     raise ValueError(f"{name}/{target}: remembering a path performs no HTTP request")
+                if "confirmation" in c:
+                    confirmation = c["confirmation"]
+                    if (
+                        c["op"] != "click"
+                        or not isinstance(confirmation, dict)
+                        or set(confirmation) != {"message", "action"}
+                        or not isinstance(confirmation["message"], str)
+                        or not 1 <= len(confirmation["message"]) <= 1024
+                        or confirmation["action"] not in ("accept", "dismiss")
+                    ):
+                        raise ValueError(
+                            f"{name}/{target}: confirmation requires a click, exact message "
+                            "(1..1024 characters), and accept/dismiss action"
+                        )
                 if c["op"] == "select" and not isinstance(c.get("value"), str):
                     raise ValueError(f"{name}/{target}: select requires a string option value")
                 if c["op"] == "upload":

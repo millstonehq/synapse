@@ -396,3 +396,20 @@ emitting a complete plan. Non-default limits are recorded in the plan and used
 when coverage independently re-derives its scenarios. Raising this budget adds
 no coverage and does not waive unreachable targets or missing evidence. Default
 plans retain their existing artifact shape.
+
+
+A click may declare a native browser confirmation explicitly:
+
+```json
+{"op":"click","selector":"button.delete","confirmation":{"message":"Delete this sample?","action":"dismiss"}}
+```
+
+The contract requires an exact nonempty message of at most 1024 characters and
+an `accept` or `dismiss` action. It is valid only on `click`; extra confirmation
+keys are rejected. The declaration is preserved in the plan and bound to run
+evidence. It does not itself grant coverage or replace subsequent outcome
+assertions. A browser consumer must wait for a native `confirm` dialog caused by
+that click, match the message exactly, apply the declared action, and fail on a
+missing or mismatched dialog within a bounded deadline. It must not silently
+accept prompts, alerts or arbitrary confirmation messages. Planning does not
+open or answer a browser dialog.
