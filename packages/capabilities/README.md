@@ -344,3 +344,24 @@ A link, filename, prefix match, or successful HTTP response alone is insufficien
 never automatically retried. The consumer owns origin restrictions and bounded
 transfer/size handling, and must reject the mode if it cannot honor that contract.
 Planning neither reads the expected file nor downloads anything.
+
+
+A journey can retain a runtime-created resource path and revisit it after an
+identity change:
+
+```json
+{"op": "remember-path", "name": "invoice"}
+{"op": "visit-path", "name": "invoice", "expect_status": 404}
+```
+
+Names match `[a-z][a-z0-9_-]{0,63}`. `visit-path` requires an integer expected HTTP
+status from 200 through 599. Both are actions; a binding still needs a separate
+observable assertion. They accept no alternate path, selector or value.
+
+Consumers must scope saved paths to one scenario, reject missing names and
+redefinitions, retain only a reviewed same-application path (no credentials, query
+or fragment), and revisit it with a bounded GET. The final URL must remain the
+saved resource and the final response must match `expect_status`; a login redirect
+is not a resource-access refusal. Invalid captures and unresolved names fail,
+without a guessed/default path. Models must describe the capture prerequisites
+and identity changes. Planning does not invent a resource URL or perform requests.
