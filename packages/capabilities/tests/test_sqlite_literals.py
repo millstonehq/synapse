@@ -158,6 +158,50 @@ def restart(db):
                 self.assertEqual(raw["entities"], [])
                 self.assertEqual(raw["blind_spots"][-1]["kind"], "computed_sql_or_expression")
 
+    def test_literal_mapping_loop_matches_runtime_without_claiming_queries(self):
+        source = """
+SCHEMAS = {
+    "widgets": ("CREATE TABLE widgets (id TEXT)", ["id"]),
+    "events": ("CREATE TABLE events (id TEXT)", ["id"]),
+}
+def initialize(db):
+    for ddl, columns in SCHEMAS.values():
+        db.execute(ddl)
+"""
+        namespace = {}
+        exec(source, namespace)
+        with sqlite3.connect(":memory:") as db:
+            namespace["initialize"](db)
+            actual = {row[0] for row in db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )}
+        raw = self.constant_discovery(source)
+        self.assertEqual({e["name"] for e in raw["entities"]}, actual)
+        self.assertTrue(all(e["declaration_kind"] == "sqlite_constant_ddl"
+                            for e in raw["entities"]))
+        self.assertEqual([b["kind"] for b in raw["blind_spots"]],
+                         ["constant_sql_unbound"])
+        self.assertTrue(all(not bindings for bindings in raw["_direct"].values()))
+
+    def test_mapping_mutation_alias_shadow_and_pre_execution_rewrite_are_unresolved(self):
+        declaration = 'SCHEMAS = {"x": ("CREATE TABLE widgets (id)", ["id"])}\n'
+        loop = 'def initialize(db):\n    for ddl, columns in SCHEMAS.values():\n        db.execute(ddl)\n'
+        cases = [
+            declaration + 'SCHEMAS.clear()\n' + loop,
+            declaration + 'alias = SCHEMAS\n' + loop,
+            declaration + 'SCHEMAS["x"] = ("SELECT 1", [])\n' + loop,
+            declaration + loop.replace('initialize(db)', 'initialize(db, SCHEMAS)'),
+            declaration + loop.replace('        db.execute', '        ddl = "SELECT 1"\n        db.execute'),
+            declaration + loop.replace('ddl, columns', 'ddl, ddl'),
+            declaration.replace('["id"]', 'build_columns()') + loop,
+            declaration.replace('("CREATE TABLE widgets (id)", ["id"])',
+                                '("CREATE TABLE widgets (id)",)') + loop,
+            declaration + 'from missing import *\n' + loop,
+        ]
+        for source in cases:
+            with self.subTest(source=source):
+                self.assertEqual(self.constant_discovery(source)["entities"], [])
+
     def test_string_false_does_not_silently_enable_discovery(self):
         with Project({"main.py": self.SOURCE}) as project:
             (project.root / "capcov.toml").write_text('[capcov]\nsqlite_ddl = "false"\n')

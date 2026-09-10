@@ -238,6 +238,13 @@ initialization, aliases, imported constants, string computation and SQL wrappers
 remain outside this conservative subset. This is static lexical resolution, not
 proof that runtime monkeypatching or dynamic code cannot replace a value.
 
+Literal module mappings of tuples are also supported when a `for` loop unpacks
+`SCHEMAS.values()` and its first statement passes a string tuple element directly
+to a SQLite execution call. Other reads of the mapping, aliases, mutations,
+shadowing, computed entries, duplicate keys and ambiguous unpacking remain
+unresolved. This pattern also retains `constant_sql_unbound`; no query or route
+binding is inferred from the declaration.
+
 Opting in asserts these SQL-shaped method calls are relevant to the target; this
 pass does not infer the receiver's runtime type. It deliberately creates no CRUD
 or route binding. Every candidate call stays in `blind_spots`: literal statements

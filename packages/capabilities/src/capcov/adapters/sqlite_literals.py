@@ -105,6 +105,11 @@ def constant_strings(tree: ast.Module) -> dict[str, str]:
         if (isinstance(target, ast.Name) and isinstance(value, ast.Constant)
                 and isinstance(value.value, str)):
             candidates[target.id] = value.value
+    safe = _unshadowed_names(tree)
+    return {name: value for name, value in candidates.items() if name in safe}
+
+
+def _unshadowed_names(tree: ast.Module) -> set[str]:
     writes: dict[str, int] = {}
     forbidden = set()
     for node in ast.walk(tree):
@@ -118,14 +123,74 @@ def constant_strings(tree: ast.Module) -> dict[str, str]:
             forbidden.update(alias.asname or alias.name.split(".")[0] for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
             if any(alias.name == "*" for alias in node.names):
-                return {}
+                return set()
             forbidden.update(alias.asname or alias.name for alias in node.names)
         elif isinstance(node, (ast.ExceptHandler, ast.MatchAs, ast.MatchStar)) and node.name:
             forbidden.add(node.name)
         elif isinstance(node, ast.MatchMapping) and node.rest:
             forbidden.add(node.rest)
-    return {name: value for name, value in candidates.items()
-            if writes.get(name) == 1 and name not in forbidden}
+    return {name for name, count in writes.items() if count == 1 and name not in forbidden}
+
+
+def mapping_loop_sql(tree: ast.Module) -> dict[int, list[str]]:
+    """Find literal tuple SQL passed directly from a mapping values loop.
+
+    Only the loop's first statement can execute the selected tuple element.
+    Other uses of the mapping (including aliases and mutations), shadowing,
+    computed values and ambiguous unpacking stay unresolved. This inventories
+    declarations, never execution, receiver identity or query bindings.
+    """
+    safe = _unshadowed_names(tree)
+    definitions = {}
+    for statement in tree.body:
+        target = (statement.targets[0]
+                  if isinstance(statement, ast.Assign) and len(statement.targets) == 1
+                  else statement.target if isinstance(statement, ast.AnnAssign) else None)
+        value = getattr(statement, "value", None)
+        if isinstance(target, ast.Name) and target.id in safe and isinstance(value, ast.Dict):
+            try:
+                literal = ast.literal_eval(value)
+            except (ValueError, TypeError, SyntaxError):
+                continue
+            if (literal and all(isinstance(k, str) for k in literal)
+                    and len(literal) == len(value.keys)
+                    and all(isinstance(v, tuple) for v in literal.values())):
+                definitions[target.id] = literal
+    loops = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.For) or not node.body:
+            continue
+        iterator = node.iter
+        if not (isinstance(iterator, ast.Call) and not iterator.args and not iterator.keywords
+                and isinstance(iterator.func, ast.Attribute) and iterator.func.attr == "values"
+                and isinstance(iterator.func.value, ast.Name)
+                and iterator.func.value.id in definitions):
+            continue
+        if not (isinstance(node.target, ast.Tuple)
+                and all(isinstance(t, ast.Name) for t in node.target.elts)):
+            continue
+        names = [t.id for t in node.target.elts]
+        if len(set(names)) != len(names):
+            continue
+        first = node.body[0]
+        call = first.value if isinstance(first, ast.Expr) else None
+        if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
+                and call.func.attr in {"execute", "executescript", "executemany"}):
+            continue
+        sql = call.args[0] if call.args else next(
+            (kw.value for kw in call.keywords if kw.arg in {"sql", "sql_script"}), None)
+        if not isinstance(sql, ast.Name) or sql.id not in names:
+            continue
+        index = names.index(sql.id)
+        values = definitions[iterator.func.value.id].values()
+        if not all(len(v) == len(names) and isinstance(v[index], str) for v in values):
+            continue
+        loops.append((iterator.func.value, call, [v[index] for v in values]))
+    allowed_reads = {id(name) for name, _, _ in loops}
+    escaped = {node.id for node in ast.walk(tree)
+               if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+               and node.id in definitions and id(node) not in allowed_reads}
+    return {id(call): sql for name, call, sql in loops if name.id not in escaped}
 
 
 def inspect_call(

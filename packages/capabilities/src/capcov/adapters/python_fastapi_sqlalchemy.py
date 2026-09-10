@@ -297,6 +297,7 @@ class _FunctionWalker(ast.NodeVisitor):
         self.evidence: dict[str, list[dict]] = {}
         self.sqlite_ddl = sqlite_ddl
         self.sql_constants = sqlite_literals.constant_strings(module.tree) if sqlite_ddl else {}
+        self.sql_loops = sqlite_literals.mapping_loop_sql(module.tree) if sqlite_ddl else {}
         self.sql_entities: list[dict] = []
 
     # -- scope
@@ -361,6 +362,9 @@ class _FunctionWalker(ast.NodeVisitor):
         here = self._current
         fn = node.func
         sql = sqlite_literals.inspect_call(node, self.sql_constants) if self.sqlite_ddl else None
+        if id(node) in self.sql_loops:
+            sql = ([table for value in self.sql_loops[id(node)]
+                    for table in sqlite_literals.tables(value)], "constant_sql_unbound")
         if sql is not None:
             tables, kind = sql
             for table in tables:
