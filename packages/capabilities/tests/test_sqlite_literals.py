@@ -99,6 +99,65 @@ def dynamic(db, name):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["symbol"], "Item")
 
+    def constant_discovery(self, source):
+        with Project({"main.py": source}) as project:
+            (project.root / "capcov.toml").write_text("[capcov]\nsqlite_ddl = true\n")
+            return adapter.discover(project.source, project.root)
+
+    def test_shared_constant_expands_inventory_without_claiming_bindings(self):
+        source = """
+SCHEMA: str = "CREATE TABLE reviews (id TEXT, actor TEXT, PRIMARY KEY(id, actor))"
+def initialize(db):
+    db.execute(SCHEMA)
+def restart(db):
+    db.executescript(sql_script=SCHEMA)
+"""
+        raw = self.constant_discovery(source)
+        self.assertEqual([e["name"] for e in raw["entities"]], ["reviews"])
+        self.assertEqual(raw["entities"][0]["declaration_kind"], "sqlite_constant_ddl")
+        self.assertEqual([b["kind"] for b in raw["blind_spots"]],
+                         ["constant_sql_unbound", "constant_sql_unbound"])
+        self.assertTrue(all(not tables for tables in raw["_direct"].values()))
+
+    def test_competing_bindings_remain_unresolved(self):
+        cases = [
+            'SCHEMA = "CREATE TABLE replacement (id)"',
+            'SCHEMA += "; SELECT 1"',
+            'del SCHEMA',
+            'def initialize(db, SCHEMA):\n    db.execute(SCHEMA)',
+            'def other():\n    SCHEMA = "CREATE TABLE local (id)"',
+            'from missing import SCHEMA',
+            'from missing import *',
+            'import unknown as SCHEMA',
+            'class SCHEMA: pass',
+            'def SCHEMA(): pass',
+            'try: pass\nexcept Exception as SCHEMA: pass',
+            'match value:\n    case {"value": SCHEMA}: pass',
+            '[SCHEMA for SCHEMA in values]',
+            'if condition:\n    SCHEMA = "CREATE TABLE conditional (id)"',
+        ]
+        for extra in cases:
+            with self.subTest(extra=extra):
+                raw = self.constant_discovery(
+                    'SCHEMA = "CREATE TABLE reviews (id)"\n'
+                    'def create(db):\n    db.execute(SCHEMA)\n' + extra + '\n'
+                )
+                self.assertEqual(raw["entities"], [])
+                self.assertTrue(all(b["kind"] == "computed_sql_or_expression"
+                                    for b in raw["blind_spots"]))
+
+    def test_computed_and_conditional_definitions_are_not_evaluated(self):
+        for declaration in (
+            'SCHEMA = build_schema()',
+            'SCHEMA = "CREATE TABLE " + table + " (id)"',
+            'if enabled:\n    SCHEMA = "CREATE TABLE reviews (id)"',
+            'ORIGINAL = "CREATE TABLE reviews (id)"\nSCHEMA = ORIGINAL',
+        ):
+            with self.subTest(declaration=declaration):
+                raw = self.constant_discovery(declaration + '\ndef create(db):\n    db.execute(SCHEMA)')
+                self.assertEqual(raw["entities"], [])
+                self.assertEqual(raw["blind_spots"][-1]["kind"], "computed_sql_or_expression")
+
     def test_string_false_does_not_silently_enable_discovery(self):
         with Project({"main.py": self.SOURCE}) as project:
             (project.root / "capcov.toml").write_text('[capcov]\nsqlite_ddl = "false"\n')

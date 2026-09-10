@@ -193,15 +193,14 @@ execution provenance in its local recipe.
 
 Keep contract and source inventories separate when comparing them: overlapping
 HTTP surfaces still fail if configured in one inventory. Agreement does not prove
-completeness, and differences need investigation. In a local Storekeeper probe,
-the contract exposed 60 operations versus 25 in the selected source-flow scope:
-all 25 matched, while 35 additional operations mostly belonged to inherited
-administration and portal/auth code. None received coverage merely from discovery.
+completeness, and differences need investigation. A contract may expose inherited
+administration and authentication operations outside the selected source-flow
+scope. Those additional operations receive no coverage merely from discovery.
 
 ## Current support
 
 - Python/FastAPI/SQLAlchemy entity discovery and runtime probes.
-- Opt-in literal SQLite table declarations, with unbound query diagnostics.
+- Opt-in literal and shared-constant SQLite declarations, with unbound query diagnostics.
 - Python route source obligations, OpenAPI JSON operations, and Zoho Creator export discovery.
 - Required/forbidden fact-state planning with explicit blocked transitions.
 - Consumer execution commands with fresh run nonces and source/model/plan hashes.
@@ -229,6 +228,15 @@ It reads Python/SQL tokens without importing or running the application. Comment
 and string contents cannot create table declarations. Declaration records carry
 file/line evidence and `declaration_kind = "sqlite_literal_ddl"`; duplicate table
 names retain their first declaration (an existing ORM declaration takes priority).
+
+A direct module-level string assignment or annotated string assignment can also
+supply the SQL argument. These declarations carry `sqlite_constant_ddl` and their
+calls retain `constant_sql_unbound` diagnostics. Resolution requires one binding
+with no reassignment, deletion, import or lexical shadow anywhere in that module.
+Even shadowing in an unrelated function leaves the name unresolved. Conditional
+initialization, aliases, imported constants, string computation and SQL wrappers
+remain outside this conservative subset. This is static lexical resolution, not
+proof that runtime monkeypatching or dynamic code cannot replace a value.
 
 Opting in asserts these SQL-shaped method calls are relevant to the target; this
 pass does not infer the receiver's runtime type. It deliberately creates no CRUD

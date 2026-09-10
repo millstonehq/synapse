@@ -86,7 +86,51 @@ def tables(sql: str) -> list[str]:
     return out
 
 
-def inspect_call(node: ast.Call) -> tuple[list[str], str] | None:
+def constant_strings(tree: ast.Module) -> dict[str, str]:
+    """Resolve direct module string assignments with no competing lexical binding.
+
+    This intentionally rejects a name shadowed anywhere in the module, including
+    an unrelated function: absence is preferable to binding SQL to the wrong
+    value. Imports, aliases, conditional initialization and computed expressions
+    remain explicit diagnostics. No target code is imported or evaluated.
+    """
+    candidates: dict[str, str] = {}
+    for statement in tree.body:
+        target = (
+            statement.targets[0]
+            if isinstance(statement, ast.Assign) and len(statement.targets) == 1
+            else statement.target if isinstance(statement, ast.AnnAssign) else None
+        )
+        value = getattr(statement, "value", None)
+        if (isinstance(target, ast.Name) and isinstance(value, ast.Constant)
+                and isinstance(value.value, str)):
+            candidates[target.id] = value.value
+    writes: dict[str, int] = {}
+    forbidden = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            writes[node.id] = writes.get(node.id, 0) + 1
+        elif isinstance(node, ast.arg):
+            forbidden.add(node.arg)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            forbidden.add(node.name)
+        elif isinstance(node, ast.Import):
+            forbidden.update(alias.asname or alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            if any(alias.name == "*" for alias in node.names):
+                return {}
+            forbidden.update(alias.asname or alias.name for alias in node.names)
+        elif isinstance(node, (ast.ExceptHandler, ast.MatchAs, ast.MatchStar)) and node.name:
+            forbidden.add(node.name)
+        elif isinstance(node, ast.MatchMapping) and node.rest:
+            forbidden.add(node.rest)
+    return {name: value for name, value in candidates.items()
+            if writes.get(name) == 1 and name not in forbidden}
+
+
+def inspect_call(
+    node: ast.Call, constants: dict[str, str] | None = None,
+) -> tuple[list[str], str] | None:
     if not isinstance(node.func, ast.Attribute) or node.func.attr not in {
         "execute", "executemany", "executescript",
     }:
@@ -96,4 +140,6 @@ def inspect_call(node: ast.Call) -> tuple[list[str], str] | None:
     )
     if isinstance(sql, ast.Constant) and isinstance(sql.value, str):
         return tables(sql.value), "literal_sql_unbound"
+    if isinstance(sql, ast.Name) and constants is not None and sql.id in constants:
+        return tables(constants[sql.id]), "constant_sql_unbound"
     return [], "computed_sql_or_expression"
