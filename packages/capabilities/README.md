@@ -54,6 +54,41 @@ legacy `orphan_tests` report key means a test observed an undeclared entity; one
 inventory cannot prove that the entity was deleted. Do not infer historical
 removal from that label or treat an accounted gap as a demonstrated business outcome.
 
+### Optional SCIP resolver (`--resolver scip`)
+
+`capcov discover` resolves its call graph with a stdlib-only AST pass by default.
+`--resolver scip` sources that graph from a SCIP indexer instead — type-aware,
+cross-file and multi-language, which recovers call chains (and so entity
+bindings) the AST pass cannot follow across module and interface boundaries:
+
+```sh
+capcov discover --target . --resolver scip --out capabilities.json
+```
+
+This is a hybrid, not a replacement. The AST pass still runs and stays the
+enumerator of blind spots (`getattr`/`eval`/dynamic import) and the fallback,
+because SCIP is a black box about its own gaps: it reports the edges it resolved
+and says nothing about the sites it could not. capcov recovers that silence by
+subtraction, so the artifact carries **both** halves — `scip_resolved_edges` and
+the `scip_residue` of call sites SCIP left unresolved, each named with a file and
+a line (an untyped `session.add(job)`, a computed `getattr`). Coverage therefore
+reports resolved-by-SCIP plus unresolved-enumerated, never a bare number, and the
+"name unresolved, do not drop" property holds through the SCIP path. These fields
+flow through `reconcile` into `coverage.json` alongside the existing cells.
+
+The resolver depends on **external command-line tools**, not Python packages, so
+it is opt-in and there is no pip extra for it. `capcov` and its non-SCIP tests
+run with none of them installed; `--resolver scip` fails with a named, actionable
+error when a tool is absent. Install, per target language:
+
+- a SCIP indexer — Python: `npm install -g @sourcegraph/scip-python`; Go:
+  `go install github.com/scip-code/scip-go/cmd/scip-go@latest`;
+- the `scip` CLI (reads an index as JSON) —
+  `git clone --depth 1 https://github.com/sourcegraph/scip.git && cd scip && go build -o scip ./cmd/scip`.
+
+capcov finds the indexer on `PATH` and locates the `scip` CLI via `$SCIP_CLI`, a
+binary dropped at `src/capcov/scip/vendor/scip`, or `PATH`.
+
 Flow coverage retains the source obligation denominator and checks observed
 outcomes against a reviewed behavior model:
 

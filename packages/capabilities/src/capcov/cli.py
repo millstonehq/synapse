@@ -82,6 +82,18 @@ def cmd_discover(args: argparse.Namespace) -> int:
     adapter = load_adapter(adapter_name)
 
     raw = adapter.discover(source_dir, target, name_match=not args.no_name_match)
+    # Optional hybrid: rent SCIP as the resolver for the call graph, keep the AST
+    # pass as everything else (entities, surfaces, the enumerated blind spots).
+    # The AST adapter always runs first -- it is the fallback and the enumerator;
+    # SCIP only re-sources `_calls` and adds its resolved-edges + residue.
+    if getattr(args, "resolver", "ast") == "scip":
+        from .scip import resolve as scip_resolve
+
+        language = getattr(adapter, "LANGUAGE", "python")
+        try:
+            raw = scip_resolve.resolve(source_dir, raw, language=language)
+        except scip_resolve.ScipToolsUnavailable as exc:
+            raise SystemExit(f"capcov discover --resolver scip: {exc}")
     direct, calls, ops = raw["_direct"], raw["_calls"], raw["_ops"]
 
     roots = [s["handler"] for s in raw["surfaces"]]
@@ -132,6 +144,16 @@ def cmd_discover(args: argparse.Namespace) -> int:
         "residue_summary": raw["residue_summary"],
         "unbound_entry_points": missing_roots,
     }
+    # When SCIP resolved the call graph, carry both halves of the hybrid into the
+    # artifact: the edges SCIP resolved AND the residue it stayed silent about,
+    # so coverage never reports a bare number -- resolved-by-SCIP plus
+    # unresolved-enumerated, each named with a file and a line.
+    if raw.get("resolver") == "scip":
+        doc["resolver"] = "scip"
+        doc["scip_resolved_edges"] = raw["scip_resolved_edges"]
+        doc["scip_entities"] = raw["scip_entities"]
+        doc["scip_residue"] = raw["scip_residue"]
+        doc["scip_residue_summary"] = raw["scip_residue_summary"]
     rc = _emit(Path(args.out), dict(doc), args.check)
     if not args.quiet:
         bound_entities = {c["entity"] for c in capabilities}
@@ -152,6 +174,14 @@ def cmd_discover(args: argparse.Namespace) -> int:
             print(
                 "capcov discover: entry points with no analysed body: "
                 + ", ".join(missing_roots)
+            )
+        if raw.get("resolver") == "scip":
+            rs = raw["scip_residue_summary"]
+            print(
+                f"capcov discover: resolver scip -- {rs['scip_resolved_edges']} "
+                f"edges resolved ({rs['scip_rooted_edges']} rooted in-project); "
+                f"{rs['unresolved_enumerated']} of {rs['ast_call_sites']} call "
+                "sites enumerated as unresolved (named, not dropped)"
             )
     return rc
 
@@ -210,6 +240,13 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
         **result,
         "blind_spots": capabilities.get("blind_spots", []),
     }
+    # Carry the hybrid's SCIP evidence through the reconcile so coverage reports
+    # resolved-by-SCIP AND unresolved-enumerated -- both survive to the gate and
+    # the report, and neither is collapsed into a single coverage figure. Absent
+    # for an AST-resolved run, so this is backward compatible.
+    for key in ("resolver", "scip_resolved_edges", "scip_residue", "scip_residue_summary"):
+        if key in capabilities:
+            doc[key] = capabilities[key]
     rc = _emit(Path(args.out), dict(doc), args.check)
     if not args.quiet:
         s = result["summary"]
@@ -217,6 +254,13 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
             "capcov reconcile: "
             + ", ".join(f"{k} {s[k]}" for k in reconcile_mod.CELLS)
         )
+        rs = capabilities.get("scip_residue_summary")
+        if rs is not None:
+            print(
+                f"capcov reconcile: scip resolver -- {rs['scip_resolved_edges']} "
+                f"edges resolved, {rs['unresolved_enumerated']} call sites "
+                "unresolved-enumerated (each named in scip_residue)"
+            )
     return rc
 
 
@@ -297,6 +341,14 @@ def main(argv: list[str] | None = None) -> int:
         "--no-name-match",
         action="store_true",
         help="resolve calls through imports only; report every name-match as residue",
+    )
+    d.add_argument(
+        "--resolver",
+        choices=("ast", "scip"),
+        default="ast",
+        help="call-graph resolver: 'ast' (default, hand-rolled, stdlib-only) or "
+        "'scip' (type-aware cross-file; needs a SCIP indexer + the scip CLI). "
+        "The AST pass runs either way and stays the blind-spot enumerator.",
     )
     d.set_defaults(func=cmd_discover)
 
