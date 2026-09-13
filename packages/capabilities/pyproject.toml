@@ -20,6 +20,25 @@ Documentation = "https://github.com/millstonehq/synapse/tree/main/packages/capab
 # The probe is the half that needs the TARGET's libraries -- sqlalchemy and a
 # web framework -- and it imports them lazily, inside the install functions, so
 # `capcov gate` never pays for them.
+#
+# The optional SCIP resolver (`capcov discover --resolver scip`) is type-aware,
+# cross-file and multi-language where the default AST resolver is none of those.
+# Its dependencies are EXTERNAL command-line tools, not Python packages, so there
+# is no pip extra that installs them -- an empty marker would only lie about what
+# `pip install .[scip]` gives you. Install the CLIs directly and capcov finds
+# them on PATH (the `scip` CLI is also located via $SCIP_CLI or a binary dropped
+# at src/capcov/scip/vendor/scip):
+#
+#   * a SCIP indexer for the target's language:
+#       python -> npm install -g @sourcegraph/scip-python
+#       go     -> go install github.com/scip-code/scip-go/cmd/scip-go@latest
+#   * the scip CLI (reads an index as JSON):
+#       git clone --depth 1 https://github.com/sourcegraph/scip.git
+#       cd scip && go build -o scip ./cmd/scip
+#
+# capcov.scip imports with none of these present; only `--resolver scip` needs
+# them, and it fails with a named, actionable error when they are absent. The
+# resolver's own tests skip cleanly wherever the tooling is not installed.
 
 [project.optional-dependencies]
 probe-python = ["sqlalchemy>=2.0", "pytest>=8"]

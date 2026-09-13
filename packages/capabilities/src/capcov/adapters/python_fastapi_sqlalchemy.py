@@ -33,22 +33,21 @@ from pathlib import Path
 
 from . import sqlite_literals
 
+# The dynamic-access blind-spot vocabulary lives in the scip package -- it is the
+# half a static resolver cannot see through, and it is the same set no matter
+# which adapter reads it. Importing it back (rather than keeping a copy) is what
+# guarantees the enumerator and this adapter never disagree about what is blind.
+from ..scip.blindspots import DYNAMIC_BLIND_CALLS as BLIND_SPOT_CALLS
+from ..scip.blindspots import constant_name_arg
+
 NAME = "python-fastapi-sqlalchemy"
 
-HTTP_METHODS = ("get", "post", "put", "patch", "delete", "head", "options", "trace")
+# The SCIP indexer language for `--resolver scip`. This adapter reads Python, so
+# the optional SCIP path indexes with scip-python; the resolver seam reads this
+# to pick the indexer.
+LANGUAGE = "python"
 
-BLIND_SPOT_CALLS = {
-    "getattr": "attribute_by_name",
-    "setattr": "attribute_by_name",
-    "delattr": "attribute_by_name",
-    "vars": "namespace_lookup",
-    "globals": "namespace_lookup",
-    "locals": "namespace_lookup",
-    "eval": "dynamic_eval",
-    "exec": "dynamic_eval",
-    "__import__": "dynamic_import",
-    "import_module": "dynamic_import",
-}
+HTTP_METHODS = ("get", "post", "put", "patch", "delete", "head", "options", "trace")
 
 # Operation inference. Only what is structurally decidable is claimed here; the
 # probe reads the SQL verb and knows exactly, so static guessing at operations
@@ -398,7 +397,7 @@ class _FunctionWalker(ast.NodeVisitor):
             # an analyser can read it. Only a computed name hides an access, so
             # the literal form is recorded as resolved rather than inflating the
             # blind-spot count with sites nobody needs to review.
-            literal = _constant_second_arg(node)
+            literal = constant_name_arg(node)
             self.blind.append(
                 {
                     "kind": BLIND_SPOT_CALLS[callee_name],
@@ -475,12 +474,6 @@ class _FunctionWalker(ast.NodeVisitor):
             if base and ":" not in base:  # a module
                 return f"{base}:{fn.attr}"
         return None
-
-
-def _constant_second_arg(node: ast.Call) -> str | None:
-    if len(node.args) > 1 and isinstance(node.args[1], ast.Constant):
-        return node.args[1].value if isinstance(node.args[1].value, str) else None
-    return None
 
 
 def _render(node: ast.expr) -> str:
