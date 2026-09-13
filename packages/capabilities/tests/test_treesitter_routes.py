@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -42,6 +43,14 @@ PY_QUERY = (
     "((call function: (attribute attribute: (identifier) @fn (#eq? @fn \"add_url_rule\")) "
     "arguments: (argument_list . (string) @path)))"
 )
+# Captures the decorated handler function as @handler so its body is walked for
+# branch and exception candidates.
+PY_HANDLER_QUERY = (
+    "(decorated_definition "
+    "(decorator (call function: (attribute attribute: (identifier) @method) "
+    "arguments: (argument_list (string) @path))) "
+    "definition: (function_definition) @handler)"
+)
 
 GO_SRC = """package main
 
@@ -65,6 +74,20 @@ PY_SRC = """from flask import Flask
 
 app = Flask(__name__)
 app.add_url_rule("/legacy", "legacy", legacy_view)
+"""
+
+# One if/else and one try/except in the handler body -- the branch and
+# exception candidates the handler-subtree walk must find.
+PY_HANDLER_SRC = """@router.post("/edit")
+def edit():
+    if authenticated:
+        return save()
+    else:
+        return other()
+    try:
+        reject()
+    except Error:
+        return False
 """
 
 
@@ -157,16 +180,18 @@ class TreesitterRoutesTests(unittest.TestCase):
         self.assertEqual(by_id["http:/health"]["source"]["file"], "server.js")
         self.assertEqual(by_id["http:/legacy"]["source"]["file"], "legacy.py")
 
-    def test_python_form_the_ast_adapter_cannot_see(self) -> None:
-        # add_url_rule is a bare call, not a decorator: python-routes misses it,
-        # tree-sitter catches it.
+    def test_bare_call_route_form_is_discovered(self) -> None:
+        # add_url_rule is a bare call, not a decorator: a decorator-only reader
+        # would miss it, while a config query capturing the call catches it.
         inventory = self._discover(
             {"legacy.py": PY_SRC},
             [{"kind": "treesitter-routes", "language": "python", "files": ["legacy.py"], "query": PY_QUERY}],
         )
+        # Only the route surface, never the endpoint-name string that follows it.
+        surfaces = {o["id"] for o in inventory["obligations"] if o["kind"] == "surface"}
+        self.assertEqual(surfaces, {"http:/legacy"})
         ids = {o["id"] for o in inventory["obligations"]}
-        # Only the route, never the endpoint-name string that follows it.
-        self.assertEqual(ids, {"http:/legacy"})
+        self.assertNotIn("http:legacy", ids)
 
     def test_predicate_excludes_a_sibling_call(self) -> None:
         src = 'package main\nfunc f() {\n\thandle("POST /ask", a)\n\troute("POST /skip", b)\n}\n'
@@ -216,6 +241,86 @@ class TreesitterRoutesTests(unittest.TestCase):
         )
         by_id = {o["id"]: o for o in inventory["obligations"]}
         self.assertEqual(by_id["http:/ask"]["handler"], "myHandler")
+
+    def _candidate_shapes(self, inventory: dict, surface: str) -> set[tuple[str, str]]:
+        """Branch/exception obligations reduced to (kind, structure) -- the sig
+        digest and every line number normalised away so only the id SHAPE remains."""
+        shapes = set()
+        for obligation in inventory["obligations"]:
+            if obligation["kind"] not in {"branch-candidate", "exception-candidate"}:
+                continue
+            self.assertEqual(obligation["surface"], surface)
+            self.assertTrue(obligation["id"].startswith(surface + ":"))
+            suffix = obligation["id"][len(surface) :]
+            suffix = re.sub(r"[0-9a-f]{12}", "H", suffix)
+            suffix = re.sub(r":\d+", ":L", suffix)
+            shapes.add((obligation["kind"], suffix))
+        return shapes
+
+    def test_handler_branches_and_exceptions_are_emitted(self) -> None:
+        treesitter = self._discover(
+            {"app.py": PY_HANDLER_SRC},
+            [
+                {
+                    "kind": "treesitter-routes",
+                    "language": "python",
+                    "files": ["app.py"],
+                    "query": PY_HANDLER_QUERY,
+                }
+            ],
+        )
+        kinds = [o["kind"] for o in treesitter["obligations"]]
+        # No obligation-KIND regression: from one Python decorator fixture with an
+        # if/else and a try/except, the generic adapter emits every kind the retired
+        # per-language Python route adapter did and no other -- surface,
+        # branch-candidate, exception-candidate, and the boundary:route:* boundaries
+        # (kind unresolved).
+        self.assertEqual(
+            set(kinds),
+            {"surface", "branch-candidate", "exception-candidate", "unresolved"},
+        )
+        by_kind = {o["id"]: o["kind"] for o in treesitter["obligations"]}
+        self.assertEqual(by_kind["http:/edit"], "surface")
+        self.assertEqual(kinds.count("branch-candidate"), 2)
+        self.assertEqual(kinds.count("exception-candidate"), 1)
+        # Both outcomes of the one branch, and the one exception handler, each
+        # reduced to (kind, id shape).
+        ts_shapes = self._candidate_shapes(treesitter, "http:/edit")
+        self.assertEqual(
+            ts_shapes,
+            {
+                ("branch-candidate", ":branch:H:L:true"),
+                ("branch-candidate", ":branch:H:L:false"),
+                ("exception-candidate", ":except:L"),
+            },
+        )
+        # The adapter-agnostic boundaries are present, once each, not language-keyed.
+        ids = {o["id"] for o in treesitter["obligations"]}
+        for category in (
+            "called-function-branches",
+            "mounted-route-confirmation",
+            "roles-and-configurations",
+            "external-effects",
+        ):
+            self.assertIn(f"boundary:route:{category}", ids)
+
+    def test_dynamic_path_capture_is_unresolved(self) -> None:
+        # The query captures the path arg broadly; a non-literal path yields an
+        # unresolved dynamic-route obligation rather than a surface.
+        src = 'package main\nfunc f() {\n\thandle("POST /ask", a)\n\thandle(pathVar, b)\n}\n'
+        query = (
+            "((call_expression function: (identifier) @fn (#eq? @fn \"handle\") "
+            "arguments: (argument_list . (_) @path)))"
+        )
+        inventory = self._discover(
+            {"svc.go": src},
+            [{"kind": "treesitter-routes", "language": "go", "files": ["svc.go"], "query": query}],
+        )
+        kinds = {o["id"]: o["kind"] for o in inventory["obligations"]}
+        self.assertEqual(kinds.get("http:/ask"), "surface")
+        dynamic = [o for o in inventory["obligations"] if o["id"].endswith(":dynamic-route")]
+        self.assertEqual(len(dynamic), 1)
+        self.assertEqual(dynamic[0]["kind"], "unresolved")
 
     def test_dedup_keeps_the_first_location(self) -> None:
         src = 'package main\nfunc f() {\n\thandle("POST /ask", a)\n\thandle("POST /ask", b)\n}\n'

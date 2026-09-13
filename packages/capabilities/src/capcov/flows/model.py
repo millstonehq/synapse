@@ -172,7 +172,7 @@ def reconcile(inventory: dict, model: dict, execution_plan: dict, run: dict | No
         }
         mounted = set(run.get("mounted_surfaces", []))
         if static_http and mounted == static_http and run.get("status") == "passed":
-            resolved_boundaries.add("boundary:python:mounted-route-confirmation")
+            resolved_boundaries.add("boundary:route:mounted-route-confirmation")
         elif mounted:
             for name in sorted(mounted - static_http):
                 failures.append(f"runtime-only surface: {name}")

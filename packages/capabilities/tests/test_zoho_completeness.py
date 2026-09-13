@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 import tempfile
 import unittest
@@ -11,6 +12,20 @@ from capcov.flows.catalog import build_catalog
 from capcov.flows.cli import main
 from capcov.flows.discovery import discover
 from capcov.flows.zoho import Export, derive
+
+_HAVE_TS = (
+    importlib.util.find_spec("tree_sitter") is not None
+    and importlib.util.find_spec("tree_sitter_language_pack") is not None
+)
+
+# A decorated route: the decorator call captures @path and the decorated
+# function is captured as @handler.
+PY_HANDLER_QUERY = (
+    "(decorated_definition "
+    "(decorator (call function: (attribute attribute: (identifier) @method) "
+    "arguments: (argument_list (string) @path))) "
+    "definition: (function_definition) @handler)"
+)
 
 SOURCE = """application "Fixture"
 {
@@ -337,6 +352,7 @@ class ZohoCompletenessTests(unittest.TestCase):
         # Recursion in the fixture must terminate without a guessed depth cap.
         self.assertTrue(catalog["memberships"]["zoho:function:PEOPLE.cycle"])
 
+    @unittest.skipUnless(_HAVE_TS, "treesitter extra not installed")
     def test_source_set_detects_new_unknown_files(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -344,7 +360,14 @@ class ZohoCompletenessTests(unittest.TestCase):
             config = {
                 "scope": "fixture",
                 "root": ".",
-                "adapters": [{"kind": "python-routes", "globs": ["*.py"]}],
+                "adapters": [
+                    {
+                        "kind": "treesitter-routes",
+                        "language": "python",
+                        "globs": ["*.py"],
+                        "query": PY_HANDLER_QUERY,
+                    }
+                ],
                 "source_sets": [
                     {
                         "directory": ".",

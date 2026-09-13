@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 import tempfile
 import unittest
@@ -10,6 +11,21 @@ from unittest.mock import patch
 from capcov.flows.cli import main
 from capcov.flows.discovery import discover
 from capcov.flows.model import digest, plan, reconcile
+
+_HAVE_TS = (
+    importlib.util.find_spec("tree_sitter") is not None
+    and importlib.util.find_spec("tree_sitter_language_pack") is not None
+)
+
+# A decorated route: the decorator call captures @path and the function it
+# decorates is captured as @handler, so its body is walked for branch and
+# exception candidates.
+PY_HANDLER_QUERY = (
+    "(decorated_definition "
+    "(decorator (call function: (attribute attribute: (identifier) @method) "
+    "arguments: (argument_list (string) @path))) "
+    "definition: (function_definition) @handler)"
+)
 
 
 def fixture() -> tuple[dict, dict]:
@@ -269,6 +285,7 @@ class FlowTests(unittest.TestCase):
         run["scenarios"].pop()
         self.assertFalse(reconcile(inventory, model, execution_plan, run)["complete"])
 
+    @unittest.skipUnless(_HAVE_TS, "treesitter extra not installed")
     def test_discovery_retains_branches_exceptions_and_boundaries(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -285,7 +302,12 @@ class FlowTests(unittest.TestCase):
                         "scope": "fixture",
                         "root": ".",
                         "adapters": [
-                            {"kind": "python-routes", "files": ["routes.py"], "prefix": "/portal"},
+                            {
+                                "kind": "treesitter-routes",
+                                "language": "python",
+                                "files": ["routes.py"],
+                                "query": PY_HANDLER_QUERY,
+                            },
                         ],
                     }
                 )

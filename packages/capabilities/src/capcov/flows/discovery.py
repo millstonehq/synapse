@@ -4,7 +4,6 @@ Locations and hashes are emitted; source expressions (potential secrets) are not
 Structural candidates do not claim semantic outcomes or runtime reachability.
 
 Adapters:
-  python-routes      decorator routes, read with the stdlib `ast`.
   zoho-export        a Zoho Deluge export.
   treesitter-routes  routes in any tree-sitter-supported language. Needs the
       optional `treesitter` extra (tree-sitter + tree-sitter-language-pack),
@@ -12,15 +11,20 @@ Adapters:
       calls are routes lives in a config-supplied tree-sitter query, not here,
       so one adapter serves Go, JavaScript, Python and the rest. It sees literal
       string arguments in the nodes the query matches: a path built by
-      concatenation or held in a variable is invisible -- the same precision
-      floor as python-routes' literal decorator arguments -- but, unlike a
-      regex, it is comment- and syntax-aware (a commented-out call is a comment
-      node and never matches).
+      concatenation or held in a variable is invisible, and emits an unresolved
+      dynamic-route obligation -- but, unlike a regex, it is comment- and
+      syntax-aware (a commented-out call is a comment node and never matches).
+      When the query also captures the enclosing handler as @handler, its
+      subtree is walked for branch-candidate (per branch node, both outcomes)
+      and exception-candidate (per exception handler) obligations; the branch
+      and exception node types are config-driven (branch_nodes, exception_nodes)
+      with per-language defaults. Four adapter-agnostic
+      boundary:route:<category> obligations mark what static reading cannot
+      resolve.
 """
 
 from __future__ import annotations
 
-import ast
 import fnmatch
 import hashlib
 import json
@@ -118,6 +122,48 @@ def _route_from_literal(text: str, strip_suffixes: list[str]) -> tuple[str, str 
     return text, method
 
 
+# One if/for/except is a structural obligation until a scenario links it; the
+# node types that count as a branch or an exception handler are language-specific,
+# so the config may override them and these are the sensible per-language defaults.
+_DEFAULT_BRANCH_NODES = ("if_statement",)
+_DEFAULT_EXCEPTION_NODES = {
+    "python": ("except_clause",),
+    "javascript": ("catch_clause",),
+    "typescript": ("catch_clause",),
+    "tsx": ("catch_clause",),
+    "go": ("defer_statement",),
+}
+
+
+def _is_string_literal(node: object) -> bool:
+    """A path arg is resolvable only if it is a literal string; an identifier or a
+    concatenation is unresolvable and yields a dynamic-route obligation instead."""
+    if "string" in node.type:  # type: ignore[attr-defined]
+        return True
+    text = node.text.decode()  # type: ignore[attr-defined]
+    return bool(text) and text[0] in _ROUTE_QUOTES
+
+
+def _handler_name(node: object) -> str | None:
+    """A clean identifier for the handler, never the function's source text (a
+    body may hold a secret; the docstring's promise is locations and hashes only)."""
+    if node.child_count == 0:  # type: ignore[attr-defined]
+        return _route_from_literal(node.text.decode(), [])[0] or None  # type: ignore[attr-defined]
+    name = node.child_by_field_name("name")  # type: ignore[attr-defined]
+    if name is not None and name.child_count == 0:
+        return name.text.decode()
+    return None
+
+
+def _descendants(node: object):
+    stack = [node]
+    while stack:
+        current = stack.pop()
+        yield current
+        for index in range(current.child_count):  # type: ignore[attr-defined]
+            stack.append(current.child(index))  # type: ignore[attr-defined]
+
+
 def discover(config_path: Path) -> dict:
     config = json.loads(config_path.read_text())
     root = (config_path.parent / config["root"]).resolve()
@@ -126,6 +172,7 @@ def discover(config_path: Path) -> dict:
     graphs = []
     source_census = []
     analysed_files: set[str] = set()
+    treesitter_boundaries_added = False
 
     def source(relative: str) -> Path:
         path = (root / relative).resolve()
@@ -174,74 +221,7 @@ def discover(config_path: Path) -> dict:
 
     for adapter in config["adapters"]:
         kind = adapter["kind"]
-        if kind == "python-routes":
-            files = set(adapter.get("files", []))
-            for pattern in adapter.get("globs", []):
-                discovered = {
-                    p.relative_to(root).as_posix()
-                    for p in root.glob(pattern)
-                    if p.is_file() and "__pycache__" not in p.parts
-                }
-                if not discovered:
-                    raise ValueError(f"empty Python source glob: {pattern}")
-                files.update(discovered)
-            route_count = 0
-            for relative in sorted(files):
-                tree = ast.parse(source(relative).read_text())
-                analysed_files.add(relative)
-                for node in ast.walk(tree):
-                    if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
-                        continue
-                    for dec in node.decorator_list:
-                        if not (
-                            isinstance(dec, ast.Call)
-                            and isinstance(dec.func, ast.Attribute)
-                            and dec.func.attr in {"get", "post", "put", "patch", "delete"}
-                        ):
-                            continue
-                        if not dec.args or not isinstance(dec.args[0], ast.Constant):
-                            add(
-                                f"python:{relative}:{node.name}:dynamic-route",
-                                "unresolved",
-                                relative,
-                                node.lineno,
-                            )
-                            continue
-                        route = adapter.get("prefix", "") + str(dec.args[0].value)
-                        name = f"http:{dec.func.attr.upper()} {route}"
-                        add(name, "surface", relative, dec.lineno, handler=node.name)
-                        route_count += 1
-                        # Both outcomes of an if, and each exception handler, are
-                        # obligations until linked to a meaningful scenario.
-                        for child in ast.walk(node):
-                            if isinstance(child, ast.If):
-                                signature = digest(ast.dump(child.test))[:12]
-                                for outcome in ("true", "false"):
-                                    add(
-                                        f"{name}:branch:{signature}:{child.lineno}:{outcome}",
-                                        "branch-candidate",
-                                        relative,
-                                        child.lineno,
-                                        surface=name,
-                                    )
-                            elif isinstance(child, ast.ExceptHandler):
-                                add(
-                                    f"{name}:except:{child.lineno}",
-                                    "exception-candidate",
-                                    relative,
-                                    child.lineno,
-                                    surface=name,
-                                )
-            if not route_count:
-                raise ValueError("no routes discovered in the configured Python sources")
-            for category in (
-                "called-function-branches",
-                "mounted-route-confirmation",
-                "roles-and-configurations",
-                "external-effects",
-            ):
-                add(f"boundary:python:{category}", "unresolved", config_path.name, 1)
-        elif kind == "zoho-export":
+        if kind == "zoho-export":
             relative = adapter["export"]
             export = source(relative)
             graph = derive_zoho(export.read_text(), relative)
@@ -283,6 +263,12 @@ def discover(config_path: Path) -> dict:
             parser = ts.Parser(language)
             id_prefix = adapter.get("id_prefix", "http:")
             strip_suffixes = adapter.get("strip_suffixes", ["{$}"])
+            branch_nodes = set(adapter.get("branch_nodes", _DEFAULT_BRANCH_NODES))
+            exception_nodes = set(
+                adapter.get(
+                    "exception_nodes", _DEFAULT_EXCEPTION_NODES.get(adapter["language"], ())
+                )
+            )
             files = set(adapter.get("files", []))
             for pattern in adapter.get("globs", []):
                 discovered = {
@@ -299,15 +285,27 @@ def discover(config_path: Path) -> dict:
                 for _pattern, captures in ts.QueryCursor(query).matches(tree.root_node):
                     if "path" not in captures or not _ts_satisfied(predicates, captures):
                         continue
-                    method = handler = None
+                    method = None
                     if captures.get("method"):
                         method = _route_from_literal(captures["method"][0].text.decode(), [])[0]
                         method = method.upper()
-                    if captures.get("handler"):
-                        handler = _route_from_literal(captures["handler"][0].text.decode(), [])[0]
+                    # The query may capture the enclosing handler node; walking its
+                    # subtree yields the branch and exception candidates below.
+                    handler_node = captures["handler"][0] if captures.get("handler") else None
                     for node in captures["path"]:
-                        candidates.append((node.start_byte, node, method, handler))
-                for _start, node, method, handler in sorted(candidates, key=lambda c: c[0]):
+                        candidates.append((node.start_byte, node, method, handler_node))
+                for _start, node, method, handler_node in sorted(candidates, key=lambda c: c[0]):
+                    line = node.start_point[0] + 1
+                    if not _is_string_literal(node):
+                        # The call is a route but the path is not a literal, so it
+                        # yields an unresolved dynamic-route obligation.
+                        add(
+                            f"{relative}:{line}:{node.start_point[1]}:dynamic-route",
+                            "unresolved",
+                            relative,
+                            line,
+                        )
+                        continue
                     route, verb = _route_from_literal(node.text.decode(), strip_suffixes)
                     name = id_prefix + route
                     if name in seen:
@@ -316,9 +314,47 @@ def discover(config_path: Path) -> dict:
                     extra: dict[str, object] = {}
                     if method or verb:
                         extra["method"] = method or verb
+                    handler = _handler_name(handler_node) if handler_node is not None else None
                     if handler:
                         extra["handler"] = handler
-                    add(name, "surface", relative, node.start_point[0] + 1, **extra)
+                    add(name, "surface", relative, line, **extra)
+                    if handler_node is None:
+                        continue
+                    # Both outcomes of a branch, and each exception handler, are
+                    # obligations until linked to a scenario.
+                    for child in _descendants(handler_node):
+                        if child.type in branch_nodes:
+                            condition = child.child_by_field_name("condition")
+                            signature = digest((condition or child).text.decode())[:12]
+                            branch_line = child.start_point[0] + 1
+                            for outcome in ("true", "false"):
+                                add(
+                                    f"{name}:branch:{signature}:{branch_line}:{outcome}",
+                                    "branch-candidate",
+                                    relative,
+                                    branch_line,
+                                    surface=name,
+                                )
+                        elif child.type in exception_nodes:
+                            exc_line = child.start_point[0] + 1
+                            add(
+                                f"{name}:except:{exc_line}",
+                                "exception-candidate",
+                                relative,
+                                exc_line,
+                                surface=name,
+                            )
+            if not treesitter_boundaries_added:
+                # Adapter-agnostic boundaries: the engine no longer hard-codes a
+                # language. Emitted once even across several treesitter adapters.
+                for category in (
+                    "called-function-branches",
+                    "mounted-route-confirmation",
+                    "roles-and-configurations",
+                    "external-effects",
+                ):
+                    add(f"boundary:route:{category}", "unresolved", config_path.name, 1)
+                treesitter_boundaries_added = True
         else:
             raise ValueError(f"unsupported discovery adapter: {kind}")
     for entry in source_census:
