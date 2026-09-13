@@ -136,6 +136,23 @@ obligations. The four Python discovery limits apply once to the combined
 inventory; mounted-route confirmation must account for every discovered mount.
 Overlapping declarations of the same HTTP surface remain an error.
 
+When different source handlers intentionally declare the same method/path (for
+example a replaced legacy router), assign their adapters distinct
+`source_namespace` identifiers. This preserves separate surface and branch IDs;
+surface records retain `http_surface` for comparison with runtime registrations.
+It does not establish which handler is mounted or qualify an omitted handler.
+Consumers must reconcile source ownership as well as method/path, and retain
+unresolved declarations. Duplicate IDs within a namespace still fail discovery.
+
+Explicit `add_api_route` calls are also inventoried when the path and method
+list are literal and the endpoint is an unshadowed module-defined function.
+Omitted methods mean GET. Each declared method retains the callback's branch and
+exception candidates and the registration's source location. Dynamic paths,
+methods, imported/attribute callbacks, shadowed names and expanded keyword
+arguments remain unresolved obligations; no application code is executed.
+This is a conservative source rule, not proof of runtime mounting or framework
+object identity. Runtime reconciliation remains required.
+
 ## OpenAPI operation inventory
 
 An HTTP service in any language can supply a local OpenAPI JSON document:
@@ -176,15 +193,14 @@ execution provenance in its local recipe.
 
 Keep contract and source inventories separate when comparing them: overlapping
 HTTP surfaces still fail if configured in one inventory. Agreement does not prove
-completeness, and differences need investigation. In a local Storekeeper probe,
-the contract exposed 60 operations versus 25 in the selected source-flow scope:
-all 25 matched, while 35 additional operations mostly belonged to inherited
-administration and portal/auth code. None received coverage merely from discovery.
+completeness, and differences need investigation. A contract may expose inherited
+administration and authentication operations outside the selected source-flow
+scope. Those additional operations receive no coverage merely from discovery.
 
 ## Current support
 
 - Python/FastAPI/SQLAlchemy entity discovery and runtime probes.
-- Opt-in literal SQLite table declarations, with unbound query diagnostics.
+- Opt-in literal and shared-constant SQLite declarations, with unbound query diagnostics.
 - Python route source obligations, OpenAPI JSON operations, and Zoho Creator export discovery.
 - Required/forbidden fact-state planning with explicit blocked transitions.
 - Consumer execution commands with fresh run nonces and source/model/plan hashes.
@@ -212,6 +228,22 @@ It reads Python/SQL tokens without importing or running the application. Comment
 and string contents cannot create table declarations. Declaration records carry
 file/line evidence and `declaration_kind = "sqlite_literal_ddl"`; duplicate table
 names retain their first declaration (an existing ORM declaration takes priority).
+
+A direct module-level string assignment or annotated string assignment can also
+supply the SQL argument. These declarations carry `sqlite_constant_ddl` and their
+calls retain `constant_sql_unbound` diagnostics. Resolution requires one binding
+with no reassignment, deletion, import or lexical shadow anywhere in that module.
+Even shadowing in an unrelated function leaves the name unresolved. Conditional
+initialization, aliases, imported constants, string computation and SQL wrappers
+remain outside this conservative subset. This is static lexical resolution, not
+proof that runtime monkeypatching or dynamic code cannot replace a value.
+
+Literal module mappings of tuples are also supported when a `for` loop unpacks
+`SCHEMAS.values()` and its first statement passes a string tuple element directly
+to a SQLite execution call. Other reads of the mapping, aliases, mutations,
+shadowing, computed entries, duplicate keys and ambiguous unpacking remain
+unresolved. This pattern also retains `constant_sql_unbound`; no query or route
+binding is inferred from the declaration.
 
 Opting in asserts these SQL-shaped method calls are relevant to the target; this
 pass does not infer the receiver's runtime type. It deliberately creates no CRUD
