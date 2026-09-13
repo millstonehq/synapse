@@ -277,11 +277,16 @@ def main(argv: list[str] | None = None) -> int:
         from .flows.cli import main as flows_main
 
         return flows_main(actual[1:])
+    if actual and actual[0] == "features":
+        from .features.cli import main as features_main
+
+        return features_main(actual[1:])
     parser = argparse.ArgumentParser(prog="capcov", description=__doc__)
     parser.add_argument("--quiet", action="store_true")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("flows", help="source obligations, flow planning, and browser outcome evidence")
     sub.add_parser("outcomes", help="scoped behavior obligations and fresh pytest evidence")
+    sub.add_parser("features", help="FODA feature-model validation, configuration check, coverage rollup")
 
     def common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--target", default=".", help="the project root")
