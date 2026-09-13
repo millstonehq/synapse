@@ -10,6 +10,13 @@ because the distance falls out of it. That distance is two things at once: the
 per-hop convergence history (does this method still find more at 4 hops than at
 3?) and the evidence chain attached to every binding, so a reader can check the
 claim by following the calls rather than trusting the tool.
+
+Reachability is computed over the RESOLVED call edges only. Higher-order and
+virtual dispatch are not decidable from syntax (Shivers 1991, k-CFA; see
+ADR-0001) and ref-derived call graphs are unsound in measured practice (Samhi
+2024), so this closes over the call graph it was GIVEN, not over every path that
+can truly run. The unresolved edges that bound it are named by the adapter rather
+than dropped.
 """
 
 from __future__ import annotations
@@ -42,9 +49,12 @@ def bind(
 
     history[k] is the number of distinct entities bound across ALL roots using
     call chains of at most k hops. history[0] is the direct-reference-only
-    answer. It converges by construction; a history that is still climbing at
-    the last hop means the traversal was truncated, and the caller should say so
-    rather than present the number as final.
+    answer. A stable tail means the fixpoint has closed over the RESOLVED edges
+    -- convergence over the GIVEN call graph, NOT a proof that every
+    truly-reachable entity was found (ref-derived edges are unsound for
+    higher-order and virtual dispatch: Shivers 1991; Samhi 2024, see ADR-0001).
+    A history still climbing at the last hop means the traversal was truncated,
+    and the caller should say so rather than present the number as final.
     """
     per_root: dict[str, dict[str, int]] = {}
     depth = 0

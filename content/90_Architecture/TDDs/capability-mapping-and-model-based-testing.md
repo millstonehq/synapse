@@ -5,10 +5,10 @@ title: Capability Mapping and Model Based Testing
 status: proposed
 owner: cpb
 created: '2026-09-06T00:00:00.000Z'
-updated: '2026-09-06T00:00:00.000Z'
+updated: '2026-09-13T00:00:00.000Z'
 tags: [capabilities, testing, architecture, adapters]
 summary: Optional Synapse extension for mapping implementation evidence into system capabilities, executable journeys, and explicit completeness gaps.
-related_adrs: []
+related_adrs: [ADR-0001]
 ---
 
 ## Summary
@@ -181,3 +181,40 @@ Run discovery read-only against pinned snapshots. Run mutations in declared test
 For the first implementation, artifacts are local files and execution is a foreground command. Clean up only processes/resources started by that run; attach mode leaves the user's application running. CI can invoke the same command without adding a framework service.
 
 Expose separate CI checks for inventory drift, model validation, execution, and completeness. A successful documentation build must never imply successful behavioral testing.
+
+## Literature foundations
+
+The mechanisms in this TDD have lineages in model-based testing, program
+analysis, and software-architecture reconciliation. [[ADR-0001-capcov-literature-foundations|ADR-0001]]
+records the full map, the corrected overclaims, and the resolver decision; this
+section maps each facet of the completeness vector to its source so the design can
+be checked against established practice.
+
+The completeness vector — *source accounted, references resolved, behavior
+modeled, required outcome classes tested, and target parity established* — is not
+one number by construction, and each facet is anchored separately:
+
+| Completeness facet | Anchor | Why |
+| --- | --- | --- |
+| **source accounted** | Livshits et al. 2015 (soundiness); Samhi et al. 2024 | A "soundy" analysis accounts for every scoped file and *names* its unsound corners rather than dropping them; measured call-graph studies show why silent omission is the default failure. This is the discipline behind the adapter's enumerated blind spots. |
+| **references resolved** | Néron et al. 2015; Creager & van Antwerpen 2023; Shivers 1991 | Name resolution and call-graph reachability are first-class problems; the backward-reachability fixpoint converges over *resolved* edges only, and higher-order/virtual dispatch is not decidable from syntax (k-CFA), which is why unresolved references stay findings. |
+| **behavior modeled** | Chow 1978; Utting & Legeard 2007; Lee & Yannakakis 1996 | The fact/transition model is an EFSM with STRIPS-style effects; "all-transitions" generation and reachability-bounded coverage are standard model-based-testing results. |
+| **required outcome classes tested** | Ammann & Offutt (2008/2016) | A coverage criterion is a set of test requirements; each branch outcome (allowed/denied, success/failure) is a *separate* obligation, never collapsed into a single pass. |
+| **target parity established** | Murphy, Notkin & Sullivan 1995 | Comparing old and new bindings against the incumbent denominator is a reflexion-model comparison: a feature present in the incumbent but absent from the replacement is a visible *absence*, not a silently dropped requirement. |
+
+**Reflexion Models as the frame for `reconcile`.** The static-vs-runtime
+reconciliation (`core/reconcile.py`, `core/gate.py`, and the surface comparison in
+`flows/model.py::reconcile()`) is a Software Reflexion Model (Murphy, Notkin &
+Sullivan 1995). The declared inventory is the high-level model; runtime
+observation is the reality; every entity/surface is labelled convergence,
+divergence, or absence:
+
+| Reflexion Model | capcov verdict |
+| --- | --- |
+| convergence — declared AND present | `covered` (`both` cell) |
+| divergence — present, NOT declared | `runtime-only` (`runtime_only` cell; "runtime reached this surface and discover never found it") |
+| absence — declared, NOT present | `dead` / `unmounted` (`neither` cell) |
+
+The `static_only` cell (declared and statically reachable, but unexercised) is the
+coverage gap the three reflexion labels do not name directly: structure converges,
+evidence is still `unproven`. These verdicts and cells are documented, not renamed.

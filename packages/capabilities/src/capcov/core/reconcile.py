@@ -10,6 +10,18 @@ than noise:
     runtime_only  the extractor missed it -- fix the adapter, or say why
     neither       declared and never touched -- dead
 
+This is a Software Reflexion Model (Murphy, Notkin & Sullivan 1995; see
+ADR-0001): the declared inventory is the high-level model, runtime observation is
+the reality, and the cells are its three labels --
+
+    both          convergence  (declared AND present)
+    runtime_only  divergence   (present, NOT declared)
+    neither       absence      (declared, NOT present) -- dead
+
+static_only is the coverage gap the three labels do not name directly: the
+declaration and the static extraction converge, but the testing evidence is still
+missing.
+
 Three of those four are failures until someone names a reason. That is the
 whole mechanism; everything else here is bookkeeping.
 """
