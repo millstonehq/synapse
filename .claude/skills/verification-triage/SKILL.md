@@ -13,7 +13,9 @@ A capability is rebuilt when its e2e rows are green **against a real running ins
 
 ## Map the capability — the flow model, four fields per step
 
-One JSON file per capability (`tools/axon/capcov/credential-acquisition.model.json` is the real one). A transition is **ready to rebuild** only when all four are filled:
+**Discovery is automatic; the model is authored, and authoring is progressive — never a prerequisite for starting.** `discover` derives the surface/entity obligations from the code on its own. The flow model (`tools/axon/capcov/credential-acquisition.model.json`) is the *behavior* layer you author on top to make outcomes checkable: you begin from auto-discovery and fill the model in as you go. A human clarifies ambiguous semantics; a human does not hand-author the map before discovery can run.
+
+A transition is **ready to prove** (not "allowed to exist") when all four are filled:
 
 - `outcome` — the caller-distinguishable result, plain words. Two transitions with the same outcome means one is not a real capability.
 - `obligations` — the surface(s) it binds (`http:/ask`).
@@ -22,7 +24,7 @@ One JSON file per capability (`tools/axon/capcov/credential-acquisition.model.js
 
 Order falls out of the fact machine: `plan` walks `requires`/`adds` from `initial` and generates the scenarios. Take the shortest path to the headline outcome first, then branch **refusal and security paths ahead of happy-path variants** (a wrong refusal is costlier than a missing convenience).
 
-Skip everything outside `scope`, provably — the discovery query already filters, and the baseline README records the excluded routes as *correctly absent*. You map one capability's surfaces, not the system.
+You map one capability's surfaces at a time, not the system. But **filtering a route out of THIS capability's run does not make it "outside the product."** A scoped-out surface must be **accounted globally** — assigned to some other capability's gate, or listed as explicitly unresolved in a global denominator. "Correctly absent from this gate" is a per-run fact, never a product-completeness claim; the excluded set is a ledger to reconcile, not a set to forget.
 
 ## The check must DETECT WRONG BEHAVIOR, not reproduce right behavior
 
@@ -32,7 +34,13 @@ For every **state-mutating or auth** transition (one that `adds`/`removes` a fac
 - **ordering** — swap it with a sibling;
 - **scoping** — apply it to the neighbor's subject.
 
-Green means "catches the wrong behaviors", not "matched one path". The repo already does this — `prove.py` runs an 8-fault matrix and asserts the gate reddens. Generalize that; a happy-path oracle (dual-hitting a live original) is a weaker reinvention of it.
+Green means "catches the wrong behaviors", not "matched one path". The repo already does this — `prove.py` runs an 8-fault matrix and asserts the gate reddens. Generalize that.
+
+**Mutations and differential testing are complementary — neither subsumes the other.** A mutation proves your *check* can catch a fault you thought of; a differential (running the rebuild against the reference and asserting agreement) catches a divergence you did *not* think to seed. Each exposes errors the other misses — tests can kill every chosen mutant while still enforcing the wrong contract. Use mutations to prove the check has power on the spine, and a differential to catch unseeded drift; do not drop one because you have the other.
+
+**A mutation's evidence is a SPECIFIC failing assertion, not a red aggregate gate.** The gate may already be red for unrelated reasons (incomplete coverage — `prove.py`'s gate stays red even on a good run). "Still red when I inject the fault" proves nothing. Assert that *this transition's binding* reddens *for this fault*, and is green without it. Aggregate red is not caught-the-fault.
+
+**"Observable" includes later and persisted effects, not just the immediate response.** Two calls that both return `500` can leave different persisted state, different permissions, or different retry behavior. On a state-mutating or auth transition, the check must assert the *downstream* effect a later request reveals — matching the immediate response is insufficient exactly where the risk is highest.
 
 ## Read the ratio beside its denominator's edge
 
@@ -50,14 +58,22 @@ The inner loop is local and sub-10s. A signal you block a turn on had better be 
 | 3 | full behavioral run (`capcov flows run`) | minutes | transition boundary |
 | 4 | CI / e2e against a real instance | minutes+ | pre-merge and the done-check only |
 
-Rules: never `git push` to find out if a change works — CI **confirms**, it does not **inform**. Change one transition → check one; never re-run all of them or rebuild the world for a one-line edit. When a signal is slower than your next edit, fire it async and keep working. The fast proxy must be a **strict subset** of the authoritative check (a proxy failure is always a real failure); drift between proxy and authoritative is itself a bug to fix, not tolerate.
+Rules, dependency-aware (not absolute): **run every available local check first; block on a slow or live signal only when the next decision actually depends on it.** Don't `git push` to answer a question a local check already answers. But some facts only the live environment teaches — IAM, certificates, managed-DB and Fargate behavior — and waiting on those is informing, not stalling, when your next step depends on them. Scope regression by **blast radius, not line count**: a one-line change to a shared composition can justify broad checks because it moves a fleet. When a signal is slower than your next edit and nothing downstream needs it yet, fire it async and keep working. The fast proxy must be a **strict subset** of the authoritative check (a proxy failure is always a real failure); drift between proxy and authoritative is itself a bug to fix, not tolerate.
 
 ## The single worst failure
 
 Run `capcov.sh`, see the gate exit 0 with its baselined lines, declare the rebuild verified — having never run the behavioral step, never seeded a wrong behavior, over a denominator of one route in one tier while dozens of routes and other languages sit outside it by construction. Every honest marker (`unproven`, `moved_out`, "discovery unresolved", the deliberately-red gate) was present and read as a formality. Green meant "the three things I chose to look at are shaped the way I said"; it was reported as "works".
 
+## Partial shipment is an explicit scope decision, and the spine is never shallow
+
+Shipping less than the whole is legitimate — but it is a *decision that preserves the full goal*, not a silent redefinition. A limited release names exactly what it covers and leaves the rest assigned or unresolved in the global denominator; it never lets discovery's filtering *authorize* dropping a required capability. And the "verify it shallow" default has a hard exception: **for authentication, writes, and delivery, a shallow bug's cost is not bounded** — a wrong write, a leaked permission, or a dropped message is silent and expensive. Those are the spine; they are deep-always, differential *and* mutation, effect-and-ownership asserted, regardless of the release's scope.
+
 ## Use capcov's own words
 
-Verbs: `discover` / `plan` / `coverage` / `run` / `report` / `gate`. States: `covered` / `unproven` / `unmapped` / `unknown-obligation` / `OBSOLETE`. Fix `unknown obligation` (not built) before `unproven` (built, not exercised); `unmapped` means your model missed a scoped surface. Do not re-teach the gate/baseline discipline — `tools/axon/capcov/baseline.README.md` already does, correctly; point at it rather than forking it.
+Verbs: `discover` / `plan` / `coverage` / `run` / `report` / `gate`. States: `covered` / `unproven` / `unmapped` / `unknown-obligation` / `OBSOLETE`.
+
+**Triage `unknown-obligation` before prescribing work — undiscovered is not the same as unimplemented.** An `unknown-obligation` may mean the feature is genuinely not built, OR that discovery failed to extract, identify, or map it (a duplicate-route collision, an unresolved language, a scoping mistake). Prescribing "go build it" on a mapping failure builds a duplicate or chases a phantom. Split the cause first; only a confirmed not-built is a build task. Then fix confirmed `unknown-obligation` before `unproven` (built, not exercised); `unmapped` means your model missed a scoped surface.
+
+Do not re-teach the gate/baseline discipline — `tools/axon/capcov/baseline.README.md` already does, correctly; point at it rather than forking it.
 
 Tooling gaps this method exposes (extend the tool, do not file the method down to fit it): a `mutations` field + generalized fault-matrix runner; `discover` emitting the excluded-surface count and unresolved-language list as first-class fields; `plan` emitting the unreachable-from-initial set; a `--only <transition>` selector; and wiring `capcov flows run` into the driver that currently omits it. See `TOOLING-EXTENSIONS.md` beside this file.

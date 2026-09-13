@@ -77,12 +77,47 @@ reader supplies. Print `assurance` verbatim; "injected fixtures" is not-done for
 
 ---
 
-**The load-bearing disagreement, recorded rather than averaged.** Majors proposed a live-oracle
-dual-hit against the running original as the inner-loop check. Red-team (Taleb) showed that for
-the spine (state-mutating / auth transitions) a happy-path dual-hit is a weaker reinvention of
-the seeded-mutation matrix that already exists in `prove.py`, because it only ever drives the
-one agreed trajectory. **Resolution: seeded mutations (extension 1) are primary for the spine;
-a live oracle or a corpus generated from the live original is a secondary, optional broad
-happy-path check — never hand-transcribed literals.** The evidence that would flip it: if
-seeded mutations prove too sparse to catch real regressions that a live diff would, add the
-live oracle as a complement, not a replacement.
+## 7. Global denominator accounting
+
+**Gap.** `excluded_surfaces` (extension 2) is per-capability. Filtering a route out of one
+capability's run does not establish that it is outside the product. Left per-run, an excluded
+surface is silently no one's responsibility.
+
+**Extension.** Roll the per-capability excluded/unresolved sets into a **global denominator**:
+every surface `discover` can see across all capability configs must be **assigned to some
+capability's gate** or listed **explicitly unresolved**. A route that is excluded everywhere is
+a coverage hole, not "correctly absent". `report` gains a global view: assigned / unassigned /
+unresolved across the whole product.
+
+## 8. Distinguish undiscovered from unimplemented
+
+**Gap.** `unknown-obligation` is reported as one class, but it conflates "the feature is not
+built" with "discovery failed to extract/identify/map it" (a duplicate-route collision, an
+unresolved language). Acting on it as "go build" produces a duplicate or chases a phantom.
+
+**Extension.** `unknown-obligation` carries a cause hint where the tool can infer one
+(duplicate symbol seen; language unresolved; scope filter hit) so triage can split
+mapping-failure from genuinely-not-built before any product work is prescribed.
+
+---
+
+**On mutations vs differential — complementary, not either/or (corrected).** An earlier draft
+here said seeded mutations *subsume* a live differential. They do not, and that was wrong.
+A mutation proves your *check* can catch a fault you seeded; a differential (run the rebuild
+against the reference, assert agreement) catches divergence you did *not* seed. Each exposes
+what the other misses. Build **both**: seeded mutations (extension 1) to prove the checks have
+power on the spine, and a differential against the running original (multi-input, and asserting
+persisted/downstream state, not just the immediate response) to catch unseeded drift. Neither
+replaces the other; hand-transcribed literal asserts replace *neither* and should go.
+
+---
+
+## Design note — the generic discovery architecture (informs #38)
+
+The right generic design is not "tree-sitter only". It is **two generic mechanisms, one per
+input class, everything else config**: (a) **tree-sitter** for source code (any language via a
+query), replacing every language-specific code reader; (b) a **generic structured-spec reader**
+for declarative contract/data files (via a path query), of which **OpenAPI is one config, not a
+bespoke adapter** — the honest home for the non-code modality. SQLite-constant discovery, being
+code-side, folds into a tree-sitter query. Result: exactly two discovery mechanisms, both
+generic, no per-language and no per-format special cases.
