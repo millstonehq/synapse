@@ -37,6 +37,12 @@ def discover(config_path: Path) -> dict:
     source_census = []
     analysed_files: set[str] = set()
     python_limits_added = False
+    # Provenance the coverage denominator would otherwise hide: route-shaped
+    # candidates the query could see but filtered out, and declared adapters that
+    # resolved to no surface at all. Neither adds obligations; both make a
+    # silently narrowed N legible instead of implied by absence.
+    excluded_surfaces: list[dict] = []
+    unresolved_adapters: list[dict] = []
 
     def source(relative: str) -> Path:
         path = (root / relative).resolve()
@@ -83,8 +89,16 @@ def discover(config_path: Path) -> dict:
         if not matched:
             raise ValueError(f"empty source set: {scope['directory']}")
 
-    for adapter in config["adapters"]:
+    adapters = config["adapters"]
+    if not adapters:
+        unresolved_adapters.append({
+            "adapter": None,
+            "kind": None,
+            "reason": "no discovery adapters declared; no language resolves to surfaces",
+        })
+    for index, adapter in enumerate(adapters):
         kind = adapter["kind"]
+        surfaces_before = sum(1 for o in obligations if o["kind"] == "surface")
         if kind == "python-routes":
             namespace = adapter.get("source_namespace")
             if namespace is not None and (
@@ -111,6 +125,27 @@ def discover(config_path: Path) -> dict:
                     if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                         continue
                     for dec in node.decorator_list:
+                        # A decorator shaped like a router registration —
+                        # `x.<method>("/path")` — whose method is outside the
+                        # recognised verb set (HEAD, OPTIONS, WEBSOCKET, ...) is a
+                        # surface the query saw and dropped, not one that is absent.
+                        if (
+                            isinstance(dec, ast.Call)
+                            and isinstance(dec.func, ast.Attribute)
+                            and dec.func.attr not in {"get", "post", "put", "patch", "delete"}
+                            and dec.args
+                            and isinstance(dec.args[0], ast.Constant)
+                            and isinstance(dec.args[0].value, str)
+                            and dec.args[0].value.startswith("/")
+                        ):
+                            excluded_surfaces.append({
+                                "file": relative,
+                                "line": dec.lineno,
+                                "method": dec.func.attr.upper(),
+                                "path": adapter.get("prefix", "") + dec.args[0].value,
+                                "handler": node.name,
+                                "reason": "route decorator method not in the recognised HTTP verb set",
+                            })
                         if not (
                             isinstance(dec, ast.Call)
                             and isinstance(dec.func, ast.Attribute)
@@ -238,6 +273,12 @@ def discover(config_path: Path) -> dict:
                 add(f"boundary:zoho:{prefix}{category}", "unresolved", relative, 1)
         else:
             raise ValueError(f"unsupported discovery adapter: {kind}")
+        if sum(1 for o in obligations if o["kind"] == "surface") == surfaces_before:
+            unresolved_adapters.append({
+                "adapter": index,
+                "kind": kind,
+                "reason": "adapter declared but produced no surface obligations",
+            })
     for entry in source_census:
         if entry["classified"] and entry["file"] not in analysed_files:
             entry["classified"] = False
@@ -290,4 +331,15 @@ def discover(config_path: Path) -> dict:
         "obligations": sorted(obligations, key=lambda o: o["id"]),
         "graphs": graphs,
         "source_census": source_census,
+        "excluded_surfaces": {
+            "count": len(excluded_surfaces),
+            "surfaces": sorted(
+                excluded_surfaces,
+                key=lambda s: (s["file"], s["line"], s["method"], s["path"]),
+            ),
+        },
+        "unresolved": sorted(
+            unresolved_adapters,
+            key=lambda u: (-1 if u["adapter"] is None else u["adapter"], u["kind"] or ""),
+        ),
     }

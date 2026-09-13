@@ -65,6 +65,12 @@ def main(argv: list[str]) -> int:
     r.add_argument("--config", required=True, help="re-discover to reject stale source evidence")
     r.add_argument("--out", required=True)
     r.add_argument("--timeout", type=int, default=180)
+    r.add_argument(
+        "--only",
+        metavar="TRANSITION_OR_SCENARIO_ID",
+        help="inner loop: run just this transition/scenario, passed to the runner "
+        "as CAPCOV_FLOW_ONLY; omit to execute the whole plan",
+    )
     # Parse runner argv after -- separately, so options may follow the plan.
     c = sub.add_parser("coverage")
     c.add_argument("inventory")
@@ -72,6 +78,12 @@ def main(argv: list[str]) -> int:
     c.add_argument("plan")
     c.add_argument("--run")
     c.add_argument("--out", required=True)
+    c.add_argument(
+        "--only",
+        metavar="TRANSITION_OR_SCENARIO_ID",
+        help="inner loop: scope coverage to one transition/scenario id; "
+        "omit to fold the whole plan",
+    )
     g = sub.add_parser("gate")
     g.add_argument("coverage")
     g.add_argument("--baseline", help="exact named failures, each with a reason; never covered")
@@ -117,6 +129,8 @@ def main(argv: list[str]) -> int:
                     "CAPCOV_FLOW_OUT": str(output),
                     "CAPCOV_FLOW_NONCE": nonce,
                 }
+                if args.only is not None:
+                    env["CAPCOV_FLOW_ONLY"] = args.only
                 proc = subprocess.run(runner, env=env, timeout=args.timeout, check=False)
                 if not output.exists():
                     raise ValueError("runner produced no fresh outcome evidence")
@@ -133,11 +147,16 @@ def main(argv: list[str]) -> int:
                     emit(args.out, result)
                     return 1
         elif args.command == "coverage":
+            # Pass ``only`` only when asked, so the unscoped call is the bare
+            # four-argument invocation that folds the whole plan via reconcile's
+            # own default; a bare --only-less run threads no scope keyword at all.
+            scope = {"only": args.only} if args.only is not None else {}
             result = reconcile(
                 read(args.inventory),
                 read(args.model),
                 read(args.plan),
                 read(args.run) if args.run else None,
+                **scope,
             )
             print(f"capcov flows: {result['summary']}; assurance={result['assurance']}")
         elif args.command == "report":
