@@ -1,4 +1,12 @@
-"""Finite fact-state flow planning. No inferred edge is treated as confirmed."""
+"""Finite fact-state flow planning. No inferred edge is treated as confirmed.
+
+Facts are state variables and each transition carries requires/forbids guards and
+adds/removes effects: an EFSM with STRIPS-style operators. plan() emits one
+shortest-prerequisite scenario per transition -- "all-transitions" test
+generation, meaningful only over the reachable transitions (Chow 1978; Utting &
+Legeard 2007; Lee & Yannakakis 1996 -- see ADR-0001), which is why the blocked
+list and the max_states budget are reported rather than hidden.
+"""
 
 from __future__ import annotations
 
@@ -173,7 +181,12 @@ def advance(t: dict, state: frozenset[str]) -> frozenset[str]:
 
 
 def plan(model: dict, target: str, max_states: int = 10000) -> dict:
-    """Shortest prerequisite path to every transition; bounds fail explicitly."""
+    """Shortest prerequisite path to every transition; bounds fail explicitly.
+
+    One scenario per transition is the all-transitions criterion (Chow 1978; see
+    ADR-0001); coverage of it is coverage of transitions, not of input values,
+    orderings, or interleavings.
+    """
     if type(max_states) is not int or max_states < 1:
         raise ValueError("max_states must be a positive integer")
     validate(model)
@@ -235,7 +248,16 @@ def plan(model: dict, target: str, max_states: int = 10000) -> dict:
 
 
 def reconcile(inventory: dict, model: dict, execution_plan: dict, run: dict | None) -> dict:
-    """Accounted, executable, and proven are different denominators."""
+    """Accounted, executable, and proven are different denominators.
+
+    Obligations are the test-requirement denominator, and each branch outcome is
+    its own obligation, never collapsed into one pass (Ammann & Offutt; see
+    ADR-0001). The static_http-vs-mounted check below is a Software Reflexion
+    Model (Murphy, Notkin & Sullivan 1995): a surface mounted at runtime but not
+    declared is a divergence (a "runtime-only surface" failure), a declared
+    surface not mounted is an absence (an "unmounted surface" failure), and an
+    obligation proven by a passing scenario is a convergence (covered).
+    """
     validate(model)
     failures = []
     if execution_plan["model_sha256"] != digest(model):

@@ -16,6 +16,31 @@ coverage gates, and reports. Consumer repositories own reviewed behavior models,
 source scope, identities, startup/reset recipes, runtime fixtures, and target
 bindings. It works without a Synapse vault or a hosted service.
 
+## Foundations
+
+Each mechanism has a lineage in testing and program-analysis literature.
+`ADR-0001-capcov-literature-foundations` (in the Synapse vault under
+`content/90_Architecture/ADRs/`) records the full map and the resolver decision;
+the anchors in brief:
+
+- **Flow model = model-based testing.** Facts + guarded transitions form an
+  EFSM/STRIPS model; `plan()` emits one shortest-prerequisite scenario per
+  transition ("all-transitions" generation). — Chow 1978; Utting & Legeard 2007;
+  Lee & Yannakakis 1996.
+- **Obligations = test requirements.** The obligation set is the denominator, and
+  each branch outcome is a separate obligation, never collapsed. — Ammann & Offutt
+  (2008/2016).
+- **Reachability + soundy resolution.** The backward-reachability fixpoint closes
+  over *resolved* edges; the adapter resolves what it can syntactically and
+  *enumerates* its blind spots rather than guessing. — Livshits et al. 2015
+  (soundiness); Shivers 1991 (k-CFA); Samhi et al. 2024; Néron et al. 2015;
+  Creager & van Antwerpen 2023 (stack graphs: scale, no precision/recall figure).
+- **Static-vs-runtime reconciliation = a Software Reflexion Model.** Declared vs
+  observed maps convergence/divergence/absence onto `covered` / `runtime-only` /
+  `dead`. — Murphy, Notkin & Sullivan 1995.
+- **Capability nouns descend from FODA.** Capabilities as a facet tree; adopting
+  its variability structure is a future option. — Kang et al. 1990.
+
 ## Install and test
 
 Requires Python 3.12 or newer. From `packages/capabilities`:

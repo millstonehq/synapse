@@ -13,6 +13,14 @@ Two properties are load-bearing and neither is free:
   import is listed with a file and a line. This is a diagnostic, not a gate --
   it explains why runtime observation found something static did not, and it is
   the reason the static half can be trusted about its own limits.
+
+This is a soundy analyser: a resolved core that documents its unsound corners
+rather than hiding them (Livshits et al. 2015, the soundiness manifesto; see
+ADR-0001). Those corners are unavoidable -- higher-order and virtual dispatch are
+not decidable from syntax (Shivers 1991, k-CFA) and ref-derived call graphs are
+unsound in measured practice (Samhi 2024) -- so an ambiguous multi-candidate call
+is bound to NONE of its candidates and recorded, never guessed. Resolution here
+is syntactic, blind spots are enumerated, and accuracy is unmeasured.
 """
 
 from __future__ import annotations

@@ -102,6 +102,8 @@ def gate(coverage: dict, exemptions_path: Path | None) -> list[Failure]:
             )
 
     for surface in coverage["unknown_surfaces"]:
+        # A divergence in Software Reflexion Model terms (Murphy 1995; see
+        # ADR-0001): runtime reached a surface the declared model does not have.
         name = surface["surface"]
         exemption = exemptions.get(name)
         if exemption is None:
@@ -149,6 +151,11 @@ def gate(coverage: dict, exemptions_path: Path | None) -> list[Failure]:
 
 
 def _explain(row: dict) -> str:
+    # The three failing cells are the Software Reflexion Model's labels (Murphy,
+    # Notkin & Sullivan 1995; see reconcile.py and ADR-0001): static_only is the
+    # coverage gap (structure converges, evidence missing), runtime_only is a
+    # divergence (present, not declared), neither is an absence (declared, not
+    # present) -- dead.
     if row["cell"] == "static_only":
         return (
             f"reachable from {', '.join(row['static_surfaces'][:3])}"
