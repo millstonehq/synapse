@@ -64,6 +64,10 @@ Rules, dependency-aware (not absolute): **run every available local check first;
 
 Run `capcov.sh`, see the gate exit 0 with its baselined lines, declare the rebuild verified — having never run the behavioral step, never seeded a wrong behavior, over a denominator of one route in one tier while dozens of routes and other languages sit outside it by construction. Every honest marker (`unproven`, `moved_out`, "discovery unresolved", the deliberately-red gate) was present and read as a formality. Green meant "the three things I chose to look at are shaped the way I said"; it was reported as "works".
 
+## Know when to stop extending the tool
+
+Extending capcov is a means, not the work. **Stop the moment an engine change no longer *blocks* evaluating a required product outcome, and go back to qualifying the product.** A tool extension is justified only while its absence prevents you from trusting a real outcome (e.g. no way to prove a write's effect). The failure mode this session's whole thread warns about is the reverse: accumulating infrastructure while most of the product stays unassessed. The loop is: discover across the surface → classify each gap (measurement / implementation / acceptance) → pick a high-value user outcome → run targeted checks and the relevant faults → qualify that outcome → update the backlog. Reach a usable end-to-end flow early; do not let engine work outrun a single qualified capability.
+
 ## Partial shipment is an explicit scope decision, and the spine is never shallow
 
 Shipping less than the whole is legitimate — but it is a *decision that preserves the full goal*, not a silent redefinition. A limited release names exactly what it covers and leaves the rest assigned or unresolved in the global denominator; it never lets discovery's filtering *authorize* dropping a required capability. And the "verify it shallow" default has a hard exception: **for authentication, writes, and delivery, a shallow bug's cost is not bounded** — a wrong write, a leaked permission, or a dropped message is silent and expensive. Those are the spine; they are deep-always, differential *and* mutation, effect-and-ownership asserted, regardless of the release's scope.
@@ -72,7 +76,13 @@ Shipping less than the whole is legitimate — but it is a *decision that preser
 
 Verbs: `discover` / `plan` / `coverage` / `run` / `report` / `gate`. States: `covered` / `unproven` / `unmapped` / `unknown-obligation` / `OBSOLETE`.
 
-**Triage `unknown-obligation` before prescribing work — undiscovered is not the same as unimplemented.** An `unknown-obligation` may mean the feature is genuinely not built, OR that discovery failed to extract, identify, or map it (a duplicate-route collision, an unresolved language, a scoping mistake). Prescribing "go build it" on a mapping failure builds a duplicate or chases a phantom. Split the cause first; only a confirmed not-built is a build task. Then fix confirmed `unknown-obligation` before `unproven` (built, not exercised); `unmapped` means your model missed a scoped surface.
+**Classify every gap before prescribing work — three kinds, three different actions:**
+
+- **measurement** — discovery failed to extract, identify, or map it (a duplicate-route collision, an unresolved language, a scoping mistake). Fix the tool or the model; do NOT build anything.
+- **implementation** — genuinely not built. A build task.
+- **acceptance** — built, but not yet qualified against reference behavior. A test/qualification task.
+
+`unknown-obligation` is usually measurement OR implementation, and prescribing "go build it" on a measurement gap builds a duplicate or chases a phantom — your duplicate-route blocker is exactly this. `unproven` is an acceptance gap. Split the cause first; only a confirmed *implementation* gap is a build task. Then fix confirmed `unknown-obligation` before `unproven`; `unmapped` means your model missed a scoped surface.
 
 Do not re-teach the gate/baseline discipline — `tools/axon/capcov/baseline.README.md` already does, correctly; point at it rather than forking it.
 
