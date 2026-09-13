@@ -31,6 +31,39 @@ def repository_path(value: object) -> bool:
     )
 
 
+MUTATION_KINDS = {"idempotency", "ordering", "scoping"}
+
+
+def validate_mutations(name: str, transition: dict, transition_ids: set[str]) -> None:
+    """A transition MAY declare mutations -- wrong-behaviours a rebuild must fail.
+
+    The engine only checks the field's shape and carries it into the plan; it
+    never executes a mutation. `ordering` names a sibling transition the effect is
+    relative to; `scoping`/`idempotency` need only a kind and a note.
+    """
+    mutations = transition.get("mutations")
+    if mutations is None:
+        return
+    if not isinstance(mutations, list):
+        raise ValueError(f"{name}: mutations must be a list")
+    for mutation in mutations:
+        if not isinstance(mutation, dict):
+            raise ValueError(f"{name}: each mutation must be an object")
+        kind = mutation.get("kind")
+        if kind not in MUTATION_KINDS:
+            raise ValueError(f"{name}: unknown mutation kind {kind!r}")
+        if not isinstance(mutation.get("note"), str) or not mutation["note"].strip():
+            raise ValueError(f"{name}: mutation requires a note")
+        if kind == "ordering":
+            sibling = mutation.get("with")
+            if not isinstance(sibling, str) or sibling == name or sibling not in transition_ids:
+                raise ValueError(
+                    f"{name}: ordering mutation requires 'with' naming a sibling transition"
+                )
+        if kind == "scoping" and "target" in mutation and not isinstance(mutation["target"], str):
+            raise ValueError(f"{name}: scoping mutation target must be a neighbour subject")
+
+
 def validate(model: dict) -> None:
     if model.get("version") != 1:
         raise ValueError("flow model version must be 1")
@@ -43,6 +76,7 @@ def validate(model: dict) -> None:
     if not set(model.get("initial", [])) <= known:
         raise ValueError("unknown initial fact")
     ids = set()
+    all_ids = {t.get("id") for t in model["transitions"]}
     for t in model["transitions"]:
         name = t["id"]
         if not name or name in ids:
@@ -59,6 +93,7 @@ def validate(model: dict) -> None:
             raise ValueError(f"{name}: actor, outcome, and source evidence required")
         if not t.get("obligations"):
             raise ValueError(f"{name}: no inventory obligations")
+        validate_mutations(name, t, all_ids)
         bindings = t.get("bindings", {})
         for target, binding in bindings.items():
             commands = binding.get("commands", [])
@@ -210,44 +245,60 @@ def plan(model: dict, target: str, max_states: int = 10000) -> dict:
                         f"state budget exceeded ({max_states}); no complete plan emitted"
                     )
                 queue.append((after, candidate))
-    scenarios = []
-    for name, path in sorted(paths.items()):
-        scenarios.append(
-            {
-                "id": name,
-                "steps": [
-                    {
-                        "transition": step,
-                        "commands": transitions[step]["bindings"][target]["commands"],
-                    }
-                    for step in path
-                ],
-            }
-        )
+    def step(name: str) -> dict:
+        t = transitions[name]
+        entry = {"transition": name, "commands": t["bindings"][target]["commands"]}
+        if t.get("mutations"):
+            entry["mutations"] = t["mutations"]
+        return entry
+
+    scenarios = [
+        {"id": name, "steps": [step(s) for s in path]}
+        for name, path in sorted(paths.items())
+    ]
+    # A transition not reached from `initial` by the BFS produces no scenario;
+    # report it rather than dropping it silently. Same content as `blocked`,
+    # named for the runner that reads plan.json.
+    unreachable = [
+        {
+            "transition": name,
+            "reason": (
+                "missing target binding"
+                if target not in t.get("bindings", {})
+                else "unreachable preconditions"
+            ),
+        }
+        for name, t in sorted(transitions.items())
+        if name not in paths
+    ]
+    # Soundiness warning: a state-mutating transition that declares no mutation
+    # can never be turned RED by a rebuild, so surface it -- never a hard failure.
+    unmutated_state_transitions = sorted(
+        t["id"]
+        for t in model["transitions"]
+        if (t.get("adds") or t.get("removes")) and not t.get("mutations")
+    )
     return {
         "version": 1,
         "scope": model["scope"],
         "target": target,
         "model_sha256": digest(model),
         "scenarios": scenarios,
-        "blocked": [
-            {
-                "transition": name,
-                "reason": (
-                    "missing target binding"
-                    if target not in t.get("bindings", {})
-                    else "unreachable preconditions"
-                ),
-            }
-            for name, t in sorted(transitions.items())
-            if name not in paths
-        ],
+        "blocked": unreachable,
+        "unreachable": unreachable,
+        "unmutated_state_transitions": unmutated_state_transitions,
         "states_explored": len(seen),
         **({"max_states": max_states} if max_states != 10000 else {}),
     }
 
 
-def reconcile(inventory: dict, model: dict, execution_plan: dict, run: dict | None) -> dict:
+def reconcile(
+    inventory: dict,
+    model: dict,
+    execution_plan: dict,
+    run: dict | None,
+    only: str | None = None,
+) -> dict:
     """Accounted, executable, and proven are different denominators.
 
     Obligations are the test-requirement denominator, and each branch outcome is
@@ -257,6 +308,10 @@ def reconcile(inventory: dict, model: dict, execution_plan: dict, run: dict | No
     declared is a divergence (a "runtime-only surface" failure), a declared
     surface not mounted is an absence (an "unmounted surface" failure), and an
     obligation proven by a passing scenario is a convergence (covered).
+
+    `only` scopes the fold to a single scenario id: obligations proven by any
+    other scenario's path stay unproven, so a caller can attribute coverage to one
+    transition. With only=None every planned scenario folds.
     """
     validate(model)
     failures = []
@@ -329,6 +384,8 @@ def reconcile(inventory: dict, model: dict, execution_plan: dict, run: dict | No
         if len(by_id) != len(results) or set(by_id) != expected_ids:
             failures.append("execution scenario set differs from plan")
         for scenario in execution_plan["scenarios"]:
+            if only is not None and scenario["id"] != only:
+                continue
             result = by_id.get(scenario["id"], {})
             by_transition = {t["id"]: t for t in model["transitions"]}
             missing_surfaces = []
@@ -403,6 +460,12 @@ def reconcile(inventory: dict, model: dict, execution_plan: dict, run: dict | No
         "execution_scope": execution_scope,
         "rows": rows,
         "blocked": execution_plan["blocked"],
+        # Provenance carried through from discovery so the narrowed denominator is
+        # legible in the coverage artifact, not only the raw inventory: surfaces
+        # the query saw and filtered, and adapters that resolved to nothing. They
+        # add no obligation and change no pass/fail; absence would read as none.
+        "excluded_surfaces": inventory.get("excluded_surfaces", {"count": 0, "surfaces": []}),
+        "unresolved": inventory.get("unresolved", []),
         "failures": failures,
         "summary": {
             status: sum(r["status"] == status for r in rows)
