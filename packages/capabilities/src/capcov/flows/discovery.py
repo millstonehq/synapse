@@ -4,7 +4,6 @@ Locations and hashes are emitted; source expressions (potential secrets) are not
 Structural candidates do not claim semantic outcomes or runtime reachability.
 
 Adapters:
-  zoho-export        a Zoho Deluge export.
   treesitter-routes  routes in any tree-sitter-supported language. Needs the
       optional `treesitter` extra (tree-sitter + tree-sitter-language-pack),
       lazily imported so core discovery stays stdlib-only. The opinion of WHICH
@@ -32,17 +31,6 @@ import re
 from pathlib import Path
 
 from .model import digest
-from .zoho import derive as derive_zoho
-
-
-def qualify(value: object, namespace: str) -> object:
-    if isinstance(value, str) and value.startswith("zoho:"):
-        return "zoho:" + namespace + ":" + value[5:]
-    if isinstance(value, list):
-        return [qualify(item, namespace) for item in value]
-    if isinstance(value, dict):
-        return {key: qualify(item, namespace) for key, item in value.items()}
-    return value
 
 
 # Standard tree-sitter predicates. The binding applies these when it runs the
@@ -221,37 +209,7 @@ def discover(config_path: Path) -> dict:
 
     for adapter in config["adapters"]:
         kind = adapter["kind"]
-        if kind == "zoho-export":
-            relative = adapter["export"]
-            export = source(relative)
-            graph = derive_zoho(export.read_text(), relative)
-            namespace = adapter.get("namespace")
-            if namespace:
-                graph = qualify(graph, namespace)
-                for row in graph["census"]:
-                    row["section"] = f"{namespace}: {row['section']}"
-            graph["namespace"] = namespace
-            analysed_files.add(relative)
-            graphs.append({key: value for key, value in graph.items() if key != "nodes"})
-            obligations.extend(graph["nodes"])
-            for item in graph["unresolved"]:
-                add(
-                    f"boundary:zoho:source:{digest(item)[:16]}",
-                    "unresolved",
-                    relative,
-                    item["source"]["line"],
-                    owner=item["owner"],
-                    reason=item["reason"],
-                )
-            for category in (
-                "runtime-confirmation",
-                "semantic-outcome-confirmation",
-                "fixture-and-environment-coverage",
-                "presentation-and-computed-expressions",
-            ):
-                prefix = f"{namespace}:" if namespace else ""
-                add(f"boundary:zoho:{prefix}{category}", "unresolved", relative, 1)
-        elif kind == "treesitter-routes":
+        if kind == "treesitter-routes":
             try:
                 import tree_sitter as ts
                 from tree_sitter_language_pack import get_language
@@ -367,35 +325,6 @@ def discover(config_path: Path) -> dict:
                 1,
                 reason="source file was not consumed by a discovery adapter",
             )
-    # Cross-application calls resolve only against an explicitly supplied export,
-    # with both source hashes in this inventory. Similar function names are not evidence.
-    by_id = {item["id"]: item for item in obligations}
-    resolved_dependencies = set()
-    for item in list(obligations):
-        if item.get("effect") != "external-call":
-            continue
-        namespace, _, symbol = item["callee"].partition(".")
-        target = f"zoho:{namespace}:function:{symbol}"
-        if target in by_id:
-            graphs[0]["edges"].append(
-                {
-                    "from": item["id"],
-                    "to": target,
-                    "relation": "resolves-to",
-                    "source": item["source"],
-                }
-            )
-            resolved_dependencies.add(item["id"])
-
-    def resolved(item: dict) -> bool:
-        return (
-            item.get("owner") in resolved_dependencies
-            and item.get("reason") == "qualified call dependency has no source in this export"
-        )
-
-    obligations = [item for item in obligations if not resolved(item)]
-    for graph in graphs:
-        graph["unresolved"] = [item for item in graph["unresolved"] if not resolved(item)]
     ids = [o["id"] for o in obligations]
     if len(set(ids)) != len(ids):
         raise ValueError("duplicate obligation IDs; qualify separate application surfaces")

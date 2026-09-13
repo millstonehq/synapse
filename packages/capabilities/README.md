@@ -66,7 +66,7 @@ does not prove persistence, authorization, external delivery, or product parity.
 ## Current support
 
 - Python/FastAPI/SQLAlchemy entity discovery and runtime probes.
-- Python route source obligations and Zoho Creator export discovery.
+- Tree-sitter route source obligations across any supported language.
 - Required/forbidden fact-state planning with explicit blocked transitions.
 - Consumer execution commands with fresh run nonces and source/model/plan hashes.
 - Exact scenario/assertion reconciliation, per-step HTTP evidence, and gap gates.
