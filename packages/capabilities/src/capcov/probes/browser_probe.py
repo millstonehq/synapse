@@ -50,7 +50,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from .. import artifacts
+from .. import adapters, artifacts
 from ..flows.model import digest, plan
 from .probe_registry import (
     ENV_NONCE,
@@ -397,7 +397,11 @@ def observe(
         out_path,
         "observed",
         artifacts.provenance(
-            os.path.basename(str(source)), tree_hash, "capcov browser-probe", files
+            os.path.basename(str(source)),
+            tree_hash,
+            "capcov browser-probe",
+            files,
+            source_patterns,
         ),
         body,
     )
@@ -409,9 +413,13 @@ def _load_model(target_dir: Path) -> tuple[dict, str, tuple[str, ...]]:
 
     ``[capcov] flows_model`` names the referenced EFSM (a large graph kept as a
     referenced artifact, not inlined TOML -- design 1.1); ``flows_target``
-    defaults to ``"browser"``; ``globs`` (when present, from a route adapter
-    entry) tightens the freshness guard's source patterns beyond the Python
-    default so a non-Python target's mid-run change is still caught.
+    defaults to ``"browser"``; the source patterns come from the adapter specs so
+    a non-Python target's mid-run change is still caught.
+
+    The pattern set is resolved by `capcov.adapters.source_patterns`, the same
+    call `discover` makes. It has to be: `reconcile` refuses a static artifact and
+    a runtime artifact whose `artifact_sha256` disagree, so two hand-rolled copies
+    of this rule would drift into a pipeline that always refuses itself.
     """
     import tomllib
 
@@ -428,11 +436,11 @@ def _load_model(target_dir: Path) -> tuple[dict, str, tuple[str, ...]]:
     model_path = (target_dir / model_ref).resolve()
     model = json.loads(model_path.read_text())
     plan_target = capcov.get("flows_target", DEFAULT_TARGET)
-    globs: list[str] = []
-    for entry in data.get("adapters", []):
-        globs.extend(entry.get("globs", []))
-    patterns = tuple(globs) if globs else ("**/*.py",)
-    return model, plan_target, patterns
+    if capcov.get("adapter"):
+        specs = [(capcov["adapter"], None)]
+    else:
+        specs = [(entry.get("name"), entry) for entry in data.get("adapters", [])]
+    return model, plan_target, adapters.source_patterns(specs)
 
 
 def main(argv: list[str] | None = None) -> int:

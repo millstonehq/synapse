@@ -27,6 +27,42 @@ REGISTRY = {
     "structured-spec": "capcov.adapters.structured_spec",
 }
 
+# The source a spec-less adapter reads, when its `[[adapters]]` entry declares no
+# `globs`. The stack adapter reads its language's files; the config-driven
+# route/contract adapters read exactly what their entry names, so they contribute
+# nothing of their own. An adapter absent from this table falls back to the Python
+# default rather than to nothing -- an unrecognised adapter must not silently
+# shrink the hashed tree to zero files.
+DEFAULT_SOURCE_PATTERNS = ("**/*.py",)
+ADAPTER_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
+    "python-fastapi-sqlalchemy": DEFAULT_SOURCE_PATTERNS,
+    "treesitter-routes": (),
+    "structured-spec": (),
+}
+
+
+def source_patterns(specs: list[tuple[str, dict | None]]) -> tuple[str, ...]:
+    """The glob set that backs an artifact's provenance hash, for these specs.
+
+    Resolved PER SPEC and unioned. Taking the union of only the declared `globs`
+    is what made a mixed config lie: `python-fastapi-sqlalchemy` never declares
+    `globs`, so one Go route adapter beside it replaced `**/*.py` outright and a
+    Python source edit stopped invalidating capabilities.json. Each spec now
+    contributes either what it declared or its own default, so every adapter's
+    source is in the hash.
+
+    Discover and the browser probe MUST agree here: `reconcile` refuses a static
+    and a runtime artifact whose `artifact_sha256` disagree, so a second copy of
+    this rule is a broken pipeline waiting to happen. There is one.
+    """
+    patterns: list[str] = []
+    for name, config in specs:
+        declared = list((config or {}).get("globs") or [])
+        patterns.extend(
+            declared or ADAPTER_SOURCE_PATTERNS.get(name, DEFAULT_SOURCE_PATTERNS)
+        )
+    return tuple(dict.fromkeys(patterns)) or DEFAULT_SOURCE_PATTERNS
+
 
 def load(name: str) -> ModuleType:
     import importlib

@@ -19,6 +19,7 @@ from pathlib import Path
 from . import artifacts
 from .adapters import load as load_adapter
 from .adapters import merge as merge_adapters
+from .adapters import source_patterns as _adapter_source_patterns
 from .core import fixpoint
 from .core import gate as gate_mod
 from .core import reconcile as reconcile_mod
@@ -110,13 +111,13 @@ def _run_adapter(
 
 
 def _source_patterns(specs: list[tuple[str, dict | None]]) -> tuple[str, ...]:
-    """Use the configured adapter inputs for source-bound artifact provenance."""
-    globs = [
-        pattern
-        for _, config in specs
-        for pattern in ((config or {}).get("globs") or [])
-    ]
-    return tuple(dict.fromkeys(globs)) if globs else ("**/*.py",)
+    """Use the configured adapter inputs for source-bound artifact provenance.
+
+    The rule itself lives in `capcov.adapters` -- the one place that is allowed to
+    know what an adapter reads -- because the browser probe resolves the same set
+    and `reconcile` refuses two artifacts hashed over different trees.
+    """
+    return _adapter_source_patterns(specs)
 
 
 def _emit(path: Path, doc: dict, check: bool) -> int:
@@ -257,7 +258,8 @@ def cmd_discover(args: argparse.Namespace) -> int:
             )
     capabilities.sort(key=lambda c: (c["entity"], c["surface"]))
 
-    tree_hash, files = artifacts.tree_sha256(source_dir, _source_patterns(specs))
+    patterns = _source_patterns(specs)
+    tree_hash, files = artifacts.tree_sha256(source_dir, patterns)
     blind = [b for b in raw["blind_spots"] if b["blind"]]
     extractor = "capcov " + (
         adapters[0].NAME
@@ -267,7 +269,7 @@ def cmd_discover(args: argparse.Namespace) -> int:
     doc = {
         "kind": "capabilities",
         "derived_from": artifacts.provenance(
-            str(source_dir.relative_to(target)), tree_hash, extractor, files,
+            str(source_dir.relative_to(target)), tree_hash, extractor, files, patterns,
         ),
         "entities": raw["entities"],
         "surfaces": raw["surfaces"],

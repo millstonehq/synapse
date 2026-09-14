@@ -31,7 +31,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from capcov import cli
+from capcov import artifacts, cli
 
 from .support import APP, Project
 
@@ -432,6 +432,41 @@ class SourcePatternTests(unittest.TestCase):
             cli._source_patterns([("python-fastapi-sqlalchemy", None)]),
             ("**/*.py",),
         )
+
+    def test_mixed_config_hashes_both_trees(self) -> None:
+        # `globs` is a route-adapter key; the stack adapter never declares one. A
+        # union of only the DECLARED globs therefore dropped `**/*.py` outright
+        # the moment a Go route adapter appeared beside it, and a Python source
+        # edit stopped invalidating capabilities.json.
+        self.assertEqual(
+            cli._source_patterns(
+                [
+                    ("python-fastapi-sqlalchemy", {}),
+                    ("treesitter-routes", {"globs": ["*.go"]}),
+                ]
+            ),
+            ("**/*.py", "*.go"),
+        )
+
+    def test_unknown_adapter_never_shrinks_the_tree_to_nothing(self) -> None:
+        self.assertEqual(
+            cli._source_patterns([("some-future-adapter", {})]), ("**/*.py",)
+        )
+
+    def test_discover_records_the_patterns_its_hash_was_taken_over(self) -> None:
+        # The hash is only interpretable together with its glob set; `outcomes`
+        # recomputes from this field.
+        self.assertEqual(
+            artifacts.source_patterns_of(
+                artifacts.provenance("src", "sha", "x", 1, ("*.go",))
+            ),
+            ("*.go",),
+        )
+        self.assertEqual(
+            artifacts.source_patterns_of(artifacts.provenance("src", "sha", "x", 1)),
+            ("**/*.py",),
+        )
+        self.assertEqual(artifacts.source_patterns_of({}), ("**/*.py",))
 
 
 if __name__ == "__main__":

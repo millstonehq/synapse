@@ -184,6 +184,17 @@ def observed_artifact(body: dict) -> dict:
     return {"schema_version": 1, "kind": "observed", "derived_from": {}, **body}
 
 
+def gate_failures(coverage: dict) -> set[tuple[str, str]]:
+    """(rule, subject) pairs the gate raised.
+
+    Asserting the PAIR, not merely that the gate is non-empty: a gate reddened by
+    an unrelated `undiscovered-surface` proves nothing about required-flow gating,
+    and a test that cannot tell the two apart passes against a gate with the flow
+    check deleted (tests/fixtures/backpressure/ignore-required-flows.patch).
+    """
+    return {(f.rule, f.subject) for f in gate(coverage, None)}
+
+
 class ProjectionShape(unittest.TestCase):
     def test_carriers_are_always_present(self) -> None:
         body = project(plan(flow_model(), "browser"), run_evidence(plan(flow_model(), "browser")))
@@ -279,7 +290,9 @@ class AssertionFailureOmitsTheBinding(unittest.TestCase):
         run["scenarios"] = [s for s in run["scenarios"] if s["id"] == "list"]
         coverage = reconcile(discovered_capabilities([OPEN_ROUTE]),
                              observed_artifact(project(execution_plan, run)))
-        self.assertTrue(gate(coverage, None))
+        # `list` passed on the very route `open` was supposed to exercise. The
+        # absent scenario must still be named, by id.
+        self.assertIn(("required-flow-failed", "open"), gate_failures(coverage))
 
     def test_duplicate_scenario_cannot_overwrite_failure(self) -> None:
         execution_plan = plan(flow_model(), "browser")
@@ -293,18 +306,34 @@ class AssertionFailureOmitsTheBinding(unittest.TestCase):
         for scope in ("diagnostic", "partial", "unknown"):
             with self.subTest(scope=scope):
                 body = project(execution_plan, run_evidence(execution_plan, execution_scope=scope))
-                self.assertTrue(gate(reconcile(discovered_capabilities([]), observed_artifact(body)), None))
+                # Every route IS discovered here, so a scope failure is the only
+                # thing that can redden the gate on the non-diagnostic scopes --
+                # against an empty inventory `undiscovered-surface` reddens it for
+                # free and the scope rule goes untested.
+                coverage = reconcile(
+                    discovered_capabilities([LIST_ROUTE, OPEN_ROUTE]),
+                    observed_artifact(body),
+                )
+                self.assertIn(("required-flow-failed", "scope"), gate_failures(coverage))
         for scenario in execution_plan["scenarios"]:
             for step in scenario["steps"]:
                 step["commands"] = []
         body = project(execution_plan, run_evidence(execution_plan))
-        self.assertTrue(body["flows_failures"])
+        coverage = reconcile(
+            discovered_capabilities([LIST_ROUTE, OPEN_ROUTE]), observed_artifact(body)
+        )
+        # A scenario that asserts nothing cannot pass by asserting nothing.
+        self.assertLessEqual(
+            {("required-flow-failed", "list"), ("required-flow-failed", "open")},
+            gate_failures(coverage),
+        )
 
     def test_only_cannot_qualify_full_plan_even_on_shared_route(self) -> None:
         execution_plan = plan(flow_model(), "browser")
         run = run_evidence(execution_plan, hit={"list": OPEN_ROUTE})
         body = project(execution_plan, run, only="list")
-        self.assertTrue(gate(reconcile(discovered_capabilities([OPEN_ROUTE]), observed_artifact(body)), None))
+        coverage = reconcile(discovered_capabilities([OPEN_ROUTE]), observed_artifact(body))
+        self.assertIn(("required-flow-failed", "scope"), gate_failures(coverage))
 
     def test_old_browser_receipt_requires_fresh_observation(self) -> None:
         execution_plan = plan(flow_model(), "browser")

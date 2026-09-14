@@ -17,6 +17,9 @@ from pathlib import Path
 
 SCHEMA_VERSION = 1
 
+# The source glob set a tree hash is taken over when nothing else is declared.
+DEFAULT_PATTERNS = ("**/*.py",)
+
 # `derived_from` describes the RUN -- when it happened and against which exact
 # bytes. `--check` asks a different question: has what the system can do changed?
 # Diffing the provenance too would fail the check on every reformatted line,
@@ -29,7 +32,7 @@ SCHEMA_VERSION = 1
 VOLATILE = ("derived_from",)
 
 
-def tree_sha256(root: Path, patterns: tuple[str, ...] = ("**/*.py",)) -> tuple[str, int]:
+def tree_sha256(root: Path, patterns: tuple[str, ...] = DEFAULT_PATTERNS) -> tuple[str, int]:
     """Hash a source tree: sha256 over a sorted manifest of per-file hashes.
 
     Returns (hash, file_count). The manifest is hashed rather than the
@@ -48,14 +51,41 @@ def tree_sha256(root: Path, patterns: tuple[str, ...] = ("**/*.py",)) -> tuple[s
     return hashlib.sha256(manifest.encode()).hexdigest(), len(set(entries))
 
 
-def provenance(artifact: str, artifact_sha256: str, extractor: str, files: int) -> dict:
-    return {
+def provenance(
+    artifact: str,
+    artifact_sha256: str,
+    extractor: str,
+    files: int,
+    patterns: tuple[str, ...] | None = None,
+) -> dict:
+    """Describe the run: which bytes, read by whom, when -- and over which globs.
+
+    `artifact_sha256` is only meaningful together with the pattern set it was
+    taken over: the same tree hashed as `**/*.py` and as `*.go` gives two
+    different, equally valid answers. Recording the patterns is what lets a LATER
+    reader (`capcov outcomes`) recompute the same hash instead of silently
+    recomputing a different one and calling the inventory stale. Omitted for an
+    artifact written over the Python default, so old artifacts keep reading.
+    """
+    doc = {
         "artifact": artifact,
         "artifact_sha256": artifact_sha256,
         "artifact_files": files,
         "extractor": extractor,
         "extracted_at": datetime.now(UTC).isoformat(timespec="seconds"),
     }
+    if patterns is not None and tuple(patterns) != DEFAULT_PATTERNS:
+        doc["source_patterns"] = list(patterns)
+    return doc
+
+
+def source_patterns_of(derived_from: dict) -> tuple[str, ...]:
+    """The globs an artifact's `artifact_sha256` was taken over.
+
+    An artifact written before provenance carried the field, or written over the
+    Python default, has none -- that is the default, not an error.
+    """
+    return tuple(derived_from.get("source_patterns") or DEFAULT_PATTERNS)
 
 
 def write(path: Path, kind: str, derived_from: dict, body: dict) -> None:

@@ -16,7 +16,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from .artifacts import tree_sha256
+from .artifacts import source_patterns_of, tree_sha256
 from .flows.model import digest
 
 STATUSES = ("demonstrated", "failed", "missing", "unresolved", "inconclusive")
@@ -80,7 +80,13 @@ def validate(mapping: dict, inventory: dict) -> None:
 def provenance(root: Path, mapping: dict, inventory: dict) -> dict:
     validate(mapping, inventory)
     source = local_path(root, inventory["derived_from"]["artifact"])
-    if tree_sha256(source)[0] != inventory["derived_from"]["artifact_sha256"]:
+    # Recompute the inventory's hash over the SAME globs discover used. Reading
+    # the tree as `**/*.py` against an inventory taken over `*.go` is not a
+    # staleness finding, it is two different questions -- and it made every
+    # `capcov outcomes` command unusable on the non-Python targets discover now
+    # supports.
+    patterns = source_patterns_of(inventory["derived_from"])
+    if tree_sha256(source, patterns)[0] != inventory["derived_from"]["artifact_sha256"]:
         raise ValueError("source inventory is stale; re-discover")
     paths = {}
     inputs = [local_path(root, name) for name in mapping["inputs"]]

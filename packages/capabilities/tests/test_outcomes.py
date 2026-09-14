@@ -101,6 +101,29 @@ class OutcomeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "current map"):
             self.coverage()
 
+    def test_non_python_inventory_is_not_read_as_stale(self):
+        # discover hashes the adapter's globs; provenance must recompute over the
+        # SAME globs. Recomputing `**/*.py` against a `*.go` inventory made every
+        # `capcov outcomes` command (including `check`) fail on exactly the
+        # non-Python targets discover supports.
+        (self.root / "src/app.go").write_text("package main\n")
+        self.inventory["derived_from"]["source_patterns"] = ["*.go"]
+        self.inventory["derived_from"]["artifact_sha256"] = tree_sha256(
+            self.root / "src", ("*.go",)
+        )[0]
+        self.assertIn("map_sha256", provenance(self.root, self.mapping, self.inventory))
+
+    def test_non_python_source_change_still_rejects_inventory(self):
+        # ...and the guard must keep working: a Go edit invalidates a Go inventory.
+        (self.root / "src/app.go").write_text("package main\n")
+        self.inventory["derived_from"]["source_patterns"] = ["*.go"]
+        self.inventory["derived_from"]["artifact_sha256"] = tree_sha256(
+            self.root / "src", ("*.go",)
+        )[0]
+        (self.root / "src/app.go").write_text("package main // changed\n")
+        with self.assertRaisesRegex(ValueError, "stale"):
+            provenance(self.root, self.mapping, self.inventory)
+
     def test_changed_source_rejects_inventory(self):
         (self.root / "src/app.py").write_text("value = 2\n")
         with self.assertRaisesRegex(ValueError, "stale"):
@@ -198,11 +221,17 @@ class OutcomeTests(unittest.TestCase):
         inventory.write_text(json.dumps(self.inventory))
         return [sys.executable, "-m", "capcov", "outcomes", "check", str(mapping),
                 "--inventory", str(inventory), "--target", str(self.root),
-                "--out", str(self.root / "run.json"), "--timeout", "15"]
+                "--out", str(self.root / "run.json"), "--timeout", "60"]
 
     def invoke_check(self, *extra, env=None):
+        # Generous bounds. These timeouts exist to stop a hung run, not to assert
+        # how fast a fresh pytest interpreter starts: the suite also runs inside
+        # check-backpressure.sh's disposable copies and on a shared CI runner, and
+        # a tight bound there fails as "pytest session did not finish normally" --
+        # an infrastructure timeout wearing a product failure's clothes. The one
+        # test that asserts timeout behavior passes its own `--timeout 1`.
         return subprocess.run(self.check_command() + list(extra), env=env,
-                              text=True, capture_output=True, timeout=25)
+                              text=True, capture_output=True, timeout=180)
 
     @requires_pytest
     def test_check_real_pytest_pass_and_failure_control_advancement(self):
