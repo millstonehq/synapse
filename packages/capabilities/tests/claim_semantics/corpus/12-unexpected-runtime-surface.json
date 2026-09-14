@@ -43,7 +43,7 @@
       ],
       "quantifier": "exists",
       "domain": null,
-      "mappings": [{"evidence_relation":"runtime_surface_observed","effect":"observation","context_indices":["tenant","run"],"bindings":[["tenant","tenant"],["run","run"]]}], "diagnostics": [{"trigger_relation":"runtime_surface_observed","effect":"forbidden","operational_status":"out-of-scope","context_indices":["tenant","run"],"required":true}]
+      "mappings": [{"evidence_relation":"runtime_surface_observed","effect":"observation","context_indices":["tenant","run"],"bindings":[["tenant","tenant"],["run","run"]]}], "diagnostics": [{"trigger_relation":"runtime_surface_observed","effect":"forbidden","operational_status":"out-of-scope","context_indices":["tenant","run"],"predicate":{"column":"surface","operator":"not-in","value":["route-known"]},"required":true}]
     }
   ],
   "facts": [

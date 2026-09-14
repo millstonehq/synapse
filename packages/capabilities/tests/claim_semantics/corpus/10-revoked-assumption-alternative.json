@@ -14,7 +14,7 @@
     "event": "evt-10",
     "attempt": "attempt-10"
   },
-  "rules": [{"name":"row_requires_independent_current_sql","claim_id":"claim-saved","premises":[{"relation":"sql_row_exists","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]},{"relation":"sql_snapshot_current__accepted","bindings":[]}]}],
+  "rules": [{"name":"row_requires_independent_current_sql","claim_id":"claim-saved","premises":[{"relation":"sql_row_exists","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]},{"relation":"sql_snapshot_current__accepted","scope":"global","bindings":[]}]}],
   "claims": [
     {
       "id": "claim-saved",

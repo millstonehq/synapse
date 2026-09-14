@@ -50,19 +50,42 @@ def bundle_payload(fixture: dict[str, Any]) -> dict[str, Any]:
     rules, mappings, diagnostics = [], [], []
     declarations = fixture.get("rules", ())
     claim_by_id = {entry["id"]: entry for entry in fixture["claims"]}
+    rule_names = set()
     for declaration in declarations:
+        if set(declaration) != {"name", "claim_id", "premises"}:
+            raise ValueError("rule declaration has unknown or missing fields")
+        if not isinstance(declaration["name"], str) or not declaration["name"] or declaration["name"] in rule_names:
+            raise ValueError("rule names must be unique non-empty strings")
+        rule_names.add(declaration["name"])
+        if declaration["claim_id"] not in claim_by_id or not isinstance(declaration["premises"], list) or not declaration["premises"]:
+            raise ValueError("rule declaration claim_id/premises are invalid")
         claim_entry = claim_by_id[declaration["claim_id"]]
         cdecl = schema["relations"][claim_entry["relation"]]
         claim_values = dict(zip((c["name"] for c in cdecl["columns"]), claim_entry["args"]))
         body = []
         for premise in declaration["premises"]:
+            if set(premise) - {"relation", "bindings", "predicates", "scope"} or "relation" not in premise or "bindings" not in premise:
+                raise ValueError("premise declaration has unknown or missing fields")
+            if not isinstance(premise["bindings"], list) or any(set(binding) != {"claim_column", "evidence_column", "type"} for binding in premise["bindings"]):
+                raise ValueError("binding declaration has unknown or missing fields")
+            if not premise["bindings"] and premise.get("scope") != "global":
+                raise ValueError("unbound premise requires explicit global scope")
+            if premise.get("scope") not in (None, "global", "claim"):
+                raise ValueError("unknown premise scope")
+            if any(set(predicate) != {"column", "type", "value"} for predicate in premise.get("predicates", ())):
+                raise ValueError("predicate declaration has unknown or missing fields")
             sdecl = schema["relations"][premise["relation"]]
             bindings = {binding["evidence_column"]: binding for binding in premise["bindings"]}
+            predicates = {predicate["column"]: predicate for predicate in premise.get("predicates", ())}
             claim_columns = {column["name"]: column for column in cdecl["columns"]}
             source_terms = []
             for col in sdecl["columns"]:
                 binding = bindings.get(col["name"])
-                if binding:
+                predicate = predicates.get(col["name"])
+                if predicate:
+                    if predicate["type"] != col["type"]: raise ValueError("typed predicate does not match evidence column")
+                    source_terms.append(_term(predicate["value"], predicate["type"]))
+                elif binding:
                     if binding["claim_column"] not in claim_columns or binding["type"] != col["type"] or binding["type"] != claim_columns[binding["claim_column"]]["type"]:
                         raise ValueError("typed rule binding does not match claim/evidence columns")
                     source_terms.append(_term(claim_values[binding["claim_column"]], binding["type"]))

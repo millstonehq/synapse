@@ -36,6 +36,7 @@
     "effect_reached": "symbol",
     "event": "symbol",
     "history": "symbol",
+    "holds": "boolean",
     "http_authorization": "symbol",
     "http_post_accepted": "symbol",
     "http_save_succeeded": "symbol",
@@ -348,8 +349,18 @@
           "context": false
         },
         {
+          "name": "capability",
+          "type": "symbol",
+          "context": false
+        },
+        {
           "name": "outcome",
           "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "holds",
+          "type": "boolean",
           "context": false
         }
       ],
@@ -357,7 +368,9 @@
         "tenant",
         "run",
         "history",
-        "outcome"
+        "capability",
+        "outcome",
+        "holds"
       ],
       "modality": "observation",
       "polarity": "positive",
