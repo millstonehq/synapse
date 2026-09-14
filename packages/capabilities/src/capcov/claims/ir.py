@@ -21,13 +21,17 @@ class _TextEnum(str, Enum):
 
 
 class TypeName(_TextEnum):
-    STRING = "string"
+    SYMBOL = "symbol"
+    STRING = "symbol"  # compatibility alias for early experimental callers
     INTEGER = "integer"
+    UNSIGNED = "unsigned"
+    DECIMAL = "unsigned"  # compatibility alias
     BOOLEAN = "boolean"
-    DECIMAL = "decimal"
-    IDENTIFIER = "identifier"
-    TIMESTAMP = "timestamp"
-    JSON = "json"
+    TIMESTAMP = "timestamp"  # epoch microseconds
+    DIGEST = "digest"
+    JSON_METADATA_ONLY = "json-metadata-only"
+    JSON = "json-metadata-only"  # compatibility alias
+    IDENTIFIER = "symbol"  # compatibility alias
 
 
 class Modality(_TextEnum):
@@ -77,6 +81,8 @@ class RelationDecl:
     completes: str | None = None
     finite: bool = False
     nonempty: bool = False
+    compatibility_targets: tuple[str, ...] = ()
+    compatibility_context_indices: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "columns", tuple(self.columns))
@@ -85,6 +91,8 @@ class RelationDecl:
         object.__setattr__(self, "binding", BindingTime(self.binding))
         object.__setattr__(self, "producer_classes", tuple(sorted(self.producer_classes)))
         object.__setattr__(self, "context_indices", tuple(self.context_indices))
+        object.__setattr__(self, "compatibility_targets", tuple(sorted(self.compatibility_targets)))
+        object.__setattr__(self, "compatibility_context_indices", tuple(self.compatibility_context_indices))
 
     @property
     def arity(self) -> int: return len(self.columns)
@@ -100,6 +108,8 @@ class Context:
 
     def __post_init__(self) -> None:
         if any(not isinstance(k, str) for k, _ in self.values): raise TypeError("context keys must be strings")
+        keys = [k for k, _ in self.values]
+        if len(keys) != len(set(keys)): raise ValueError("duplicate context keys")
         object.__setattr__(self, "values", tuple((k, _freeze_value(v)) for k, v in sorted(self.values)))
 
     def as_dict(self) -> dict[str, Any]: return dict(self.values)
@@ -189,10 +199,13 @@ class Bundle:
         # These collections denote sets in the language.  Normalize their
         # order at construction time so independently assembled bundles hash
         # identically even when their producers enumerate inputs differently.
-        object.__setattr__(self, "relations", tuple(sorted(self.relations, key=lambda x: x.name)))
-        object.__setattr__(self, "facts", tuple(sorted(self.facts, key=lambda x: repr(x))))
-        object.__setattr__(self, "rules", tuple(sorted(self.rules, key=lambda x: (x.name, repr(x)))))
-        object.__setattr__(self, "claims", tuple(sorted(self.claims, key=lambda x: repr(x))))
+        object.__setattr__(self, "relations", tuple(sorted(self.relations, key=_sort_key)))
+        object.__setattr__(self, "facts", tuple(sorted(self.facts, key=_sort_key)))
+        object.__setattr__(self, "rules", tuple(sorted(self.rules, key=_sort_key)))
+        object.__setattr__(self, "claims", tuple(sorted(self.claims, key=_sort_key)))
+        metadata_keys = [k for k, _ in self.metadata]
+        if any(not isinstance(k, str) for k in metadata_keys): raise TypeError("metadata keys must be strings")
+        if len(metadata_keys) != len(set(metadata_keys)): raise ValueError("duplicate metadata keys")
         object.__setattr__(self, "metadata", tuple((k, _freeze_value(v)) for k, v in sorted(self.metadata)))
         if self.schema_version != SCHEMA_VERSION:
             raise ValueError(f"unsupported claim schema version: {self.schema_version}")
@@ -231,6 +244,16 @@ def to_json(value: Any) -> str: return canonical_json(value)
 def canonical_digest(value: Any) -> str: return digest(value)
 
 
+def _sort_key(value: Any) -> str:
+    """Canonical structural key; malformed IR gets a deterministic type key."""
+    try:
+        return canonical_json(value)
+    except (TypeError, ValueError):
+        if is_dataclass(value):
+            return value.__class__.__module__ + "." + value.__class__.__qualname__ + "{" + ",".join(f.name + ":" + _sort_key(getattr(value, f.name)) for f in fields(value)) + "}"
+        return type(value).__module__ + "." + type(value).__qualname__
+
+
 class _FrozenMap(Mapping[str, Any]):
     __slots__ = ("_items",)
     def __init__(self, items): self._items = tuple(items)
@@ -262,7 +285,7 @@ def _strict_object(raw, allowed, path):
     return raw
 
 
-def bundle_from_json(source: str | bytes | Mapping[str, Any]) -> Bundle:
+def bundle_from_json(source: str | bytes | Mapping[str, Any], *, validate: bool = True) -> Bundle:
     """Strictly ingest a schema-v1 JSON object; unknown fields are rejected."""
     def reject_constant(value): raise ValueError(f"non-standard JSON constant: {value}")
     def reject_duplicate(pairs):
@@ -278,8 +301,8 @@ def bundle_from_json(source: str | bytes | Mapping[str, Any]) -> Bundle:
         x = _strict_object(x, {"name", "type", "context"}, "column")
         return Column(x["name"], x["type"], x.get("context", False))
     def relation(x):
-        x = _strict_object(x, {"name", "columns", "modality", "polarity", "binding", "primitive", "producer_classes", "context_indices", "completes", "finite", "nonempty"}, "relation")
-        return RelationDecl(x["name"], tuple(column(c) for c in x.get("columns", ())), x.get("modality", "observation"), x.get("polarity", "positive"), x.get("binding", "runtime"), x.get("primitive", True), tuple(x.get("producer_classes", ())), tuple(x.get("context_indices", ())), x.get("completes"), x.get("finite", False), x.get("nonempty", False))
+        x = _strict_object(x, {"name", "columns", "modality", "polarity", "binding", "primitive", "producer_classes", "context_indices", "completes", "finite", "nonempty", "compatibility_targets", "compatibility_context_indices"}, "relation")
+        return RelationDecl(x["name"], tuple(column(c) for c in x.get("columns", ())), x.get("modality", "observation"), x.get("polarity", "positive"), x.get("binding", "runtime"), x.get("primitive", True), tuple(x.get("producer_classes", ())), tuple(x.get("context_indices", ())), x.get("completes"), x.get("finite", False), x.get("nonempty", False), tuple(x.get("compatibility_targets", ())), tuple(x.get("compatibility_context_indices", ())))
     def term(x):
         x = _strict_object(x, {"variable", "value", "type"}, "term")
         if "variable" in x:
@@ -304,7 +327,11 @@ def bundle_from_json(source: str | bytes | Mapping[str, Any]) -> Bundle:
     def claim(x):
         x = _strict_object(x, {"relation", "terms", "context", "quantifier", "domain"}, "claim")
         return Claim(x["relation"], tuple(term(t) for t in x.get("terms", ())), Context.from_mapping(x.get("context", {})), x.get("quantifier", "exists"), x.get("domain"))
-    return Bundle(tuple(relation(x) for x in raw.get("relations", ())), tuple(atom(x) for x in raw.get("facts", ())), tuple(rule(x) for x in raw.get("rules", ())), tuple(claim(x) for x in raw.get("claims", ())), tuple(sorted((raw.get("metadata") or {}).items())))
+    bundle = Bundle(tuple(relation(x) for x in raw.get("relations", ())), tuple(atom(x) for x in raw.get("facts", ())), tuple(rule(x) for x in raw.get("rules", ())), tuple(claim(x) for x in raw.get("claims", ())), tuple(sorted((raw.get("metadata") or {}).items())))
+    if validate:
+        from .validation import assert_valid
+        assert_valid(bundle)
+    return bundle
 
 
 def from_json(source): return bundle_from_json(source)

@@ -19,7 +19,7 @@ class ContractReviewTests(unittest.TestCase):
         value = {"x": [1, {"y": 2}]}
         c = Constant(value, TypeName.JSON)
         value["x"].append(3)
-        self.assertEqual(canonical_json(c), '{"type":"json","value":{"x":[1,{"y":2}]}}')
+        self.assertEqual(canonical_json(c), '{"type":"json-metadata-only","value":{"x":[1,{"y":2}]}}')
         with self.assertRaises(TypeError): Constant({1: "bad"})
         with self.assertRaises(ValueError): Constant(math.nan)
         with self.assertRaises(TypeError): canonical_json({"bad": {1: 2}})
@@ -80,6 +80,53 @@ class ContractReviewTests(unittest.TestCase):
         with self.assertRaises(ValueError): bundle_from_json('{"schema_version":1,"relations":[],"facts":[],"rules":[],"claims":[],"metadata":{},"x":NaN}')
         bad = dict(base); bad["schema_version"] = 2
         with self.assertRaises(ValueError): bundle_from_json(bad)
+
+    def test_validation_is_total_for_malformed_rule_parts(self):
+        rel = R("a", (("x", TypeName.STRING, False),))
+        malformed = Rule(object(), (object(),), aggregation=object())
+        codes = {i.code for i in validate_bundle(Bundle((rel,), rules=(malformed,)))}
+        self.assertTrue({"atom-type", "aggregation-type"}.issubset(codes))
+
+    def test_declared_constant_type_is_checked_against_value(self):
+        rel = R("a", (("x", TypeName.INTEGER, False),))
+        issues = validate_bundle(Bundle((rel,), facts=(Atom("a", (Constant("1", TypeName.INTEGER),)),)))
+        self.assertIn("type-mismatch", {i.code for i in issues})
+
+    def test_frozen_json_is_recognized_as_json_type(self):
+        rel = R("a", (("payload", TypeName.JSON, False),))
+        self.assertFalse(validate_bundle(Bundle((rel,), facts=(Atom("a", (Constant({"x": [1]}, TypeName.JSON),)),))))
+
+    def test_context_and_metadata_duplicates_are_rejected(self):
+        with self.assertRaises(ValueError): Context((('tenant', 'a'), ('tenant', 'b')))
+        with self.assertRaises(ValueError): Bundle((), metadata=(('x', 1), ('x', 2)))
+        rel = R("a", (("tenant", TypeName.STRING, True),), context_indices=("tenant",))
+        claim = Claim("a", (Constant("t"),), Context.from_mapping({"tenant": 4}))
+        self.assertIn("type-mismatch", {i.code for i in validate_bundle(Bundle((rel,), claims=(claim,)))})
+
+    def test_aggregation_requires_body_source_and_head_dataflow(self):
+        src = R("src", (("tenant", TypeName.STRING, True), ("n", TypeName.INTEGER, False)), context_indices=("tenant",))
+        out = R("out", (("tenant", TypeName.STRING, True), ("n", TypeName.INTEGER, False)), context_indices=("tenant",))
+        dom = R("dom", (("tenant", TypeName.STRING, True),), finite=True, nonempty=True, context_indices=("tenant",))
+        clo = R("closed", (("tenant", TypeName.STRING, True),), modality=Modality.COMPLETENESS, completes="dom", context_indices=("tenant",))
+        agg = Aggregation("s", "src", ("tenant",), "n", "sum", "dom", "closed")
+        rule = Rule(Atom("out", (Variable("t"), Variable("z"))), (), aggregation=agg)
+        self.assertIn("aggregation-source", {i.code for i in validate_bundle(Bundle((src, out, dom, clo), rules=(rule,)))})
+
+    def test_compatibility_targets_and_positions_are_explicit(self):
+        a = R("a", (("tenant", TypeName.STRING, True),), context_indices=("tenant",))
+        b = R("b", (("tenant", TypeName.STRING, True),), context_indices=("tenant",))
+        c = R("compat", (("left", TypeName.STRING, True), ("right", TypeName.STRING, True)), modality=Modality.COMPATIBILITY, context_indices=("left", "right"), compatibility_targets=("a", "b"), compatibility_context_indices=("left", "right"))
+        self.assertFalse({i.code for i in validate_bundle(Bundle((a, b, c)))} & {"compatibility-target", "compatibility-context"})
+        bad = RelationDecl("bad", c.columns, modality=Modality.COMPATIBILITY, context_indices=("left", "right"), compatibility_targets=("a", "missing"), compatibility_context_indices=("wrong",))
+        self.assertTrue({"compatibility-target", "compatibility-context"}.issubset({i.code for i in validate_bundle(Bundle((a, b, bad)))}))
+
+    def test_structural_sorting_and_default_json_validation(self):
+        r = R("a", (("x", TypeName.STRING, False),))
+        one = Bundle((r,), facts=(Atom("a", (Constant("b"),)), Atom("a", (Constant("a"),))))
+        two = Bundle((r,), facts=(Atom("a", (Constant("a"),)), Atom("a", (Constant("b"),))))
+        self.assertEqual(canonical_json(one), canonical_json(two))
+        payload = {"schema_version": 1, "relations": [{"name": "a", "columns": [{"name": "x", "type": "string", "context": False}]}], "facts": [{"relation": "a", "terms": [{"value": 3}]}], "rules": [], "claims": [], "metadata": {}}
+        with self.assertRaises(Exception): bundle_from_json(payload)
 
 
 if __name__ == "__main__": unittest.main()
