@@ -87,6 +87,35 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
                 second = bundle_from_json(json.loads(canonical_json(first)), validate=True)
                 self.assertEqual(schema_digest(first), schema_digest(second))
 
+    def test_declared_outputs_cover_expected_diagnostic_payloads(self):
+        expected = json.loads((ROOT / "expected.json").read_text())["cases"]
+        for path in sorted(ROOT.glob("[0-9][0-9]-*.json")):
+            bundle = load_fixture(path)
+            by_claim = {}
+            for output in bundle.outputs:
+                by_claim.setdefault(output.claim_id, []).append(output)
+            for claim_id, table in expected[path.stem]["claims"].items():
+                declared = by_claim.get(claim_id, [])
+                observed = {o.evidence_id for o in declared if o.kind.value == "observed"}
+                forbidden = {o.evidence_id for o in declared if o.kind.value == "forbidden"}
+                self.assertTrue(set(table["observed_leaves"]).issubset(observed), path.stem)
+                self.assertTrue(set(table["forbidden_leaves"]).issubset(forbidden), path.stem)
+                discrepancies = [dict(o.fields).get("kind").value for o in declared if o.kind.value == "discrepancy" and "kind" in dict(o.fields)]
+                self.assertTrue({d["kind"] for d in table["discrepancies"]}.issubset(discrepancies), path.stem)
+                missing = {(dict(o.fields).get("reason").value, o.relation) for o in declared if o.kind.value == "missing_premise" and "reason" in dict(o.fields)}
+                self.assertTrue({(d["reason"], d["relation"]) for d in table["missing_premises"]}.issubset(missing), path.stem)
+
+    def test_malformed_output_templates_are_rejected_structurally(self):
+        payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
+        payload["outputs"] = [{"kind": "observed", "claim_id": "claim-terminal-delivery", "evidence_id": "missing"}]
+        with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
+        payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
+        payload["outputs"] = [{"kind": "missing_premise", "claim_id": "claim-terminal-delivery", "relation": "smtp_accepted", "fields": {"x": {"source": "constant", "type": "boolean", "value": "not-bool"}}}]
+        with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
+        payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
+        payload["outputs"] = [{"kind": "discrepancy", "claim_id": "claim-terminal-delivery", "fields": {"x": {"source": "evidence", "evidence_id": "fact-http-save", "column": "missing", "type": "symbol"}}}]
+        with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
+
     def test_mixed_history_false_rows_are_observation_discrepancies(self):
         bundle = load_fixture(ROOT / "11-compatible-history-sets.json")
         self.assertTrue(all(mapping.effect == EvidenceEffect.OBSERVATION for mapping in bundle.mappings if mapping.evidence_relation == "compatible_history"))

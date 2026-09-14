@@ -15,6 +15,7 @@
     "attempt": "attempt-1",
     "recipient": "a@example.test"
   },
+  "outputs": [{"kind":"observed","claim_id":"claim-terminal-delivery","evidence_id":"fact-http-save"},{"kind":"observed","claim_id":"claim-terminal-delivery","evidence_id":"fact-issue-changed"},{"kind":"observed","claim_id":"claim-terminal-delivery","evidence_id":"fact-mail-250"},{"kind":"observed","claim_id":"claim-terminal-delivery","evidence_id":"fact-sql-terminal"}],
   "rules": [{"name":"terminal_requires_correlated_path","claim_id":"claim-terminal-delivery","premises":[
     {"relation":"http_save_succeeded","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]},
     {"relation":"issue_changed_observed","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]},
