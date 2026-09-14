@@ -10,6 +10,7 @@ is absent.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import textwrap
 import unittest
@@ -36,6 +37,17 @@ _FIXTURES = Path(__file__).resolve().parent / "fixtures"
 # reads as a green run and the python differential oracle cannot catch it.
 GO_FIXTURE = _FIXTURES / "scip_go_nested_symbols.json"
 PHP_FIXTURE = _FIXTURES / "scip_php_symbols.json"
+
+# The deep go/php hybrid reads the source tree for its call-site census through
+# the per-language blind-spot enumerator, whose go/php inventory is a tree-sitter
+# parse. That path is the tree-sitter adapter's own -- a deep go/php ast_raw
+# cannot be produced without the extra in the first place -- so the deep-join
+# tests below require it and skip cleanly when it is absent. The python path
+# (ast, stdlib) is unaffected.
+_HAVE_TS = (
+    importlib.util.find_spec("tree_sitter") is not None
+    and importlib.util.find_spec("tree_sitter_language_pack") is not None
+)
 
 _PY = "scip-python python spike 0.0.1 "
 
@@ -338,6 +350,7 @@ class DeepHybridJoinTest(unittest.TestCase):
             "unresolved": [],
         }
 
+    @unittest.skipUnless(_HAVE_TS, "deep go/php hybrid census needs the treesitter extra")
     def test_provisional_keys_are_canonicalized_to_scip_nodes(self) -> None:
         hybrid = resolve.hybrid_raw(
             self._ast_raw(), self._php(), "/tmp/phpslice", language="php", deep=True
@@ -347,6 +360,7 @@ class DeepHybridJoinTest(unittest.TestCase):
         self.assertIn(handler, hybrid["_direct"])
         self.assertIn("App\\Repositories:JobRepository.writeAudit", hybrid["_ops"])
 
+    @unittest.skipUnless(_HAVE_TS, "deep go/php hybrid census needs the treesitter extra")
     def test_node_keys_seeded_from_scip_defs_keep_the_mid_chain_edge(self) -> None:
         hybrid = resolve.hybrid_raw(
             self._ast_raw(), self._php(), "/tmp/phpslice", language="php", deep=True
@@ -362,6 +376,7 @@ class DeepHybridJoinTest(unittest.TestCase):
             },
         )
 
+    @unittest.skipUnless(_HAVE_TS, "deep go/php hybrid census needs the treesitter extra")
     def test_a_location_with_no_scip_def_is_named_not_dropped(self) -> None:
         hybrid = resolve.hybrid_raw(
             self._ast_raw(), self._php(), "/tmp/phpslice", language="php", deep=True
