@@ -28,6 +28,14 @@ FIXTURE = (
     / "fixtures"
     / "scip_normalized_router_service.json"
 )
+_FIXTURES = Path(__file__).resolve().parent / "fixtures"
+# Real `scip print --json` dumps: scip-go 0.2.7 over a NESTED-package module and
+# scip-php (davidrjenni, dev-main) over a Laravel-shaped controller->repo->model
+# slice. These are the crux: the symbol->node half is proven on real go/php
+# symbols, not synthesized ones, because a whole-language translation failure
+# reads as a green run and the python differential oracle cannot catch it.
+GO_FIXTURE = _FIXTURES / "scip_go_nested_symbols.json"
+PHP_FIXTURE = _FIXTURES / "scip_php_symbols.json"
 
 _PY = "scip-python python spike 0.0.1 "
 
@@ -72,6 +80,308 @@ class SymbolTranslationTest(unittest.TestCase):
         self.assertIsNone(resolve.scip_symbol_to_node(_PY + "shop/__init__:"))
         self.assertIsNone(resolve.scip_symbol_to_node(None))
         self.assertIsNone(resolve.scip_symbol_to_node(""))
+
+
+def _definition_nodes(normalized: dict, language: str) -> tuple[dict, list]:
+    """(node -> the one symbol that produced it, list of collisions) over every
+    DEFINITION symbol in a normalized index, for ``language``."""
+    to_node = resolve.normalizer(language).symbol_to_node
+    by_node: dict[str, str] = {}
+    collisions: list[tuple] = []
+    for doc in normalized["documents"]:
+        for occ in doc["occurrences"]:
+            if not occ["is_definition"]:
+                continue
+            node = to_node(occ["symbol"])
+            if node is None:
+                continue
+            if node in by_node and by_node[node] != occ["symbol"]:
+                collisions.append((node, occ["symbol"], by_node[node]))
+            by_node.setdefault(node, occ["symbol"])
+    return by_node, collisions
+
+
+class NormalizerStrategyTest(unittest.TestCase):
+    """The per-indexer normalizer: one parse, a per-language namespace separator.
+    The single Python-shaped translator silently mistranslated the others; this
+    pins each language's node spelling (the co-design contract T3 reproduces)."""
+
+    def test_python_dotted_module_unchanged(self) -> None:
+        n = resolve.normalizer("python")
+        self.assertEqual(
+            n.symbol_to_node(_PY + "`shop.router`/make_job()."), "shop.router:make_job"
+        )
+        # scip-python's other observed form -- bare slash namespaces -- yields the
+        # same dotted module, so both forms co-design to module.dotted:qualname.
+        self.assertEqual(
+            n.symbol_to_node(_PY + "app/models/Job#"), "app.models:Job"
+        )
+
+    def test_go_import_path_is_the_package(self) -> None:
+        # scip-go single-backticks the FULL import path; the go normalizer keeps
+        # it verbatim as the package (slash-joined) -> import/path:Recv.Method.
+        go = "scip-go gomod github.com/example/gonest . "
+        self.assertEqual(
+            resolve.normalizer("go").symbol_to_node(
+                go + "`github.com/example/gonest/internal/jobs`/Repo#Get()."
+            ),
+            "github.com/example/gonest/internal/jobs:Repo.Get",
+        )
+
+    def test_php_bare_namespaces_are_the_package(self) -> None:
+        # scip-php emits BARE namespace descriptors and no backticks: the crux the
+        # single Python translator dropped to None. The php normalizer consumes
+        # all leading namespaces (backslash-joined) -> Namespace\Class.method.
+        php = "scip-php composer example/php-slice 1.0.0.0 "
+        self.assertEqual(
+            resolve.normalizer("php").symbol_to_node(
+                php + "App/Http/Controllers/JobController#getJob()."
+            ),
+            "App\\Http\\Controllers:JobController.getJob",
+        )
+
+    def test_one_translator_cannot_serve_two_indexers_is_the_crux(self) -> None:
+        # The crux, made concrete: the SAME php symbol translated with the wrong
+        # language's normalizer yields a DIFFERENT node spelling (python dot-joins
+        # the namespace, php backslash-joins it). The dotted spelling never
+        # matches the php handler adapter's backslash co-design key, so every edge
+        # is silently mis-keyed -- a green run. Per-indexer selection is what makes
+        # the two sides agree; the php normalizer is the co-design spelling.
+        php = "scip-php composer example/php-slice 1.0.0.0 App/Repositories/JobRepository#get()."
+        wrong = resolve.normalizer("python").symbol_to_node(php)
+        right = resolve.normalizer("php").symbol_to_node(php)
+        self.assertEqual(right, "App\\Repositories:JobRepository.get")
+        self.assertNotEqual(wrong, right, "the wrong normalizer must not silently agree")
+        self.assertEqual(wrong, "App.Repositories:JobRepository.get")
+
+    def test_an_unknown_language_is_rejected_not_silently_python(self) -> None:
+        with self.assertRaises(ValueError):
+            resolve.normalizer("ruby")
+
+
+class GoNestedSymbolResolveTest(unittest.TestCase):
+    """symbol->node over the REAL scip-go nested-package dump: non-None,
+    collision-free, byte-equal to the co-design node for every definition; and
+    the resolved call graph drops no in-project edge across packages+files."""
+
+    def setUp(self) -> None:
+        from capcov.scip import map as scip_map
+
+        self.scip_map = scip_map
+        self.normalized = runner.normalize_scip_json(json.loads(GO_FIXTURE.read_text()))
+
+    def test_every_node_shaped_definition_resolves_and_is_collision_free(self) -> None:
+        by_node, collisions = _definition_nodes(self.normalized, "go")
+        self.assertEqual(collisions, [], "two definitions must not share a node id")
+        to_node = resolve.normalizer("go").symbol_to_node
+        for doc in self.normalized["documents"]:
+            for occ in doc["occurrences"]:
+                if not occ["is_definition"]:
+                    continue
+                sym = occ["symbol"]
+                node = to_node(sym)
+                # None is allowed ONLY for a non-node symbol: a local, a bare
+                # package (trailing `/`), or a parameter (trailing `)`).
+                if node is None:
+                    self.assertTrue(
+                        sym.startswith("local ")
+                        or sym.rstrip().endswith("/")
+                        or sym.rstrip().endswith(")"),
+                        f"a node-shaped definition translated to None: {sym!r}",
+                    )
+
+    def test_the_co_design_node_spellings_are_pinned(self) -> None:
+        by_node, _ = _definition_nodes(self.normalized, "go")
+        pkg = "github.com/example/gonest"
+        for expected in (
+            f"{pkg}/api:Handler.GetJob",
+            f"{pkg}/internal/jobs:Service.Fetch",
+            f"{pkg}/internal/jobs:Repo.Get",
+            f"{pkg}/internal/jobs:Repo.Write",
+            f"{pkg}/internal/jobs:Job",
+            f"{pkg}/internal/audit:AuditLog",
+            f"{pkg}/internal/audit:Record",
+        ):
+            self.assertIn(expected, by_node)
+
+    def test_calls_graph_drops_no_in_project_edge(self) -> None:
+        edges = self.scip_map.call_edges(self.normalized)
+        to_node = resolve.normalizer("go").symbol_to_node
+        in_project = [
+            e for e in edges if to_node(e["caller"]) and to_node(e["callee"])
+        ]
+        calls = resolve.calls_graph(edges, language="go")
+        rooted = sum(len(v) for v in calls.values())
+        self.assertEqual(
+            rooted, len(in_project), "every in-project edge must survive translation"
+        )
+        pkg = "github.com/example/gonest"
+        # the cross-file, cross-package chain GetJob -> Service.Fetch -> Repo.Get
+        self.assertIn(
+            f"{pkg}/internal/jobs:Service.Fetch",
+            calls[f"{pkg}/api:Handler.GetJob"],
+        )
+        self.assertIn(
+            f"{pkg}/internal/jobs:Repo.Get",
+            calls[f"{pkg}/internal/jobs:Service.Fetch"],
+        )
+
+
+class PhpSymbolResolveTest(unittest.TestCase):
+    """symbol->node over the REAL scip-php dump. scip-php's bare namespaces are
+    the documented crux (every edge -> None before the split); scip-php also
+    emits NO enclosing range, so the runner synthesizes one or map attributes no
+    caller. Both are proven here on the controller->repo call chain."""
+
+    def setUp(self) -> None:
+        from capcov.scip import map as scip_map
+
+        self.scip_map = scip_map
+        self.normalized = runner.normalize_scip_json(
+            json.loads(PHP_FIXTURE.read_text())
+        )
+
+    def test_every_node_shaped_definition_resolves_and_is_collision_free(self) -> None:
+        by_node, collisions = _definition_nodes(self.normalized, "php")
+        self.assertEqual(collisions, [], "two definitions must not share a node id")
+        to_node = resolve.normalizer("php").symbol_to_node
+        for doc in self.normalized["documents"]:
+            for occ in doc["occurrences"]:
+                if not occ["is_definition"]:
+                    continue
+                sym = occ["symbol"]
+                if to_node(sym) is None:
+                    # None allowed only for a parameter (a `().($p)` symbol).
+                    self.assertTrue(
+                        sym.rstrip().endswith(")"),
+                        f"a node-shaped definition translated to None: {sym!r}",
+                    )
+
+    def test_the_co_design_node_spellings_are_pinned(self) -> None:
+        by_node, _ = _definition_nodes(self.normalized, "php")
+        for expected in (
+            "App\\Http\\Controllers:JobController.getJob",
+            "App\\Repositories:JobRepository.get",
+            "App\\Repositories:JobRepository.writeAudit",
+            "App\\Models:Job",
+            "App\\Models:AuditLog",
+        ):
+            self.assertIn(expected, by_node)
+
+    def test_calls_graph_drops_no_in_project_edge(self) -> None:
+        # scip-php gives no enclosing range; the runner synthesized callable spans,
+        # so map attributes each call to getJob and NO in-project edge is dropped.
+        edges = self.scip_map.call_edges(self.normalized)
+        to_node = resolve.normalizer("php").symbol_to_node
+        in_project = [
+            e for e in edges if to_node(e["caller"]) and to_node(e["callee"])
+        ]
+        self.assertTrue(in_project, "the controller->repo calls must be edges at all")
+        calls = resolve.calls_graph(edges, language="php")
+        rooted = sum(len(v) for v in calls.values())
+        self.assertEqual(rooted, len(in_project))
+        handler = "App\\Http\\Controllers:JobController.getJob"
+        self.assertEqual(
+            calls[handler],
+            {
+                "App\\Repositories:JobRepository.get",
+                "App\\Repositories:JobRepository.writeAudit",
+            },
+        )
+
+
+class ScipDefsByLocationTest(unittest.TestCase):
+    """The (file,line)-join binding of record: SCIP owns the node spelling at
+    each definition site, keyed 1-based to match the adapter's node locations."""
+
+    def test_defs_are_keyed_by_one_based_location_to_the_scip_node(self) -> None:
+        normalized = runner.normalize_scip_json(json.loads(PHP_FIXTURE.read_text()))
+        defs = resolve.scip_defs_by_location(normalized, language="php")
+        # getJob is defined at SCIP 0-based line 15 -> AST 1-based 16.
+        self.assertEqual(
+            defs[("app/Http/Controllers/JobController.php", 16)],
+            "App\\Http\\Controllers:JobController.getJob",
+        )
+        # get() at 0-based 8 -> 1-based 9.
+        self.assertEqual(
+            defs[("app/Repositories/JobRepository.php", 9)],
+            "App\\Repositories:JobRepository.get",
+        )
+
+
+class DeepHybridJoinTest(unittest.TestCase):
+    """The deep hybrid: provisional adapter node keys are canonicalized against
+    SCIP's own definition set, node_keys is seeded from SCIP defs (so a mid-chain
+    node the adapter never registered still survives is_node), and a location
+    with no SCIP definition becomes a NAMED unresolved -- never a silent drop."""
+
+    def _php(self) -> dict:
+        return runner.normalize_scip_json(json.loads(PHP_FIXTURE.read_text()))
+
+    def _ast_raw(self) -> dict:
+        # A provisional deep dict as the tree-sitter adapter would emit it: nodes
+        # keyed provisionally and tagged with each definition's (file, 1-based
+        # line). It deliberately does NOT register the Repo.get node -- the SCIP
+        # def seed must supply it or the getJob->get edge would fail is_node.
+        return {
+            "_direct": {"prov:getJob": set(), "prov:writeAudit": {"audit_logs"}},
+            "_ops": {"prov:writeAudit": {"audit_logs": {"create"}}},
+            "_calls": {"prov:getJob": {"prov:writeAudit"}},
+            "surfaces": [
+                {"id": "http:GET /jobs/{id}", "handler": "prov:getJob"}
+            ],
+            "_node_locations": {
+                "prov:getJob": ["app/Http/Controllers/JobController.php", 16],
+                "prov:writeAudit": ["app/Repositories/JobRepository.php", 15],
+                "prov:ghost": ["app/Nowhere.php", 999],
+            },
+            "unresolved": [],
+        }
+
+    def test_provisional_keys_are_canonicalized_to_scip_nodes(self) -> None:
+        hybrid = resolve.hybrid_raw(
+            self._ast_raw(), self._php(), "/tmp/phpslice", language="php", deep=True
+        )
+        handler = "App\\Http\\Controllers:JobController.getJob"
+        self.assertEqual(hybrid["surfaces"][0]["handler"], handler)
+        self.assertIn(handler, hybrid["_direct"])
+        self.assertIn("App\\Repositories:JobRepository.writeAudit", hybrid["_ops"])
+
+    def test_node_keys_seeded_from_scip_defs_keep_the_mid_chain_edge(self) -> None:
+        hybrid = resolve.hybrid_raw(
+            self._ast_raw(), self._php(), "/tmp/phpslice", language="php", deep=True
+        )
+        handler = "App\\Http\\Controllers:JobController.getJob"
+        # Repo.get was never a provisional adapter node; it is a known node only
+        # because node_keys was seeded from SCIP's definitions (R8).
+        self.assertEqual(
+            hybrid["_calls"][handler],
+            {
+                "App\\Repositories:JobRepository.get",
+                "App\\Repositories:JobRepository.writeAudit",
+            },
+        )
+
+    def test_a_location_with_no_scip_def_is_named_not_dropped(self) -> None:
+        hybrid = resolve.hybrid_raw(
+            self._ast_raw(), self._php(), "/tmp/phpslice", language="php", deep=True
+        )
+        ghosts = [u for u in hybrid["unresolved"] if u.get("node") == "prov:ghost"]
+        self.assertEqual(len(ghosts), 1)
+        self.assertEqual(ghosts[0]["kind"], "deep-unresolved")
+        self.assertTrue(ghosts[0]["reason"], "an unresolved node is named, not dropped")
+
+    def test_shallow_path_is_byte_identical_without_a_deep_flag(self) -> None:
+        # The shallow python path must not shift: same inputs, deep defaulting off.
+        with Project(HybridAssemblyTest.FILES) as project:
+            ast_raw = adapter.discover(project.source, project.root)
+            shallow = resolve.hybrid_raw(
+                ast_raw, HybridAssemblyTest()._normalized(), project.source
+            )
+        self.assertNotIn("deep", shallow)
+        self.assertEqual(
+            shallow["_calls"], {"app.router:make_job": {"app.service:create_job"}}
+        )
 
 
 class CallsGraphFromFixtureTest(unittest.TestCase):
@@ -361,6 +671,28 @@ class ToolGuardTest(unittest.TestCase):
 
     def test_tools_available_is_a_bool_and_never_runs_a_tool(self) -> None:
         self.assertIsInstance(resolve.tools_available("python"), bool)
+
+    def test_tools_available_php_requires_the_script_not_just_php(self) -> None:
+        # php on PATH is necessary but not sufficient: without the standalone
+        # scip-php script php would falsely report available.
+        with (
+            patch("capcov.scip.resolve.shutil.which", return_value="/usr/bin/php"),
+            patch("capcov.scip.runner._scip_php_bin", return_value="/no/such/scip-php"),
+        ):
+            self.assertFalse(resolve.tools_available("php"))
+
+    def test_resolve_php_names_the_missing_scip_php_script(self) -> None:
+        with (
+            patch("capcov.scip.resolve.shutil.which", return_value="/usr/bin/php"),
+            patch("capcov.scip.runner._scip_php_bin", return_value="/no/such/scip-php"),
+        ):
+            with self.assertRaises(resolve.ScipToolsUnavailable) as ctx:
+                resolve.resolve(
+                    "/some/dir",
+                    {"_direct": {}, "_calls": {}, "surfaces": []},
+                    language="php",
+                )
+        self.assertIn("scip-php", str(ctx.exception))
 
 
 # ---------------------------------------------------------------------------
