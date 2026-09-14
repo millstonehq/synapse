@@ -35,6 +35,13 @@ contract cheaply in an interactive Pi session:
 /capcov-workflow smoke
 ```
 
+The deterministic manifest seam can be checked without Pi or a model:
+
+```text
+node .pi/workflows/test-capcov-experiment.mjs
+node .pi/workflows/test-capcov-runtime.mjs
+```
+
 The smoke is capped at two minutes, uses a read-only worker, requires an exact JSON
 result, appends a `smoke-result` event, and must leave actionable start/end details in
 `.capcov/pi-workflow/driver.log`.
@@ -58,6 +65,25 @@ For each dependency-ready task in
 6. accepts the task only when every gate passes and every reviewer approves;
 7. creates the task's git checkpoint itself and appends a completion event.
 
+Tasks are admitted through ordered waves. A wave may fan out read-only scouts,
+and parallel workers run in real detached Git worktrees. Their patches and gate
+results are persisted, then a single reducer integrates them into the root in
+manifest order. Only that reducer can mutate or commit the root checkout.
+Parallel tasks are accepted only when they declare distinct isolated `worktree`
+paths and their glob write sets are disjoint; the manifest loader rejects unsafe
+overlap instead of guessing. Each wave emits a `wave-checkpoint` event and
+pauses by default, so `/capcov-workflow resume` is the explicit admission to the
+next wave. `admission.requiresCompleted` and `admission.requiresEvents` provide
+hard conditional downstream admission for the Shen, specialization, and real-Go
+tracks without treating an agent's report as evidence. Existing task checkpoints
+are treated as virtual legacy checkpoints through the configured alias map.
+
+Differential/mismatch failures are identified only by the manifest's explicit
+gate `failureKind`, never by matching diagnostic text. They are recorded as
+`wave-repair` events. A wave is
+blocked after its configured (default three) repair attempts; retries cannot
+silently turn an unresolved counterexample into a pass.
+
 An implementer's `status: ready` is never the completion predicate. Failed tools,
 invalid structured output, failed gates, refuted reviews, missing external fixtures,
 and timeouts remain failures or blockers in the journal rather than being replaced
@@ -68,6 +94,13 @@ complete.
 The Go milestone may stop honestly when `CAPCOV_GO_FIXTURE_ROOT` is absent. Synthetic
 Python notification behavior cannot satisfy it.
 
+The active manifest is Datalog-first: semantic contract, adversarial corpus,
+parallel Python-reference and real Souffle kernels, differential shrinking,
+certificates, fresh target-go qualification, and bounded Datalog evaluation. The
+older Shen/specialization chain remains represented only for journal aliasing.
+Legacy tasks are disabled and cannot run or satisfy the independent
+Python-plus-Souffle evidence gate.
+
 ## Trust and safety
 
 - The committed manifest owns commands; agents cannot invent executable gate
@@ -76,9 +109,9 @@ Python notification behavior cannot satisfy it.
   authority. Use this only in a trusted checkout/container.
 - Reviewers receive only Pi's `read` tool. They inspect the persisted patch and
   source but cannot invoke shell commands or edit.
-- Only one writer runs at a time. Read-only scouts and reviewers run in parallel;
-  this avoids pretending overlapping writers are safe. Future writer parallelism
-  should use separate worktrees and disjoint manifest write sets.
+- Only one reducer writer integrates a wave at a time. Read-only scouts and
+  declared parallel workers run in isolated worktrees. Parallel worktrees and
+  disjoint manifest write sets are validated at load time.
 - The run is bounded by task count, three attempts per task, subprocess timeouts,
   dependency edges, and explicit cancellation.
 - Manual retry cannot reset an exhausted attempt budget, and cannot race an active run.
