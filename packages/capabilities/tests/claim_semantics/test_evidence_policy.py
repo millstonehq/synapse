@@ -78,6 +78,18 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
         missing = bundle_from_json(payload, validate=True)
         self.assertTrue(all(rule.aggregation.closure_witness == "compatible_history_domain_closed" for rule in missing.rules if rule.aggregation))
 
+    def test_all_fixture_bundles_canonically_reingest(self):
+        for path in ROOT.glob("[0-9][0-9]-*.json"):
+            with self.subTest(case=path.stem):
+                first = load_fixture(path)
+                second = bundle_from_json(json.loads(canonical_json(first)), validate=True)
+                self.assertEqual(schema_digest(first), schema_digest(second))
+
+    def test_mixed_history_false_rows_are_observation_discrepancies(self):
+        bundle = load_fixture(ROOT / "11-compatible-history-sets.json")
+        effects = {diagnostic.effect for diagnostic in bundle.diagnostics if diagnostic.trigger_relation == "compatible_history"}
+        self.assertEqual({EvidenceEffect.OBSERVATION}, effects)
+
     def test_malformed_evidence_policy_is_rejected(self):
         payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
         payload["evidence"][0]["depends_on"] = ["missing-id"]
