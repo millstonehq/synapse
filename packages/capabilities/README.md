@@ -349,6 +349,31 @@ Python distribution formats.
 
 ## Scoped outcome coverage with pytest
 
+### Test capcov's own advancement gate
+
+From `packages/capabilities`, run:
+
+```sh
+uv run --frozen --with pytest sh scripts/check-backpressure.sh
+```
+
+The checked-in `capcov.toml` and `capcov.outcomes.json` bind a small set of capcov's
+own acceptance behaviors to exact tests. The script discovers the actual source
+and runs `outcomes check` in disposable copies. Its host creates an `advanced`
+marker only on exit zero. It verifies three executions: a passing baseline, an
+omitted required check, and a source mutant that suppresses required browser-flow
+failures. The negative cases must return 1 and name the intended missing/failed
+outcome; an unrelated error is not a successful fault control. The script verifies
+cleanup and fails if any expectation is unmet. The existing package CI job runs
+this same command before building release artifacts.
+
+This establishes local host enforcement for these capcov obligations. It does not
+qualify every capcov feature, prove resistance to an agent rewriting its protected
+tests/host, or measure autonomous repair/convergence. Ordinary runs retain no JSON
+receipts in the repository; CI retains the terminal command output.
+
+### Bind consumer outcomes
+
 Use `capcov outcomes` to keep business outcomes separate from entity reachability.
 The consumer owns a JSON map of stable capability/outcome IDs to **exact pytest
 node IDs**, including parameter IDs. Every mapped case must pass setup, call, and

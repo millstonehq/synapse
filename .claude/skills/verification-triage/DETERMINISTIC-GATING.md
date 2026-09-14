@@ -19,6 +19,16 @@ The host must still enforce the exit code and own the accepted checker/contract
 revision. These changes do not prevent hostile runner code from fabricating its
 own observation, or prove deployment, rollback, and business-contract adequacy.
 
+Capcov itself now supplies a bounded local host check. From `packages/capabilities`,
+run `uv run --frozen --with pytest sh scripts/check-backpressure.sh`. Its authored
+`capcov.outcomes.json` binds capcov's own acceptance behavior. The script uses the
+actual CLI in disposable copies and creates an advancement marker only on exit zero.
+The baseline must advance; an omitted required test and a source mutant suppressing
+browser-flow failures must block for their specifically named outcomes. Cleanup is
+checked. These three cases passed locally; the same command is wired into package
+CI, whose remote execution has not been observed here. This tests local host
+enforcement, not an autonomous agent's behavior or an external product migration.
+
 ## The useful distinction
 
 There are three independent questions:

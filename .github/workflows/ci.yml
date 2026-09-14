@@ -29,6 +29,9 @@ jobs:
         env:
           PYTHONPATH: src
         run: uv run --frozen python -m unittest discover -s tests -t .
+      - name: Verify capcov blocks false advancement
+        timeout-minutes: 8
+        run: uv run --frozen --with pytest sh scripts/check-backpressure.sh
       - name: Build distributions
         run: uv build
       - name: Verify wheel, entry points, and release version
