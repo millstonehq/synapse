@@ -35,6 +35,12 @@ contract cheaply in an interactive Pi session:
 /capcov-workflow smoke
 ```
 
+The deterministic manifest seam can be checked without Pi or a model:
+
+```text
+node .pi/workflows/test-capcov-experiment.mjs
+```
+
 The smoke is capped at two minutes, uses a read-only worker, requires an exact JSON
 result, appends a `smoke-result` event, and must leave actionable start/end details in
 `.capcov/pi-workflow/driver.log`.
@@ -59,14 +65,17 @@ For each dependency-ready task in
 7. creates the task's git checkpoint itself and appends a completion event.
 
 Tasks are admitted through ordered waves. A wave may fan out read-only scouts,
-but writer integration is always reducer-owned and follows the manifest order.
-Parallel writer tasks are accepted only when they declare isolated `worktree`
+and parallel workers run in real detached Git worktrees. Their patches and gate
+results are persisted, then a single reducer integrates them into the root in
+manifest order. Only that reducer can mutate or commit the root checkout.
+Parallel tasks are accepted only when they declare distinct isolated `worktree`
 paths and their glob write sets are disjoint; the manifest loader rejects unsafe
 overlap instead of guessing. Each wave emits a `wave-checkpoint` event and
 pauses by default, so `/capcov-workflow resume` is the explicit admission to the
 next wave. `admission.requiresCompleted` and `admission.requiresEvents` provide
-conditional downstream admission for the Shen, specialization, and real-Go
-tracks without treating an agent's report as evidence.
+hard conditional downstream admission for the Shen, specialization, and real-Go
+tracks without treating an agent's report as evidence. Existing task checkpoints
+are treated as virtual legacy checkpoints through the configured alias map.
 
 Differential/mismatch failures are recorded as `wave-repair` events. A wave is
 blocked after its configured (default three) repair attempts; retries cannot
@@ -81,6 +90,12 @@ complete.
 
 The Go milestone may stop honestly when `CAPCOV_GO_FIXTURE_ROOT` is absent. Synthetic
 Python notification behavior cannot satisfy it.
+
+The active manifest is Datalog-first: semantic contract, adversarial corpus,
+parallel Python-reference and real Souffle kernels, differential shrinking,
+certificates, fresh target-go qualification, and bounded Datalog evaluation. The
+older Shen/specialization chain remains only as a legacy compatibility tail and
+cannot preempt the Datalog waves.
 
 ## Trust and safety
 
