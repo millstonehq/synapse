@@ -87,7 +87,7 @@ def _python_type(value):
     if isinstance(value, int): return TypeName.INTEGER
     if isinstance(value, float): return None
     if isinstance(value, str): return TypeName.SYMBOL
-    if isinstance(value, (tuple, list, Mapping)): return TypeName.JSON
+    if isinstance(value, (tuple, list, Mapping)): return TypeName.JSON_METADATA_ONLY
     return None
 
 
@@ -153,6 +153,8 @@ def _validate_completeness(negated, rule, relations, issues, path):
     target_decl = relations.get(target)
     for witness in matches:
         witness_decl = relations[witness.relation]
+        if target_decl and witness_decl.context_indices != target_decl.context_indices:
+            continue
         ok = True
         for name in target_decl.context_indices if target_decl else ():
             if name not in witness_decl.context_indices: ok = False; break
@@ -172,9 +174,16 @@ def _validate_context_joins(rule, relations, issues, path):
     for i, (_, left) in enumerate(context_bindings):
         for _, right in context_bindings[i + 1:]:
             differing = {k for k in left.keys() & right.keys() if repr(left[k]) != repr(right[k])}
+            differing_terms = {term.name for key in differing for term in (left[key], right[key]) if isinstance(term, Variable)}
             left_rel = next((a.relation for a, b in context_bindings if b is left), None)
             right_rel = next((a.relation for a, b in context_bindings if b is right), None)
-            witnessed = any({left_rel, right_rel}.issubset(set(decl.compatibility_targets)) and differing.issubset(_atom_vars(atom)) for atom, decl in compatibility)
+            def witness_matches(atom, decl):
+                if not {left_rel, right_rel}.issubset(set(decl.compatibility_targets)): return False
+                names = [c.name for c in decl.columns]
+                positions = decl.compatibility_context_indices or decl.context_indices
+                payload = {atom.terms[names.index(p)] for p in positions if p in names}
+                return differing and differing_terms.issubset({t.name for t in payload if isinstance(t, Variable)})
+            witnessed = any(witness_matches(atom, decl) for atom, decl in compatibility)
             if differing and not witnessed:
                 issues.append(ValidationIssue("missing-compatibility", "cross-context joins require an explicit compatibility witness", path)); return
 
@@ -188,7 +197,7 @@ def _validate_aggregation(a, rule, relations, issues, path):
         for g in a.group_by:
             if g not in names: issues.append(ValidationIssue("aggregation-group", f"unknown group column {g!r}", path))
         if a.value_variable not in names: issues.append(ValidationIssue("aggregation-value", f"unknown value column {a.value_variable!r}", path))
-        if a.operator in {"sum", "min", "max"} and a.value_variable in names and names[a.value_variable] not in {TypeName.INTEGER, TypeName.DECIMAL}:
+        if a.operator in {"sum", "min", "max"} and a.value_variable in names and names[a.value_variable] not in {TypeName.INTEGER, TypeName.UNSIGNED}:
             issues.append(ValidationIssue("aggregation-value", "numeric aggregation requires an integer or decimal value", path))
         source_atoms = [x for x in rule.body if isinstance(x, Atom) and not x.negated and x.relation == a.relation]
         if not source_atoms: issues.append(ValidationIssue("aggregation-source", "aggregation source must be a positive body atom", path))
@@ -236,10 +245,13 @@ def _validate_recursion(bundle, relations, issues):
         for atom in rule.body:
             if isinstance(atom, Atom) and atom.relation in edges: edges[rule.head.relation].append((atom.relation, atom.negated))
         if isinstance(rule.aggregation, Aggregation) and rule.aggregation.relation in edges: edges[rule.head.relation].append((rule.aggregation.relation, False))
+    components = _scc(edges)
     for start in edges:
         for dst, negative in edges[start]:
             if negative and start in _reachable(edges, dst): issues.append(ValidationIssue("recursive-negation", f"negative cycle involving {start} and {dst}", "rules"))
-            if dst == start and any(rule.head.relation == start and rule.aggregation and rule.aggregation.relation == dst for rule in bundle.rules): issues.append(ValidationIssue("recursive-aggregation", "aggregation dependency is recursive", "rules"))
+    for rule in bundle.rules:
+        if isinstance(rule, Rule) and isinstance(rule.head, Atom) and isinstance(rule.aggregation, Aggregation) and rule.head.relation in components and rule.aggregation.relation in components and components[rule.head.relation] == components[rule.aggregation.relation]:
+            issues.append(ValidationIssue("recursive-aggregation", "aggregation dependency is recursively cyclic", "rules"))
 
 
 def _reachable(edges, source):
@@ -249,3 +261,21 @@ def _reachable(edges, source):
         if node in seen: continue
         seen.add(node); stack.extend(dst for dst, _ in edges[node])
     return seen
+
+
+def _scc(edges):
+    index = 0; stack = []; on_stack = set(); indices = {}; low = {}; result = {}
+    def visit(node):
+        nonlocal index
+        indices[node] = low[node] = index; index += 1; stack.append(node); on_stack.add(node)
+        for child, _ in edges[node]:
+            if child not in indices: visit(child); low[node] = min(low[node], low[child])
+            elif child in on_stack: low[node] = min(low[node], indices[child])
+        if low[node] == indices[node]:
+            component = len(result); members = []
+            while True:
+                item = stack.pop(); on_stack.remove(item); result[item] = component; members.append(item)
+                if item == node: break
+    for node in edges:
+        if node not in indices: visit(node)
+    return result
