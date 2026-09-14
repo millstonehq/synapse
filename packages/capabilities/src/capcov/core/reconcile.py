@@ -155,6 +155,17 @@ def reconcile(capabilities: dict, observed: dict) -> dict:
             for test in sorted(row["tests"]):
                 orphan_tests.append({"test": test, "entity": entity})
 
+    flow_evidence = {}
+    if (
+        "flows_failures" in observed
+        or "flows_execution_scope" in observed
+        or observed.get("derived_from", {}).get("extractor") == "capcov browser-probe"
+    ):
+        flow_evidence["flows_failures"] = observed.get("flows_failures", [{
+            "id": "evidence",
+            "reason": "browser evidence has no required-flow results; re-run observe",
+        }])
+
     return {
         "rows": rows,
         "summary": {cell: sum(1 for r in rows if r["cell"] == cell) for cell in CELLS},
@@ -185,6 +196,8 @@ def reconcile(capabilities: dict, observed: dict) -> dict:
         # while a promoted route/spec adapter's narrowing survives to the gate.
         "excluded_surfaces": _merge_excluded_surfaces(capabilities, observed),
         "unresolved": _merge_unresolved(capabilities, observed),
+        # A passing route must not erase a failed required scenario on that route.
+        **flow_evidence,
         # Repair the reconcile->coverage leak: residue and its summary were built
         # by discover and written to capabilities.json, then dropped here, so the
         # enumerated-but-unresolved call sites never reached the gate or the report.

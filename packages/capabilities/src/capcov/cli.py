@@ -379,8 +379,9 @@ def cmd_observe(args: argparse.Namespace) -> int:
     # drive their own exercise; the env is set for the duration of the call and
     # restored after, so a probe run leaves the caller's environment untouched.
     probe = probe_registry.load(probe_name)
-    saved = {key: os.environ.get(key) for key in observe_env}
+    saved = {key: os.environ.get(key) for key in {*observe_env, probe_registry.ENV_ONLY}}
     try:
+        os.environ.pop(probe_registry.ENV_ONLY, None)
         os.environ.update(observe_env)
         rc = probe.main(list(args.command or []))
     finally:

@@ -387,6 +387,31 @@ product decisions. There are no exemptions which turn such outcomes into passes.
 
 Run from the consumer project:
 
+For an advancement gate, use the single fresh execution-and-check command:
+
+```sh
+capcov outcomes check capcov.outcomes.json --inventory .capcov/inventory.json \
+  --python .venv/bin/python --timeout 180 --out .capcov/outcomes-run.json
+```
+
+First generate the inventory with `capcov discover` as below. `check` always runs
+the union of mapped test IDs, accepts no selection arguments, and returns zero
+only when **every authored outcome is demonstrated** with a clean session. Missing
+bindings, skips, unresolved outcomes, failures, and timeouts prevent acceptance.
+Even an inherited pytest filter that runs a passing subset cannot discharge the
+missing cases. The output is the usual run receipt, suitable for `coverage`.
+Invalid/stale inputs return 2; valid but unqualified execution returns 1.
+
+Have the existing CI/agent host advance only on exit zero. A host that ignores the
+exit code is not enforcing this gate. Keep the accepted map, checker, dependencies,
+and invocation under the host's existing trusted revision/review controls; a
+candidate that can rewrite those controls can bypass them. This command prevents
+accidental old-receipt reuse by executing afresh; it does not sandbox hostile tests
+or authenticate their external observations. It has one bounded execution, not
+an autonomous retry loop. The caller must bound any retries across invocations.
+
+For diagnostic selection or separate report generation, the existing commands remain:
+
 ```sh
 capcov discover --target . --out .capcov/inventory.json
 capcov outcomes run capcov.outcomes.json --inventory .capcov/inventory.json \
@@ -403,6 +428,21 @@ and gate after that failure. `run` returns 1 for unsuccessful/incomplete executi
 1 unless all scoped outcomes are demonstrated and the session is clean. Invalid
 or stale evidence returns 2. Commands after `--` on `run` are pytest selections or
 options; otherwise it runs the union of mapped node IDs.
+
+`run` success is execution success, not acceptance: a passing selection can still
+leave required outcomes missing. Use `check`, or explicitly invoke `gate` after
+`run`, before advancing. Printed success messages from tests do not override the
+pytest setup/call/teardown results collected by the probe.
+
+The browser path now also preserves required scenario failures through
+`observe --probe browser` → `reconcile` → `gate`. A passing scenario on a shared
+route cannot hide a failed/missing scenario. Structural exemptions cannot waive
+these failures. Duplicate scenario IDs and nonzero runner exits are rejected;
+empty, blocked, assertionless, diagnostic, and `--only` executions cannot qualify
+the full plan. Author a separate bounded model to qualify a smaller capability.
+Older browser observation files without required-flow results must be regenerated.
+Browser runners remain trusted assertion observers; this is not proof that an
+arbitrary runner truthfully reports SQL, SMTP, or browser effects.
 
 The report distinguishes `demonstrated`, `failed`, `missing`, `unresolved`, and
 `inconclusive`. It is complete only **within the authored scope and environment**;

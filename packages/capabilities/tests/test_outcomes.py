@@ -1,4 +1,8 @@
+import importlib.util
 import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,6 +12,8 @@ from unittest.mock import patch
 from capcov.artifacts import tree_sha256
 from capcov.outcomes import execute, provenance, reconcile, validate
 from capcov.probes import outcomes_probe
+
+requires_pytest = unittest.skipUnless(importlib.util.find_spec("pytest"), "requires target pytest")
 
 
 class OutcomeTests(unittest.TestCase):
@@ -184,3 +190,81 @@ class OutcomeTests(unittest.TestCase):
                 "xfail": "inconclusive",
             },
         )
+
+    def check_command(self):
+        mapping = self.root / "outcomes.json"
+        inventory = self.root / "inventory.json"
+        mapping.write_text(json.dumps(self.mapping))
+        inventory.write_text(json.dumps(self.inventory))
+        return [sys.executable, "-m", "capcov", "outcomes", "check", str(mapping),
+                "--inventory", str(inventory), "--target", str(self.root),
+                "--out", str(self.root / "run.json"), "--timeout", "15"]
+
+    def invoke_check(self, *extra, env=None):
+        return subprocess.run(self.check_command() + list(extra), env=env,
+                              text=True, capture_output=True, timeout=25)
+
+    @requires_pytest
+    def test_check_real_pytest_pass_and_failure_control_advancement(self):
+        result = self.invoke_check()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        (self.root / "tests/test_app.py").write_text(
+            'def test_owner():\n    print("SUCCESS: all outcomes demonstrated")\n'
+            '    assert False, "foreign owner was accepted"\n'
+        )
+        result = self.invoke_check()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("failed", result.stdout)
+        run = json.loads((self.root / "run.json").read_text())
+        self.assertEqual(run["tests"][self.test], "failed")
+
+    @requires_pytest
+    def test_check_skip_or_missing_binding_cannot_advance(self):
+        (self.root / "tests/test_app.py").write_text(
+            'import pytest\n@pytest.mark.skip(reason="not implemented")\n'
+            'def test_owner(): pass\n'
+        )
+        result = self.invoke_check()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        (self.root / "tests/test_app.py").write_text('def test_owner(): pass\n')
+        self.mapping["outcomes"].append({
+            **self.mapping["outcomes"][0], "id": "delivery", "tests": [],
+        })
+        result = self.invoke_check()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("missing", result.stdout)
+
+    @requires_pytest
+    def test_check_rejects_selection_and_detects_environment_filter(self):
+        result = self.invoke_check("--", "-k", "owner")
+        self.assertEqual(result.returncode, 2)
+        self.mapping["outcomes"][0]["tests"].append("tests/test_app.py::test_delivery")
+        (self.root / "tests/test_app.py").write_text(
+            'def test_owner(): pass\ndef test_delivery(): pass\n'
+        )
+        result = self.invoke_check(env={**os.environ, "PYTEST_ADDOPTS": "-k owner"})
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("missing", result.stdout)
+
+    @requires_pytest
+    def test_check_replaces_previous_receipt_and_refuses_changed_inputs(self):
+        self.assertEqual(self.invoke_check().returncode, 0)
+        previous = json.loads((self.root / "run.json").read_text())
+        self.assertEqual(self.invoke_check().returncode, 0)
+        self.assertNotEqual(previous["nonce"], json.loads((self.root / "run.json").read_text())["nonce"])
+        (self.root / "tests/test_app.py").write_text(
+            'from pathlib import Path\ndef test_owner():\n'
+            '    Path("src/app.py").write_text("value = 2\\n")\n'
+        )
+        result = self.invoke_check()
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertFalse((self.root / "run.json").exists())
+
+    @requires_pytest
+    def test_check_timeout_does_not_advance(self):
+        (self.root / "tests/test_app.py").write_text(
+            'import time\ndef test_owner(): time.sleep(10)\n'
+        )
+        result = self.invoke_check("--timeout", "1")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("pytest session did not finish normally", result.stdout)

@@ -20,10 +20,12 @@ the plan attestation.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from capcov.core.gate import gate
 from capcov.core.reconcile import reconcile
@@ -258,6 +260,70 @@ class DiagnosticScopeAwardsZeroCoverage(unittest.TestCase):
 
 
 class AssertionFailureOmitsTheBinding(unittest.TestCase):
+    def test_pass_on_same_route_cannot_hide_required_failure(self) -> None:
+        execution_plan = plan(flow_model(), "browser")
+        run = run_evidence(
+            execution_plan, hit={"list": OPEN_ROUTE},
+            scenario_status={"open": "failed"},
+        )
+        coverage = reconcile(
+            discovered_capabilities([OPEN_ROUTE]),
+            observed_artifact(project(execution_plan, run)),
+        )
+        self.assertEqual(coverage["summary"]["both"], 1)
+        self.assertTrue(any(f.subject == "open" for f in gate(coverage, None)))
+
+    def test_missing_scenario_cannot_hide_behind_shared_route(self) -> None:
+        execution_plan = plan(flow_model(), "browser")
+        run = run_evidence(execution_plan, hit={"list": OPEN_ROUTE})
+        run["scenarios"] = [s for s in run["scenarios"] if s["id"] == "list"]
+        coverage = reconcile(discovered_capabilities([OPEN_ROUTE]),
+                             observed_artifact(project(execution_plan, run)))
+        self.assertTrue(gate(coverage, None))
+
+    def test_duplicate_scenario_cannot_overwrite_failure(self) -> None:
+        execution_plan = plan(flow_model(), "browser")
+        run = run_evidence(execution_plan)
+        run["scenarios"].insert(0, {**run["scenarios"][0], "status": "failed"})
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            project(execution_plan, run)
+
+    def test_partial_and_assertionless_runs_cannot_qualify(self) -> None:
+        execution_plan = plan(flow_model(), "browser")
+        for scope in ("diagnostic", "partial", "unknown"):
+            with self.subTest(scope=scope):
+                body = project(execution_plan, run_evidence(execution_plan, execution_scope=scope))
+                self.assertTrue(gate(reconcile(discovered_capabilities([]), observed_artifact(body)), None))
+        for scenario in execution_plan["scenarios"]:
+            for step in scenario["steps"]:
+                step["commands"] = []
+        body = project(execution_plan, run_evidence(execution_plan))
+        self.assertTrue(body["flows_failures"])
+
+    def test_only_cannot_qualify_full_plan_even_on_shared_route(self) -> None:
+        execution_plan = plan(flow_model(), "browser")
+        run = run_evidence(execution_plan, hit={"list": OPEN_ROUTE})
+        body = project(execution_plan, run, only="list")
+        self.assertTrue(gate(reconcile(discovered_capabilities([OPEN_ROUTE]), observed_artifact(body)), None))
+
+    def test_old_browser_receipt_requires_fresh_observation(self) -> None:
+        execution_plan = plan(flow_model(), "browser")
+        body = project(execution_plan, run_evidence(execution_plan))
+        del body["flows_failures"]
+        coverage = reconcile(discovered_capabilities([LIST_ROUTE, OPEN_ROUTE]), observed_artifact(body))
+        self.assertTrue(any("re-run observe" in f.detail for f in gate(coverage, None)))
+
+    def test_structural_exemption_cannot_waive_runtime_failure(self) -> None:
+        execution_plan = plan(flow_model(), "browser")
+        body = project(execution_plan, run_evidence(execution_plan, scenario_status={"list": "failed"}))
+        coverage = reconcile(discovered_capabilities([LIST_ROUTE, OPEN_ROUTE]), observed_artifact(body))
+        with tempfile.TemporaryDirectory() as directory:
+            exemptions = Path(directory) / "exemptions.toml"
+            exemptions.write_text(f'[[exempt]]\nentity = "{LIST_ROUTE}"\ncell = "static_only"\n'
+                                  'reason = "measurement gap"\ndate = "2026-09-14"\n')
+            failures = gate(coverage, exemptions)
+            self.assertEqual([f.rule for f in failures], ["required-flow-failed"])
+
     def test_failed_scenario_status_omits_binding(self) -> None:
         execution_plan = plan(flow_model(), "browser")
         body = project(
@@ -423,6 +489,25 @@ class ObserveEndToEnd(unittest.TestCase):
                     out=Path(directory) / "o.json",
                     runner=[],
                 )
+
+    def test_failed_process_cannot_attest_success(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            out = root / "observed.json"
+            out.write_text("stale")
+            runner = self._runner()
+            runner[-1] += "\nraise SystemExit(7)\n"
+            with self.assertRaisesRegex(ValueError, "exit 7"):
+                observe(model=flow_model(), source_root=root, out=out, runner=runner)
+            self.assertFalse(out.exists())
+
+    def test_full_execution_does_not_inherit_diagnostic_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runner = self._runner()
+            runner[-1] = 'import os\nassert "CAPCOV_FLOW_ONLY" not in os.environ\n' + runner[-1]
+            with patch.dict(os.environ, {"CAPCOV_FLOW_ONLY": "list"}):
+                observe(model=flow_model(), source_root=root, out=root / "observed.json", runner=runner)
 
 
 if __name__ == "__main__":

@@ -114,6 +114,17 @@ def load_exemptions(path: Path | None) -> tuple[dict[str, dict], list[Failure]]:
 
 def gate(coverage: dict, exemptions_path: Path | None) -> list[Failure]:
     exemptions, failures = load_exemptions(exemptions_path)
+    # Runtime assertion failures are not structural coverage gaps. Exempting a
+    # route cannot waive its required behavioral checks.
+    flow_failures = coverage.get("flows_failures", [])
+    if not isinstance(flow_failures, list):
+        failures.append(Failure("invalid-flow-evidence", "browser", "flows_failures must be a list"))
+    else:
+        for entry in flow_failures:
+            if not isinstance(entry, dict) or not entry.get("id") or not entry.get("reason"):
+                failures.append(Failure("invalid-flow-evidence", "browser", "malformed flow failure"))
+            else:
+                failures.append(Failure("required-flow-failed", entry["id"], entry["reason"]))
     used: set[str] = set()
     explained_runtime_only: set[str] = set()
 

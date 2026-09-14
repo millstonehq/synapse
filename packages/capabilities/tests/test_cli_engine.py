@@ -56,8 +56,10 @@ _OPENAPI = json.dumps({"openapi": "3.1.0", "paths": {"/items": {"get": {}, "post
 
 
 def _origin_main_cli_source() -> str:
-    """origin/main's cli.py, from git. The byte-identical baseline is that code."""
-    for ref in ("origin/main", "7801732"):
+    """The pre-unification main CLI. A moving ref cannot be a stable baseline:
+    after merge, origin/main itself generates a nonce and equality is impossible.
+    """
+    for ref in ("780173269246f02a7c219b6bd086d1dd93948783",):
         try:
             done = subprocess.run(
                 ["git", "-C", str(_REPO), "show",
@@ -67,7 +69,7 @@ def _origin_main_cli_source() -> str:
             return done.stdout
         except (subprocess.CalledProcessError, FileNotFoundError):
             continue
-    raise unittest.SkipTest("origin/main baseline cli.py is not reachable via git")
+    raise unittest.SkipTest("pre-unification baseline cli.py is not reachable via git")
 
 
 def _shadow_src_with_baseline_cli(tmp: Path) -> Path:

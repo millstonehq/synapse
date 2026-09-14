@@ -8,6 +8,13 @@ Karpathy / red-team-Taleb) grounded in the real tree under `tools/axon/`.
 
 Ranked by how much a missing one lets a false green through.
 
+These are proposed extensions, not a statement that every behavior below ships.
+At capcov base `d3ac0ba`, mutation declarations and unmutated-transition reporting
+exist; declarations do not execute faults. Before extending a consumer, inspect its
+actual bindings. For the proposed external advancement boundary and source review,
+see [DETERMINISTIC-GATING.md](DETERMINISTIC-GATING.md). Prefer extending an existing
+runner only where a demonstrated false-success path requires it.
+
 ## 1. A `mutations` field + a generalized fault-matrix runner (highest value)
 
 **Gap.** A binding with one happy-path assert cannot distinguish two systems that agree on
@@ -20,10 +27,11 @@ hand-built for the conversation model; the credential model has none.
 
 **Extension.** Each transition may declare `mutations: [{kind: idempotency|ordering|scoping,
 ...}]`. The runner applies each mutation to the rebuild and asserts the transition's binding
-reddens. A transition's coverage is not `covered` until its happy assert passes AND every
-declared mutation is caught. "Green" becomes "detects the wrong behaviors", not "reproduced
-one right path". This subsumes and is stronger than a live-oracle dual-hit, which only ever
-drives the happy path.
+reddens. Proposed acceptance requires its baseline assertion to pass and each required
+seeded implementation fault to fail that assertion. Repeating, reordering, or changing
+the subject of an input is an adversarial scenario; it is not by itself an implementation
+mutation. Fault controls and differential execution establish different facts and are
+complementary. Declaration counts alone satisfy neither requirement.
 
 ## 2. First-class denominator provenance from `discover`
 
