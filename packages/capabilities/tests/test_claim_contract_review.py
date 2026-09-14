@@ -134,6 +134,28 @@ class ContractReviewTests(unittest.TestCase):
         rule = Rule(Atom("out", (Variable("t"), Variable("z"))), (), aggregation=agg)
         self.assertIn("aggregation-source", {i.code for i in validate_bundle(Bundle((src, out, dom, clo), rules=(rule,)))})
 
+    def test_aggregation_preserves_every_source_context_dimension(self):
+        src = R("src", (("tenant", TypeName.SYMBOL, True), ("run", TypeName.SYMBOL, True), ("n", TypeName.INTEGER, False)), context_indices=("tenant", "run"))
+        out = R("out", (("tenant", TypeName.SYMBOL, True), ("run", TypeName.SYMBOL, True), ("n", TypeName.INTEGER, False)), context_indices=("tenant", "run"))
+        dom = R("dom", (("tenant", TypeName.SYMBOL, True),), finite=True, nonempty=True, context_indices=("tenant",))
+        clo = R("closed", (("tenant", TypeName.SYMBOL, True),), modality=Modality.COMPLETENESS, completes="dom", context_indices=("tenant",))
+        agg = Aggregation("s", "src", ("tenant",), "n", "sum", "dom", "closed")
+        rule = Rule(Atom("out", (Variable("t"), Variable("wrong_run"), Variable("n"))), (Atom("src", (Variable("t"), Variable("run"), Variable("n"))),), aggregation=agg)
+        self.assertIn("aggregation-head", {i.code for i in validate_bundle(Bundle((src, out, dom, clo), rules=(rule,)))})
+
+    def test_all_aggregation_requires_nonempty_domain(self):
+        src = R("src", (("x", TypeName.SYMBOL, False),)); out = R("out", (("x", TypeName.SYMBOL, False),))
+        dom = R("dom", (("x", TypeName.SYMBOL, False),), finite=True, nonempty=False); clo = R("closed", (("x", TypeName.SYMBOL, False),), modality=Modality.COMPLETENESS, completes="dom")
+        agg = Aggregation("a", "src", ("x",), "x", "all", "dom", "closed")
+        rule = Rule(Atom("out", (Variable("x"),)), (Atom("src", (Variable("x"),)),), aggregation=agg)
+        self.assertIn("aggregation-domain", {i.code for i in validate_bundle(Bundle((src, out, dom, clo), rules=(rule,)))})
+
+    def test_unsigned_accepts_nonnegative_integers_and_rejects_negative(self):
+        rel = R("u", (("n", TypeName.UNSIGNED, False),))
+        self.assertNotIn("type-mismatch", {i.code for i in validate_bundle(Bundle((rel,), facts=(Atom("u", (Constant(0),)),)))})
+        self.assertNotIn("type-mismatch", {i.code for i in validate_bundle(Bundle((rel,), facts=(Atom("u", (Constant(4, TypeName.UNSIGNED),)),)))})
+        self.assertIn("type-mismatch", {i.code for i in validate_bundle(Bundle((rel,), facts=(Atom("u", (Constant(-1, TypeName.UNSIGNED),)),)))})
+
     def test_compatibility_targets_and_positions_are_explicit(self):
         a = R("a", (("tenant", TypeName.SYMBOL, True),), context_indices=("tenant",))
         b = R("b", (("tenant", TypeName.SYMBOL, True),), context_indices=("tenant",))
