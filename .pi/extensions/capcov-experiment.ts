@@ -116,17 +116,6 @@ async function loadConfig(root: string): Promise<Config> {
     if (task.id === "souffle-kernel" && !task.gates.some((gate) => gate.command.join(" ").includes("souffle"))) throw new Error("Souffle kernel gate must execute real Souffle");
   }
   const waves = config.waves ?? config.tasks.map((task) => ({ id: task.id, title: task.title, maxParallel: 1, pauseAfter: true, reducer: task.id }));
-  const needsSouffle = config.tasks.some((task) => !task.legacy && task.gates.some((gate) => gate.command.join(" ").includes("souffle")));
-  if (needsSouffle) {
-    const probe = await new Promise<{ code: number; stderr: string }>((resolve) => {
-      const child = spawn("souffle", ["--version"], { cwd: root, stdio: ["ignore", "ignore", "pipe"] });
-      let stderr = "";
-      child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-      child.on("error", (error) => resolve({ code: 127, stderr: error.message }));
-      child.on("close", (code) => resolve({ code: code ?? 1, stderr }));
-    });
-    if (probe.code !== 0) throw new Error(`Datalog workflow requires real Souffle on PATH; install it through the Nix develop environment (${probe.stderr || `exit ${probe.code}`})`);
-  }
   const waveIds = new Set(waves.map((wave) => wave.id));
   if (new Set(waves.map((wave) => wave.id)).size !== waves.length) throw new Error("Workflow contains duplicate wave ids");
   for (const wave of waves) {
