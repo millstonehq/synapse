@@ -53,6 +53,15 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
         out_of_scope = load_fixture(ROOT / "12-unexpected-runtime-surface.json")
         self.assertFalse(any(rule.head.relation == "model_complete" for rule in out_of_scope.rules))
         self.assertTrue(any(mapping.effect == EvidenceEffect.OBSERVATION for mapping in out_of_scope.mappings))
+        history = json.loads((ROOT / "11-compatible-history-sets.json").read_text())
+        compatible = next(x for x in history["facts"] if x["relation"] == "compatible_history")
+        self.assertEqual(["tenant", "run", "history", "capability", "outcome", "holds"], compatible["arg_order"])
+        self.assertIsInstance(compatible["arguments"]["holds"], bool)
+        sql = load_fixture(ROOT / "10-revoked-assumption-alternative.json")
+        self.assertTrue(any(rule.name == "row_requires_independent_current_sql" for rule in sql.rules))
+        terminal = load_fixture(ROOT / "13-acceptance-sql-ack-failure.json")
+        self.assertTrue(any(rule.head.relation == "notification_delivery_terminal" for rule in terminal.rules))
+        self.assertTrue(any(d.claim_id == "claim-terminal" and d.trigger_relation == "sql_ack_failed" for d in terminal.diagnostics))
 
     def test_malformed_evidence_policy_is_rejected(self):
         payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
@@ -69,6 +78,9 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
         with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
         payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
         payload["evidence"][0]["context"]["tenant"] = "wrong-tenant"
+        with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
+        payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
+        payload["diagnostic_policy"]["revocation"] = "not-an-effect"
         with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
 
 

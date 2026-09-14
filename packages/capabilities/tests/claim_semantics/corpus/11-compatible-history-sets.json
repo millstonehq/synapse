@@ -14,7 +14,7 @@
     "claim_scope": "all-compatible-histories",
     "attempt": "attempt-11"
   },
-  "rules": [{"name":"forall_compatible_history_universal","claim_id":"claim-universal","premises":[{"relation":"compatible_history","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]}]},{"name":"forall_compatible_history_mixed","claim_id":"claim-mixed","premises":[{"relation":"compatible_history","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]}]}],
+  "rules": [{"name":"forall_compatible_history_universal","claim_id":"claim-universal","premises":[{"relation":"compatible_history","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"},{"claim_column":"capability","evidence_column":"capability","type":"symbol"}],"predicates":[{"column":"holds","type":"boolean","value":true}]}]},{"name":"forall_compatible_history_mixed","claim_id":"claim-mixed","premises":[{"relation":"compatible_history","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"},{"claim_column":"capability","evidence_column":"capability","type":"symbol"}],"predicates":[{"column":"holds","type":"boolean","value":true}]}]}],
   "claims": [
     {
       "id": "claim-universal",
@@ -63,7 +63,7 @@
       ],
       "context": {
         "tenant": "tenant-a",
-        "run": "run-11",
+        "run": "run-11-mixed",
         "claim_scope": "all-compatible-histories",
         "attempt": "attempt-11"
       },
@@ -116,20 +116,26 @@
         "tenant": "tenant-a",
         "run": "run-11-mixed",
         "history": "history-a",
-        "outcome": "support"
+        "capability": "notify",
+        "outcome": "support",
+        "holds": true
       },
       "source": "model",
       "args": [
         "tenant-a",
         "run-11-mixed",
         "history-a",
-        "support"
+        "notify",
+        "support",
+        true
       ],
       "arg_order": [
         "tenant",
         "run",
         "history",
-        "outcome"
+        "capability",
+        "outcome",
+        "holds"
       ],
       "context": {
         "tenant": "tenant-a",
@@ -149,20 +155,26 @@
         "tenant": "tenant-a",
         "run": "run-11-mixed",
         "history": "history-b",
-        "outcome": "refute"
+        "capability": "notify",
+        "outcome": "refute",
+        "holds": false
       },
       "source": "model",
       "args": [
         "tenant-a",
         "run-11-mixed",
         "history-b",
-        "refute"
+        "notify",
+        "refute",
+        false
       ],
       "arg_order": [
         "tenant",
         "run",
         "history",
-        "outcome"
+        "capability",
+        "outcome",
+        "holds"
       ],
       "context": {
         "tenant": "tenant-a",

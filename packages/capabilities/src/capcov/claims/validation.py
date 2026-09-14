@@ -28,6 +28,19 @@ def _atom_vars(atom): return set().union(*(_variables(t) for t in atom.terms)) i
 
 def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
     issues: list[ValidationIssue] = []
+    policy = bundle.diagnostic_policy
+    policy_fields = {
+        "missing_premises": {"unresolved", "refuted", "invalid-input", "out-of-scope"},
+        "inconsistent_premises": {"inconsistent-premises"},
+        "out_of_scope": {"out-of-scope"},
+        "forbidden_evidence": {"invalid-input", "out-of-scope"},
+        "revocation": {"refutation", "stale"},
+        "completeness": {"required", "unresolved"},
+    }
+    for field_name, allowed in policy_fields.items():
+        value = getattr(policy, field_name, None)
+        if not isinstance(value, str) or value not in allowed:
+            issues.append(ValidationIssue("diagnostic-policy", f"invalid {field_name} policy value", f"diagnostic_policy.{field_name}"))
     relations = {r.name: r for r in bundle.relations if isinstance(r, RelationDecl)}
     if len(relations) != len(bundle.relations):
         issues.append(ValidationIssue("duplicate-relation", "relation names must be unique", "relations"))
@@ -105,6 +118,9 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
         path = f"diagnostics[{i}]"
         if not isinstance(diagnostic, DiagnosticRule): issues.append(ValidationIssue("diagnostic-type", "expected DiagnosticRule", path)); continue
         if not isinstance(diagnostic.effect, EvidenceEffect): issues.append(ValidationIssue("diagnostic-effect", "unsupported diagnostic effect", path))
+        predicate = dict(diagnostic.predicate)
+        if predicate and predicate.get("operator") not in {"=", "!=", "in", "not-in", "exists"}:
+            issues.append(ValidationIssue("diagnostic-predicate", "unsupported diagnostic predicate operator", path))
         if diagnostic.trigger_relation not in relations: issues.append(ValidationIssue("diagnostic-trigger", diagnostic.trigger_relation, path))
         if diagnostic.operational_status not in allowed_status: issues.append(ValidationIssue("diagnostic-status", diagnostic.operational_status, path))
         relation = relations.get(diagnostic.trigger_relation)

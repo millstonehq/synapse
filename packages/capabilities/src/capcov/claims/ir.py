@@ -192,12 +192,14 @@ class DiagnosticRule:
     required: bool = False
     message: str = ""
     claim_id: str = ""
+    predicate: tuple[tuple[str, Any], ...] = ()
 
     def __post_init__(self) -> None:
         try: effect = EvidenceEffect(self.effect)
         except (TypeError, ValueError): effect = self.effect
         object.__setattr__(self, "effect", effect)
         object.__setattr__(self, "context_indices", tuple(sorted(set(self.context_indices))))
+        object.__setattr__(self, "predicate", tuple(sorted(self.predicate)))
 
 
 @dataclass(frozen=True)
@@ -423,8 +425,10 @@ def bundle_from_json(source: str | bytes | Mapping[str, Any], *, validate: bool 
         x = _strict_object(x, {"claim_id", "claim_relation", "evidence_relation", "effect", "context_indices", "bindings", "required", "allow_out_of_scope"}, "mapping")
         return EvidenceMapping(x["claim_relation"], x["evidence_relation"], x["effect"], tuple(x.get("context_indices", ())), tuple(tuple(pair) for pair in x.get("bindings", ())), x.get("required", False), x.get("allow_out_of_scope", False), x.get("claim_id", ""))
     def diagnostic(x):
-        x = _strict_object(x, {"claim_id", "trigger_relation", "effect", "operational_status", "context_indices", "when_missing", "required", "message"}, "diagnostic")
-        return DiagnosticRule(x["trigger_relation"], x["effect"], x.get("operational_status", "complete"), tuple(x.get("context_indices", ())), x.get("when_missing", False), x.get("required", False), x.get("message", ""), x.get("claim_id", ""))
+        x = _strict_object(x, {"claim_id", "trigger_relation", "effect", "operational_status", "context_indices", "when_missing", "required", "message", "predicate"}, "diagnostic")
+        predicate = x.get("predicate") or {}
+        if predicate: _strict_object(predicate, {"column", "operator", "value"}, "diagnostic.predicate")
+        return DiagnosticRule(x["trigger_relation"], x["effect"], x.get("operational_status", "complete"), tuple(x.get("context_indices", ())), x.get("when_missing", False), x.get("required", False), x.get("message", ""), x.get("claim_id", ""), tuple(sorted(predicate.items())))
     policy_raw = raw.get("diagnostic_policy") or {}
     _strict_object(policy_raw, {"missing_premises", "inconsistent_premises", "out_of_scope", "forbidden_evidence", "revocation", "completeness"}, "diagnostic_policy")
     policy = DiagnosticPolicy(**policy_raw)
