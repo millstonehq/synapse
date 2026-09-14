@@ -122,6 +122,10 @@ class _LimitReached(RuntimeError):
     pass
 
 
+class _UnsupportedConstruct(RuntimeError):
+    pass
+
+
 class _Engine:
     def __init__(self, bundle: Bundle, limits: ResourceLimits) -> None:
         self.bundle = bundle
@@ -166,7 +170,13 @@ class _Engine:
             if fact.negated:
                 continue
             row = tuple(_ground_term(term, {}) for term in fact.terms)
-            leaf = "fact:" + fact.relation + ":" + canonical_json(row)
+            # Evidence-policy revisions may add an authoritative id to Atom.
+            # Keep the old stable row-derived id for the current IR and use
+            # the explicit id whenever it exists.
+            authoritative_id = next((getattr(fact, name, None)
+                                     for name in ("evidence_id", "fact_id", "id", "source_id")
+                                     if getattr(fact, name, None)), None)
+            leaf = str(authoritative_id) if authoritative_id is not None else "fact:" + fact.relation + ":" + canonical_json(row)
             self.add(fact.relation, row, Derivation(fact.relation, row, leaf_id=leaf, kind="fact"))
 
     def strata(self) -> dict[str, int]:
@@ -198,27 +208,36 @@ class _Engine:
         for level in range(max(levels.values(), default=0) + 1):
             rules = [r for r in self.bundle.rules if levels[r.head.relation] == level]
             iterations = 0
+            previous_delta: Mapping[str, set[Row]] | None = None
             while True:
                 iterations += 1
                 if self.limits.max_iterations is not None and iterations > self.limits.max_iterations:
                     raise _LimitReached(f"stratum {level} exceeded the iteration limit")
                 changed = False
+                additions: dict[str, set[Row]] = {name: set() for name in self.relations}
+                delta = None if iterations == 1 else previous_delta
                 for rule in sorted(rules, key=lambda r: canonical_json(r)):
-                    for row, proof in self._derive_rule(rule):
-                        changed |= self.add(rule.head.relation, row, proof)
+                    for row, proof in self._derive_rule(rule, delta):
+                        if self.add(rule.head.relation, row, proof):
+                            additions[rule.head.relation].add(row)
+                            changed = True
                 self.check_limits()
                 if not changed:
                     break
+                previous_delta = additions
 
-    def _derive_rule(self, rule: Rule) -> Iterable[tuple[Row, Derivation]]:
+    def _derive_rule(self, rule: Rule, delta: Mapping[str, set[Row]] | None) -> Iterable[tuple[Row, Derivation]]:
         aggregate = rule.aggregation
         source_index = None
         if aggregate is not None:
             source_index = next((i for i, atom in enumerate(rule.body)
                                  if isinstance(atom, Atom) and not atom.negated and atom.relation == aggregate.relation), None)
         body = tuple(atom for i, atom in enumerate(rule.body) if i != source_index)
-        for env, children in self._match_body(body, {}):
-            if aggregate is not None:
+        # Aggregates are non-recursive by contract, so a complete pass is
+        # sufficient and avoids accidentally treating a partial group as a
+        # closed finite aggregate.
+        if aggregate is not None:
+            for env, children in self._match_body(body, {}):
                 source_atom = rule.body[source_index]  # type: ignore[index]
                 candidates = list(self._match_atom(source_atom, env, positive_only=True))
                 if not candidates:
@@ -237,8 +256,13 @@ class _Engine:
                     result = min(_ground_term(source_atom.terms[index], candidate_env) for candidate_env, _ in candidates)
                 elif aggregate.operator == "max":
                     result = max(_ground_term(source_atom.terms[index], candidate_env) for candidate_env, _ in candidates)
+                elif aggregate.operator == "any":
+                    result = bool(candidates)
+                elif aggregate.operator == "all":
+                    result = bool(candidates) and all(bool(_ground_term(source_atom.terms[index], candidate_env))
+                                                       for candidate_env, _ in candidates)
                 else:
-                    raise _LimitReached(f"unsupported aggregate: {aggregate.operator}")
+                    raise _UnsupportedConstruct(f"unsupported aggregate: {aggregate.operator}")
                 aggregate_env = dict(env)
                 aggregate_env[aggregate.name] = result
                 if aggregate.operator != "count":
@@ -248,33 +272,59 @@ class _Engine:
                 for _, proofs in candidates:
                     proof_children.extend(proofs)
                 yield row, Derivation(rule.head.relation, row, rule.name or "rule", tuple(proof_children), kind="aggregate")
-                continue
-            row = tuple(_ground_term(t, env) for t in rule.head.terms)
-            yield row, Derivation(rule.head.relation, row, rule.name or "rule", tuple(children))
+            return
 
-    def _match_body(self, body: Iterable[Atom | Comparison], env: Environment) -> Iterable[tuple[Environment, list[Derivation]]]:
+        if delta is None:
+            for env, children in self._match_body(rule.body, {}):
+                row = tuple(_ground_term(t, env) for t in rule.head.terms)
+                yield row, Derivation(rule.head.relation, row, rule.name or "rule", tuple(children))
+            return
+
+        # Semi-naive delta step: each positive body atom is used once as the
+        # pivot against only rows added in the previous iteration.  Unioning
+        # pivots prevents old tuples from redoing the full Cartesian product.
+        pivots = [i for i, atom in enumerate(rule.body)
+                  if isinstance(atom, Atom) and not atom.negated and delta.get(atom.relation)]
+        seen: set[str] = set()
+        for pivot in pivots:
+            overrides = {pivot: delta[rule.body[pivot].relation]}  # type: ignore[index]
+            for env, children in self._match_body(rule.body, {}, overrides):
+                row = tuple(_ground_term(t, env) for t in rule.head.terms)
+                proof = Derivation(rule.head.relation, row, rule.name or "rule", tuple(children))
+                key = canonical_json((row, proof.as_dict()))
+                if key not in seen:
+                    seen.add(key)
+                    yield row, proof
+
+    def _match_body(self, body: Iterable[Atom | Comparison], env: Environment,
+                    overrides: Mapping[int, set[Row]] | None = None,
+                    offset: int = 0) -> Iterable[tuple[Environment, list[Derivation]]]:
         items = tuple(body)
         if not items:
             yield dict(env), []
             return
         first, rest = items[0], items[1:]
+        first_index = offset
         if isinstance(first, Comparison):
             if _compare(first, env):
-                yield from self._match_body(rest, env)
+                yield from self._match_body(rest, env, overrides, offset + 1)
             return
         if first.negated:
             matches = list(self._match_atom(first, env, positive_only=True))
             if not matches:
-                yield from self._match_body(rest, env)
+                yield from self._match_body(rest, env, overrides, offset + 1)
             return
-        for next_env, proofs in self._match_atom(first, env, positive_only=True):
-            for final_env, rest_proofs in self._match_body(rest, next_env):
+        rows_override = overrides.get(first_index) if overrides else None
+        for next_env, proofs in self._match_atom(first, env, positive_only=True, rows_override=rows_override):
+            for final_env, rest_proofs in self._match_body(rest, next_env, overrides, offset + 1):
                 yield final_env, proofs + rest_proofs
 
-    def _match_atom(self, atom: Atom, env: Environment, *, positive_only: bool) -> Iterable[tuple[Environment, list[Derivation]]]:
+    def _match_atom(self, atom: Atom, env: Environment, *, positive_only: bool,
+                    rows_override: set[Row] | None = None) -> Iterable[tuple[Environment, list[Derivation]]]:
         del positive_only  # reserved for the future explicit negative relation form
         decl = self.relations[atom.relation]
-        for row in sorted(self.rows[atom.relation], key=canonical_json):
+        rows = self.rows[atom.relation] if rows_override is None else rows_override
+        for row in sorted(rows, key=canonical_json):
             next_env = dict(env)
             ok = True
             for term, value in zip(atom.terms, row):
@@ -306,13 +356,16 @@ class _Engine:
                 subclaim_terms = tuple(_ground_term(t, env) if isinstance(t, Variable) and t.name in env else t for t in claim.terms)
                 subclaim = Claim(claim.relation, subclaim_terms, claim.context, "exists", None)
                 subresults.append(self.evaluate_claim(index, subclaim).result)
-            supports = any(r.semantic in {SemanticVerdict.SUPPORTED, SemanticVerdict.CONFLICTING} for r in subresults)
-            refutes = any(r.semantic in {SemanticVerdict.REFUTED, SemanticVerdict.CONFLICTING} for r in subresults)
             if any(r.operational != OperationalStatus.COMPLETE for r in subresults):
                 status = next(r.operational for r in subresults if r.operational != OperationalStatus.COMPLETE)
             else:
                 status = OperationalStatus.COMPLETE
-            result = EvaluationResult(verdict(supports and not refutes, refutes and not supports), status,
+            # FORALL is conjunction: every typed domain substitution must be
+            # supported.  A refuted instance is evidence against the whole
+            # conjunction; support from some other instance does not erase it.
+            all_supported = all(r.semantic == SemanticVerdict.SUPPORTED for r in subresults)
+            any_refuted = any(r.semantic in {SemanticVerdict.REFUTED, SemanticVerdict.CONFLICTING} for r in subresults)
+            result = EvaluationResult(verdict(all_supported, any_refuted), status,
                                       EvaluationBasis.BOUNDED_HISTORY_MODEL,
                                       support=tuple(x for r in subresults for x in r.support),
                                       refutation=tuple(x for r in subresults for x in r.refutation),
@@ -391,6 +444,11 @@ def evaluate(bundle: Bundle, limits: ResourceLimits | None = None) -> Evaluation
                                                                OperationalStatus.RESOURCE_EXHAUSTED,
                                                                message=str(exc))) for i, claim in enumerate(bundle.claims))
         return EvaluationReport((), (), claims, OperationalStatus.RESOURCE_EXHAUSTED, str(exc))
+    except _UnsupportedConstruct as exc:
+        claims = tuple(ClaimResult(i, claim, EvaluationResult(SemanticVerdict.UNRESOLVED,
+                                                               OperationalStatus.UNSUPPORTED_CONSTRUCT,
+                                                               message=str(exc))) for i, claim in enumerate(bundle.claims))
+        return EvaluationReport((), (), claims, OperationalStatus.UNSUPPORTED_CONSTRUCT, str(exc))
 
 
 evaluate_bundle = evaluate
