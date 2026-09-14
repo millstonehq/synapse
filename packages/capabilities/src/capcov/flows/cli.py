@@ -1,4 +1,13 @@
-"""capcov flows: inventory -> model -> plan -> browser evidence -> coverage."""
+"""capcov flows: inventory -> model -> plan -> browser evidence -> coverage.
+
+``discover``, ``catalog``, and ``plan`` run on the shared discovery/planning
+engine the promoted core adapters and the browser probe wrap; they are NOT
+deprecated. ``run``, ``coverage``, and ``gate`` are DEPRECATION SHIMS: they still
+resolve and return (so consumers pinned to the flows pipeline keep working until
+they bump) but the unified engine supersedes them --
+``capcov observe --probe browser`` -> ``capcov reconcile`` -> ``capcov gate``
+drives the same planner+runner and reads the four cells.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +22,22 @@ from pathlib import Path
 from .catalog import build_catalog, render_catalog
 from .discovery import discover
 from .model import digest, plan, reconcile
+
+# The three retired verbs and the one-line notice each prints. The notice points
+# at the unified observe(--probe browser) -> reconcile -> gate path; the flows verb
+# still does its work so the suite (and pinned consumers) stay green.
+_SHIM_NOTICE = {
+    "run": "`flows run` is superseded by `capcov observe --probe browser`, which drives "
+    "the same planner+runner and emits the four-cell observed artifact.",
+    "coverage": "`flows coverage` is superseded by `capcov reconcile` on the four-cell "
+    "engine, fed by `capcov observe --probe browser`.",
+    "gate": "the flows freeform baseline gate is superseded by `capcov gate` with a "
+    "core exemptions.toml (cell-typed, dated); see the migration note in this module.",
+}
+
+
+def _deprecated(verb: str) -> None:
+    print(f"capcov flows: DEPRECATED -- {_SHIM_NOTICE[verb]}")
 
 
 def read(path: str) -> dict:
@@ -110,6 +135,7 @@ def main(argv: list[str]) -> int:
         elif args.command == "plan":
             result = plan(read(args.model), args.target, args.max_states)
         elif args.command == "run":
+            _deprecated("run")
             if not runner:
                 raise ValueError("run requires a runner command after --")
             output_path = Path(args.out).resolve()
@@ -147,6 +173,7 @@ def main(argv: list[str]) -> int:
                     emit(args.out, result)
                     return 1
         elif args.command == "coverage":
+            _deprecated("coverage")
             # Pass ``only`` only when asked, so the unscoped call is the bare
             # four-argument invocation that folds the whole plan via reconcile's
             # own default; a bare --only-less run threads no scope keyword at all.
@@ -201,6 +228,21 @@ def main(argv: list[str]) -> int:
             out.write_text("\n".join(lines) + "\n")
             return 0
         else:
+            # MIGRATION NOTE (flows baseline -> core exemptions.toml). The flows
+            # baseline is a flat `{"<failure>": "<reason>"}` map, e.g.
+            #   {"unmapped: http:GET /jobs/{id}": "Existing screen; awaiting a flow"}
+            # The unified gate (capcov gate) reads a cell-typed, dated exemptions.toml:
+            #   [[exempt]]
+            #   entity = "http:GET /jobs/{id}"   # the id after the "<status>: " prefix
+            #   cell   = "static_only"           # unmapped/unproven -> static_only;
+            #                                    # runtime-only -> runtime_only;
+            #                                    # boundary/unresolved -> unresolved
+            #   reason = "Existing screen; awaiting a flow"   # carried verbatim
+            #   date   = "2026-09-13"            # REQUIRED by core; a bare baseline had none
+            # The weaker freeform scheme does not survive "one gate": every waiver now
+            # carries a reason AND a date AND the cell it exempts, so a stale waiver
+            # fails instead of hiding a regression.
+            _deprecated("gate")
             coverage = read(args.coverage)
             failures = set(coverage["failures"])
             baseline = read(args.baseline) if args.baseline else {}
