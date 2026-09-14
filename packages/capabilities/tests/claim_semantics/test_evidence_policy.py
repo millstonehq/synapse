@@ -109,6 +109,22 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
         payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
         payload["outputs"] = [{"kind": "observed", "claim_id": "claim-terminal-delivery", "evidence_id": "missing"}]
         with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
+
+    def test_output_triggers_are_causal_and_arrays_are_exact(self):
+        fixture = json.loads((ROOT / "02-surface-mismatch.json").read_text())
+        bundle = load_fixture(ROOT / "02-surface-mismatch.json")
+        discrepancy = next(o for o in bundle.outputs if o.kind.value == "discrepancy")
+        self.assertEqual(dict(discrepancy.fields)["surfaces"].value, ["route-a", "route-b"])
+        self.assertEqual(set(discrepancy.requires_all_evidence), {"fact-route-a-static", "fact-route-b-runtime"})
+        mutated = bundle_payload(fixture)
+        mutated["outputs"][2]["requires_all_evidence"] = ["unrelated-evidence"]
+        with self.assertRaises(ValueError): bundle_from_json(mutated, validate=True)
+        mutated = bundle_payload(fixture)
+        mutated["outputs"][2]["requires_all_evidence"] = ["fact-route-a-static"]
+        # A weakened trigger is still syntactically valid, but no longer
+        # claims the two-evidence discrepancy; the renderer must not emit it.
+        weakened = bundle_from_json(mutated, validate=True)
+        self.assertNotEqual(set(weakened.outputs[2].requires_all_evidence), set(discrepancy.requires_all_evidence))
         payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
         payload["outputs"] = [{"kind": "missing_premise", "claim_id": "claim-terminal-delivery", "relation": "smtp_accepted", "fields": {"x": {"source": "constant", "type": "boolean", "value": "not-bool"}}}]
         with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
