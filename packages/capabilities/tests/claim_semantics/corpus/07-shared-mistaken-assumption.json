@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "07-shared-mistaken-assumption",
+  "title": "Shared false assumption is not independent support",
+  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": "shared-fake-provider"},
+  "context": {"tenant": "tenant-a", "run": "run-7", "event": "evt-7"},
+  "claims": [{"id": "claim-delivered", "predicate": "notification_delivery_terminal", "arguments": {"tenant": "tenant-a", "event": "evt-7", "run": "run-7"}}],
+  "facts": [
+    {"id": "fact-static", "predicate": "mail_path_declared", "arguments": {"tenant": "tenant-a", "event": "evt-7", "run": "run-7"}, "source": "static"},
+    {"id": "fact-runtime", "predicate": "mail_path_observed", "arguments": {"tenant": "tenant-a", "event": "evt-7", "run": "run-7"}, "source": "runtime"}
+  ],
+  "assumptions": [
+    {"id": "assumption-false", "predicate": "provider_is_real", "arguments": {"provider": "loopback"}, "status": "rejected"},
+    {"id": "assumption-false-independent", "predicate": "independent_support", "arguments": {"paths": ["static", "runtime"]}, "status": "rejected"}
+  ],
+  "expected": {"semantic_verdict": "unresolved", "operational_status": "incomplete", "required_leaves": ["fact-static", "fact-runtime"], "forbidden_leaves": ["assumption-false-independent"], "discrepancies": [{"kind": "shared-assumption", "assumption": "assumption-false"}], "missing_premises": [{"predicate": "independent_support", "reason": "both producers depend on one false assumption"}]}
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "01-correlated-positive",
+  "title": "Correlated notification execution supports terminal delivery",
+  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": null},
+  "context": {"tenant": "tenant-a", "run": "run-1", "event": "evt-1", "attempt": "attempt-1", "recipient": "a@example.test"},
+  "claims": [{"id": "claim-terminal-delivery", "predicate": "notification_delivery_terminal", "arguments": {"tenant": "tenant-a", "event": "evt-1", "recipient": "a@example.test", "run": "run-1"}}],
+  "facts": [
+    {"id": "fact-http-save", "predicate": "http_save_succeeded", "arguments": {"tenant": "tenant-a", "event": "evt-1", "run": "run-1"}, "source": "http"},
+    {"id": "fact-issue-changed", "predicate": "issue_changed_observed", "arguments": {"tenant": "tenant-a", "event": "evt-1", "run": "run-1"}, "source": "worker"},
+    {"id": "fact-mail-250", "predicate": "smtp_accepted", "arguments": {"tenant": "tenant-a", "event": "evt-1", "recipient": "a@example.test", "run": "run-1"}, "source": "smtp"},
+    {"id": "fact-sql-terminal", "predicate": "sql_terminal_state", "arguments": {"tenant": "tenant-a", "event": "evt-1", "recipient": "a@example.test", "run": "run-1"}, "source": "sql"}
+  ],
+  "assumptions": [{"id": "assumption-context-closed", "predicate": "context_domain_closed", "arguments": {"tenant": "tenant-a", "run": "run-1"}, "status": "accepted"}],
+  "expected": {"semantic_verdict": "supported", "operational_status": "complete", "required_leaves": ["fact-http-save", "fact-issue-changed", "fact-mail-250", "fact-sql-terminal"], "forbidden_leaves": [], "discrepancies": [], "missing_premises": []}
+}

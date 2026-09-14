@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "04-authorization-polarity",
+  "title": "Allow and deny are separate polarity claims",
+  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": "deny-path-ignored"},
+  "context": {"tenant": "tenant-a", "run": "run-4", "policy": "document-read"},
+  "claims": [
+    {"id": "claim-allow", "predicate": "authorized", "arguments": {"tenant": "tenant-a", "actor": "alice", "operation": "read", "decision": "allow", "run": "run-4"}},
+    {"id": "claim-deny", "predicate": "authorized", "arguments": {"tenant": "tenant-a", "actor": "bob", "operation": "read", "decision": "deny", "run": "run-4"}}
+  ],
+  "facts": [
+    {"id": "fact-allow-200", "predicate": "http_authorization", "arguments": {"tenant": "tenant-a", "actor": "alice", "operation": "read", "decision": "allow", "status": 200}, "source": "runtime"},
+    {"id": "fact-deny-403", "predicate": "http_authorization", "arguments": {"tenant": "tenant-a", "actor": "bob", "operation": "read", "decision": "deny", "status": 403}, "source": "runtime"}
+  ],
+  "assumptions": [{"id": "assumption-policy-version", "predicate": "policy_version", "arguments": {"policy": "document-read", "version": "v1"}, "status": "accepted"}],
+  "expected": {"semantic_verdict": "supported", "operational_status": "complete", "required_leaves": ["fact-allow-200", "fact-deny-403"], "forbidden_leaves": [], "discrepancies": [], "missing_premises": []}
+}

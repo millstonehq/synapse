@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "13-acceptance-sql-ack-failure",
+  "title": "Provider acceptance and SQL acknowledgement are distinct claims",
+  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": "sql-ack-failed-after-provider-acceptance"},
+  "context": {"tenant": "tenant-a", "run": "run-13", "event": "evt-13", "recipient": "a@example.test"},
+  "claims": [
+    {"id": "claim-provider", "predicate": "provider_accepted", "arguments": {"tenant": "tenant-a", "event": "evt-13", "recipient": "a@example.test", "run": "run-13"}},
+    {"id": "claim-terminal", "predicate": "notification_delivery_terminal", "arguments": {"tenant": "tenant-a", "event": "evt-13", "recipient": "a@example.test", "run": "run-13"}}
+  ],
+  "facts": [
+    {"id": "fact-mail-250", "predicate": "smtp_accepted", "arguments": {"tenant": "tenant-a", "event": "evt-13", "recipient": "a@example.test", "run": "run-13"}, "source": "smtp"},
+    {"id": "fact-sql-ack", "predicate": "sql_acknowledged", "arguments": {"tenant": "tenant-a", "event": "evt-13", "recipient": "a@example.test", "run": "run-13"}, "source": "sql", "status": "failed"}
+  ],
+  "assumptions": [{"id": "assumption-provider-implies-terminal", "predicate": "provider_acceptance_implies_terminal", "arguments": {"provider": "smtp"}, "status": "rejected"}],
+  "expected": {"semantic_verdict": "supported", "operational_status": "complete-with-discrepancy", "required_leaves": ["fact-mail-250"], "forbidden_leaves": ["fact-sql-ack"], "discrepancies": [{"kind": "sql-ack-failure"}], "missing_premises": [{"predicate": "sql_terminal_ack", "reason": "provider acceptance does not imply application acknowledgement"}]}
+}

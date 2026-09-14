@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "03-post-without-creation",
+  "title": "Successful POST does not prove durable creation",
+  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": "missing-commit"},
+  "context": {"tenant": "tenant-a", "run": "run-3", "event": "evt-3", "request": "req-3"},
+  "claims": [
+    {"id": "claim-request", "predicate": "post_request_succeeded", "arguments": {"tenant": "tenant-a", "event": "evt-3", "request": "req-3"}},
+    {"id": "claim-created", "predicate": "row_created", "arguments": {"tenant": "tenant-a", "event": "evt-3", "run": "run-3"}}
+  ],
+  "facts": [{"id": "fact-post-200", "predicate": "http_post_accepted", "arguments": {"tenant": "tenant-a", "event": "evt-3", "request": "req-3", "status": 200}, "source": "http"}],
+  "assumptions": [{"id": "assumption-response-means-commit", "predicate": "response_implies_commit", "arguments": {"status": 200}, "status": "rejected"}],
+  "expected": {"semantic_verdict": "supported", "operational_status": "incomplete", "required_leaves": ["fact-post-200"], "forbidden_leaves": [], "discrepancies": [], "missing_premises": [{"predicate": "row_committed", "reason": "POST response does not prove durable creation"}]}
+}

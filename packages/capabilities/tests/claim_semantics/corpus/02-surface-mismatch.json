@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "02-surface-mismatch",
+  "title": "Static and runtime routes are different surfaces",
+  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": "route-a-static-route-b-runtime", "legacy_comparator": "non-authoritative: a Boolean route hit"},
+  "context": {"tenant": "tenant-a", "run": "run-2", "event": "evt-2", "surface": "route-b"},
+  "claims": [{"id": "claim-effect", "predicate": "effect_reached", "arguments": {"tenant": "tenant-a", "event": "evt-2", "surface": "route-a", "run": "run-2"}}],
+  "facts": [
+    {"id": "fact-route-a-static", "predicate": "static_route_exists", "arguments": {"tenant": "tenant-a", "surface": "route-a"}, "source": "static"},
+    {"id": "fact-route-b-runtime", "predicate": "runtime_route_observed", "arguments": {"tenant": "tenant-a", "surface": "route-b", "event": "evt-2", "run": "run-2"}, "source": "runtime"}
+  ],
+  "assumptions": [{"id": "assumption-surface-equality", "predicate": "same_surface", "arguments": {"static": "route-a", "runtime": "route-b"}, "status": "rejected"}],
+  "expected": {"semantic_verdict": "unresolved", "operational_status": "incomplete", "required_leaves": ["fact-route-a-static", "fact-route-b-runtime"], "forbidden_leaves": [], "discrepancies": [{"kind": "surface-mismatch", "surfaces": ["route-a", "route-b"]}], "missing_premises": [{"predicate": "same_surface", "reason": "static and runtime observations name different routes"}]}
+}
