@@ -108,6 +108,7 @@ temp/
 
 # Scratch/research data (LLM outputs, iteration data)
 scratch/
+.capcov/
 
 # ========================================
 # Obsidian
