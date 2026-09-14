@@ -427,7 +427,18 @@ def bundle_from_json(source: str | bytes | Mapping[str, Any], *, validate: bool 
     def diagnostic(x):
         x = _strict_object(x, {"claim_id", "trigger_relation", "effect", "operational_status", "context_indices", "when_missing", "required", "message", "predicate"}, "diagnostic")
         predicate = x.get("predicate") or {}
+        if isinstance(predicate, (list, tuple)):
+            pairs = []
+            for pair in predicate:
+                if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+                    raise ValueError("diagnostic predicate canonical form requires key/value pairs")
+                pairs.append(tuple(pair))
+            keys = [key for key, _ in pairs]
+            if len(keys) != len(set(keys)): raise ValueError("duplicate diagnostic predicate key")
+            predicate = dict(pairs)
         if predicate: _strict_object(predicate, {"column", "operator", "value"}, "diagnostic.predicate")
+        if predicate and (not isinstance(predicate.get("column"), str) or not isinstance(predicate.get("operator"), str)):
+            raise ValueError("diagnostic predicate column/operator must be strings")
         return DiagnosticRule(x["trigger_relation"], x["effect"], x.get("operational_status", "complete"), tuple(x.get("context_indices", ())), x.get("when_missing", False), x.get("required", False), x.get("message", ""), x.get("claim_id", ""), tuple(sorted(predicate.items())))
     policy_raw = raw.get("diagnostic_policy") or {}
     _strict_object(policy_raw, {"missing_premises", "inconsistent_premises", "out_of_scope", "forbidden_evidence", "revocation", "completeness"}, "diagnostic_policy")
