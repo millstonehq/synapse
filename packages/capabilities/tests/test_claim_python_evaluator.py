@@ -111,6 +111,43 @@ class PythonEvaluatorTests(unittest.TestCase):
         self.assertEqual(report.relation_rows("total"), (("a", 5),))
         self.assertEqual(report.claims[0].semantic, SemanticVerdict.SUPPORTED)
 
+    def test_forall_is_a_typed_conjunction_over_the_domain(self) -> None:
+        bundle = Bundle(
+            relations=(rel("domain", ("name", "symbol"), finite=True, nonempty=True),
+                       rel("item", ("name", "symbol"), ("ok", "boolean"))),
+            facts=(fact("domain", "a"), fact("domain", "b"), fact("item", "a", True), fact("item", "b", False)),
+            claims=(Claim("item", (Variable("name"), Constant(True)), quantifier="forall", domain="domain"),),
+        )
+        result = evaluate(bundle).claims[0]
+        # The second typed substitution has no matching positive fact; in an
+        # open-world relation that is unresolved, not a refutation.
+        self.assertEqual(result.semantic, SemanticVerdict.UNRESOLVED)
+        self.assertEqual(result.operational, OperationalStatus.COMPLETE)
+
+    def test_any_and_all_aggregations_have_boolean_results(self) -> None:
+        relations = (
+            rel("item", ("name", "symbol"), ("ok", "boolean")),
+            rel("group", ("name", "symbol"), finite=True, nonempty=True),
+            rel("group_closed", ("name", "symbol"), modality="completeness", completes="group"),
+            rel("any_ok", ("name", "symbol"), ("ok", "boolean")),
+            rel("all_ok", ("name", "symbol"), ("ok", "boolean")),
+        )
+        any_rule = Rule(Atom("any_ok", (Variable("name"), Variable("ok"))),
+                        (Atom("item", (Variable("name"), Variable("ok"))), Atom("group", (Variable("name"),)),
+                         Atom("group_closed", (Variable("name"),))), "any-ok",
+                        Aggregation("ok", "item", ("name",), "ok", "any", "group", "group_closed"))
+        all_rule = Rule(Atom("all_ok", (Variable("name"), Variable("ok"))),
+                        (Atom("item", (Variable("name"), Variable("ok"))), Atom("group", (Variable("name"),)),
+                         Atom("group_closed", (Variable("name"),))), "all-ok",
+                        Aggregation("ok", "item", ("name",), "ok", "all", "group", "group_closed"))
+        bundle = Bundle(relations=relations,
+                        facts=(fact("item", "a", True), fact("item", "a", False), fact("group", "a"), fact("group_closed", "a")),
+                        rules=(any_rule, all_rule), claims=(Claim("any_ok", (Constant("a"), Constant(True))),))
+        report = evaluate(bundle)
+        self.assertEqual(report.relation_rows("any_ok"), (("a", True),))
+        self.assertEqual(report.relation_rows("all_ok"), (("a", False),))
+        self.assertEqual(report.claims[0].semantic, SemanticVerdict.SUPPORTED)
+
 
 if __name__ == "__main__":
     unittest.main()
