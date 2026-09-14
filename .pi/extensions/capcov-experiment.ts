@@ -112,8 +112,21 @@ async function loadConfig(root: string): Promise<Config> {
     ids.add(task.id);
     if (!task.writeSet?.length || !task.gates?.length) throw new Error(`Task ${task.id} needs writeSet and gates`);
     if (!task.legacy && task.gates.some((gate) => !gate.failureKind)) throw new Error(`Modern task ${task.id} gates must declare failureKind`);
+    if (!task.legacy && task.gates.some((gate) => gate.command.slice(0, 2).join(" ") !== "nix develop")) throw new Error(`Modern task ${task.id} gates must run through nix develop`);
+    if (task.id === "souffle-kernel" && !task.gates.some((gate) => gate.command.join(" ").includes("souffle"))) throw new Error("Souffle kernel gate must execute real Souffle");
   }
   const waves = config.waves ?? config.tasks.map((task) => ({ id: task.id, title: task.title, maxParallel: 1, pauseAfter: true, reducer: task.id }));
+  const needsSouffle = config.tasks.some((task) => !task.legacy && task.gates.some((gate) => gate.command.join(" ").includes("souffle")));
+  if (needsSouffle) {
+    const probe = await new Promise<{ code: number; stderr: string }>((resolve) => {
+      const child = spawn("souffle", ["--version"], { cwd: root, stdio: ["ignore", "ignore", "pipe"] });
+      let stderr = "";
+      child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+      child.on("error", (error) => resolve({ code: 127, stderr: error.message }));
+      child.on("close", (code) => resolve({ code: code ?? 1, stderr }));
+    });
+    if (probe.code !== 0) throw new Error(`Datalog workflow requires real Souffle on PATH; install it through the Nix develop environment (${probe.stderr || `exit ${probe.code}`})`);
+  }
   const waveIds = new Set(waves.map((wave) => wave.id));
   if (new Set(waves.map((wave) => wave.id)).size !== waves.length) throw new Error("Workflow contains duplicate wave ids");
   for (const wave of waves) {
@@ -125,6 +138,7 @@ async function loadConfig(root: string): Promise<Config> {
   for (const task of config.tasks) {
     if (task.wave && !waveIds.has(task.wave)) throw new Error(`Task ${task.id} names unknown wave ${task.wave}`);
     if (!task.legacy && !task.role) throw new Error(`Modern task ${task.id} must declare role parallel or reducer`);
+    if (!task.legacy && !task.wave) throw new Error(`Modern task ${task.id} must declare a wave`);
     if (task.role === "parallel" && !task.worktree) throw new Error(`Parallel task ${task.id} must declare an isolated worktree`);
     if (task.role === "reducer" && task.worktree) throw new Error(`Reducer task ${task.id} cannot use a worker worktree`);
     for (const required of task.admission?.requiresCompleted ?? []) if (!ids.has(required)) throw new Error(`Task ${task.id} has unknown admission task ${required}`);
@@ -642,7 +656,7 @@ async function checkResumePreconditions(root: string, config: Config, events: Ev
 function nextTask(config: Config, state: Derived): Task | undefined {
   const wave = waveFor(config, state);
   if (wave) return waveTasks(config, state, wave)[0];
-  return config.tasks.find((task) => !state.completed.has(task.id) && task.dependsOn.every((dep) => state.completed.has(dep)));
+  return undefined;
 }
 
 function statusText(config: Config, state: Derived): string {
