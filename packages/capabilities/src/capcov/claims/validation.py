@@ -102,9 +102,9 @@ def _validate_term(term, expected, env, issues, path, fact_only=False):
     inferred = _python_type(term.value)
     declared = term.type
     actual = declared or inferred
-    declared_ok = declared is None or inferred == declared or (declared == TypeName.TIMESTAMP and inferred == TypeName.INTEGER and isinstance(term.value, int) and term.value >= 0) or (declared == TypeName.DIGEST and inferred == TypeName.SYMBOL) or (declared == TypeName.JSON_METADATA_ONLY and inferred == TypeName.JSON_METADATA_ONLY)
+    declared_ok = declared is None or inferred == declared or (declared == TypeName.UNSIGNED and inferred == TypeName.INTEGER and isinstance(term.value, int) and term.value >= 0) or (declared == TypeName.TIMESTAMP and inferred == TypeName.INTEGER and isinstance(term.value, int) and term.value >= 0) or (declared == TypeName.DIGEST and inferred == TypeName.SYMBOL) or (declared == TypeName.JSON_METADATA_ONLY and inferred == TypeName.JSON_METADATA_ONLY)
     if expected == TypeName.UNSIGNED and isinstance(term.value, int) and term.value < 0: declared_ok = False
-    compatible = actual == expected or (expected == TypeName.TIMESTAMP and inferred == TypeName.INTEGER and isinstance(term.value, int) and term.value >= 0) or (expected == TypeName.DIGEST and inferred == TypeName.SYMBOL)
+    compatible = actual == expected or (expected == TypeName.UNSIGNED and inferred == TypeName.INTEGER and isinstance(term.value, int) and term.value >= 0) or (expected == TypeName.TIMESTAMP and inferred == TypeName.INTEGER and isinstance(term.value, int) and term.value >= 0) or (expected == TypeName.DIGEST and inferred == TypeName.SYMBOL)
     if actual is None or not declared_ok or not compatible:
         issues.append(ValidationIssue("type-mismatch", f"expected {expected.value}, got {getattr(actual, 'value', actual)}", path))
 
@@ -204,13 +204,17 @@ def _validate_aggregation(a, rule, relations, issues, path):
         else:
             source_atom = source_atoms[0]; source_names = [c.name for c in source.columns]
             head_decl = relations.get(rule.head.relation)
-            for group in a.group_by:
-                if group in source_names and head_decl and group in [c.name for c in head_decl.columns]:
-                    si = source_names.index(group); hi = [c.name for c in head_decl.columns].index(group)
-                    if repr(source_atom.terms[si]) != repr(rule.head.terms[hi]):
-                        issues.append(ValidationIssue("aggregation-head", f"head does not preserve group column {group!r}", path))
+            required_head_columns = set(a.group_by) | set(source.context_indices)
+            head_names = [c.name for c in head_decl.columns] if head_decl else []
+            for group in required_head_columns:
+                if group not in source_names or group not in head_names:
+                    issues.append(ValidationIssue("aggregation-head", f"head must preserve group/context column {group!r}", path)); continue
+                si = source_names.index(group); hi = head_names.index(group)
+                if repr(source_atom.terms[si]) != repr(rule.head.terms[hi]):
+                    issues.append(ValidationIssue("aggregation-head", f"head does not preserve group/context column {group!r}", path))
     if domain is None: issues.append(ValidationIssue("aggregation-domain", "aggregation requires a named domain", path))
     elif not domain.finite: issues.append(ValidationIssue("aggregation-domain", "aggregation domain must be finite", path))
+    elif a.operator == "all" and not domain.nonempty: issues.append(ValidationIssue("aggregation-domain", "all aggregation requires a non-empty domain", path))
     if closure is None: issues.append(ValidationIssue("aggregation-closure", "aggregation requires a closure witness", path))
     elif closure.modality.value != "completeness" or closure.completes != a.domain: issues.append(ValidationIssue("aggregation-closure", "closure witness must complete the named domain", path))
     elif domain and closure.context_indices != domain.context_indices: issues.append(ValidationIssue("aggregation-closure", "closure witness context positions must match its finite domain", path))
