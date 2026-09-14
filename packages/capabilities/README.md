@@ -182,7 +182,7 @@ unmapped obligations, and insufficient evidence remain gaps. A baseline can
 permit reviewed gaps without calling them covered. A passing browser navigation
 does not prove persistence, authorization, external delivery, or product parity.
 
-Python branch and exception candidates retain their parent HTTP surface. A mapped
+Route branch and exception candidates retain their parent HTTP surface. A mapped
 candidate requires that parent request in the same execution step, together with
 the declared outcome assertions; observing the route in another step is not
 enough. Missing or invalid parent references fail reconciliation. The candidate
@@ -190,28 +190,27 @@ ID is a source obligation, never a URL the runner should fabricate. HTTP presenc
 alone does not distinguish which branch ran: consumer-reviewed assertions still
 have to establish the intended outcome.
 
-Separate `python-routes` adapters can declare different router prefixes, including
-multiple mounts of the same source. Each mount keeps its own surface and branch
-obligations. The four Python discovery limits apply once to the combined
-inventory; mounted-route confirmation must account for every discovered mount.
-Overlapping declarations of the same HTTP surface remain an error.
+Source code in any tree-sitter-supported language is read by the single
+`treesitter-routes` adapter (install the `treesitter` extra). The opinion of
+which calls are routes is a config-supplied tree-sitter query, so one adapter
+serves Go, JavaScript, Python and the rest -- there is no per-language reader. It
+sees literal string arguments in the nodes the query matches: a path built by
+concatenation or held in a variable is invisible and becomes an unresolved
+dynamic-route obligation. Unlike a regex it is comment- and syntax-aware, so a
+commented-out call never matches. When the query captures the enclosing handler
+as `@handler`, its body is walked for branch and exception candidates; the node
+types that count are config-driven (`branch_nodes`, `exception_nodes`) with
+per-language defaults. Four route-reading limits are emitted once for the
+combined inventory.
 
-When different source handlers intentionally declare the same method/path (for
-example a replaced legacy router), assign their adapters distinct
-`source_namespace` identifiers. This preserves separate surface and branch IDs;
-surface records retain `http_surface` for comparison with runtime registrations.
-It does not establish which handler is mounted or qualify an omitted handler.
-Consumers must reconcile source ownership as well as method/path, and retain
-unresolved declarations. Duplicate IDs within a namespace still fail discovery.
-
-Explicit `add_api_route` calls are also inventoried when the path and method
-list are literal and the endpoint is an unshadowed module-defined function.
-Omitted methods mean GET. Each declared method retains the callback's branch and
-exception candidates and the registration's source location. Dynamic paths,
-methods, imported/attribute callbacks, shadowed names and expanded keyword
-arguments remain unresolved obligations; no application code is executed.
-This is a conservative source rule, not proof of runtime mounting or framework
-object identity. Runtime reconciliation remains required.
+The same source read at more than one mount point is namespaced with distinct
+`id_prefix` values, which keeps each mount's surface and branch IDs separate;
+overlapping declarations of the same ID remain an error. An optional `methods`
+allowlist records a matched, route-shaped candidate whose verb is outside the set
+under `excluded_surfaces` -- the query saw it and the verb filter dropped it, so
+the narrowed denominator stays legible instead of implied by absence. This is a
+conservative source rule, not proof of runtime mounting or framework object
+identity. Runtime reconciliation remains required.
 
 ## OpenAPI operation inventory
 
@@ -261,7 +260,7 @@ scope. Those additional operations receive no coverage merely from discovery.
 
 - Python/FastAPI/SQLAlchemy entity discovery and runtime probes.
 - Opt-in literal and shared-constant SQLite declarations, with unbound query diagnostics.
-- Python route source obligations, OpenAPI JSON operations, and Zoho Creator export discovery.
+- Tree-sitter route source obligations in any supported language, and OpenAPI JSON operations (one config of the generic structured-spec reader).
 - Required/forbidden fact-state planning with explicit blocked transitions.
 - Consumer execution commands with fresh run nonces and source/model/plan hashes.
 - Exact scenario/assertion reconciliation, per-step HTTP evidence, and gap gates.

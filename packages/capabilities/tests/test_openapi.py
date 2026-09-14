@@ -86,15 +86,15 @@ class OpenAPIInventoryTests(unittest.TestCase):
             with self.subTest(prefix=prefix), self.assertRaises(ValueError):
                 derive('{"openapi":"3.1.0"}', "api.json", prefix)
 
-    def test_overlapping_python_and_contract_surfaces_remain_an_error(self):
+    def test_overlapping_contract_surfaces_remain_an_error(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "api.json").write_text('{"openapi":"3.1.0","paths":{"/x":{"get":{}}}}')
-            (root / "routes.py").write_text('@router.get("/x")\ndef x():\n    return 1\n')
+            (root / "a.json").write_text('{"openapi":"3.1.0","paths":{"/x":{"get":{}}}}')
+            (root / "b.json").write_text('{"openapi":"3.1.0","paths":{"/x":{"get":{}}}}')
             config = root / "discovery.json"
             config.write_text(json.dumps({"root": ".", "scope": "overlap", "adapters": [
-                {"kind": "python-routes", "files": ["routes.py"]},
-                {"kind": "openapi-json", "document": "api.json"},
+                {"kind": "openapi-json", "document": "a.json"},
+                {"kind": "openapi-json", "document": "b.json"},
             ]}))
             with self.assertRaisesRegex(ValueError, "duplicate obligation IDs"):
                 discover(config)

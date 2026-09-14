@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 import tempfile
 import unittest
@@ -10,6 +11,22 @@ from unittest.mock import patch
 from capcov.flows.cli import main
 from capcov.flows.discovery import discover
 from capcov.flows.model import digest, plan, reconcile
+
+_HAVE_TS = (
+    importlib.util.find_spec("tree_sitter") is not None
+    and importlib.util.find_spec("tree_sitter_language_pack") is not None
+)
+
+# A decorated route: the decorator call captures @path and the function it
+# decorates is captured as @handler, so its body is walked for branch and
+# exception candidates. The route opinion lives in this config query, not in the
+# engine, so the single treesitter-routes adapter serves every language.
+PY_HANDLER_QUERY = (
+    "(decorated_definition "
+    "(decorator (call function: (attribute attribute: (identifier) @method) "
+    "arguments: (argument_list (string) @path))) "
+    "definition: (function_definition) @handler)"
+)
 
 
 def fixture() -> tuple[dict, dict]:
@@ -591,6 +608,7 @@ class FlowTests(unittest.TestCase):
         run["scenarios"].pop()
         self.assertFalse(reconcile(inventory, model, execution_plan, run)["complete"])
 
+    @unittest.skipUnless(_HAVE_TS, "treesitter extra not installed")
     def test_discovery_retains_branches_exceptions_and_boundaries(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -607,7 +625,12 @@ class FlowTests(unittest.TestCase):
                         "scope": "fixture",
                         "root": ".",
                         "adapters": [
-                            {"kind": "python-routes", "files": ["routes.py"], "prefix": "/portal"},
+                            {
+                                "kind": "treesitter-routes",
+                                "language": "python",
+                                "files": ["routes.py"],
+                                "query": PY_HANDLER_QUERY,
+                            },
                         ],
                     }
                 )
@@ -620,7 +643,11 @@ class FlowTests(unittest.TestCase):
             route.write_text('@router.get("/new")\ndef new():\n    return 1\n')
             self.assertNotEqual(inventory, discover(config))
 
-    def test_multiple_python_mounts_preserve_surfaces_and_shared_limits(self) -> None:
+    @unittest.skipUnless(_HAVE_TS, "treesitter extra not installed")
+    def test_multiple_route_mounts_preserve_surfaces_and_shared_limits(self) -> None:
+        # The same source read at two mount points. Tree-sitter has no path
+        # prefix; distinct mounts are namespaced by id_prefix, and the four route
+        # discovery limits are still emitted once for the combined inventory.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "routes.py").write_text(
@@ -631,14 +658,18 @@ class FlowTests(unittest.TestCase):
             settings = {
                 "scope": "two-mounts", "root": ".",
                 "adapters": [
-                    {"kind": "python-routes", "files": ["routes.py"], "prefix": prefix}
-                    for prefix in ("/portal", "/admin")
+                    {
+                        "kind": "treesitter-routes", "language": "python",
+                        "files": ["routes.py"], "query": PY_HANDLER_QUERY,
+                        "id_prefix": prefix,
+                    }
+                    for prefix in ("portal:", "admin:")
                 ],
             }
             config.write_text(json.dumps(settings))
             inventory = discover(config)
             surfaces = {o["id"] for o in inventory["obligations"] if o["kind"] == "surface"}
-            self.assertEqual(surfaces, {"http:GET /portal/items", "http:GET /admin/items"})
+            self.assertEqual(surfaces, {"portal:/items", "admin:/items"})
             branches = [o for o in inventory["obligations"] if o["kind"] == "branch-candidate"]
             self.assertEqual(len(branches), 4)
             self.assertEqual({o["surface"] for o in branches}, surfaces)
@@ -647,43 +678,10 @@ class FlowTests(unittest.TestCase):
             self.assertIn("boundary:python:mounted-route-confirmation", {o["id"] for o in limits})
             # Only global discovery limits are shared. Colliding route declarations
             # still fail instead of silently shrinking the coverage denominator.
-            settings["adapters"][1]["prefix"] = "/portal"
+            settings["adapters"][1]["id_prefix"] = "portal:"
             config.write_text(json.dumps(settings))
             with self.assertRaisesRegex(ValueError, "duplicate obligation IDs"):
                 discover(config)
-
-    def test_source_namespaces_preserve_colliding_handlers_and_branches(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            for name in ("legacy", "replacement"):
-                (root / f"{name}.py").write_text(
-                    '@router.get("/items")\ndef items():\n'
-                    '    if allowed:\n        return []\n    return None\n'
-                )
-            config = root / "discovery.json"
-            settings = {"scope": "source-declarations", "root": ".", "adapters": [
-                {"kind": "python-routes", "files": [f"{name}.py"], "source_namespace": name}
-                for name in ("legacy", "replacement")
-            ]}
-            config.write_text(json.dumps(settings))
-            inventory = discover(config)
-            surfaces = [o for o in inventory["obligations"] if o["kind"] == "surface"]
-            self.assertEqual({o["http_surface"] for o in surfaces}, {"http:GET /items"})
-            ids = {o["id"] for o in surfaces}
-            self.assertEqual(ids, {f"python:{name}:http:GET /items" for name in ("legacy", "replacement")})
-            branches = [o for o in inventory["obligations"] if o["kind"] == "branch-candidate"]
-            self.assertEqual(len(branches), 4)
-            self.assertEqual({o["surface"] for o in branches}, ids)
-            # Qualification cannot silently coalesce declarations in the same namespace.
-            settings["adapters"][1]["source_namespace"] = "legacy"
-            config.write_text(json.dumps(settings))
-            with self.assertRaisesRegex(ValueError, "duplicate obligation IDs"):
-                discover(config)
-            for invalid in ("", "has:separator", "white space", 42):
-                settings["adapters"][1]["source_namespace"] = invalid
-                config.write_text(json.dumps(settings))
-                with self.assertRaisesRegex(ValueError, "source_namespace"):
-                    discover(config)
 
     def test_unknown_adapter_does_not_produce_empty_green(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
