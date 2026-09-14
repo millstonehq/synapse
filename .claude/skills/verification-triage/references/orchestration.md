@@ -158,6 +158,15 @@ receipts after integration and rerun checks affected by changed inputs. Publish
 coherent validated checkpoints using the user's existing branch/mainline policy;
 this workflow does not require stacked PRs or introduce new approval gates.
 
+Namespaced Crossplane claims can still own the same external service and fight
+over its revision. Before retiring a duplicate, compare managed-resource external
+IDs and owner references. To preserve the shared service, pause the stale
+controller, set its owned resources to orphan on deletion and observe-only, and
+verify those policies before deleting its claim. Confirm the stale XR is deleting,
+then remove its pause so deletion and finalizer handling can finish without a
+normal reconciliation restoring destructive policies; verify the stale children
+are gone and the external service remains intact.
+
 Use native spawn/message/follow-up/interrupt facilities to coordinate workers.
 Interrupt for an actual redirect, cancellation or unsafe overlap, not because an
 observation timed out. Preserve live process handles and perform required cleanup.
