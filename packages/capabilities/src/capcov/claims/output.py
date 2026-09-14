@@ -23,48 +23,66 @@ def _evidence_values(bundle: Bundle, evidence_id: str) -> dict[str, Any]:
     return values
 
 
-def _triggered(output: OutputTemplate, active: set[str], claim_state: str | None) -> bool:
-    if not set(output.requires_all_evidence).issubset(active):
-        return False
-    if output.requires_any_evidence and not set(output.requires_any_evidence) & active:
-        return False
-    if set(output.excludes_evidence) & active:
-        return False
-    return output.when_claim in (None, "always") or output.when_claim == claim_state
+def _predicate_matches(value: Any, operator: str, expected: Any) -> bool:
+    if operator == "=": return value == expected
+    if operator == "!=": return value != expected
+    if operator == "in": return value in expected if isinstance(expected, (list, tuple)) else False
+    if operator == "not-in": return value not in expected if isinstance(expected, (list, tuple)) else False
+    return False
 
 
-def _relevant(bundle: Bundle, claim_id: str, evidence_id: str, derived: set[str]) -> bool:
+def _relevant(bundle: Bundle, claim_id: str, evidence_id: str, proof: set[str]) -> bool:
     evidence = next((item for item in bundle.evidence if item.id == evidence_id), None)
     claim = _claim(bundle, claim_id)
     if evidence is None or claim is None:
         return False
+    values = _evidence_values(bundle, evidence_id)
+    claim_context = claim.context.as_dict()
     for mapping in bundle.mappings:
         if mapping.claim_id != claim_id or mapping.evidence_relation != evidence.atom.relation:
             continue
-        values = _evidence_values(bundle, evidence_id)
+        if any(evidence.context.as_dict().get(index) != claim_context.get(index) for index in mapping.context_indices):
+            continue
         claim_relation = next((r for r in bundle.relations if r.name == claim.relation), None)
         claim_values = {c.name: t.value for c, t in zip(claim_relation.columns, claim.terms) if isinstance(t, Constant)} if claim_relation else {}
         if all(claim_values.get(left) == values.get(right) for left, right in mapping.bindings):
             return True
     for diagnostic in bundle.diagnostics:
-        if diagnostic.claim_id == claim_id and diagnostic.trigger_relation == evidence.atom.relation:
-            return True
-    if evidence_id in derived:
+        if diagnostic.claim_id != claim_id or diagnostic.trigger_relation != evidence.atom.relation or diagnostic.when_missing:
+            continue
+        if any(evidence.context.as_dict().get(index) != claim_context.get(index) for index in diagnostic.context_indices):
+            continue
+        predicate = dict(diagnostic.predicate)
+        if predicate and not _predicate_matches(values.get(predicate.get("column")), predicate.get("operator"), predicate.get("value")):
+            continue
+        return True
+    if evidence_id in proof:
         return any(rule.head.relation == claim.relation and any(atom.relation == evidence.atom.relation for atom in rule.body) for rule in bundle.rules)
     return False
 
 
-def render_outputs(bundle: Bundle, claim_id: str, active_evidence: set[str] | frozenset[str], derived_evidence: set[str] | frozenset[str] = frozenset(), claim_state: str | None = None, missing_relations: set[str] | frozenset[str] = frozenset()) -> tuple[dict[str, Any], ...]:
+def _triggered(output: OutputTemplate, relevant: set[str], claim_state: str | None) -> bool:
+    if not set(output.requires_all_evidence).issubset(relevant):
+        return False
+    if output.requires_any_evidence and not set(output.requires_any_evidence) & relevant:
+        return False
+    if set(output.excludes_evidence) & relevant:
+        return False
+    return output.when_claim in (None, "always") or output.when_claim == claim_state
+
+
+def render_outputs(bundle: Bundle, claim_id: str, active_evidence: set[str] | frozenset[str], proof_evidence: set[str] | frozenset[str] = frozenset(), claim_state: str | None = None, missing_relations: set[str] | frozenset[str] = frozenset()) -> tuple[dict[str, Any], ...]:
     """Render active, typed output templates for one claim deterministically."""
     active = set(active_evidence)
-    derived = set(derived_evidence)
+    proof = set(proof_evidence)
+    relevant = {evidence_id for evidence_id in active if _relevant(bundle, claim_id, evidence_id, proof)}
     rendered = []
     for output in bundle.outputs:
-        if output.claim_id != claim_id or not _triggered(output, active, claim_state):
+        if output.claim_id != claim_id or not _triggered(output, relevant, claim_state):
             continue
-        if output.evidence_id and (output.evidence_id not in active or not _relevant(bundle, claim_id, output.evidence_id, derived)):
+        if output.evidence_id and output.evidence_id not in relevant:
             continue
-        if output.kind == OutputKind.MISSING_PREMISE and output.relation not in set(missing_relations) and not output.causal_missing:
+        if output.kind == OutputKind.MISSING_PREMISE and output.relation not in set(missing_relations):
             continue
         item: dict[str, Any] = {"kind": output.kind.value, "claim_id": output.claim_id}
         if output.evidence_id:
@@ -85,7 +103,7 @@ def render_outputs(bundle: Bundle, claim_id: str, active_evidence: set[str] | fr
                 value = claim_values.get(template.column)
             else:
                 evidence_id = template.evidence_id or output.evidence_id
-                if not evidence_id or evidence_id not in active or not _relevant(bundle, claim_id, evidence_id, derived):
+                if not evidence_id or evidence_id not in relevant:
                     break
                 value = _evidence_values(bundle, evidence_id).get(template.column)
             fields[name] = value

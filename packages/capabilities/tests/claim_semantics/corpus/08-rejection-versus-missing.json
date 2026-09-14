@@ -94,7 +94,7 @@
       ],
       "quantifier": "exists",
       "domain": null,
-      "mappings": [], "diagnostics": [{"trigger_relation":"authorization_observation_missing","effect":"observation","operational_status":"complete","context_indices":["tenant","run"],"when_missing":true,"required":true}]
+      "mappings": [{"evidence_relation":"authorization_observation_missing","effect":"observation","context_indices":["tenant","run"],"bindings":[["tenant","tenant"],["run","run"]]}], "diagnostics": [{"trigger_relation":"authorization_observation_missing","effect":"observation","operational_status":"complete","context_indices":["tenant","run"],"when_missing":true,"required":true}]
     }
   ],
   "facts": [
