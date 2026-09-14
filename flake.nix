@@ -114,6 +114,7 @@
           souffle-recursive-typed-smoke = pkgs.runCommand "souffle-recursive-typed-smoke" {
             nativeBuildInputs = [ pkgs.souffle ];
           } ''
+            export LC_ALL=C
             mkdir -p facts output "$out"
             cp ${./tests/souffle/recursive-typed.dl} recursive-typed.dl
             cp ${./tests/souffle/edge.facts} facts/edge.facts
