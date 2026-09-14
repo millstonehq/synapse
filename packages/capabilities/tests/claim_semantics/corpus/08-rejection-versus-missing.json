@@ -2,16 +2,226 @@
   "schema_version": 1,
   "id": "08-rejection-versus-missing",
   "title": "Explicit rejection refutes; missing evidence does not",
-  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": "absence-treated-as-denial"},
-  "context": {"tenant": "tenant-a", "run": "run-8", "event": "evt-8"},
+  "provenance": {
+    "kind": "synthetic",
+    "source": "hand-authored semantic control",
+    "seeded_fault": "absence-treated-as-denial"
+  },
+  "context": {
+    "tenant": "tenant-a",
+    "run": "run-8",
+    "event": "evt-8",
+    "attempt": "attempt-08"
+  },
   "claims": [
-    {"id": "claim-explicit-denial", "predicate": "authorized", "arguments": {"tenant": "tenant-a", "actor": "bob", "decision": "allow", "run": "run-8"}},
-    {"id": "claim-missing-denial", "predicate": "authorized", "arguments": {"tenant": "tenant-a", "actor": "carol", "decision": "allow", "run": "run-8"}}
+    {
+      "id": "claim-explicit-denial",
+      "predicate": "authorized",
+      "arguments": {
+        "tenant": "tenant-a",
+        "actor": "bob",
+        "decision": "allow",
+        "run": "run-8",
+        "operation": null
+      },
+      "relation": "authorized",
+      "arg_order": [
+        "tenant",
+        "actor",
+        "operation",
+        "decision",
+        "run"
+      ],
+      "args": [
+        "tenant-a",
+        "bob",
+        null,
+        "allow",
+        "run-8"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-8",
+        "event": "evt-8",
+        "attempt": "attempt-08"
+      },
+      "provenance": {
+        "source": "reviewed-claim",
+        "depends_on": []
+      }
+    },
+    {
+      "id": "claim-missing-denial",
+      "predicate": "authorized",
+      "arguments": {
+        "tenant": "tenant-a",
+        "actor": "carol",
+        "decision": "allow",
+        "run": "run-8",
+        "operation": null
+      },
+      "relation": "authorized",
+      "arg_order": [
+        "tenant",
+        "actor",
+        "operation",
+        "decision",
+        "run"
+      ],
+      "args": [
+        "tenant-a",
+        "carol",
+        null,
+        "allow",
+        "run-8"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-8",
+        "event": "evt-8",
+        "attempt": "attempt-08"
+      },
+      "provenance": {
+        "source": "reviewed-claim",
+        "depends_on": []
+      }
+    }
   ],
   "facts": [
-    {"id": "fact-explicit-rejection", "predicate": "authorization_rejected", "arguments": {"tenant": "tenant-a", "actor": "bob", "decision": "deny", "status": 403}, "source": "runtime"},
-    {"id": "fact-missing", "predicate": "authorization_observation", "arguments": {"tenant": "tenant-a", "actor": "carol"}, "source": "runtime", "status": "absent"}
+    {
+      "id": "fact-explicit-rejection",
+      "predicate": "authorization_rejected",
+      "arguments": {
+        "tenant": "tenant-a",
+        "actor": "bob",
+        "decision": "deny",
+        "status": 403,
+        "run": "run-8"
+      },
+      "source": "runtime",
+      "relation": "authorization_rejected",
+      "arg_order": [
+        "tenant",
+        "actor",
+        "decision",
+        "run"
+      ],
+      "args": [
+        "tenant-a",
+        "bob",
+        "deny",
+        "run-8"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-8",
+        "event": "evt-8",
+        "attempt": "attempt-08"
+      },
+      "provenance": {
+        "source": "runtime",
+        "depends_on": []
+      }
+    },
+    {
+      "id": "fact-missing",
+      "predicate": "authorization_observation",
+      "arguments": {
+        "tenant": "tenant-a",
+        "actor": "carol",
+        "run": "run-8"
+      },
+      "source": "runtime",
+      "relation": "authorization_observation_missing",
+      "arg_order": [
+        "tenant",
+        "actor",
+        "run"
+      ],
+      "args": [
+        "tenant-a",
+        "carol",
+        "run-8"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-8",
+        "event": "evt-8",
+        "attempt": "attempt-08"
+      },
+      "provenance": {
+        "source": "runtime",
+        "depends_on": []
+      }
+    }
   ],
-  "assumptions": [{"id": "assumption-closed-auth-log", "predicate": "auth_log_complete", "arguments": {"tenant": "tenant-a", "run": "run-8"}, "status": "rejected"}],
-  "expected": {"semantic_verdict": "refuted", "operational_status": "complete", "required_leaves": ["fact-explicit-rejection"], "forbidden_leaves": ["fact-missing"], "discrepancies": [], "missing_premises": []}
+  "assumptions": [
+    {
+      "id": "assumption-closed-auth-log",
+      "predicate": "auth_log_complete",
+      "arguments": {
+        "tenant": "tenant-a",
+        "run": "run-8"
+      },
+      "status": "rejected",
+      "relation": "auth_log_complete",
+      "arg_order": [
+        "tenant",
+        "run"
+      ],
+      "args": [
+        "tenant-a",
+        "run-8"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-8",
+        "event": "evt-8",
+        "attempt": "attempt-08"
+      },
+      "provenance": {
+        "source": "reviewed-assumption",
+        "depends_on": []
+      }
+    }
+  ],
+  "expected": {
+    "claims": {
+      "claim-explicit-denial": {
+        "semantic_verdict": "refuted",
+        "operational_status": "complete",
+        "support_leaves": [],
+        "refutation_leaves": [
+          "fact-explicit-rejection"
+        ],
+        "observed_leaves": [
+          "fact-explicit-rejection"
+        ],
+        "forbidden_leaves": [],
+        "discrepancies": [],
+        "missing_premises": []
+      },
+      "claim-missing-denial": {
+        "semantic_verdict": "unresolved",
+        "operational_status": "incomplete",
+        "support_leaves": [],
+        "refutation_leaves": [],
+        "observed_leaves": [
+          "fact-missing"
+        ],
+        "forbidden_leaves": [
+          "fact-missing"
+        ],
+        "discrepancies": [],
+        "missing_premises": []
+      }
+    }
+  },
+  "schema_ref": "schema-v1",
+  "context_indices": [
+    "tenant",
+    "run",
+    "event",
+    "attempt"
+  ]
 }

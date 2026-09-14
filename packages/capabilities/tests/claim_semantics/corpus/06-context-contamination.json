@@ -2,13 +2,187 @@
   "schema_version": 1,
   "id": "06-context-contamination",
   "title": "Cross-tenant and cross-run evidence cannot join",
-  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": "tenant-run-keys-dropped"},
-  "context": {"tenant": "tenant-a", "run": "run-6a", "event": "evt-6"},
-  "claims": [{"id": "claim-terminal", "predicate": "notification_delivery_terminal", "arguments": {"tenant": "tenant-a", "event": "evt-6", "run": "run-6a"}}],
-  "facts": [
-    {"id": "fact-tenant-a", "predicate": "http_save_succeeded", "arguments": {"tenant": "tenant-a", "event": "evt-6", "run": "run-6a"}, "source": "http"},
-    {"id": "fact-tenant-b", "predicate": "sql_terminal_state", "arguments": {"tenant": "tenant-b", "event": "evt-6", "run": "run-6b"}, "source": "sql"}
+  "provenance": {
+    "kind": "synthetic",
+    "source": "hand-authored semantic control",
+    "seeded_fault": "tenant-run-keys-dropped"
+  },
+  "context": {
+    "tenant": "tenant-a",
+    "run": "run-6a",
+    "event": "evt-6",
+    "attempt": "attempt-06"
+  },
+  "claims": [
+    {
+      "id": "claim-terminal",
+      "predicate": "notification_delivery_terminal",
+      "arguments": {
+        "tenant": "tenant-a",
+        "event": "evt-6",
+        "run": "run-6a",
+        "recipient": null,
+        "attempt": "attempt-06"
+      },
+      "relation": "notification_delivery_terminal",
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "args": [
+        "tenant-a",
+        "evt-6",
+        null,
+        "run-6a",
+        "attempt-06"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-6a",
+        "event": "evt-6",
+        "attempt": "attempt-06"
+      },
+      "provenance": {
+        "source": "reviewed-claim",
+        "depends_on": []
+      }
+    }
   ],
-  "assumptions": [{"id": "assumption-context-compatible", "predicate": "same_context", "arguments": {"left": "tenant-a/run-6a", "right": "tenant-b/run-6b"}, "status": "rejected"}],
-  "expected": {"semantic_verdict": "unresolved", "operational_status": "complete-with-discrepancy", "required_leaves": ["fact-tenant-a", "fact-tenant-b"], "forbidden_leaves": [], "discrepancies": [{"kind": "context-mismatch", "dimensions": ["tenant", "run"]}], "missing_premises": [{"predicate": "same_context", "reason": "evidence rows cannot be joined"}]}
+  "facts": [
+    {
+      "id": "fact-tenant-a",
+      "predicate": "http_save_succeeded",
+      "arguments": {
+        "tenant": "tenant-a",
+        "event": "evt-6",
+        "run": "run-6a"
+      },
+      "source": "http",
+      "relation": "http_save_succeeded",
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "args": [
+        "tenant-a",
+        "evt-6",
+        "run-6a"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-6a",
+        "event": "evt-6",
+        "attempt": "attempt-06"
+      },
+      "provenance": {
+        "source": "http",
+        "depends_on": []
+      }
+    },
+    {
+      "id": "fact-tenant-b",
+      "predicate": "sql_terminal_state",
+      "arguments": {
+        "tenant": "tenant-b",
+        "event": "evt-6",
+        "run": "run-6b",
+        "recipient": null
+      },
+      "source": "sql",
+      "relation": "sql_terminal_state",
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ],
+      "args": [
+        "tenant-b",
+        "evt-6",
+        null,
+        "run-6b"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-6a",
+        "event": "evt-6",
+        "attempt": "attempt-06"
+      },
+      "provenance": {
+        "source": "sql",
+        "depends_on": []
+      }
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "assumption-context-compatible",
+      "predicate": "same_context",
+      "arguments": {
+        "left": "tenant-a/run-6a",
+        "right": "tenant-b/run-6b"
+      },
+      "status": "rejected",
+      "relation": "same_context",
+      "arg_order": [
+        "left",
+        "right"
+      ],
+      "args": [
+        "tenant-a/run-6a",
+        "tenant-b/run-6b"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-6a",
+        "event": "evt-6",
+        "attempt": "attempt-06"
+      },
+      "provenance": {
+        "source": "reviewed-assumption",
+        "depends_on": []
+      }
+    }
+  ],
+  "expected": {
+    "claims": {
+      "claim-terminal": {
+        "semantic_verdict": "unresolved",
+        "operational_status": "incomplete",
+        "support_leaves": [],
+        "refutation_leaves": [],
+        "observed_leaves": [
+          "fact-tenant-a",
+          "fact-tenant-b"
+        ],
+        "forbidden_leaves": [],
+        "discrepancies": [
+          {
+            "kind": "context-mismatch",
+            "dimensions": [
+              "tenant",
+              "run"
+            ]
+          }
+        ],
+        "missing_premises": [
+          {
+            "predicate": "same_context",
+            "reason": "evidence rows cannot be joined"
+          }
+        ]
+      }
+    }
+  },
+  "schema_ref": "schema-v1",
+  "context_indices": [
+    "tenant",
+    "run",
+    "event",
+    "attempt"
+  ]
 }
