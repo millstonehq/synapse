@@ -16,7 +16,6 @@
   "claims": [
     {
       "id": "claim-allow",
-      "predicate": "authorized",
       "arguments": {
         "tenant": "tenant-a",
         "actor": "alice",
@@ -25,13 +24,6 @@
         "run": "run-4"
       },
       "relation": "authorized",
-      "arg_order": [
-        "tenant",
-        "actor",
-        "operation",
-        "decision",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "alice",
@@ -48,11 +40,19 @@
       "provenance": {
         "source": "reviewed-claim",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "actor",
+        "operation",
+        "decision",
+        "run"
+      ],
+      "quantifier": "exists",
+      "domain": null
     },
     {
       "id": "claim-deny",
-      "predicate": "authorized",
       "arguments": {
         "tenant": "tenant-a",
         "actor": "bob",
@@ -61,13 +61,6 @@
         "run": "run-4"
       },
       "relation": "authorized",
-      "arg_order": [
-        "tenant",
-        "actor",
-        "operation",
-        "decision",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "bob",
@@ -84,13 +77,21 @@
       "provenance": {
         "source": "reviewed-claim",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "actor",
+        "operation",
+        "decision",
+        "run"
+      ],
+      "quantifier": "exists",
+      "domain": null
     }
   ],
   "facts": [
     {
       "id": "fact-allow-200",
-      "predicate": "http_authorization",
       "arguments": {
         "tenant": "tenant-a",
         "actor": "alice",
@@ -101,18 +102,12 @@
       },
       "source": "runtime",
       "relation": "http_authorization",
-      "arg_order": [
-        "tenant",
-        "actor",
-        "operation",
-        "decision",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "alice",
         "read",
         "allow",
+        200,
         "run-4"
       ],
       "context": {
@@ -126,11 +121,18 @@
         "depends_on": [
           "assumption-policy-version"
         ]
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "actor",
+        "operation",
+        "decision",
+        "status",
+        "run"
+      ]
     },
     {
       "id": "fact-deny-403",
-      "predicate": "http_authorization",
       "arguments": {
         "tenant": "tenant-a",
         "actor": "bob",
@@ -141,18 +143,12 @@
       },
       "source": "runtime",
       "relation": "http_authorization",
-      "arg_order": [
-        "tenant",
-        "actor",
-        "operation",
-        "decision",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "bob",
         "read",
         "deny",
+        403,
         "run-4"
       ],
       "context": {
@@ -166,23 +162,25 @@
         "depends_on": [
           "assumption-policy-version"
         ]
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "actor",
+        "operation",
+        "decision",
+        "status",
+        "run"
+      ]
     }
   ],
   "assumptions": [
     {
       "id": "assumption-policy-version",
-      "predicate": "policy_version",
       "arguments": {
         "policy": "document-read",
         "version": "v1"
       },
-      "status": "accepted",
-      "relation": "policy_version",
-      "arg_order": [
-        "policy",
-        "version"
-      ],
+      "relation": "policy_version__accepted",
       "args": [
         "document-read",
         "v1"
@@ -196,7 +194,12 @@
       "provenance": {
         "source": "reviewed-assumption",
         "depends_on": []
-      }
+      },
+      "subject_relation": "policy_version",
+      "arg_order": [
+        "policy",
+        "version"
+      ]
     }
   ],
   "expected": {

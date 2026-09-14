@@ -11,31 +11,24 @@
     "tenant": "tenant-a",
     "run": "run-7",
     "event": "evt-7",
-    "attempt": "attempt-07"
+    "attempt": "attempt-07",
+    "recipient": "a@example.test"
   },
   "claims": [
     {
       "id": "claim-delivered",
-      "predicate": "notification_delivery_terminal",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-7",
         "run": "run-7",
-        "recipient": null,
+        "recipient": "a@example.test",
         "attempt": "attempt-07"
       },
       "relation": "notification_delivery_terminal",
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run",
-        "attempt"
-      ],
       "args": [
         "tenant-a",
         "evt-7",
-        null,
+        "a@example.test",
         "run-7",
         "attempt-07"
       ],
@@ -43,18 +36,27 @@
         "tenant": "tenant-a",
         "run": "run-7",
         "event": "evt-7",
-        "attempt": "attempt-07"
+        "attempt": "attempt-07",
+        "recipient": "a@example.test"
       },
       "provenance": {
         "source": "reviewed-claim",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "quantifier": "exists",
+      "domain": null
     }
   ],
   "facts": [
     {
       "id": "fact-static",
-      "predicate": "mail_path_declared",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-7",
@@ -62,11 +64,6 @@
       },
       "source": "static",
       "relation": "mail_path_declared",
-      "arg_order": [
-        "tenant",
-        "event",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "evt-7",
@@ -76,16 +73,21 @@
         "tenant": "tenant-a",
         "run": "run-7",
         "event": "evt-7",
-        "attempt": "attempt-07"
+        "attempt": "attempt-07",
+        "recipient": "a@example.test"
       },
       "provenance": {
         "source": "static",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ]
     },
     {
       "id": "fact-runtime",
-      "predicate": "mail_path_observed",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-7",
@@ -93,11 +95,6 @@
       },
       "source": "runtime",
       "relation": "mail_path_observed",
-      "arg_order": [
-        "tenant",
-        "event",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "evt-7",
@@ -107,26 +104,27 @@
         "tenant": "tenant-a",
         "run": "run-7",
         "event": "evt-7",
-        "attempt": "attempt-07"
+        "attempt": "attempt-07",
+        "recipient": "a@example.test"
       },
       "provenance": {
         "source": "runtime",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ]
     }
   ],
   "assumptions": [
     {
       "id": "assumption-false",
-      "predicate": "provider_is_real",
       "arguments": {
         "provider": "loopback"
       },
-      "status": "rejected",
-      "relation": "provider_is_real",
-      "arg_order": [
-        "provider"
-      ],
+      "relation": "provider_is_real__rejected",
       "args": [
         "loopback"
       ],
@@ -134,27 +132,27 @@
         "tenant": "tenant-a",
         "run": "run-7",
         "event": "evt-7",
-        "attempt": "attempt-07"
+        "attempt": "attempt-07",
+        "recipient": "a@example.test"
       },
       "provenance": {
         "source": "reviewed-assumption",
         "depends_on": []
-      }
+      },
+      "subject_relation": "provider_is_real",
+      "arg_order": [
+        "provider"
+      ]
     },
     {
       "id": "assumption-false-independent",
-      "predicate": "independent_support",
       "arguments": {
         "paths": [
           "static",
           "runtime"
         ]
       },
-      "status": "rejected",
-      "relation": "independent_support",
-      "arg_order": [
-        "paths"
-      ],
+      "relation": "independent_support__rejected",
       "args": [
         [
           "static",
@@ -165,19 +163,24 @@
         "tenant": "tenant-a",
         "run": "run-7",
         "event": "evt-7",
-        "attempt": "attempt-07"
+        "attempt": "attempt-07",
+        "recipient": "a@example.test"
       },
       "provenance": {
         "source": "reviewed-assumption",
         "depends_on": []
-      }
+      },
+      "subject_relation": "independent_support",
+      "arg_order": [
+        "paths"
+      ]
     }
   ],
   "expected": {
     "claims": {
       "claim-delivered": {
         "semantic_verdict": "unresolved",
-        "operational_status": "incomplete",
+        "operational_status": "complete",
         "support_leaves": [],
         "refutation_leaves": [],
         "observed_leaves": [
@@ -195,8 +198,8 @@
         ],
         "missing_premises": [
           {
-            "predicate": "independent_support",
-            "reason": "both producers depend on one false assumption"
+            "reason": "both producers depend on one false assumption",
+            "relation": "independent_support"
           }
         ]
       }

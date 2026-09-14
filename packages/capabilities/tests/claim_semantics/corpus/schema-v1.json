@@ -1,499 +1,1912 @@
 {
   "schema_version": 1,
   "id": "claim-semantics-v1",
-  "description": "Ordered, finite, evaluator-independent relation signatures for Stage A.",
+  "description": "Claims IR relation declarations",
   "context_indices": [
-    "tenant",
-    "run",
-    "event",
     "attempt",
-    "recipient",
-    "surface",
-    "window",
-    "policy",
-    "request",
-    "capability",
-    "actor",
-    "operation",
-    "decision",
-    "provider",
-    "commit",
-    "revision",
+    "claim_scope",
+    "event",
     "interval",
-    "claim_scope"
+    "recipient",
+    "run",
+    "surface",
+    "tenant",
+    "window"
   ],
   "types": {
-    "tenant": "symbol",
-    "run": "symbol",
-    "event": "symbol",
-    "attempt": "symbol",
-    "recipient": "symbol",
-    "surface": "symbol",
-    "window": "symbol",
-    "policy": "symbol",
-    "request": "symbol",
-    "capability": "symbol",
     "actor": "symbol",
-    "operation": "symbol",
-    "decision": "symbol",
-    "provider": "symbol",
-    "commit": "symbol",
-    "revision": "symbol",
-    "interval": "symbol",
-    "status": "symbol",
+    "attempt": "symbol",
+    "auth_log_complete__rejected": "symbol",
+    "authorization_observation": "symbol",
+    "authorization_observation_missing": "symbol",
+    "authorization_rejected": "symbol",
+    "authorized": "symbol",
+    "capability": "symbol",
+    "capability_holds_in_all_compatible_histories": "symbol",
     "cardinality": "integer",
     "claim_scope": "symbol",
     "claimed": "symbol",
+    "commit": "symbol",
+    "compatible_history": "symbol",
+    "compatible_history_domain__inconsistent": "symbol",
+    "compatible_history_domain_empty": "symbol",
+    "context_domain_closed__accepted": "symbol",
+    "decision": "symbol",
+    "effect_reached": "symbol",
+    "event": "symbol",
+    "history": "symbol",
+    "http_authorization": "symbol",
+    "http_post_accepted": "symbol",
+    "http_save_succeeded": "symbol",
+    "independent_support__rejected": "symbol",
+    "interval": "symbol",
+    "issue_changed_observed": "symbol",
     "left": "symbol",
+    "mail_path_declared": "symbol",
+    "mail_path_observed": "symbol",
+    "model_complete": "symbol",
+    "model_revision_current__revoked": "symbol",
+    "no_resend_during_window": "symbol",
+    "no_resend_forever": "symbol",
+    "no_resend_observed": "symbol",
+    "notification_delivery_terminal": "symbol",
+    "observation_window_closed__accepted": "symbol",
     "observed": "symbol",
-    "paths": "list[symbol]",
+    "one_delivery": "symbol",
+    "one_terminal_outcome__rejected": "symbol",
+    "operation": "symbol",
+    "outcome": "symbol",
+    "paths": "json-metadata-only",
+    "policy": "symbol",
+    "policy_version__accepted": "symbol",
+    "post_request_succeeded": "symbol",
+    "provider": "symbol",
+    "provider_acceptance_implies_terminal__rejected": "symbol",
+    "provider_accepted": "symbol",
+    "provider_is_real__rejected": "symbol",
+    "recipient": "symbol",
+    "request": "symbol",
+    "response_implies_commit__rejected": "symbol",
+    "revision": "symbol",
     "right": "symbol",
+    "row_created": "symbol",
+    "run": "symbol",
     "runtime": "symbol",
+    "runtime_route_observed": "symbol",
+    "runtime_surface_observed": "symbol",
+    "same_context__rejected": "symbol",
+    "same_event__rejected": "symbol",
+    "same_surface__rejected": "symbol",
+    "smtp_acceptance_missing": "symbol",
+    "smtp_accepted": "symbol",
+    "smtp_accepted__claim": "symbol",
+    "smtp_rejected": "symbol",
+    "sql_ack_failed": "symbol",
+    "sql_row_exists": "symbol",
+    "sql_snapshot_current__accepted": "symbol",
+    "sql_terminal_state": "symbol",
     "static": "symbol",
-    "version": "symbol"
-    ,"outcomes": "list[symbol]"
+    "static_route_exists": "symbol",
+    "status": "integer",
+    "surface": "symbol",
+    "surface_inventory_closed__rejected": "symbol",
+    "tenant": "symbol",
+    "version": "symbol",
+    "window": "symbol"
   },
   "relations": {
-    "smtp_accepted__claim": {
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run",
-        "attempt"
+    "auth_log_complete__rejected": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
       ],
-      "polarity": "positive",
-      "modality": "claim"
-    },
-    "notification_delivery_terminal": {
       "arg_order": [
         "tenant",
-        "event",
-        "recipient",
-        "run",
-        "attempt"
-      ],
-      "polarity": "positive",
-      "modality": "claim"
-    },
-    "effect_reached": {
-      "arg_order": [
-        "tenant",
-        "event",
-        "surface",
         "run"
       ],
-      "polarity": "positive",
-      "modality": "claim"
-    },
-    "post_request_succeeded": {
-      "arg_order": [
-        "tenant",
-        "event",
-        "request"
-      ],
-      "polarity": "positive",
-      "modality": "claim"
-    },
-    "row_created": {
-      "arg_order": [
-        "tenant",
-        "event",
-        "run"
-      ],
-      "polarity": "positive",
-      "modality": "claim"
-    },
-    "authorized": {
-      "arg_order": [
-        "tenant",
-        "actor",
-        "operation",
-        "decision",
-        "run"
-      ],
-      "polarity": "positive",
-      "modality": "claim"
-    },
-    "smtp_accepted": {
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run",
-        "attempt"
-      ],
-      "polarity": "positive",
-      "modality": "observed"
-    },
-    "smtp_rejected": {
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run",
-        "attempt"
-      ],
+      "modality": "assumption",
       "polarity": "negative",
-      "modality": "observed"
-    },
-    "static_route_exists": {
-      "arg_order": [
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
         "tenant",
-        "surface"
-      ],
-      "polarity": "positive",
-      "modality": "observed"
-    },
-    "runtime_route_observed": {
-      "arg_order": [
-        "tenant",
-        "surface",
-        "event",
         "run"
       ],
-      "polarity": "positive",
-      "modality": "observed"
+      "completes": null,
+      "finite": false,
+      "nonempty": false
     },
-    "http_post_accepted": {
-      "arg_order": [
-        "tenant",
-        "event",
-        "request",
-        "run"
+    "authorization_observation": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "actor",
+          "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
       ],
-      "polarity": "positive",
-      "modality": "observed"
-    },
-    "http_authorization": {
       "arg_order": [
         "tenant",
         "actor",
-        "operation",
-        "decision",
         "run"
       ],
+      "modality": "observation",
       "polarity": "positive",
-      "modality": "observed"
-    },
-    "authorization_rejected": {
-      "arg_order": [
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
         "tenant",
-        "actor",
-        "decision",
         "run"
       ],
-      "polarity": "negative",
-      "modality": "observed"
+      "completes": null,
+      "finite": false,
+      "nonempty": false
     },
     "authorization_observation_missing": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "actor",
+          "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
       "arg_order": [
         "tenant",
         "actor",
         "run"
       ],
-      "polarity": "neutral",
-      "modality": "completeness"
-    },
-    "http_save_succeeded": {
-      "arg_order": [
+      "modality": "completeness",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
         "tenant",
-        "event",
         "run"
       ],
-      "polarity": "positive",
-      "modality": "observed"
+      "completes": "authorization_observation",
+      "finite": false,
+      "nonempty": false
     },
-    "issue_changed_observed": {
+    "authorization_rejected": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "actor",
+          "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "decision",
+          "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "status",
+          "type": "integer",
+          "context": false
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
       "arg_order": [
         "tenant",
-        "event",
+        "actor",
+        "decision",
+        "status",
         "run"
       ],
-      "polarity": "positive",
-      "modality": "observed"
-    },
-    "sql_terminal_state": {
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run"
-      ],
-      "polarity": "positive",
-      "modality": "observed"
-    },
-    "sql_row_exists": {
-      "arg_order": [
-        "tenant",
-        "event",
-        "run",
-        "commit"
-      ],
-      "polarity": "positive",
-      "modality": "observed"
-    },
-    "sql_ack_failed": {
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run"
-      ],
+      "modality": "observation",
       "polarity": "negative",
-      "modality": "observed"
-    },
-    "mail_path_declared": {
-      "arg_order": [
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
         "tenant",
-        "event",
         "run"
       ],
-      "polarity": "positive",
-      "modality": "observed"
+      "completes": null,
+      "finite": false,
+      "nonempty": false
     },
-    "mail_path_observed": {
+    "authorized": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "actor",
+          "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "operation",
+          "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "decision",
+          "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
       "arg_order": [
         "tenant",
-        "event",
+        "actor",
+        "operation",
+        "decision",
         "run"
       ],
+      "modality": "claim",
       "polarity": "positive",
-      "modality": "observed"
-    },
-    "runtime_surface_observed": {
-      "arg_order": [
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
         "tenant",
-        "surface",
         "run"
       ],
-      "polarity": "positive",
-      "modality": "observed"
-    },
-    "compatible_history_set": {
-      "arg_order": [
-        "tenant",
-        "run",
-        "cardinality",
-        "outcomes"
-      ],
-      "polarity": "neutral",
-      "modality": "completeness"
-    },
-    "one_delivery": {
-      "arg_order": [
-        "tenant",
-        "event",
-        "run",
-        "attempt"
-      ],
-      "polarity": "positive",
-      "modality": "observed"
-    },
-    "no_resend_observed": {
-      "arg_order": [
-        "tenant",
-        "event",
-        "run",
-        "window",
-        "interval"
-      ],
-      "polarity": "positive",
-      "modality": "completeness"
-    },
-    "smtp_acceptance_missing": {
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run"
-      ],
-      "polarity": "neutral",
-      "modality": "completeness"
-    },
-    "sql_acknowledged": {
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run"
-      ],
-      "polarity": "positive",
-      "modality": "observed"
+      "completes": null,
+      "finite": false,
+      "nonempty": false
     },
     "capability_holds_in_all_compatible_histories": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "capability",
+          "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
       "arg_order": [
         "tenant",
         "capability",
         "run"
       ],
+      "modality": "claim",
       "polarity": "positive",
-      "modality": "claim"
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
     },
-    "model_complete": {
+    "compatible_history": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "history",
+          "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "outcome",
+          "type": "symbol",
+          "context": false
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "run",
+        "history",
+        "outcome"
+      ],
+      "modality": "observation",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "run"
+      ],
+      "completes": null,
+      "finite": true,
+      "nonempty": true
+    },
+    "compatible_history_domain__inconsistent": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "cardinality",
+          "type": "integer",
+          "context": false
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "run",
+        "cardinality"
+      ],
+      "modality": "assumption",
+      "polarity": "negative",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "compatible_history_domain_empty": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
       "arg_order": [
         "tenant",
         "run"
       ],
+      "modality": "completeness",
       "polarity": "positive",
-      "modality": "claim"
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "run"
+      ],
+      "completes": "compatible_history",
+      "finite": false,
+      "nonempty": false
     },
-    "provider_accepted": {
+    "context_domain_closed__accepted": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "run"
+      ],
+      "modality": "assumption",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "effect_reached": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "surface",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
       "arg_order": [
         "tenant",
         "event",
-        "recipient",
+        "surface",
         "run"
       ],
+      "modality": "claim",
       "polarity": "positive",
-      "modality": "claim"
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "surface",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "http_authorization": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "actor",
+          "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "operation",
+          "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "decision",
+          "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "status",
+          "type": "integer",
+          "context": false
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "actor",
+        "operation",
+        "decision",
+        "status",
+        "run"
+      ],
+      "modality": "observation",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "http_post_accepted": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "request",
+          "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "status",
+          "type": "integer",
+          "context": false
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "event",
+        "request",
+        "status",
+        "run"
+      ],
+      "modality": "observation",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "http_save_succeeded": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "modality": "observation",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "independent_support__rejected": {
+      "columns": [
+        {
+          "name": "paths",
+          "type": "json-metadata-only",
+          "context": false
+        }
+      ],
+      "arg_order": [
+        "paths"
+      ],
+      "modality": "assumption",
+      "polarity": "negative",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "issue_changed_observed": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "modality": "observation",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "mail_path_declared": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "modality": "observation",
+      "polarity": "positive",
+      "binding": "static",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "mail_path_observed": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "modality": "observation",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "model_complete": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "run"
+      ],
+      "modality": "claim",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "model_revision_current__revoked": {
+      "columns": [
+        {
+          "name": "revision",
+          "type": "symbol",
+          "context": false
+        }
+      ],
+      "arg_order": [
+        "revision"
+      ],
+      "modality": "assumption",
+      "polarity": "negative",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
     },
     "no_resend_during_window": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "window",
+          "type": "symbol",
+          "context": true
+        }
+      ],
       "arg_order": [
         "tenant",
         "event",
         "run",
         "window"
       ],
+      "modality": "claim",
       "polarity": "positive",
-      "modality": "claim"
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "run",
+        "window"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
     },
     "no_resend_forever": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
       "arg_order": [
         "tenant",
         "event",
         "run"
       ],
+      "modality": "claim",
       "polarity": "positive",
-      "modality": "claim"
-    },
-    "context_domain_closed": {
-      "arg_order": [
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
         "tenant",
+        "event",
         "run"
       ],
-      "polarity": "neutral",
-      "modality": "assumption"
+      "completes": null,
+      "finite": false,
+      "nonempty": false
     },
-    "same_surface": {
-      "arg_order": [
-        "static",
-        "runtime"
+    "no_resend_observed": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "window",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "interval",
+          "type": "symbol",
+          "context": true
+        }
       ],
-      "polarity": "neutral",
-      "modality": "assumption"
-    },
-    "response_implies_commit": {
-      "arg_order": [
-        "status"
-      ],
-      "polarity": "neutral",
-      "modality": "assumption"
-    },
-    "policy_version": {
-      "arg_order": [
-        "policy",
-        "version"
-      ],
-      "polarity": "neutral",
-      "modality": "assumption"
-    },
-    "same_event": {
-      "arg_order": [
-        "observed",
-        "claimed"
-      ],
-      "polarity": "neutral",
-      "modality": "assumption"
-    },
-    "same_context": {
-      "arg_order": [
-        "left",
-        "right"
-      ],
-      "polarity": "neutral",
-      "modality": "assumption"
-    },
-    "provider_is_real": {
-      "arg_order": [
-        "provider"
-      ],
-      "polarity": "neutral",
-      "modality": "assumption"
-    },
-    "independent_support": {
-      "arg_order": [
-        "paths"
-      ],
-      "polarity": "neutral",
-      "modality": "assumption"
-    },
-    "auth_log_complete": {
       "arg_order": [
         "tenant",
-        "run"
+        "event",
+        "run",
+        "window",
+        "interval"
       ],
-      "polarity": "neutral",
-      "modality": "assumption"
+      "modality": "observation",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "run",
+        "window",
+        "interval"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
     },
-    "one_terminal_outcome": {
+    "notification_delivery_terminal": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "recipient",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "attempt",
+          "type": "symbol",
+          "context": true
+        }
+      ],
       "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
         "attempt"
       ],
-      "polarity": "neutral",
-      "modality": "assumption"
-    },
-    "model_revision_current": {
-      "arg_order": [
-        "revision"
-      ],
-      "polarity": "neutral",
-      "modality": "assumption"
-    },
-    "sql_snapshot_current": {
-      "arg_order": [
-        "commit"
-      ],
-      "polarity": "neutral",
-      "modality": "assumption"
-    },
-    "compatible_history_domain": {
-      "arg_order": [
+      "modality": "claim",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
         "tenant",
+        "event",
+        "recipient",
         "run",
-        "cardinality"
+        "attempt"
       ],
-      "polarity": "neutral",
-      "modality": "assumption"
+      "completes": null,
+      "finite": false,
+      "nonempty": false
     },
-    "surface_inventory_closed": {
-      "arg_order": [
-        "tenant",
-        "run"
+    "observation_window_closed__accepted": {
+      "columns": [
+        {
+          "name": "window",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "interval",
+          "type": "symbol",
+          "context": true
+        }
       ],
-      "polarity": "neutral",
-      "modality": "assumption"
-    },
-    "provider_acceptance_implies_terminal": {
-      "arg_order": [
-        "provider"
-      ],
-      "polarity": "neutral",
-      "modality": "assumption"
-    },
-    "observation_window_closed": {
       "arg_order": [
         "window",
         "interval"
       ],
-      "polarity": "neutral",
-      "modality": "assumption"
+      "modality": "assumption",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "window",
+        "interval"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "one_delivery": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "attempt",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "interval",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "event",
+        "run",
+        "attempt",
+        "interval"
+      ],
+      "modality": "observation",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "run",
+        "attempt",
+        "interval"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "one_terminal_outcome__rejected": {
+      "columns": [
+        {
+          "name": "attempt",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "attempt"
+      ],
+      "modality": "assumption",
+      "polarity": "negative",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "attempt"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "policy_version__accepted": {
+      "columns": [
+        {
+          "name": "policy",
+          "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "version",
+          "type": "symbol",
+          "context": false
+        }
+      ],
+      "arg_order": [
+        "policy",
+        "version"
+      ],
+      "modality": "assumption",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "post_request_succeeded": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "request",
+          "type": "symbol",
+          "context": false
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "event",
+        "request"
+      ],
+      "modality": "claim",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "provider_acceptance_implies_terminal__rejected": {
+      "columns": [
+        {
+          "name": "provider",
+          "type": "symbol",
+          "context": false
+        }
+      ],
+      "arg_order": [
+        "provider"
+      ],
+      "modality": "assumption",
+      "polarity": "negative",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "provider_accepted": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "recipient",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ],
+      "modality": "claim",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "provider_is_real__rejected": {
+      "columns": [
+        {
+          "name": "provider",
+          "type": "symbol",
+          "context": false
+        }
+      ],
+      "arg_order": [
+        "provider"
+      ],
+      "modality": "assumption",
+      "polarity": "negative",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "response_implies_commit__rejected": {
+      "columns": [
+        {
+          "name": "status",
+          "type": "integer",
+          "context": false
+        }
+      ],
+      "arg_order": [
+        "status"
+      ],
+      "modality": "assumption",
+      "polarity": "negative",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "row_created": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "modality": "claim",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "runtime_route_observed": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "surface",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "surface",
+        "event",
+        "run"
+      ],
+      "modality": "observation",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "surface",
+        "event",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "runtime_surface_observed": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "surface",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "surface",
+        "run"
+      ],
+      "modality": "observation",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "surface",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "same_context__rejected": {
+      "columns": [
+        {
+          "name": "left",
+          "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "right",
+          "type": "symbol",
+          "context": false
+        }
+      ],
+      "arg_order": [
+        "left",
+        "right"
+      ],
+      "modality": "assumption",
+      "polarity": "negative",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "same_event__rejected": {
+      "columns": [
+        {
+          "name": "observed",
+          "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "claimed",
+          "type": "symbol",
+          "context": false
+        }
+      ],
+      "arg_order": [
+        "observed",
+        "claimed"
+      ],
+      "modality": "assumption",
+      "polarity": "negative",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "same_surface__rejected": {
+      "columns": [
+        {
+          "name": "static",
+          "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "runtime",
+          "type": "symbol",
+          "context": false
+        }
+      ],
+      "arg_order": [
+        "static",
+        "runtime"
+      ],
+      "modality": "assumption",
+      "polarity": "negative",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "smtp_acceptance_missing": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "recipient",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ],
+      "modality": "completeness",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ],
+      "completes": "smtp_accepted",
+      "finite": false,
+      "nonempty": false
+    },
+    "smtp_accepted": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "recipient",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "attempt",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "modality": "observation",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "smtp_accepted__claim": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "recipient",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "attempt",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "modality": "claim",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "smtp_rejected": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "recipient",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "attempt",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "modality": "observation",
+      "polarity": "negative",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "sql_ack_failed": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "recipient",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ],
+      "modality": "observation",
+      "polarity": "negative",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "sql_row_exists": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "commit",
+          "type": "symbol",
+          "context": false
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "event",
+        "run",
+        "commit"
+      ],
+      "modality": "observation",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "sql_snapshot_current__accepted": {
+      "columns": [
+        {
+          "name": "commit",
+          "type": "symbol",
+          "context": false
+        }
+      ],
+      "arg_order": [
+        "commit"
+      ],
+      "modality": "assumption",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "sql_terminal_state": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "event",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "recipient",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ],
+      "modality": "observation",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "static_route_exists": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "surface",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "surface"
+      ],
+      "modality": "observation",
+      "polarity": "positive",
+      "binding": "static",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "surface"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
+    },
+    "surface_inventory_closed__rejected": {
+      "columns": [
+        {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "tenant",
+        "run"
+      ],
+      "modality": "assumption",
+      "polarity": "negative",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "tenant",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false
     }
   },
   "operational_statuses": [
     "complete",
-    "incomplete",
+    "invalid-input",
     "inconsistent-premises",
+    "resource-exhausted",
+    "unsupported-construct",
+    "stale",
     "out-of-scope"
   ]
 }

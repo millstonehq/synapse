@@ -17,7 +17,6 @@
   "claims": [
     {
       "id": "claim-provider",
-      "predicate": "provider_accepted",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-13",
@@ -25,12 +24,6 @@
         "run": "run-13"
       },
       "relation": "provider_accepted",
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "evt-13",
@@ -47,11 +40,18 @@
       "provenance": {
         "source": "reviewed-claim",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ],
+      "quantifier": "exists",
+      "domain": null
     },
     {
       "id": "claim-terminal",
-      "predicate": "notification_delivery_terminal",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-13",
@@ -60,13 +60,6 @@
         "attempt": "attempt-13"
       },
       "relation": "notification_delivery_terminal",
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run",
-        "attempt"
-      ],
       "args": [
         "tenant-a",
         "evt-13",
@@ -84,13 +77,21 @@
       "provenance": {
         "source": "reviewed-claim",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "quantifier": "exists",
+      "domain": null
     }
   ],
   "facts": [
     {
       "id": "fact-mail-250",
-      "predicate": "smtp_accepted",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-13",
@@ -100,13 +101,6 @@
       },
       "source": "smtp",
       "relation": "smtp_accepted",
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run",
-        "attempt"
-      ],
       "args": [
         "tenant-a",
         "evt-13",
@@ -124,11 +118,17 @@
       "provenance": {
         "source": "smtp",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ]
     },
     {
       "id": "fact-sql-ack",
-      "predicate": "sql_acknowledged",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-13",
@@ -137,12 +137,6 @@
       },
       "source": "sql",
       "relation": "sql_ack_failed",
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "evt-13",
@@ -159,21 +153,22 @@
       "provenance": {
         "source": "sql",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ]
     }
   ],
   "assumptions": [
     {
       "id": "assumption-provider-implies-terminal",
-      "predicate": "provider_acceptance_implies_terminal",
       "arguments": {
         "provider": "smtp"
       },
-      "status": "rejected",
-      "relation": "provider_acceptance_implies_terminal",
-      "arg_order": [
-        "provider"
-      ],
+      "relation": "provider_acceptance_implies_terminal__rejected",
       "args": [
         "smtp"
       ],
@@ -187,7 +182,11 @@
       "provenance": {
         "source": "reviewed-assumption",
         "depends_on": []
-      }
+      },
+      "subject_relation": "provider_acceptance_implies_terminal",
+      "arg_order": [
+        "provider"
+      ]
     }
   ],
   "expected": {
@@ -208,7 +207,7 @@
       },
       "claim-terminal": {
         "semantic_verdict": "unresolved",
-        "operational_status": "incomplete",
+        "operational_status": "complete",
         "support_leaves": [],
         "refutation_leaves": [],
         "observed_leaves": [
@@ -225,8 +224,8 @@
         ],
         "missing_premises": [
           {
-            "predicate": "sql_terminal_ack",
-            "reason": "provider acceptance does not imply application acknowledgement"
+            "reason": "provider acceptance does not imply application acknowledgement",
+            "relation": "sql_terminal_ack"
           }
         ]
       }

@@ -17,7 +17,6 @@
   "claims": [
     {
       "id": "claim-terminal-delivery",
-      "predicate": "notification_delivery_terminal",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-1",
@@ -26,13 +25,6 @@
         "attempt": "attempt-1"
       },
       "relation": "notification_delivery_terminal",
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run",
-        "attempt"
-      ],
       "args": [
         "tenant-a",
         "evt-1",
@@ -50,13 +42,21 @@
       "provenance": {
         "source": "reviewed-claim",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "quantifier": "exists",
+      "domain": null
     }
   ],
   "facts": [
     {
       "id": "fact-http-save",
-      "predicate": "http_save_succeeded",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-1",
@@ -64,11 +64,6 @@
       },
       "source": "http",
       "relation": "http_save_succeeded",
-      "arg_order": [
-        "tenant",
-        "event",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "evt-1",
@@ -86,11 +81,15 @@
         "depends_on": [
           "assumption-context-closed"
         ]
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ]
     },
     {
       "id": "fact-issue-changed",
-      "predicate": "issue_changed_observed",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-1",
@@ -98,11 +97,6 @@
       },
       "source": "worker",
       "relation": "issue_changed_observed",
-      "arg_order": [
-        "tenant",
-        "event",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "evt-1",
@@ -120,11 +114,15 @@
         "depends_on": [
           "assumption-context-closed"
         ]
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ]
     },
     {
       "id": "fact-mail-250",
-      "predicate": "smtp_accepted",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-1",
@@ -134,13 +132,6 @@
       },
       "source": "smtp",
       "relation": "smtp_accepted",
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run",
-        "attempt"
-      ],
       "args": [
         "tenant-a",
         "evt-1",
@@ -160,11 +151,17 @@
         "depends_on": [
           "assumption-context-closed"
         ]
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ]
     },
     {
       "id": "fact-sql-terminal",
-      "predicate": "sql_terminal_state",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-1",
@@ -173,12 +170,6 @@
       },
       "source": "sql",
       "relation": "sql_terminal_state",
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "evt-1",
@@ -197,23 +188,23 @@
         "depends_on": [
           "assumption-context-closed"
         ]
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ]
     }
   ],
   "assumptions": [
     {
       "id": "assumption-context-closed",
-      "predicate": "context_domain_closed",
       "arguments": {
         "tenant": "tenant-a",
         "run": "run-1"
       },
-      "status": "accepted",
-      "relation": "context_domain_closed",
-      "arg_order": [
-        "tenant",
-        "run"
-      ],
+      "relation": "context_domain_closed__accepted",
       "args": [
         "tenant-a",
         "run-1"
@@ -228,7 +219,12 @@
       "provenance": {
         "source": "reviewed-assumption",
         "depends_on": []
-      }
+      },
+      "subject_relation": "context_domain_closed",
+      "arg_order": [
+        "tenant",
+        "run"
+      ]
     }
   ],
   "expected": {

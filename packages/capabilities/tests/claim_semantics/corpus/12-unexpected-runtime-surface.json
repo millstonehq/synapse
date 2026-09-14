@@ -16,16 +16,11 @@
   "claims": [
     {
       "id": "claim-model-complete",
-      "predicate": "model_complete",
       "arguments": {
         "tenant": "tenant-a",
         "run": "run-12"
       },
       "relation": "model_complete",
-      "arg_order": [
-        "tenant",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "run-12"
@@ -39,13 +34,18 @@
       "provenance": {
         "source": "reviewed-claim",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "run"
+      ],
+      "quantifier": "exists",
+      "domain": null
     }
   ],
   "facts": [
     {
       "id": "fact-known-surface",
-      "predicate": "runtime_surface_observed",
       "arguments": {
         "tenant": "tenant-a",
         "surface": "route-known",
@@ -53,11 +53,6 @@
       },
       "source": "runtime",
       "relation": "runtime_surface_observed",
-      "arg_order": [
-        "tenant",
-        "surface",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "route-known",
@@ -72,11 +67,15 @@
       "provenance": {
         "source": "runtime",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "surface",
+        "run"
+      ]
     },
     {
       "id": "fact-unknown-surface",
-      "predicate": "runtime_surface_observed",
       "arguments": {
         "tenant": "tenant-a",
         "surface": "surface-unmodeled",
@@ -84,11 +83,6 @@
       },
       "source": "runtime",
       "relation": "runtime_surface_observed",
-      "arg_order": [
-        "tenant",
-        "surface",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "surface-unmodeled",
@@ -103,23 +97,22 @@
       "provenance": {
         "source": "runtime",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "surface",
+        "run"
+      ]
     }
   ],
   "assumptions": [
     {
       "id": "assumption-closed-surface-inventory",
-      "predicate": "surface_inventory_closed",
       "arguments": {
         "tenant": "tenant-a",
         "run": "run-12"
       },
-      "status": "rejected",
-      "relation": "surface_inventory_closed",
-      "arg_order": [
-        "tenant",
-        "run"
-      ],
+      "relation": "surface_inventory_closed__rejected",
       "args": [
         "tenant-a",
         "run-12"
@@ -133,7 +126,12 @@
       "provenance": {
         "source": "reviewed-assumption",
         "depends_on": []
-      }
+      },
+      "subject_relation": "surface_inventory_closed",
+      "arg_order": [
+        "tenant",
+        "run"
+      ]
     }
   ],
   "expected": {
@@ -156,8 +154,8 @@
         ],
         "missing_premises": [
           {
-            "predicate": "model_complete",
-            "reason": "runtime surface is outside the closed model"
+            "reason": "runtime surface is outside the closed model",
+            "relation": "model_complete"
           }
         ]
       }

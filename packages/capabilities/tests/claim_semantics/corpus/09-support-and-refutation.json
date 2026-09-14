@@ -11,31 +11,24 @@
     "tenant": "tenant-a",
     "run": "run-9",
     "event": "evt-9",
-    "attempt": "attempt-9"
+    "attempt": "attempt-9",
+    "recipient": "a@example.test"
   },
   "claims": [
     {
       "id": "claim-terminal",
-      "predicate": "notification_delivery_terminal",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-9",
         "run": "run-9",
         "attempt": "attempt-9",
-        "recipient": null
+        "recipient": "a@example.test"
       },
       "relation": "notification_delivery_terminal",
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run",
-        "attempt"
-      ],
       "args": [
         "tenant-a",
         "evt-9",
-        null,
+        "a@example.test",
         "run-9",
         "attempt-9"
       ],
@@ -43,38 +36,40 @@
         "tenant": "tenant-a",
         "run": "run-9",
         "event": "evt-9",
-        "attempt": "attempt-9"
+        "attempt": "attempt-9",
+        "recipient": "a@example.test"
       },
       "provenance": {
         "source": "reviewed-claim",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "quantifier": "exists",
+      "domain": null
     }
   ],
   "facts": [
     {
       "id": "fact-allow",
-      "predicate": "smtp_accepted",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-9",
         "run": "run-9",
         "attempt": "attempt-9",
-        "recipient": null
+        "recipient": "a@example.test"
       },
       "source": "smtp",
       "relation": "smtp_accepted",
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run",
-        "attempt"
-      ],
       "args": [
         "tenant-a",
         "evt-9",
-        null,
+        "a@example.test",
         "run-9",
         "attempt-9"
       ],
@@ -82,36 +77,36 @@
         "tenant": "tenant-a",
         "run": "run-9",
         "event": "evt-9",
-        "attempt": "attempt-9"
+        "attempt": "attempt-9",
+        "recipient": "a@example.test"
       },
       "provenance": {
         "source": "smtp",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ]
     },
     {
       "id": "fact-deny",
-      "predicate": "smtp_rejected",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-9",
         "run": "run-9",
         "attempt": "attempt-9",
-        "recipient": null
+        "recipient": "a@example.test"
       },
       "source": "smtp",
       "relation": "smtp_rejected",
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run",
-        "attempt"
-      ],
       "args": [
         "tenant-a",
         "evt-9",
-        null,
+        "a@example.test",
         "run-9",
         "attempt-9"
       ],
@@ -119,26 +114,29 @@
         "tenant": "tenant-a",
         "run": "run-9",
         "event": "evt-9",
-        "attempt": "attempt-9"
+        "attempt": "attempt-9",
+        "recipient": "a@example.test"
       },
       "provenance": {
         "source": "smtp",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ]
     }
   ],
   "assumptions": [
     {
       "id": "assumption-single-outcome",
-      "predicate": "one_terminal_outcome",
       "arguments": {
         "attempt": "attempt-9"
       },
-      "status": "rejected",
-      "relation": "one_terminal_outcome",
-      "arg_order": [
-        "attempt"
-      ],
+      "relation": "one_terminal_outcome__rejected",
       "args": [
         "attempt-9"
       ],
@@ -146,12 +144,17 @@
         "tenant": "tenant-a",
         "run": "run-9",
         "event": "evt-9",
-        "attempt": "attempt-9"
+        "attempt": "attempt-9",
+        "recipient": "a@example.test"
       },
       "provenance": {
         "source": "reviewed-assumption",
         "depends_on": []
-      }
+      },
+      "subject_relation": "one_terminal_outcome",
+      "arg_order": [
+        "attempt"
+      ]
     }
   ],
   "expected": {
