@@ -905,6 +905,63 @@ Exit 1: `Ran 490 tests in 4.844s`, `FAILED (failures=1, skipped=67)`. Isolated r
 
 **Limit:** Stage 0 pinning is unchanged and Shen smoke is still real evaluator evidence. The workflow `regression` gate (`nix develop` unittest discover) cannot pass on this checkout while `origin/main` is a moving observe-env baseline that now also emits `CAPCOV_NONCE`. Pointing that test at the recorded experimental baseline is outside this task's write set. Linux execution and a driver-owned clean-checkout rebuild remain undemonstrated. The pinned `shen-go` revision remains accepted only for the observed smoke, not for Stage D.
 
+### Workflow toolchain re-verification (attempt 3, 2026-09-14)
+
+Re-ran Stage 0 gates on committed HEAD `3edda1e335bf9d4d2df276267def14d0f1f446f3` (`fix(workflow): tolerate volatile and streamed results`, 2026-09-14 13:51:21 -0500). Required ancestor `d1550e4d49401a0e8fa8cdd813fb2fd7bbd00765` still holds (`git merge-base --is-ancestor`, exit 0). Host remained `aarch64-darwin`, Darwin kernel `25.5.0`, Nix `nix (Determinate Nix 3.21.5) 2.34.8`. The flake does not pin the host Nix CLI. `flake.nix` / `flake.lock` were not changed: no pin defect (wrong hash, wrapper bypass, unlocked input, shim binary, Go toolchain download, or uv fetching CPython) was observed. `shasum -a 256 flake.lock` is still `d078f9fba512323fd35b24afc6a81aa3bb95c63caa1d00acf700e0827f9e6bac`. nixpkgs remains `34ab99075ac4f7e40cf037eef32cb1c360bb85e9` with lock `narHash` `sha256-hn1oU2rue2SYK8dAr8+WNZWtbsz1S2W5mnHlSEuh3bo=`. shen-go remains fetchFromGitHub rev `610ba423795b38e58dde3515a0583a109411433c`, source hash `sha256-nhJdMOcSFY5Kfd695pTGGRfrtnqBdFuy5ZLoa9tfT5Y=`, vendor hash `sha256-iTtlmSlY0qbH/1waOlfRMc1qAkBacQxI6pohRPni/so=`, `subPackages = [ "cmd/shen" ]`, `GOTOOLCHAIN=local`. An unchanged lock SHA does not by itself prove the Shen revision; that pin lives in `flake.nix` hashes and was left as-is.
+
+Live `origin/main` used by git is `8994d639fe4fa56285dc083eeca22ab00d30d839` (`docs(verification): preserve shared Crossplane resources`, 2026-09-14 13:37:44 -0500) via the loose ref `.git/refs/remotes/origin/main`. `.git/packed-refs` still lists `780173269246f02a7c219b6bd086d1dd93948783 refs/remotes/origin/main`; git prefers the loose ref. `_origin_main_cli_source()` therefore loaded `8994d639:packages/capabilities/src/capcov/cli.py`. HEAD and that blob share `cli.py` git object `bb6954d7a8aad121cc928e8bb3d55e47f91f2674`. Production baseline `7801732` remains `a57f38ce1db8631199d6f111e7120c1f5c63d48d` for the same path. HEAD `packages/capabilities/tests/test_cli_engine.py` already pops `CAPCOV_NONCE` before comparing observe envs; that test edit is outside this write set and was not touched. Attempts 1–2 recorded a develop-shell failure against then-current `origin/main` `f5775bda…`; that nonce inequality is not this attempt's result.
+
+Pinned tools observed through `nix develop --no-update-lock-file --command bash -lc` (the workflow login-shell form, not interactive `nix develop` or `bash -c`):
+
+- Python `3.12.14` at `/nix/store/p1wfv7znig26m3hns4583cb9va3kzxkg-python3-3.12.14/bin/python` (`sys.version_info[:2] == (3, 12)`; not host 3.14)
+- uv `0.12.5` at `/nix/store/71zq15rr7i4avy58y89hfgf2lhp3b7la-uv-0.12.5/bin/uv`
+- Go `1.27.0` at `/nix/store/lz3qw52rpazqga73xgsqlj4qz1lgs4hg-go-1.27.0/bin/go`
+- Git `2.55.0` at `/nix/store/yqw09igi72yxpgy3d1b25vbh5l8rx227-git-2.55.0/bin/git`
+- jq `1.8.2` at `/nix/store/d01nk4ck93bwlzwbnnb1qf1kv4d94a09-jq-1.8.2-bin/bin/jq`
+- hyperfine `1.20.0` at `/nix/store/krcnbpwana1dpxx45a0yzqjk8hpi9ff8-hyperfine-1.20.0/bin/hyperfine`
+- Shen at `/nix/store/m6vdgvc4g4djhm9ld1s16jrd39k001lm-shen-go-0-unstable-2026-09-09/bin/shen`
+- workflow `bash` wrapper at `/nix/store/vvd5k6yfqss3i49flrv5a928iqzq263m-bash/bin/bash`
+
+Every resolved executable was under `/nix/store`. `uv python find` resolved the same Nix Python. Shell env: `UV_PYTHON_DOWNLOADS=never`, `UV_PYTHON_PREFERENCE=only-system`, `UV_PYTHON` → Nix `python3.12`, `GOTOOLCHAIN=local`, `BASH_ENV` → `/nix/store/5v1hsmilsng49sxagabawls7fwms4xiz-capcov-bash-env`. `shen --version` printed `42 (port ("Go" "1.0.0-rc1") implementation ("AOT+interpreter" "go1.27.0"))`; that language version is not evaluator evidence.
+
+```sh
+nix flake check --no-update-lock-file
+```
+
+Exit 0. Built `checks.aarch64-darwin.capability-regression` (`/nix/store/094s9nvz4z1ir2hgyqn5b79f498kv0ha-capcov-capability-regression.drv`); `shen-evaluator-smoke` and `shen-package` were previously built. Nix warned Linux checks were omitted on this host. The sandboxed regression copies `${self}/packages/capabilities` with no `.git`, so origin/main baseline tests skip there. Nix log: `Ran 490 tests in 19.121s`, `OK (skipped=69)`.
+
+```sh
+nix develop --no-update-lock-file --command bash -lc \
+  'cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t .'
+```
+
+Exit 0: `Ran 490 tests in 27.951s`, `OK (skipped=67)`, no failures or errors. The skip gap versus the Python-only Nix check (`69`) is the documented develop-vs-check toolset split: this shell has pinned Go and Git, and the worktree `.git` is visible, so origin/main comparators run. They ran against live `origin/main` `8994d639`; remotes were not hidden or filtered to force fallback to `7801732`.
+
+```sh
+nix develop --no-update-lock-file --command bash -lc \
+  'set -eu; output=$(shen eval -e "(+ 20 22)"); test "$output" = 42; ! shen eval -e "(+ 1" >/dev/null 2>&1'
+```
+
+Exit 0. Direct observation of the same `bash -lc` form: `shen eval -e '(+ 20 22)'` printed exactly `42`; malformed `shen eval -e '(+ 1'` printed `ERROR: syntax error here: 40 43 32 49` and exited 1. `--version` was not treated as this smoke.
+
+```sh
+nix flake check --all-systems --no-build --no-update-lock-file
+```
+
+Exit 0. Evaluated advertised package, shell, and check derivations for `aarch64-darwin`, `aarch64-linux`, and `x86_64-linux` without building Linux. This is evaluation-only for Linux; no Linux execution is claimed. `x86_64-darwin` remains absent.
+
+Independent extra evidence, not a substitute for the four gates:
+
+```sh
+out=$(nix build .#shen-go --no-link --print-out-paths --no-update-lock-file)
+nix path-info -Sh "$out"
+"$out/bin/shen" eval -e '(+ 20 22)'
+```
+
+Exit 0. Output path `/nix/store/m6vdgvc4g4djhm9ld1s16jrd39k001lm-shen-go-0-unstable-2026-09-09`, closure `22.2 MiB`, eval printed `42`. Same binary rejected malformed `(+ 1` with exit 1. This is `cmd/shen`, not a host or shim `bin/shen`.
+
+**Limit:** pins are unchanged, not tightened. This run still cannot honestly establish a clean-checkout rebuild: the driver owns the commit, and appending this subsection dirties `EXPERIMENT-PLAN.md`, which changes `${self}` and will rebuild `capability-regression` with a dirty-tree warning. Linux remains evaluation-only. Host Nix is unpinned. The skip gap (`69` in the Python-only check vs `67` in develop) is documented and was not equalized by copying `.git` into the sandbox. The pinned `shen-go` revision remains accepted only for the observed smoke, not for Stage D (`pyrex41/Shen-Backpressure@6b9dde09` is prior art only). Live `origin/main` can still drift after this recording; this attempt's develop regression passed against `8994d639` with identical `cli.py` blobs.
+
 ## 15. Stage A — Adversarial semantic corpus
 
 Add:
