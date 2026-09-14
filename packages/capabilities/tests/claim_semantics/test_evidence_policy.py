@@ -57,8 +57,12 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
         compatible = next(x for x in history["facts"] if x["relation"] == "compatible_history")
         self.assertEqual(["tenant", "run", "history", "capability", "outcome", "holds"], compatible["arg_order"])
         self.assertIsInstance(compatible["arguments"]["holds"], bool)
+        aggregate = load_fixture(ROOT / "11-compatible-history-sets.json")
+        self.assertTrue(any(rule.aggregation and rule.aggregation.operator == "all" for rule in aggregate.rules))
+        self.assertIn("history_holds", {relation.name for relation in aggregate.relations})
         sql = load_fixture(ROOT / "10-revoked-assumption-alternative.json")
         self.assertTrue(any(rule.name == "row_requires_independent_current_sql" for rule in sql.rules))
+        self.assertTrue(all(p.get("scope") != "global" for rule in json.loads((ROOT / "10-revoked-assumption-alternative.json").read_text())["rules"] for p in rule["premises"]))
         terminal = load_fixture(ROOT / "13-acceptance-sql-ack-failure.json")
         self.assertTrue(any(rule.head.relation == "notification_delivery_terminal" for rule in terminal.rules))
         self.assertTrue(any(d.claim_id == "claim-terminal" and d.trigger_relation == "sql_ack_failed" for d in terminal.diagnostics))
@@ -81,6 +85,9 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
         with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
         payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
         payload["diagnostic_policy"]["revocation"] = "not-an-effect"
+        with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
+        payload = bundle_payload(json.loads((ROOT / "12-unexpected-runtime-surface.json").read_text()))
+        payload["diagnostics"][0]["predicate"]["column"] = "missing"
         with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
 
 

@@ -28,6 +28,12 @@ def bundle_payload(fixture: dict[str, Any]) -> dict[str, Any]:
     relations = []
     for name, declaration in schema["relations"].items():
         relations.append({"name": name, **{k: v for k, v in declaration.items() if k != "arg_order"}})
+    for declaration in fixture.get("program_relations", ()):
+        if set(declaration) != {"name", "columns", "modality", "polarity", "binding", "primitive", "producer_classes", "context_indices", "completes", "finite", "nonempty", "compatibility_targets", "compatibility_context_indices"}:
+            raise ValueError("program relation declaration has unknown or missing fields")
+        if any(r["name"] == declaration["name"] for r in relations): raise ValueError("duplicate program relation")
+        relations.append(declaration)
+        schema["relations"][declaration["name"]] = declaration
 
     def terms(entry: dict[str, Any]) -> list[dict[str, Any]]:
         declaration = schema["relations"][entry["relation"]]
@@ -52,7 +58,7 @@ def bundle_payload(fixture: dict[str, Any]) -> dict[str, Any]:
     claim_by_id = {entry["id"]: entry for entry in fixture["claims"]}
     rule_names = set()
     for declaration in declarations:
-        if set(declaration) != {"name", "claim_id", "premises"}:
+        if set(declaration) - {"name", "claim_id", "premises", "head_relation", "head_bindings", "aggregation"}:
             raise ValueError("rule declaration has unknown or missing fields")
         if not isinstance(declaration["name"], str) or not declaration["name"] or declaration["name"] in rule_names:
             raise ValueError("rule names must be unique non-empty strings")
@@ -61,6 +67,7 @@ def bundle_payload(fixture: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("rule declaration claim_id/premises are invalid")
         claim_entry = claim_by_id[declaration["claim_id"]]
         cdecl = schema["relations"][claim_entry["relation"]]
+        head_relation = declaration.get("head_relation", claim_entry["relation"])
         claim_values = dict(zip((c["name"] for c in cdecl["columns"]), claim_entry["args"]))
         body = []
         for premise in declaration["premises"]:
@@ -68,6 +75,12 @@ def bundle_payload(fixture: dict[str, Any]) -> dict[str, Any]:
                 raise ValueError("premise declaration has unknown or missing fields")
             if not isinstance(premise["bindings"], list) or any(set(binding) != {"claim_column", "evidence_column", "type"} for binding in premise["bindings"]):
                 raise ValueError("binding declaration has unknown or missing fields")
+            if len({b["claim_column"] for b in premise["bindings"]}) != len(premise["bindings"]) or len({b["evidence_column"] for b in premise["bindings"]}) != len(premise["bindings"]):
+                raise ValueError("duplicate rule bindings")
+            if len({p["column"] for p in premise.get("predicates", ())}) != len(premise.get("predicates", ())):
+                raise ValueError("duplicate rule predicates")
+            if {b["evidence_column"] for b in premise["bindings"]} & {p["column"] for p in premise.get("predicates", ())}:
+                raise ValueError("binding and predicate cannot target the same column")
             if not premise["bindings"] and premise.get("scope") != "global":
                 raise ValueError("unbound premise requires explicit global scope")
             if premise.get("scope") not in (None, "global", "claim"):
@@ -75,6 +88,11 @@ def bundle_payload(fixture: dict[str, Any]) -> dict[str, Any]:
             if any(set(predicate) != {"column", "type", "value"} for predicate in premise.get("predicates", ())):
                 raise ValueError("predicate declaration has unknown or missing fields")
             sdecl = schema["relations"][premise["relation"]]
+            if premise.get("scope", "claim") == "claim":
+                claim_context = set(cdecl["context_indices"])
+                source_context = set(sdecl["context_indices"]) & claim_context
+                if not source_context.issubset({b["claim_column"] for b in premise["bindings"]}):
+                    raise ValueError("claim-scoped premise is missing context bindings")
             bindings = {binding["evidence_column"]: binding for binding in premise["bindings"]}
             predicates = {predicate["column"]: predicate for predicate in premise.get("predicates", ())}
             claim_columns = {column["name"]: column for column in cdecl["columns"]}
@@ -88,10 +106,30 @@ def bundle_payload(fixture: dict[str, Any]) -> dict[str, Any]:
                 elif binding:
                     if binding["claim_column"] not in claim_columns or binding["type"] != col["type"] or binding["type"] != claim_columns[binding["claim_column"]]["type"]:
                         raise ValueError("typed rule binding does not match claim/evidence columns")
-                    source_terms.append(_term(claim_values[binding["claim_column"]], binding["type"]))
+                    source_terms.append({"variable": f"_{col['name']}"} if head_relation != claim_entry["relation"] else _term(claim_values[binding["claim_column"]], binding["type"]))
                 else: source_terms.append({"variable": f"_{col['name']}"})
             body.append({"relation": premise["relation"], "terms": source_terms})
-        rules.append({"name": declaration["name"], "head": {"relation": claim_entry["relation"], "terms": [_term(v, c["type"]) for v, c in zip(claim_entry["args"], cdecl["columns"])]}, "body": body})
+        head_decl = next((r for r in relations if r["name"] == head_relation), None)
+        if not head_decl: raise ValueError("unknown rule head relation")
+        head_bindings = {b["head_column"]: b for b in declaration.get("head_bindings", ())}
+        head_terms = []
+        for column in head_decl["columns"]:
+            binding = head_bindings.get(column["name"])
+            if binding:
+                if binding["type"] != column["type"]: raise ValueError("typed head binding mismatch")
+                head_terms.append({"variable": f"_{binding['premise_column']}"})
+            elif head_relation == claim_entry["relation"]:
+                head_terms.append(_term(dict(zip((c["name"] for c in cdecl["columns"]), claim_entry["args"]))[column["name"]], column["type"]))
+            else: raise ValueError("derived head requires complete bindings")
+        rule = {"name": declaration["name"], "head": {"relation": head_relation, "terms": head_terms}, "body": body}
+        if declaration.get("head_bindings"):
+            for binding in declaration["head_bindings"]:
+                if set(binding) != {"head_column", "premise_relation", "premise_column", "type"}: raise ValueError("invalid head binding")
+        if declaration.get("aggregation"):
+            agg = declaration["aggregation"]
+            if set(agg) != {"name", "relation", "group_by", "value_variable", "operator", "domain", "closure_witness"}: raise ValueError("invalid aggregation declaration")
+            rule["aggregation"] = agg
+        rules.append(rule)
     for claim_entry in fixture["claims"]:
         cdecl = schema["relations"][claim_entry["relation"]]
         for mapping in claim_entry.get("mappings", ()):

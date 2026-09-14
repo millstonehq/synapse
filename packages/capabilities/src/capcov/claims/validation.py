@@ -110,6 +110,8 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
             for left, right in mapping.bindings:
                 if left not in c_names or right not in e_names:
                     issues.append(ValidationIssue("mapping-binding", f"unknown projection {left!r}->{right!r}", path))
+            if len({left for left, _ in mapping.bindings}) != len(mapping.bindings) or len({right for _, right in mapping.bindings}) != len(mapping.bindings):
+                issues.append(ValidationIssue("mapping-binding", "duplicate projection binding", path))
             covered = {left for left, _ in mapping.bindings}
             if not set(mapping.context_indices).issubset(covered):
                 issues.append(ValidationIssue("mapping-coverage", "context mapping is not covered by bindings", path))
@@ -119,8 +121,20 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
         if not isinstance(diagnostic, DiagnosticRule): issues.append(ValidationIssue("diagnostic-type", "expected DiagnosticRule", path)); continue
         if not isinstance(diagnostic.effect, EvidenceEffect): issues.append(ValidationIssue("diagnostic-effect", "unsupported diagnostic effect", path))
         predicate = dict(diagnostic.predicate)
-        if predicate and predicate.get("operator") not in {"=", "!=", "in", "not-in", "exists"}:
-            issues.append(ValidationIssue("diagnostic-predicate", "unsupported diagnostic predicate operator", path))
+        if predicate:
+            operator = predicate.get("operator")
+            relation = relations.get(diagnostic.trigger_relation)
+            column = next((c for c in relation.columns if c.name == predicate.get("column")), None) if relation else None
+            if operator not in {"=", "!=", "in", "not-in", "exists"}:
+                issues.append(ValidationIssue("diagnostic-predicate", "unsupported diagnostic predicate operator", path))
+            if column is None: issues.append(ValidationIssue("diagnostic-predicate", "predicate column is not declared by trigger relation", path))
+            value = predicate.get("value")
+            values = value if operator in {"in", "not-in"} else [value]
+            if operator in {"in", "not-in"} and not isinstance(value, list): issues.append(ValidationIssue("diagnostic-predicate", "set predicate value must be a list", path))
+            if operator in {"=", "!=", "in", "not-in"} and column:
+                for item in values:
+                    inferred = TypeName.BOOLEAN if isinstance(item, bool) else TypeName.INTEGER if isinstance(item, int) else TypeName.SYMBOL if isinstance(item, str) else None
+                    if inferred != column.type: issues.append(ValidationIssue("diagnostic-predicate", "predicate value type does not match column", path))
         if diagnostic.trigger_relation not in relations: issues.append(ValidationIssue("diagnostic-trigger", diagnostic.trigger_relation, path))
         if diagnostic.operational_status not in allowed_status: issues.append(ValidationIssue("diagnostic-status", diagnostic.operational_status, path))
         relation = relations.get(diagnostic.trigger_relation)

@@ -1791,12 +1791,24 @@
     "sql_snapshot_current__accepted": {
       "columns": [
         {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        },
+        {
           "name": "commit",
           "type": "symbol",
           "context": false
         }
       ],
       "arg_order": [
+        "tenant",
+        "run",
         "commit"
       ],
       "modality": "assumption",
@@ -1804,7 +1816,7 @@
       "binding": "runtime",
       "primitive": true,
       "producer_classes": [],
-      "context_indices": [],
+      "context_indices": ["tenant", "run"],
       "completes": null,
       "finite": false,
       "nonempty": false
