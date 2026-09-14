@@ -4,7 +4,9 @@ import unittest
 from pathlib import Path
 
 from .adapter import ROOT, bundle_payload, load_fixture
-from capcov.claims import EvidenceEffect, bundle_from_json, canonical_json, schema_digest
+from capcov.claims import (Bundle, Claim, Column, Constant, EvidenceEffect,
+                           RelationDecl, assert_valid, bundle_from_json,
+                           canonical_json, schema_digest)
 
 
 class EvidencePolicyCompilationTests(unittest.TestCase):
@@ -95,6 +97,10 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
         payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
         payload["evidence"][0]["depends_on"] = ["missing-id"]
         with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
+
+    def test_claim_ids_are_required_only_for_evidence_policy_bundles(self):
+        relation = RelationDecl("legacy_claim", (Column("value", "symbol"),), modality="claim")
+        assert_valid(Bundle((relation,), claims=(Claim("legacy_claim", (Constant("v", "symbol"),)),)))
         payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
         payload["diagnostics"] = [{"trigger_relation": "smtp_accepted", "effect": "support", "operational_status": "not-a-status"}]
         with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)

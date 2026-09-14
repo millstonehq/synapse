@@ -79,8 +79,9 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
         if isinstance(claim, Claim): _validate_claim(claim, relations, issues, f"claims[{i}]")
         else: issues.append(ValidationIssue("claim-type", "expected Claim", f"claims[{i}]"))
     seen_claim_ids = set()
+    requires_claim_ids = bool(bundle.evidence or bundle.mappings or bundle.diagnostics)
     for i, claim in enumerate(bundle.claims):
-        if isinstance(claim, Claim) and (not isinstance(claim.id, str) or not claim.id):
+        if requires_claim_ids and isinstance(claim, Claim) and (not isinstance(claim.id, str) or not claim.id):
             issues.append(ValidationIssue("claim-id", "claim id is mandatory", f"claims[{i}]"))
         if isinstance(claim, Claim) and claim.id:
             if claim.id in seen_claim_ids: issues.append(ValidationIssue("duplicate-claim-id", claim.id, f"claims[{i}]"))
