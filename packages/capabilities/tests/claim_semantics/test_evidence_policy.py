@@ -145,6 +145,30 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
                 self.assertEqual(forbidden, set(table["forbidden_leaves"]), path.stem)
                 self.assertEqual(discrepancies, table["discrepancies"], path.stem)
                 self.assertEqual(missing, table["missing_premises"], path.stem)
+
+    def test_renamed_equivalent_program_preserves_rendered_shape(self):
+        fixture = json.loads((ROOT / "02-surface-mismatch.json").read_text())
+        original_payload = bundle_payload(fixture)
+        renamed = json.loads(json.dumps(original_payload))
+        replacements = {
+            "claim-effect": "claim-renamed",
+            "fact-route-a-static": "proof-alpha",
+            "fact-route-b-runtime": "proof-beta",
+            "static_route_observed": "renamed_static_route",
+            "static_route_exists": "renamed_static_route",
+            "runtime_route_observed": "renamed_runtime_route",
+        }
+        def rewrite(value):
+            if isinstance(value, dict): return {key: rewrite(item) for key, item in value.items()}
+            if isinstance(value, list): return [rewrite(item) for item in value]
+            return replacements.get(value, value)
+        renamed = rewrite(renamed)
+        first = bundle_from_json(original_payload, validate=True)
+        second = bundle_from_json(renamed, validate=True)
+        active_first = {record.id for record in first.evidence}
+        active_second = {record.id for record in second.evidence}
+        shape = lambda values: tuple((item["kind"], tuple(sorted(item.get("fields", {}).keys()))) for item in values)
+        self.assertEqual(shape(render_outputs(first, "claim-effect", active_first, active_first, "underived", {"same_surface"})), shape(render_outputs(second, "claim-renamed", active_second, active_second, "underived", {"same_surface"})))
         payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
         payload["outputs"] = [{"kind": "missing_premise", "claim_id": "claim-terminal-delivery", "relation": "smtp_accepted", "fields": {"x": {"source": "constant", "type": "boolean", "value": "not-bool"}}}]
         with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)

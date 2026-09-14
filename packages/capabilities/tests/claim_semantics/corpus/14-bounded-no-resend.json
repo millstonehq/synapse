@@ -54,7 +54,7 @@
       ],
       "quantifier": "exists",
       "domain": null,
-      "mappings": [{"evidence_relation":"one_delivery","effect":"support","context_indices":["tenant","event","run"],"bindings":[["tenant","tenant"],["event","event"],["run","run"]]},{"evidence_relation":"no_resend_observed","effect":"support","context_indices":["tenant","event","run","window"],"bindings":[["tenant","tenant"],["event","event"],["run","run"],["window","window"]]}], "diagnostics": []
+      "mappings": [{"evidence_relation":"one_delivery","effect":"support","context_indices":["tenant","event","run"],"bindings":[["tenant","tenant"],["event","event"],["run","run"]]},{"evidence_relation":"no_resend_observed","effect":"support","context_indices":["tenant","event","run","window"],"bindings":[["tenant","tenant"],["event","event"],["run","run"],["window","window"]]},{"evidence_relation":"observation_window_closed__accepted","effect":"observation","context_indices":[],"bindings":[["window","window"]]}], "diagnostics": []
     },
     {
       "id": "claim-forever",
@@ -88,7 +88,7 @@
       ],
       "quantifier": "exists",
       "domain": null,
-      "mappings": [{"evidence_relation":"one_delivery","effect":"observation","context_indices":["tenant","event","run"],"bindings":[["tenant","tenant"],["event","event"],["run","run"]]},{"evidence_relation":"no_resend_observed","effect":"observation","context_indices":["tenant","event","run"],"bindings":[["tenant","tenant"],["event","event"],["run","run"]]}], "diagnostics": [{"trigger_relation":"observation_window_closed__accepted","effect":"observation","operational_status":"complete","context_indices":["window","interval"],"required":true}]
+      "mappings": [{"evidence_relation":"one_delivery","effect":"observation","context_indices":["tenant","event","run"],"bindings":[["tenant","tenant"],["event","event"],["run","run"]]},{"evidence_relation":"no_resend_observed","effect":"observation","context_indices":["tenant","event","run"],"bindings":[["tenant","tenant"],["event","event"],["run","run"]]}], "diagnostics": [{"trigger_relation":"observation_window_closed__accepted","effect":"observation","operational_status":"complete","context_indices":[],"required":true}]
     }
   ],
   "facts": [
