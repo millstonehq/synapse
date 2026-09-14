@@ -185,6 +185,21 @@ function finalAssistantText(jsonLines: string): string {
   return final;
 }
 
+function assistantTextFromEvent(event: any, current: string): string {
+  let final = current;
+  if ((event.type === "message_end" || event.type === "turn_end") && event.message?.role === "assistant") {
+    for (const part of event.message.content ?? []) if (part.type === "text") final = part.text;
+  } else if (event.type === "message_update" && event.assistantMessageEvent?.type === "text_end") {
+    final = event.assistantMessageEvent.content ?? final;
+  } else if (event.type === "agent_end") {
+    for (const message of event.messages ?? []) {
+      if (message.role !== "assistant") continue;
+      for (const part of message.content ?? []) if (part.type === "text") final = part.text;
+    }
+  }
+  return final;
+}
+
 function parseObject(text: string): Record<string, any> | undefined {
   const candidates = [text.trim()];
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -223,11 +238,23 @@ async function runAgent(options: {
     const child = spawn(invocation.command, invocation.args, { cwd: options.root, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
+    let jsonLine = "";
+    let streamedFinal = "";
     let timedOut = false;
     const append = (current: string, chunk: Buffer) => (current + chunk.toString()).slice(-OUTPUT_LIMIT);
     let stdoutBytes = 0;
     let stderrBytes = 0;
-    child.stdout.on("data", (chunk) => { stdoutBytes += chunk.length; stdout = append(stdout, chunk); });
+    child.stdout.on("data", (chunk) => {
+      stdoutBytes += chunk.length;
+      stdout = append(stdout, chunk);
+      jsonLine += chunk.toString();
+      const lines = jsonLine.split("\n");
+      jsonLine = lines.pop() ?? "";
+      for (const line of lines) {
+        try { streamedFinal = assistantTextFromEvent(JSON.parse(line), streamedFinal); }
+        catch { /* ignore non-event output */ }
+      }
+    });
     child.stderr.on("data", (chunk) => { stderrBytes += chunk.length; stderr = append(stderr, chunk); });
     const stop = () => {
       child.kill("SIGTERM");
@@ -239,7 +266,11 @@ async function runAgent(options: {
     child.on("close", (code) => {
       clearTimeout(timer);
       options.signal.removeEventListener("abort", stop);
-      const output = finalAssistantText(stdout);
+      if (jsonLine.trim()) {
+        try { streamedFinal = assistantTextFromEvent(JSON.parse(jsonLine), streamedFinal); }
+        catch { /* a truncated or non-event final line is diagnostic-only */ }
+      }
+      const output = streamedFinal || finalAssistantText(stdout);
       void appendLog(options.root, `agent-end label=${options.label} code=${code ?? 1} timedOut=${timedOut} stdoutBytes=${stdoutBytes} stderrBytes=${stderrBytes} parsed=${Boolean(parseObject(output))}`)
         .finally(() => resolve({ code: code ?? 1, output, rawOutput: stdout, stderr, parsed: parseObject(output), timedOut }));
     });
@@ -665,7 +696,9 @@ export default function capcovExperiment(pi: ExtensionAPI) {
       await acquireLock(root, proposedRunId);
       try {
         const events = await readEvents(root);
-        if (action === "start" && events.length > 0) throw new Error("A journal already exists; use resume or archive .capcov/pi-workflow intentionally");
+        if (action === "start" && events.some((event) => event.type !== "smoke-result")) {
+          throw new Error("A workflow run journal already exists; use resume or archive .capcov/pi-workflow intentionally");
+        }
         if (action === "start") await checkPreconditions(root, config, true);
         else await checkResumePreconditions(root, config, events);
         const limitIndex = args.indexOf("--tasks");

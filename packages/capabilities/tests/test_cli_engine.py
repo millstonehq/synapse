@@ -345,12 +345,17 @@ class ObservePytestBackCompatTests(unittest.TestCase):
 
         base_env = json.loads(base_dump.read_text())
         new_env = json.loads(new_dump.read_text())
-        # Every variable origin/main set is set identically by the new observe.
-        for key, value in base_env.items():
-            self.assertEqual(new_env.get(key), value, key)
-        # The ONLY addition is the freshness nonce (design §1.3), which the pytest
-        # probe ignores -- so the observed evidence is unchanged.
-        self.assertEqual(set(new_env) - set(base_env), {"CAPCOV_NONCE"})
+        # CAPCOV_NONCE is deliberately fresh per invocation.  A live origin/main
+        # may already contain the nonce behavior, so compare its contract rather
+        # than two independently generated values.
+        base_nonce = base_env.pop("CAPCOV_NONCE", None)
+        new_nonce = new_env.pop("CAPCOV_NONCE", None)
+        self.assertRegex(new_nonce or "", r"^[0-9a-f]{32}$")
+        if base_nonce is not None:
+            self.assertRegex(base_nonce, r"^[0-9a-f]{32}$")
+        self.assertEqual(base_env, new_env)
+        # Apart from that freshness token, the observed environment is unchanged
+        # whether the pinned baseline predates the nonce or live origin/main has it.
         self.assertEqual(base_env["CAPCOV_OBSERVE"], "1")
 
     def test_default_probe_requires_a_command(self) -> None:
