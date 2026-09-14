@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "06-context-contamination",
+  "title": "Cross-tenant and cross-run evidence cannot join",
+  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": "tenant-run-keys-dropped"},
+  "context": {"tenant": "tenant-a", "run": "run-6a", "event": "evt-6"},
+  "claims": [{"id": "claim-terminal", "predicate": "notification_delivery_terminal", "arguments": {"tenant": "tenant-a", "event": "evt-6", "run": "run-6a"}}],
+  "facts": [
+    {"id": "fact-tenant-a", "predicate": "http_save_succeeded", "arguments": {"tenant": "tenant-a", "event": "evt-6", "run": "run-6a"}, "source": "http"},
+    {"id": "fact-tenant-b", "predicate": "sql_terminal_state", "arguments": {"tenant": "tenant-b", "event": "evt-6", "run": "run-6b"}, "source": "sql"}
+  ],
+  "assumptions": [{"id": "assumption-context-compatible", "predicate": "same_context", "arguments": {"left": "tenant-a/run-6a", "right": "tenant-b/run-6b"}, "status": "rejected"}],
+  "expected": {"semantic_verdict": "unresolved", "operational_status": "complete-with-discrepancy", "required_leaves": ["fact-tenant-a", "fact-tenant-b"], "forbidden_leaves": [], "discrepancies": [{"kind": "context-mismatch", "dimensions": ["tenant", "run"]}], "missing_premises": [{"predicate": "same_context", "reason": "evidence rows cannot be joined"}]}
+}

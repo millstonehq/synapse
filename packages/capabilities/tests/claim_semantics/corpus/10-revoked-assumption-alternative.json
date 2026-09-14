@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "10-revoked-assumption-alternative",
+  "title": "Independent support survives one revoked assumption",
+  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": "stale-model-assumption"},
+  "context": {"tenant": "tenant-a", "run": "run-10", "event": "evt-10"},
+  "claims": [{"id": "claim-saved", "predicate": "row_created", "arguments": {"tenant": "tenant-a", "event": "evt-10", "run": "run-10"}}],
+  "facts": [{"id": "fact-independent-proof", "predicate": "sql_row_exists", "arguments": {"tenant": "tenant-a", "event": "evt-10", "run": "run-10", "commit": "commit-10"}, "source": "sql"}],
+  "assumptions": [
+    {"id": "assumption-revoked", "predicate": "model_revision_current", "arguments": {"revision": "old"}, "status": "revoked"},
+    {"id": "assumption-independent-source", "predicate": "sql_snapshot_current", "arguments": {"commit": "commit-10"}, "status": "accepted"}
+  ],
+  "expected": {"semantic_verdict": "supported", "operational_status": "complete-with-discrepancy", "required_leaves": ["fact-independent-proof"], "forbidden_leaves": ["assumption-revoked"], "discrepancies": [{"kind": "revoked-assumption", "assumption": "assumption-revoked"}], "missing_premises": []}
+}

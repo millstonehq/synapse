@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "14-bounded-no-resend",
+  "title": "Bounded no-resend is not indefinite safety",
+  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": "finite-window-generalized-to-forever"},
+  "context": {"tenant": "tenant-a", "run": "run-14", "event": "evt-14", "attempt": "attempt-14", "window": "5m"},
+  "claims": [
+    {"id": "claim-bounded", "predicate": "no_resend_during_window", "arguments": {"tenant": "tenant-a", "event": "evt-14", "run": "run-14", "window": "5m"}},
+    {"id": "claim-forever", "predicate": "no_resend_forever", "arguments": {"tenant": "tenant-a", "event": "evt-14", "run": "run-14"}}
+  ],
+  "facts": [
+    {"id": "fact-one-delivery", "predicate": "one_delivery", "arguments": {"tenant": "tenant-a", "event": "evt-14", "run": "run-14", "attempt": "attempt-14"}, "source": "runtime"},
+    {"id": "fact-no-resend-window", "predicate": "no_resend_observed", "arguments": {"tenant": "tenant-a", "event": "evt-14", "run": "run-14", "window": "5m"}, "source": "runtime"}
+  ],
+  "assumptions": [{"id": "assumption-window-closed", "predicate": "observation_window_closed", "arguments": {"window": "5m"}, "status": "accepted"}],
+  "expected": {"semantic_verdict": "unresolved", "operational_status": "complete", "required_leaves": ["fact-one-delivery", "fact-no-resend-window"], "forbidden_leaves": [], "discrepancies": [], "missing_premises": [{"predicate": "no_resend_forever", "reason": "bounded observation cannot establish indefinite safety"}]}
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "05-wrong-event-email",
+  "title": "Accepted email for another event is not target delivery",
+  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": "event-correlation-dropped"},
+  "context": {"tenant": "tenant-a", "run": "run-5", "event": "evt-target", "recipient": "a@example.test"},
+  "claims": [{"id": "claim-target-mail", "predicate": "smtp_accepted", "arguments": {"tenant": "tenant-a", "event": "evt-target", "recipient": "a@example.test", "run": "run-5"}}],
+  "facts": [
+    {"id": "fact-mail-other-event", "predicate": "smtp_accepted", "arguments": {"tenant": "tenant-a", "event": "evt-other", "recipient": "a@example.test", "run": "run-5"}, "source": "smtp"},
+    {"id": "fact-mail-target", "predicate": "smtp_accepted", "arguments": {"tenant": "tenant-a", "event": "evt-target", "recipient": "a@example.test", "run": "run-5"}, "source": "smtp", "status": "absent"}
+  ],
+  "assumptions": [{"id": "assumption-event-join", "predicate": "same_event", "arguments": {"observed": "evt-other", "claimed": "evt-target"}, "status": "rejected"}],
+  "expected": {"semantic_verdict": "unresolved", "operational_status": "incomplete", "required_leaves": ["fact-mail-other-event"], "forbidden_leaves": ["fact-mail-target"], "discrepancies": [{"kind": "wrong-event", "observed": "evt-other", "claimed": "evt-target"}], "missing_premises": [{"predicate": "mail_sent", "reason": "no accepted message for target event"}]}
+}

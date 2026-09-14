@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "09-support-and-refutation",
+  "title": "One scoped attempt can contain support and refutation",
+  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": "duplicate-attempt-outcomes"},
+  "context": {"tenant": "tenant-a", "run": "run-9", "event": "evt-9", "attempt": "attempt-9"},
+  "claims": [{"id": "claim-terminal", "predicate": "notification_delivery_terminal", "arguments": {"tenant": "tenant-a", "event": "evt-9", "run": "run-9", "attempt": "attempt-9"}}],
+  "facts": [
+    {"id": "fact-allow", "predicate": "smtp_accepted", "arguments": {"tenant": "tenant-a", "event": "evt-9", "run": "run-9", "attempt": "attempt-9"}, "source": "smtp"},
+    {"id": "fact-deny", "predicate": "smtp_rejected", "arguments": {"tenant": "tenant-a", "event": "evt-9", "run": "run-9", "attempt": "attempt-9"}, "source": "smtp"}
+  ],
+  "assumptions": [{"id": "assumption-single-outcome", "predicate": "one_terminal_outcome", "arguments": {"attempt": "attempt-9"}, "status": "rejected"}],
+  "expected": {"semantic_verdict": "conflicting", "operational_status": "complete", "required_leaves": ["fact-allow", "fact-deny"], "forbidden_leaves": [], "discrepancies": [{"kind": "same-scope-polarity-conflict"}], "missing_premises": []}
+}

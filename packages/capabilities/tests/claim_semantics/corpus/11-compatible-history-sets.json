@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "id": "11-compatible-history-sets",
+  "title": "Empty compatible-history domain is inconsistent",
+  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": "vacuous-universal-success"},
+  "context": {"tenant": "tenant-a", "run": "run-11", "claim_scope": "all-compatible-histories"},
+  "claims": [{"id": "claim-universal", "predicate": "capability_holds_in_all_compatible_histories", "arguments": {"tenant": "tenant-a", "capability": "notify", "run": "run-11"}}],
+  "facts": [{"id": "fact-empty-history-success", "predicate": "compatible_history_set", "arguments": {"tenant": "tenant-a", "run": "run-11", "cardinality": 0}, "source": "model"}],
+  "assumptions": [{"id": "assumption-compatible-domain", "predicate": "compatible_history_domain", "arguments": {"tenant": "tenant-a", "run": "run-11", "cardinality": 0}, "status": "inconsistent"}],
+  "expected": {"semantic_verdict": "unresolved", "operational_status": "inconsistent-premises", "required_leaves": [], "forbidden_leaves": ["fact-empty-history-success"], "discrepancies": [{"kind": "empty-compatible-history-domain"}], "missing_premises": [{"predicate": "compatible_history", "reason": "empty domain cannot establish universal claim"}]}
+}

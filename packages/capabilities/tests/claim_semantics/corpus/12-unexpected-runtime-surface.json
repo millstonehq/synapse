@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "12-unexpected-runtime-surface",
+  "title": "Unknown runtime surface blocks whole-model completeness",
+  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": "unmodeled-surface"},
+  "context": {"tenant": "tenant-a", "run": "run-12", "event": "evt-12"},
+  "claims": [{"id": "claim-model-complete", "predicate": "model_complete", "arguments": {"tenant": "tenant-a", "run": "run-12"}}],
+  "facts": [
+    {"id": "fact-known-surface", "predicate": "runtime_surface_observed", "arguments": {"tenant": "tenant-a", "surface": "route-known", "run": "run-12"}, "source": "runtime"},
+    {"id": "fact-unknown-surface", "predicate": "runtime_surface_observed", "arguments": {"tenant": "tenant-a", "surface": "surface-unmodeled", "run": "run-12"}, "source": "runtime"}
+  ],
+  "assumptions": [{"id": "assumption-closed-surface-inventory", "predicate": "surface_inventory_closed", "arguments": {"tenant": "tenant-a", "run": "run-12"}, "status": "rejected"}],
+  "expected": {"semantic_verdict": "unresolved", "operational_status": "complete-with-discrepancy", "required_leaves": ["fact-known-surface", "fact-unknown-surface"], "forbidden_leaves": [], "discrepancies": [{"kind": "unknown-runtime-surface", "surface": "surface-unmodeled"}], "missing_premises": [{"predicate": "model_complete", "reason": "runtime surface is outside the closed model"}]}
+}
