@@ -67,6 +67,17 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
         self.assertTrue(any(rule.head.relation == "notification_delivery_terminal" for rule in terminal.rules))
         self.assertTrue(any(d.claim_id == "claim-terminal" and d.trigger_relation == "sql_ack_failed" for d in terminal.diagnostics))
 
+    def test_history_aggregation_requires_explicit_closed_domain_witness(self):
+        bundle = load_fixture(ROOT / "11-compatible-history-sets.json")
+        aggregate = [rule for rule in bundle.rules if rule.aggregation]
+        self.assertEqual({rule.aggregation.closure_witness for rule in aggregate}, {"compatible_history_domain_closed"})
+        self.assertTrue(all(any(atom.relation == "compatible_history_domain_closed" for atom in rule.body) for rule in aggregate))
+        payload = bundle_payload(json.loads((ROOT / "11-compatible-history-sets.json").read_text()))
+        payload["facts"] = [fact for fact in payload["facts"] if fact["relation"] != "compatible_history_domain_closed"]
+        payload["evidence"] = [fact for fact in payload["evidence"] if fact["relation"] != "compatible_history_domain_closed"]
+        missing = bundle_from_json(payload, validate=True)
+        self.assertTrue(all(rule.aggregation.closure_witness == "compatible_history_domain_closed" for rule in missing.rules if rule.aggregation))
+
     def test_malformed_evidence_policy_is_rejected(self):
         payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
         payload["evidence"][0]["depends_on"] = ["missing-id"]
