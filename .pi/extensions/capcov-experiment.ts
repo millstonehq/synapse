@@ -17,6 +17,20 @@ type Task = {
   gates: Gate[];
   externalPrerequisites?: string[];
   mayBlock?: boolean;
+  /** Wave admission and integration metadata. Omitted for legacy journals. */
+  wave?: string;
+  role?: "parallel" | "reducer";
+  worktree?: string;
+  admission?: { requiresCompleted?: string[]; requiresEvents?: string[] };
+};
+type Wave = {
+  id: string;
+  title: string;
+  maxParallel: number;
+  pauseAfter?: boolean;
+  reducer?: string;
+  mismatchRepairCap?: number;
+  requiresCompleted?: string[];
 };
 type Config = {
   schemaVersion: number;
@@ -27,6 +41,8 @@ type Config = {
   agentTimeoutMinutes: number;
   reviewerCount: number;
   commitCheckpoints: boolean;
+  waves?: Wave[];
+  mismatchRepairCap?: number;
   tasks: Task[];
 };
 type Event = {
@@ -47,6 +63,7 @@ type Derived = {
   blocked: Map<string, string>;
   attempts: Map<string, number>;
   feedback: Map<string, string>;
+  repairs: Map<string, number>;
 };
 
 const ROOT_MARKER = ".git";
@@ -87,6 +104,28 @@ async function loadConfig(root: string): Promise<Config> {
     ids.add(task.id);
     if (!task.writeSet?.length || !task.gates?.length) throw new Error(`Task ${task.id} needs writeSet and gates`);
   }
+  const waves = config.waves ?? config.tasks.map((task) => ({ id: task.id, title: task.title, maxParallel: 1, pauseAfter: true, reducer: task.id }));
+  const waveIds = new Set(waves.map((wave) => wave.id));
+  if (new Set(waves.map((wave) => wave.id)).size !== waves.length) throw new Error("Workflow contains duplicate wave ids");
+  for (const wave of waves) {
+    if (!wave.id || !Number.isInteger(wave.maxParallel) || wave.maxParallel < 1) throw new Error(`Wave ${wave.id || "<missing>"} needs a positive maxParallel`);
+    if (wave.mismatchRepairCap !== undefined && (!Number.isInteger(wave.mismatchRepairCap) || wave.mismatchRepairCap < 0)) throw new Error(`Wave ${wave.id} has invalid mismatchRepairCap`);
+    if (wave.reducer && !ids.has(wave.reducer)) throw new Error(`Wave ${wave.id} names unknown reducer ${wave.reducer}`);
+  }
+  for (const task of config.tasks) {
+    if (task.wave && !waveIds.has(task.wave)) throw new Error(`Task ${task.id} names unknown wave ${task.wave}`);
+    if (task.role === "parallel" && !task.worktree) throw new Error(`Parallel task ${task.id} must declare an isolated worktree`);
+    if (task.role === "reducer" && task.worktree) throw new Error(`Reducer task ${task.id} cannot use a worker worktree`);
+  }
+  for (const wave of waves) {
+    const members = config.tasks.filter((task) => (task.wave ?? task.id) === wave.id);
+    if (!members.length) throw new Error(`Wave ${wave.id} has no tasks`);
+    if (wave.reducer && !members.some((task) => task.id === wave.reducer)) throw new Error(`Wave ${wave.id} reducer is not a member`);
+    const parallel = members.filter((task) => task.role === "parallel");
+    for (let i = 0; i < parallel.length; i++) for (let j = i + 1; j < parallel.length; j++) {
+      if (writeSetsOverlap(parallel[i].writeSet, parallel[j].writeSet)) throw new Error(`Parallel tasks ${parallel[i].id} and ${parallel[j].id} have overlapping write sets`);
+    }
+  }
   for (const task of config.tasks) {
     for (const dep of task.dependsOn) if (!ids.has(dep)) throw new Error(`Task ${task.id} has unknown dependency ${dep}`);
   }
@@ -96,7 +135,7 @@ async function loadConfig(root: string): Promise<Config> {
     if (ready.length === 0) throw new Error("Workflow task graph contains a dependency cycle");
     for (const task of ready) resolved.add(task.id);
   }
-  return config;
+  return { ...config, waves };
 }
 
 async function readEvents(root: string): Promise<Event[]> {
@@ -117,6 +156,7 @@ function derive(events: Event[]): Derived {
     blocked: new Map(),
     attempts: new Map(),
     feedback: new Map(),
+    repairs: new Map(),
   };
   for (const event of events) {
     if (event.type === "run-started") {
@@ -141,6 +181,9 @@ function derive(events: Event[]): Derived {
       state.feedback.delete(event.taskId);
     } else if (event.type === "task-unblocked" && event.taskId) {
       state.blocked.delete(event.taskId);
+    } else if (event.type === "wave-repair") {
+      const wave = String(event.data?.wave ?? "");
+      if (wave) state.repairs.set(wave, (state.repairs.get(wave) ?? 0) + 1);
     }
   }
   return state;
@@ -321,6 +364,30 @@ function outsideWriteSet(files: string[], writeSet: string[]): string[] {
   return files.filter((file) => !matchers.some((matcher) => matcher.test(file)));
 }
 
+function writeSetsOverlap(left: string[], right: string[]): boolean {
+  return left.some((a) => right.some((b) => globRegex(a).test(b) || globRegex(b).test(a)));
+}
+
+function waveFor(config: Config, state: Derived): Wave | undefined {
+  return (config.waves ?? []).find((wave) => {
+    const members = config.tasks.filter((task) => (task.wave ?? task.id) === wave.id);
+    return members.some((task) => !state.completed.has(task.id)) &&
+      (wave.requiresCompleted ?? []).every((id) => state.completed.has(id));
+  });
+}
+
+function waveTasks(config: Config, state: Derived, wave: Wave): Task[] {
+  return config.tasks.filter((task) => (task.wave ?? task.id) === wave.id &&
+    !state.completed.has(task.id) && task.dependsOn.every((dep) => state.completed.has(dep)));
+}
+
+function hasAdmissionEvidence(events: Event[], task: Task): string[] {
+  return (task.admission?.requiresEvents ?? []).filter((requirement) => {
+    const [type, wave] = requirement.split(":", 2);
+    return !events.some((event) => event.type === type && (!wave || event.data?.wave === wave));
+  });
+}
+
 async function runGate(root: string, gate: Gate, signal: AbortSignal, timeoutMs: number): Promise<GateResult> {
   const [command, ...args] = gate.command;
   const started = Date.now();
@@ -354,7 +421,7 @@ function cap(text: string, length = 12_000): string {
 function taskPacket(config: Config, task: Task, attempt: number, feedback: string): string {
   return JSON.stringify({
     workflow: config.name,
-    task: { id: task.id, title: task.title, planSections: task.planSections, dependencies: task.dependsOn, writeSet: task.writeSet, acceptance: task.acceptance },
+    task: { id: task.id, title: task.title, wave: task.wave ?? task.id, role: task.role ?? "reducer", worktree: task.worktree ?? null, planSections: task.planSections, dependencies: task.dependsOn, writeSet: task.writeSet, acceptance: task.acceptance, admission: task.admission ?? null },
     attempt,
     priorFeedback: feedback || null,
   }, null, 2);
@@ -449,11 +516,15 @@ async function checkResumePreconditions(root: string, config: Config, events: Ev
 }
 
 function nextTask(config: Config, state: Derived): Task | undefined {
+  const wave = waveFor(config, state);
+  if (wave) return waveTasks(config, state, wave)[0];
   return config.tasks.find((task) => !state.completed.has(task.id) && task.dependsOn.every((dep) => state.completed.has(dep)));
 }
 
 function statusText(config: Config, state: Derived): string {
   const lines = [`Workflow: ${config.name}`, `Run: ${state.runId ?? "not started"}`];
+  const wave = waveFor(config, state);
+  if (wave) lines.push(`Wave: ${wave.id} — ${wave.title} (repairs ${state.repairs.get(wave.id) ?? 0}/${wave.mismatchRepairCap ?? config.mismatchRepairCap ?? 3})`);
   for (const task of config.tasks) {
     const icon = state.completed.has(task.id) ? "✓" : state.blocked.has(task.id) ? "!" : "·";
     const suffix = state.blocked.has(task.id) ? ` — ${state.blocked.get(task.id)}` : ` (${state.attempts.get(task.id) ?? 0} attempts)`;
@@ -482,11 +553,38 @@ export default function capcovExperiment(pi: ExtensionAPI) {
       while (!controller.signal.aborted && tasksThisRun < taskLimit) {
         let events = await readEvents(root);
         let state = derive(events);
+        const wave = waveFor(config, state);
         const task = nextTask(config, state);
         updateUi(ctx, config, state, task?.id);
         if (!task) {
+          if (wave) {
+            const reason = `wave ${wave.id} has no admission-ready task; inspect dependency or admission evidence`;
+            await appendEvent(root, { runId, type: "wave-blocked", data: { wave: wave.id, reason } });
+            await appendEvent(root, { runId, type: "run-stopped", data: { reason } });
+            ctx.ui.notify(reason, "warning");
+            return;
+          }
           await appendEvent(root, { runId, type: "run-completed", data: { completed: [...state.completed] } });
           ctx.ui.notify("Capcov claim-semantics workflow completed", "info");
+          return;
+        }
+        const missingAdmission = [
+          ...(task.admission?.requiresCompleted ?? []).filter((id) => !state.completed.has(id)).map((id) => `completed task ${id}`),
+          ...hasAdmissionEvidence(events, task).map((type) => `event ${type}`),
+        ];
+        if (missingAdmission.length) {
+          const reason = `missing admission evidence: ${missingAdmission.join(", ")}`;
+          await appendEvent(root, { runId, type: "task-blocked", taskId: task.id, data: { reason, wave: wave?.id } });
+          await appendEvent(root, { runId, type: "run-stopped", taskId: task.id, data: { reason } });
+          ctx.ui.notify(`${task.id} blocked: ${reason}`, "warning");
+          return;
+        }
+        const repairCap = wave?.mismatchRepairCap ?? config.mismatchRepairCap ?? 3;
+        if (wave && (state.attempts.get(task.id) ?? 0) > 0 && (state.repairs.get(wave.id) ?? 0) >= repairCap) {
+          const reason = `wave ${wave.id} exhausted mismatch repair cap ${repairCap}`;
+          await appendEvent(root, { runId, type: "wave-blocked", data: { wave: wave.id, reason } });
+          await appendEvent(root, { runId, type: "run-stopped", data: { reason } });
+          ctx.ui.notify(reason, "error");
           return;
         }
         const missingPrerequisites = (task.externalPrerequisites ?? []).filter((name) => !process.env[name]);
@@ -573,6 +671,9 @@ export default function capcovExperiment(pi: ExtensionAPI) {
         }
         const failed = gates.find((gate) => !gate.ok);
         if (failed) {
+          if (wave && /mismatch|differential|discrepanc|counterexample/i.test(failed.name + " " + failed.output)) {
+            await appendEvent(root, { runId, type: "wave-repair", data: { wave: wave.id, task: task.id, reason: failed.name } });
+          }
           await appendEvent(root, { runId, type: "task-feedback", taskId: task.id, attempt, data: { feedback: `Gate ${failed.name} failed (exit ${failed.code}):\n${cap(failed.output)}` } });
           continue;
         }
@@ -589,6 +690,9 @@ export default function capcovExperiment(pi: ExtensionAPI) {
           reviews: reviews.map((review, index) => ({ lens: reviewLenses[index], code: review.code, verdict: review.parsed?.verdict ?? "invalid", output: cap(review.output || review.stderr) })),
         } });
         if (badReviews.length) {
+          if (wave && reviews.some((review) => /mismatch|differential|discrepanc|counterexample/i.test(review.output || review.stderr))) {
+            await appendEvent(root, { runId, type: "wave-repair", data: { wave: wave.id, task: task.id, reason: "review mismatch" } });
+          }
           const feedback = badReviews.map((review, index) => `Reviewer ${index + 1}: ${JSON.stringify(review.parsed ?? { error: review.stderr || review.output })}`).join("\n");
           await appendEvent(root, { runId, type: "task-feedback", taskId: task.id, attempt, data: { feedback: cap(feedback) } });
           continue;
@@ -605,6 +709,11 @@ export default function capcovExperiment(pi: ExtensionAPI) {
         await appendEvent(root, { runId, type: "task-completed", taskId: task.id, attempt, data: { checkpoint, patchSha256: digest, files, gates: gates.map((g) => g.name) } });
         tasksThisRun++;
         const postTaskState = derive(await readEvents(root));
+        if (wave && wave.pauseAfter !== false && !config.tasks.some((candidate) => (candidate.wave ?? candidate.id) === wave.id && !postTaskState.completed.has(candidate.id))) {
+          await appendEvent(root, { runId, type: "wave-checkpoint", data: { wave: wave.id, checkpoint, completed: [...postTaskState.completed] } });
+          ctx.ui.notify(`Wave ${wave.id} checkpointed at ${checkpoint.slice(0, 8)}; resume for the next wave`, "info");
+          return;
+        }
         if (postTaskState.completed.size === config.tasks.length) {
           await appendEvent(root, { runId, type: "run-completed", data: { completed: [...postTaskState.completed] } });
           ctx.ui.notify("Capcov claim-semantics workflow completed", "info");
@@ -702,8 +811,8 @@ export default function capcovExperiment(pi: ExtensionAPI) {
         if (action === "start") await checkPreconditions(root, config, true);
         else await checkResumePreconditions(root, config, events);
         const limitIndex = args.indexOf("--tasks");
-        const parsedLimit = limitIndex >= 0 ? Number(args[limitIndex + 1]) : 1;
-        const taskLimit = Number.isInteger(parsedLimit) && parsedLimit > 0 && parsedLimit <= config.tasks.length ? parsedLimit : 1;
+        const parsedLimit = limitIndex >= 0 ? Number(args[limitIndex + 1]) : config.tasks.length;
+        const taskLimit = Number.isInteger(parsedLimit) && parsedLimit > 0 && parsedLimit <= config.tasks.length ? parsedLimit : config.tasks.length;
         const runId = action === "resume" && derive(events).runId ? derive(events).runId! : proposedRunId;
         await appendEvent(root, { runId, type: "run-started", data: { action, taskLimit, head: (await git(root, ["rev-parse", "HEAD"])).stdout.trim() } });
         ctx.ui.notify(`Started ${runId}; ${taskLimit} task(s) maximum`, "info");

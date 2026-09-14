@@ -58,6 +58,20 @@ For each dependency-ready task in
 6. accepts the task only when every gate passes and every reviewer approves;
 7. creates the task's git checkpoint itself and appends a completion event.
 
+Tasks are admitted through ordered waves. A wave may fan out read-only scouts,
+but writer integration is always reducer-owned and follows the manifest order.
+Parallel writer tasks are accepted only when they declare isolated `worktree`
+paths and their glob write sets are disjoint; the manifest loader rejects unsafe
+overlap instead of guessing. Each wave emits a `wave-checkpoint` event and
+pauses by default, so `/capcov-workflow resume` is the explicit admission to the
+next wave. `admission.requiresCompleted` and `admission.requiresEvents` provide
+conditional downstream admission for the Shen, specialization, and real-Go
+tracks without treating an agent's report as evidence.
+
+Differential/mismatch failures are recorded as `wave-repair` events. A wave is
+blocked after its configured (default three) repair attempts; retries cannot
+silently turn an unresolved counterexample into a pass.
+
 An implementer's `status: ready` is never the completion predicate. Failed tools,
 invalid structured output, failed gates, refuted reviews, missing external fixtures,
 and timeouts remain failures or blockers in the journal rather than being replaced
@@ -76,9 +90,9 @@ Python notification behavior cannot satisfy it.
   authority. Use this only in a trusted checkout/container.
 - Reviewers receive only Pi's `read` tool. They inspect the persisted patch and
   source but cannot invoke shell commands or edit.
-- Only one writer runs at a time. Read-only scouts and reviewers run in parallel;
-  this avoids pretending overlapping writers are safe. Future writer parallelism
-  should use separate worktrees and disjoint manifest write sets.
+- Only one reducer writer integrates a wave at a time. Read-only scouts and
+  reviewers run in parallel. Any future parallel writer lane must use separate
+  worktrees and disjoint manifest write sets; this is validated at load time.
 - The run is bounded by task count, three attempts per task, subprocess timeouts,
   dependency edges, and explicit cancellation.
 - Manual retry cannot reset an exhausted attempt budget, and cannot race an active run.
