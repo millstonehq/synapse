@@ -7,7 +7,33 @@ description: Use when rebuilding a system with capcov to classify capability gap
 
 Bare-minimum, brutally pragmatic methodology to map a system's capabilities and prove a clean-room rebuild works. Grounded in capcov's real machinery, not a parallel theory. It is deliberately NOT formal verification.
 
-Quasi-formality means precise rules for what incomplete evidence can establish. A deterministic verdict over a bounded execution is useful; it does not make the system, observation process, or authored contract complete.
+## Quasi-formality and breadth-first work selection
+
+Quasi-formality means fast, executable, falsifiable claims that catch meaningful
+classes of bugs, with explicit limits. Optimize confidence gained per unit of work
+across the system; do not pursue exhaustive proof of one pilot while other
+capabilities remain untouched. "80/20" is a prioritization principle, not a measured
+coverage percentage. Runtime usage complements deliberate checks; it does not
+replace required authorization, data-integrity or release acceptance evidence.
+
+A deterministic verdict over a bounded execution is useful; it does not make the
+system, observation process, or authored contract complete.
+
+For multi-capability rebuilds, use **one parent orchestrator plus implementation
+workers**, with each worker owning its own verification. The parent owns global
+coverage, task selection, scope extensions and integration; no permanent reviewer
+agent is required. Read [the orchestration workflow](references/orchestration.md)
+before assigning or resuming this mode. It provides assignment/checkpoint formats,
+parallel ownership, explicit worker-model selection and continuation decisions.
+Default to the provider's workhorse model for workers (Sol / Sonnet when available),
+with the selected capable parent orchestrating; resolve supported IDs in the host. For a single bounded capability,
+work directly without manufacturing orchestration overhead.
+
+**Scheduling and qualification are different decisions.** The depth requirements
+below govern what evidence permits a claim or release. They do not authorize a
+worker to keep deepening its capability or override breadth-first task selection.
+Return partial implementation with visible unproven requirements when a packet
+ends; the orchestrator compares further depth against other capability gaps.
 
 ## The one rule: done is the deployment, not the gate
 
@@ -24,7 +50,7 @@ A transition is **ready to prove** (not "allowed to exist") when all four are fi
 - `evidence` — `file:line` into the **original**. The clean-room anchor: rebuild from here, do not guess.
 - `bindings` — the concrete check.
 
-Order falls out of the fact machine: `plan` walks `requires`/`adds` from `initial` and generates the scenarios. Take the shortest path to the headline outcome first, then branch **refusal and security paths ahead of happy-path variants** (a wrong refusal is costlier than a missing convenience).
+Within an assigned capability, scenario order falls out of the fact machine: `plan` walks `requires`/`adds` from `initial` and generates the scenarios. Take the shortest path to the headline outcome first, then branch **refusal and security paths ahead of happy-path variants** (a wrong refusal is costlier than a missing convenience).
 
 You map one capability's surfaces at a time, not the system. But **filtering a route out of THIS capability's run does not make it "outside the product."** A scoped-out surface must be **accounted globally** — assigned to some other capability's gate, or listed as explicitly unresolved in a global denominator. "Correctly absent from this gate" is a per-run fact, never a product-completeness claim; the excluded set is a ledger to reconcile, not a set to forget.
 
