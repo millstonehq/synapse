@@ -136,6 +136,22 @@ class SouffleBackendTests(unittest.TestCase):
         self.assertEqual(evaluate("all", (True, False)), ())
         self.assertEqual(evaluate("all", ()), ())
 
+    def test_boolean_aggregates_support_global_zero_group(self):
+        def bundle(operator, values):
+            source = R("source", ("value", TypeName.BOOLEAN))
+            out = R("out", ("value", TypeName.BOOLEAN))
+            domain = R("domain", ("scope", TypeName.SYMBOL), finite=True, nonempty=True)
+            closed = R("closed", ("scope", TypeName.SYMBOL), modality=Modality.COMPLETENESS, completes="domain")
+            aggregate = Aggregation(operator, "source", (), "value", operator, "domain", "closed")
+            rule = Rule(Atom("out", (Variable("value"),)), (Atom("source", (Variable("value"),)), Atom("domain", (Constant("global"),)), Atom("closed", (Constant("global"),))), aggregation=aggregate)
+            facts = tuple(Atom("source", (Constant(value),)) for value in values)
+            facts += (Atom("domain", (Constant("global"),)), Atom("closed", (Constant("global"),)))
+            return Bundle((source, out, domain, closed), facts=facts, rules=(rule,))
+        for operator in ("any", "all"):
+            program = translate_bundle(bundle(operator, (True,))).program
+            self.assertIn(".decl __capcov_agg_", program)
+            self.assertNotIn("(, n_true", program)
+
     def test_claim_context_filters_rows_and_negative_polarity_is_evidence(self):
         rel = R("rejected", ("tenant", TypeName.SYMBOL, True), ("actor", TypeName.SYMBOL), polarity="negative", context_indices=("tenant",))
         claim = Claim("rejected", (Variable("tenant"), Constant("actor")), Context.from_mapping({"tenant": "t1"}))
