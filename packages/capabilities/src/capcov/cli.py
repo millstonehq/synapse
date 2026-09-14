@@ -148,7 +148,10 @@ def _diff(old: str, new: str, label: str) -> None:
 def cmd_discover(args: argparse.Namespace) -> int:
     target = Path(args.target).resolve()
     source_dir, specs = _resolve(target, args.source, args.adapter)
-    adapters = [load_adapter(name) for name, _ in specs]
+    # `plugin` (present only in an [[adapters]] entry that brings a bespoke reader)
+    # routes `load` to import that callable instead of a registered module. Absent
+    # from every existing config, so `plugin=None` and this stays today's load.
+    adapters = [load_adapter(name, plugin=(cfg or {}).get("plugin")) for name, cfg in specs]
     name_match = not args.no_name_match
 
     # Run every adapter and MERGE their core dicts (design §1.1/§1.2). A lone

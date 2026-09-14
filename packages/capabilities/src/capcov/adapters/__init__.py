@@ -11,6 +11,16 @@ Two of the registered adapters read *routes and contracts* rather than a stack:
 (`flows.discovery`) and project its obligation inventory onto the CORE adapter
 contract. The bridge and the multi-adapter merge live here so every adapter
 speaks the one shape the fixpoint, reconcile and gate already read.
+
+The two registered adapters are two GENERIC readers, not the only two allowed.
+A clean-room rebuild OUT OF a legacy/low-code platform (Zoho Deluge, Salesforce
+Apex, COBOL, a Retool/Airtable export) starts from a source with no tree-sitter
+grammar and no structured form, so it needs a bespoke reader. Those are brought
+in as PLUGINS at the edge: an `[[adapters]]` entry may carry
+`plugin = "dotted.module:callable"`, and `load` imports that callable instead of
+a registered module (see `capcov/PLUGINS.md` for the callable contract). The core
+owns the contract, the two generic readers and this loader; a bespoke reader
+never gets special-cased into it.
 """
 
 from __future__ import annotations
@@ -28,12 +38,79 @@ REGISTRY = {
 }
 
 
-def load(name: str) -> ModuleType:
+def import_plugin_callable(dotted: str):
+    """Import the `module:callable` a plugin adapter entry declares.
+
+    The single resolver both dispatch paths (`load` here, and
+    `flows.discovery._discover_from_config`) use to turn a
+    `plugin = "dotted.module:callable"` string into the callable that reads a
+    source no built-in adapter can. Raises ValueError with a specific reason on a
+    malformed string, a missing module attribute, or a non-callable target.
+    """
     import importlib
 
+    module_path, sep, attr = dotted.partition(":")
+    if not sep or not module_path or not attr:
+        raise ValueError(
+            f"plugin {dotted!r} must be 'dotted.module:callable' "
+            "(a single colon separates the import path from the callable name)"
+        )
+    module = importlib.import_module(module_path)
+    try:
+        target = getattr(module, attr)
+    except AttributeError as exc:
+        raise ValueError(
+            f"plugin {dotted!r}: module {module_path!r} has no attribute {attr!r}"
+        ) from exc
+    if not callable(target):
+        raise ValueError(f"plugin {dotted!r}: {attr!r} is not callable")
+    return target
+
+
+def _plugin_adapter(name: str, dotted: str) -> ModuleType:
+    """A module-shaped shim so a plugin reads through the same call + merge path.
+
+    `cli._run_adapter` reads `.discover` (and forwards the `[[adapters]]` entry as
+    `config`); `cli.cmd_discover` reads `.LANGUAGE`. The shim exposes both so a
+    plugin's core dict is produced and merged EXACTLY as a built-in adapter's is.
+    The plugin callable's contract is `(source_root, target, config) -> core dict`
+    (see `capcov/PLUGINS.md`); `config` is the entry carrying its `plugin` string.
+    """
+    fn = import_plugin_callable(dotted)
+    shim = ModuleType(f"capcov.adapters._plugins.{name}")
+
+    def discover(source_root, target, name_match: bool = True, *, config=None):
+        result = fn(source_root, target, config)
+        if not isinstance(result, dict):
+            raise SystemExit(
+                f"plugin adapter {dotted!r} must return a core adapter dict "
+                "(as capcov.adapters.build_core_dict produces)"
+            )
+        return result
+
+    shim.discover = discover  # type: ignore[attr-defined]
+    shim.NAME = name  # type: ignore[attr-defined]
+    shim.LANGUAGE = None  # type: ignore[attr-defined]
+    shim.PLUGIN = dotted  # type: ignore[attr-defined]
+    return shim
+
+
+def load(name: str, *, plugin: str | None = None) -> ModuleType:
+    import importlib
+
+    if plugin is not None:
+        # The seam: `name` is a free label; the callable is the reader. Merged
+        # by `merge` below exactly like a built-in, so its excluded_surfaces and
+        # unresolved carriers reach the honest denominator unchanged.
+        try:
+            return _plugin_adapter(name, plugin)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
     if name not in REGISTRY:
         raise SystemExit(
-            f"unknown adapter {name!r}; have: {', '.join(sorted(REGISTRY))}"
+            f"unknown adapter {name!r}; built-ins are: {', '.join(sorted(REGISTRY))}; "
+            'for a source with no built-in reader, declare plugin = "module:callable" '
+            "in the [[adapters]] entry to bring your own reader"
         )
     return importlib.import_module(REGISTRY[name])
 

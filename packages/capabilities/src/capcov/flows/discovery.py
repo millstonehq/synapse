@@ -330,9 +330,37 @@ def _discover_from_config(config: dict, base: Path, config_name: str) -> dict:
             "reason": "no discovery adapters declared; no language resolves to surfaces",
         })
     for index, adapter in enumerate(adapters):
-        kind = adapter["kind"]
+        kind = adapter.get("kind")
         surfaces_before = sum(1 for o in obligations if o["kind"] == "surface")
-        if kind == "treesitter-routes":
+        if "plugin" in adapter:
+            # Plugin seam: a source with no tree-sitter grammar and no structured
+            # form (a clean-room rebuild out of Deluge/Apex/COBOL/a Retool export)
+            # brings its own reader as `plugin = "dotted.module:callable"`. The
+            # callable returns the SAME per-adapter shape a built-in contributes
+            # -- obligations plus the honest-denominator carriers -- and is merged
+            # identically here; `kind` is a free label. See capcov/PLUGINS.md.
+            from ..adapters import import_plugin_callable
+
+            produced = import_plugin_callable(adapter["plugin"])(adapter, root)
+            if not isinstance(produced, dict):
+                raise ValueError(
+                    f"plugin discovery adapter {adapter['plugin']!r} must return a "
+                    "dict with an 'obligations' list"
+                )
+            obligations.extend(produced.get("obligations", []))
+            # The carriers flow through UNCHANGED: excluded route-shaped candidates
+            # the reader saw and dropped, and the named limits it cannot resolve.
+            # `adapter` (this entry's index) and `kind` are stamped only when the
+            # plugin left them off, so the final sort keys read like a built-in's.
+            excluded_surfaces.extend(produced.get("excluded_surfaces", []))
+            for entry in produced.get("unresolved", []):
+                entry.setdefault("adapter", index)
+                entry.setdefault("kind", kind)
+                unresolved_adapters.append(entry)
+            for relative, sha in produced.get("sources", {}).items():
+                sources[relative] = sha
+                analysed_files.add(relative)
+        elif kind == "treesitter-routes":
             try:
                 import tree_sitter as ts
                 from tree_sitter_language_pack import get_language
@@ -507,7 +535,12 @@ def _discover_from_config(config: dict, base: Path, config_name: str) -> dict:
             })
             analysed_files.add(relative)
         else:
-            raise ValueError(f"unsupported discovery adapter: {kind}")
+            raise ValueError(
+                f"unsupported discovery adapter {kind!r}; built-ins are "
+                "['treesitter-routes', 'openapi-json']; for a source with no "
+                'tree-sitter grammar, declare plugin = "module:callable" to bring '
+                "your own reader"
+            )
         if sum(1 for o in obligations if o["kind"] == "surface") == surfaces_before:
             unresolved_adapters.append({
                 "adapter": index,
