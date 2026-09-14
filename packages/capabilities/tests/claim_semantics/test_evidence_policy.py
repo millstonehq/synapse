@@ -6,7 +6,7 @@ from pathlib import Path
 from .adapter import ROOT, bundle_payload, load_fixture
 from capcov.claims import (Bundle, Claim, Column, Constant, EvidenceEffect,
                            RelationDecl, assert_valid, bundle_from_json,
-                           canonical_json, schema_digest)
+                           canonical_json, schema_digest, render_outputs, VerifiedProofEvidence)
 
 
 class EvidencePolicyCompilationTests(unittest.TestCase):
@@ -86,6 +86,111 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
                 first = load_fixture(path)
                 second = bundle_from_json(json.loads(canonical_json(first)), validate=True)
                 self.assertEqual(schema_digest(first), schema_digest(second))
+
+    def test_declared_outputs_cover_expected_diagnostic_payloads(self):
+        expected = json.loads((ROOT / "expected.json").read_text())["cases"]
+        for path in sorted(ROOT.glob("[0-9][0-9]-*.json")):
+            bundle = load_fixture(path)
+            by_claim = {}
+            for output in bundle.outputs:
+                by_claim.setdefault(output.claim_id, []).append(output)
+            for claim_id, table in expected[path.stem]["claims"].items():
+                declared = by_claim.get(claim_id, [])
+                observed = {o.evidence_id for o in declared if o.kind.value == "observed"}
+                forbidden = {o.evidence_id for o in declared if o.kind.value == "forbidden"}
+                self.assertTrue(set(table["observed_leaves"]).issubset(observed), path.stem)
+                self.assertTrue(set(table["forbidden_leaves"]).issubset(forbidden), path.stem)
+                discrepancies = [dict(o.fields).get("kind").value for o in declared if o.kind.value == "discrepancy" and "kind" in dict(o.fields)]
+                self.assertTrue({d["kind"] for d in table["discrepancies"]}.issubset(discrepancies), path.stem)
+                missing = {(dict(o.fields).get("reason").value, o.relation) for o in declared if o.kind.value == "missing_premise" and "reason" in dict(o.fields)}
+                self.assertTrue({(d["reason"], d["relation"]) for d in table["missing_premises"]}.issubset(missing), path.stem)
+
+    def test_malformed_output_templates_are_rejected_structurally(self):
+        payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
+        payload["outputs"] = [{"kind": "observed", "claim_id": "claim-terminal-delivery", "evidence_id": "missing"}]
+        with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
+
+    def test_output_triggers_are_causal_and_arrays_are_exact(self):
+        fixture = json.loads((ROOT / "02-surface-mismatch.json").read_text())
+        bundle = load_fixture(ROOT / "02-surface-mismatch.json")
+        discrepancy = next(o for o in bundle.outputs if o.kind.value == "discrepancy")
+        self.assertEqual(dict(discrepancy.fields)["surfaces"].value, ["route-a", "route-b"])
+        self.assertEqual(set(discrepancy.requires_all_evidence), {"fact-route-a-static", "fact-route-b-runtime"})
+        mutated = bundle_payload(fixture)
+        mutated["outputs"][2]["requires_all_evidence"] = ["unrelated-evidence"]
+        with self.assertRaises(ValueError): bundle_from_json(mutated, validate=True)
+        mutated = bundle_payload(fixture)
+        mutated["outputs"][2]["requires_all_evidence"] = ["fact-route-a-static"]
+        # A weakened trigger is still syntactically valid, but no longer
+        # claims the two-evidence discrepancy; the renderer must not emit it.
+        weakened = bundle_from_json(mutated, validate=True)
+        self.assertNotEqual(set(weakened.outputs[2].requires_all_evidence), set(discrepancy.requires_all_evidence))
+        active = {"fact-route-a-static", "fact-route-b-runtime"}
+        self.assertTrue(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", active, VerifiedProofEvidence.from_bundle(bundle, "claim-effect", active), "unresolved", {"same_surface"})))
+        self.assertFalse(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", {"fact-route-a-static"}, VerifiedProofEvidence.from_bundle(bundle, "claim-effect", {"fact-route-a-static"}), "unresolved", {"same_surface"})))
+        self.assertFalse(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", active, VerifiedProofEvidence.from_bundle(bundle, "claim-effect", active), "supported", {"same_surface"})))
+        wrong_context = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
+        wrong_context["evidence"][0]["context"]["tenant"] = "other-tenant"
+        wrong = bundle_from_json(wrong_context, validate=False)
+        output_ids = {item.get("evidence_id") for item in render_outputs(wrong, "claim-terminal-delivery", {"fact-http-save"}, VerifiedProofEvidence.from_bundle(wrong, "claim-terminal-delivery", {"fact-http-save"}), "supported", set())}
+        self.assertNotIn("fact-http-save", output_ids)
+
+    def test_proof_certificate_trust_boundary(self):
+        bundle = load_fixture(ROOT / "01-correlated-positive.json")
+        active = {record.id for record in bundle.evidence}
+        with self.assertRaises(TypeError):
+            render_outputs(bundle, "claim-terminal-delivery", active, active, "supported", set())
+        wrong_claim = VerifiedProofEvidence.from_bundle(bundle, "claim-terminal-delivery", {"fact-http-save"})
+        with self.assertRaises(ValueError):
+            render_outputs(bundle, "other-claim", active, wrong_claim, "supported", set())
+        with self.assertRaises(ValueError):
+            render_outputs(bundle, "claim-terminal-delivery", active, VerifiedProofEvidence("claim-terminal-delivery", frozenset({"unknown"})), "supported", set())
+
+    def test_rendered_output_shapes_match_all_four_expected_payload_classes(self):
+        expected = json.loads((ROOT / "expected.json").read_text())["cases"]
+        for path in sorted(ROOT.glob("[0-9][0-9]-*.json")):
+            bundle = load_fixture(path)
+            active = {record.id for record in bundle.evidence}
+            for claim_id, table in expected[path.stem]["claims"].items():
+                rendered = render_outputs(bundle, claim_id, active, VerifiedProofEvidence.from_bundle(bundle, claim_id, active), table["semantic_verdict"], {item["relation"] for item in table["missing_premises"]})
+                observed = {item["evidence_id"] for item in rendered if item["kind"] == "observed"}
+                forbidden = {item["evidence_id"] for item in rendered if item["kind"] == "forbidden"}
+                discrepancies = [item.get("fields", {}) for item in rendered if item["kind"] == "discrepancy"]
+                missing = [{**item.get("fields", {}), "relation": item.get("relation")} for item in rendered if item["kind"] == "missing_premise"]
+                self.assertEqual(observed, set(table["observed_leaves"]), path.stem)
+                self.assertEqual(forbidden, set(table["forbidden_leaves"]), path.stem)
+                self.assertEqual(discrepancies, table["discrepancies"], path.stem)
+                self.assertEqual(missing, table["missing_premises"], path.stem)
+
+    def test_renamed_equivalent_program_preserves_rendered_shape(self):
+        fixture = json.loads((ROOT / "02-surface-mismatch.json").read_text())
+        original_payload = bundle_payload(fixture)
+        renamed = json.loads(json.dumps(original_payload))
+        replacements = {
+            "claim-effect": "claim-renamed",
+            "fact-route-a-static": "proof-alpha",
+            "fact-route-b-runtime": "proof-beta",
+            "static_route_observed": "renamed_static_route",
+            "static_route_exists": "renamed_static_route",
+            "runtime_route_observed": "renamed_runtime_route",
+        }
+        def rewrite(value):
+            if isinstance(value, dict): return {key: rewrite(item) for key, item in value.items()}
+            if isinstance(value, list): return [rewrite(item) for item in value]
+            return replacements.get(value, value)
+        renamed = rewrite(renamed)
+        first = bundle_from_json(original_payload, validate=True)
+        second = bundle_from_json(renamed, validate=True)
+        active_first = {record.id for record in first.evidence}
+        active_second = {record.id for record in second.evidence}
+        shape = lambda values: tuple((item["kind"], tuple(sorted(item.get("fields", {}).keys()))) for item in values)
+        self.assertEqual(shape(render_outputs(first, "claim-effect", active_first, VerifiedProofEvidence.from_bundle(first, "claim-effect", active_first), "unresolved", {"same_surface"})), shape(render_outputs(second, "claim-renamed", active_second, VerifiedProofEvidence.from_bundle(second, "claim-renamed", active_second), "unresolved", {"same_surface"})))
+        payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
+        payload["outputs"] = [{"kind": "missing_premise", "claim_id": "claim-terminal-delivery", "relation": "smtp_accepted", "fields": {"x": {"source": "constant", "type": "boolean", "value": "not-bool"}}}]
+        with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
+        payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
+        payload["outputs"] = [{"kind": "discrepancy", "claim_id": "claim-terminal-delivery", "fields": {"x": {"source": "evidence", "evidence_id": "fact-http-save", "column": "missing", "type": "symbol"}}}]
+        with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
 
     def test_mixed_history_false_rows_are_observation_discrepancies(self):
         bundle = load_fixture(ROOT / "11-compatible-history-sets.json")

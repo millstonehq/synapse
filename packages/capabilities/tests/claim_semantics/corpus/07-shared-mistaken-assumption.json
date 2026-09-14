@@ -16,6 +16,7 @@
     "recipient": "a@example.test"
   },
   "rules": [{"name":"terminal_requires_correlated_path","claim_id":"claim-delivered","premises":[{"relation":"mail_path_declared","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]},{"relation":"mail_path_observed","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]}]}],
+  "outputs": [{"kind":"observed","claim_id":"claim-delivered","evidence_id":"fact-static"},{"kind":"observed","claim_id":"claim-delivered","evidence_id":"fact-runtime"},{"kind":"forbidden","claim_id":"claim-delivered","evidence_id":"assumption-false-independent"},{"kind":"discrepancy","claim_id":"claim-delivered","fields":{"kind":{"value":"shared-assumption"},"assumption":{"value":"assumption-false"}}},{"kind":"missing_premise","claim_id":"claim-delivered","relation":"independent_support","fields":{"reason":{"value":"both producers depend on one false assumption"}}}],
   "claims": [
     {
       "id": "claim-delivered",

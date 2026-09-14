@@ -15,6 +15,7 @@
     "attempt": "attempt-12"
   },
   "rules": [],
+  "outputs": [{"kind":"observed","claim_id":"claim-model-complete","evidence_id":"fact-known-surface"},{"kind":"observed","claim_id":"claim-model-complete","evidence_id":"fact-unknown-surface"},{"kind":"discrepancy","claim_id":"claim-model-complete","fields":{"kind":{"value":"unknown-runtime-surface"},"surface":{"value":"surface-unmodeled"}}},{"kind":"missing_premise","claim_id":"claim-model-complete","relation":"model_complete","fields":{"reason":{"value":"runtime surface is outside the closed model"}}}],
   "claims": [
     {
       "id": "claim-model-complete",

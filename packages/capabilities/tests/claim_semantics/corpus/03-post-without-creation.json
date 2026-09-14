@@ -15,6 +15,7 @@
     "request": "req-3",
     "attempt": "attempt-03"
   },
+  "outputs": [{"kind":"observed","claim_id":"claim-request","evidence_id":"fact-post-200"},{"kind":"observed","claim_id":"claim-created","evidence_id":"fact-post-200"},{"kind":"missing_premise","claim_id":"claim-created","relation":"row_committed","fields":{"reason":{"value":"POST response does not prove durable creation"}}}],
   "rules": [{"name":"request_from_http_acceptance","claim_id":"claim-request","premises":[{"relation":"http_post_accepted","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"request","evidence_column":"request","type":"symbol"}]}]}],
   "claims": [
     {
@@ -82,7 +83,7 @@
       ],
       "quantifier": "exists",
       "domain": null,
-      "mappings": [],
+      "mappings": [{"evidence_relation":"http_post_accepted","effect":"observation","context_indices":["tenant","event"],"bindings":[["tenant","tenant"],["event","event"]]}],
       "diagnostics": [{"trigger_relation":"response_implies_commit__rejected","effect":"forbidden","operational_status":"invalid-input","context_indices":[],"required":true}]
     }
   ],
