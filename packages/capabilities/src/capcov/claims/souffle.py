@@ -169,6 +169,8 @@ def translate_bundle(bundle: Bundle) -> SouffleProgram:
             else:
                 if agg.operator not in {"any", "all"}:
                     raise NotImplementedError(f"unsupported Souffle aggregation {agg.operator!r}")
+                if source.columns[value_index].type is not TypeName.BOOLEAN:
+                    raise ValueError("any/all aggregation requires a boolean value_variable")
                 # Boolean aggregation is represented by a generated count
                 # helper.  A true row is emitted only when the finite source
                 # has at least one member (any), or exactly the finite domain
@@ -179,14 +181,15 @@ def translate_bundle(bundle: Bundle) -> SouffleProgram:
                 source_columns = {column.name: column.type for column in source.columns}
                 group_terms = [variable_aliases.get(name, _identifier(name)) for name in agg.group_by]
                 group_types = [_stype(source_columns[name]) for name in agg.group_by]
-                extra_decls.append(f".decl {helper}({', '.join(g + ':' + t for g, t in zip(group_terms, group_types))}, n:number)")
+                extra_decls.append(f".decl {helper}({', '.join(g + ':' + t for g, t in zip(group_terms, group_types))}, n_true:number, n_total:number)")
                 helper_body = [x for x in body if x != source_text]
-                helper_body.append(f"n = count : {source_text}")
-                extra_rules.append(f"{helper}({', '.join(group_terms)}, n) :- {', '.join(helper_body)}.")
+                true_source = _atom(source_atom, relation_map, relation_aliases, column_aliases, variable_aliases, {value_index: "1"})
+                helper_body.extend([f"n_total = count : {source_text}", f"n_true = count : {true_source}"])
+                extra_rules.append(f"{helper}({', '.join(group_terms)}, n_true, n_total) :- {', '.join(helper_body)}.")
                 body = [x for x in body if x != source_text]
-                body.append(f"{helper}({', '.join(group_terms)}, n)")
+                body.append(f"{helper}({', '.join(group_terms)}, n_true, n_total)")
                 if agg.operator == "any":
-                    body.append("n > 0")
+                    body.append("n_true > 0")
                 else:
                     # all requires the declared finite domain and compares
                     # source cardinality to that domain's cardinality.
@@ -194,7 +197,8 @@ def translate_bundle(bundle: Bundle) -> SouffleProgram:
                     if domain_atom is None:
                         raise ValueError("all aggregation requires a domain atom")
                     domain_text = _atom(domain_atom, relation_map, relation_aliases, column_aliases, variable_aliases)
-                    body.append(f"n = count : {domain_text}")
+                    body.append("n_total > 0")
+                    body.append("n_true = n_total")
                 target_i = [c.name for c in relation_map[rule.head.relation].columns].index(agg.value_variable)
                 head = _atom(rule.head, relation_map, relation_aliases, column_aliases, variable_aliases, {target_i: "1"})
                 lines.append(f"{head} :- {', '.join(body)}.")

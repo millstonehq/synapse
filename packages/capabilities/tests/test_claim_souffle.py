@@ -119,6 +119,23 @@ class SouffleBackendTests(unittest.TestCase):
         self.assertFalse(validate_bundle(bundle))
         self.assertEqual(run_bundle(bundle).relations["out"], (("t", True),))
 
+    def test_boolean_aggregates_count_truth_values_not_rows(self):
+        def evaluate(operator, values):
+            source = R("source", ("tenant", TypeName.SYMBOL, True), ("value", TypeName.BOOLEAN), context_indices=("tenant",))
+            out = R("out", ("tenant", TypeName.SYMBOL, True), ("value", TypeName.BOOLEAN), context_indices=("tenant",))
+            domain = R("domain", ("tenant", TypeName.SYMBOL, True), finite=True, nonempty=True, context_indices=("tenant",))
+            closed = R("closed", ("tenant", TypeName.SYMBOL, True), modality=Modality.COMPLETENESS, completes="domain", context_indices=("tenant",))
+            aggregate = Aggregation(operator, "source", ("tenant",), "value", operator, "domain", "closed")
+            rule = Rule(Atom("out", (Variable("tenant"), Variable("value"))), (Atom("source", (Variable("tenant"), Variable("value"))), Atom("domain", (Variable("tenant"),)), Atom("closed", (Variable("tenant"),))), aggregation=aggregate)
+            facts = tuple(Atom("source", (Constant("t"), Constant(value))) for value in values)
+            facts += (Atom("domain", (Constant("t"),)), Atom("closed", (Constant("t"),)))
+            return run_bundle(Bundle((source, out, domain, closed), facts=facts, rules=(rule,))).relations["out"]
+        self.assertEqual(evaluate("any", (False,)), ())
+        self.assertEqual(evaluate("any", (False, True)), (("t", True),))
+        self.assertEqual(evaluate("all", (True, True)), (("t", True),))
+        self.assertEqual(evaluate("all", (True, False)), ())
+        self.assertEqual(evaluate("all", ()), ())
+
     def test_claim_context_filters_rows_and_negative_polarity_is_evidence(self):
         rel = R("rejected", ("tenant", TypeName.SYMBOL, True), ("actor", TypeName.SYMBOL), polarity="negative", context_indices=("tenant",))
         claim = Claim("rejected", (Variable("tenant"), Constant("actor")), Context.from_mapping({"tenant": "t1"}))
