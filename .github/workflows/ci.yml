@@ -27,6 +27,8 @@ jobs:
           gc-max-store-size-linux: 2G
       - name: Check all Linux derivations
         run: nix flake check --no-update-lock-file
+      - name: Run Souffle recursive typed smoke
+        run: nix build --no-update-lock-file .#checks.x86_64-linux.souffle-recursive-typed-smoke
 
   test-capabilities:
     name: Test and build capability package
