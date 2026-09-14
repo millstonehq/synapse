@@ -205,6 +205,12 @@ possible techniques, not mandatory architecture. Add one only when an actual
 qualification exposes a concrete blocking gap and the engine-extension rule permits
 it. Research interest is not a worker assignment in a product rebuild by default.
 
+An oracle manifest can name one revision while its executed source was copied
+from another runtime checkout. Before starting fixtures, resolve the immutable
+revision and compare its application-source bytes with the copied and executed
+bytes. Record vendor and generated ORM inputs separately as runtime prerequisites;
+their presence does not establish application-source identity.
+
 This workflow is a separation of responsibilities, not deterministic enforcement.
 Subagents share model limitations; a parent can still accept bad reasoning. Native
 hooks or an external watchdog can strengthen checkpoint enforcement if observed
