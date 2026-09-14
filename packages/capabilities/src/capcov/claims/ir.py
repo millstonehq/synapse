@@ -10,6 +10,7 @@ from enum import Enum
 import hashlib
 import json
 from typing import Any, Mapping, Sequence
+import math
 
 
 SCHEMA_VERSION = 1
@@ -73,6 +74,9 @@ class RelationDecl:
     primitive: bool = True
     producer_classes: tuple[str, ...] = ()
     context_indices: tuple[str, ...] = ()
+    completes: str | None = None
+    finite: bool = False
+    nonempty: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "columns", tuple(self.columns))
@@ -95,7 +99,8 @@ class Context:
         return cls(tuple(sorted(values.items())))
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "values", tuple(sorted(self.values)))
+        if any(not isinstance(k, str) for k, _ in self.values): raise TypeError("context keys must be strings")
+        object.__setattr__(self, "values", tuple((k, _freeze_value(v)) for k, v in sorted(self.values)))
 
     def as_dict(self) -> dict[str, Any]: return dict(self.values)
 
@@ -112,6 +117,7 @@ class Constant:
 
     def __post_init__(self) -> None:
         if self.type is not None: object.__setattr__(self, "type", TypeName(self.type))
+        object.__setattr__(self, "value", _freeze_value(self.value))
 
 
 Term = Variable | Constant
@@ -187,7 +193,7 @@ class Bundle:
         object.__setattr__(self, "facts", tuple(sorted(self.facts, key=lambda x: repr(x))))
         object.__setattr__(self, "rules", tuple(sorted(self.rules, key=lambda x: (x.name, repr(x)))))
         object.__setattr__(self, "claims", tuple(sorted(self.claims, key=lambda x: repr(x))))
-        object.__setattr__(self, "metadata", tuple(sorted(self.metadata)))
+        object.__setattr__(self, "metadata", tuple((k, _freeze_value(v)) for k, v in sorted(self.metadata)))
         if self.schema_version != SCHEMA_VERSION:
             raise ValueError(f"unsupported claim schema version: {self.schema_version}")
 
@@ -195,7 +201,8 @@ class Bundle:
 def _plain(value: Any) -> Any:
     if isinstance(value, Enum): return value.value
     if isinstance(value, (str, int, float, bool)) or value is None: return value
-    if isinstance(value, Mapping): return {str(k): _plain(v) for k, v in sorted(value.items(), key=lambda x: str(x[0]))}
+    if isinstance(value, _FrozenMap): return {k: _plain(v) for k, v in value.items()}
+    if isinstance(value, Mapping): raise TypeError("mapping must be recursively frozen before canonicalisation")
     if isinstance(value, (tuple, list, set, frozenset)): return [_plain(v) for v in value]
     if is_dataclass(value):
         return {f.name: _plain(getattr(value, f.name)) for f in fields(value)}
@@ -204,7 +211,7 @@ def _plain(value: Any) -> Any:
 
 def canonical_dict(value: Any) -> dict[str, Any] | Any:
     """Return JSON-compatible data with deterministic field and set ordering."""
-    return _plain(value)
+    return _plain(value if is_dataclass(value) else _freeze_value(value))
 
 
 def canonical_json(value: Any) -> str:
@@ -222,3 +229,82 @@ def to_json(value: Any) -> str: return canonical_json(value)
 
 
 def canonical_digest(value: Any) -> str: return digest(value)
+
+
+class _FrozenMap(Mapping[str, Any]):
+    __slots__ = ("_items",)
+    def __init__(self, items): self._items = tuple(items)
+    def __getitem__(self, key): return dict(self._items)[key]
+    def __iter__(self): return (k for k, _ in self._items)
+    def __len__(self): return len(self._items)
+    def items(self): return self._items
+
+
+def _freeze_value(value: Any) -> Any:
+    """Copy supported JSON values into immutable values before they enter IR."""
+    if value is None or isinstance(value, (str, bool, int)): return value
+    if isinstance(value, float):
+        if not math.isfinite(value): raise ValueError("non-finite floats are not canonical JSON values")
+        return value
+    if isinstance(value, Mapping):
+        if any(not isinstance(k, str) for k in value):
+            raise TypeError("canonical JSON object keys must be strings")
+        return _FrozenMap((k, _freeze_value(v)) for k, v in sorted(value.items()))
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_value(v) for v in value)
+    raise TypeError(f"unsupported canonical value: {type(value).__name__}")
+
+
+def _strict_object(raw, allowed, path):
+    if not isinstance(raw, dict): raise TypeError(f"{path} must be an object")
+    unknown = set(raw) - set(allowed)
+    if unknown: raise ValueError(f"{path} has unknown fields: {sorted(unknown)}")
+    return raw
+
+
+def bundle_from_json(source: str | bytes | Mapping[str, Any]) -> Bundle:
+    """Strictly ingest a schema-v1 JSON object; unknown fields are rejected."""
+    def reject_constant(value): raise ValueError(f"non-standard JSON constant: {value}")
+    def reject_duplicate(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result: raise ValueError(f"duplicate JSON key: {key}")
+            result[key] = value
+        return result
+    raw = json.loads(source, parse_constant=reject_constant, object_pairs_hook=reject_duplicate) if isinstance(source, (str, bytes)) else source
+    _strict_object(raw, {"schema_version", "relations", "facts", "rules", "claims", "metadata"}, "bundle")
+    if isinstance(raw.get("schema_version"), bool) or raw.get("schema_version") != SCHEMA_VERSION: raise ValueError("unsupported claim schema version")
+    def column(x):
+        x = _strict_object(x, {"name", "type", "context"}, "column")
+        return Column(x["name"], x["type"], x.get("context", False))
+    def relation(x):
+        x = _strict_object(x, {"name", "columns", "modality", "polarity", "binding", "primitive", "producer_classes", "context_indices", "completes", "finite", "nonempty"}, "relation")
+        return RelationDecl(x["name"], tuple(column(c) for c in x.get("columns", ())), x.get("modality", "observation"), x.get("polarity", "positive"), x.get("binding", "runtime"), x.get("primitive", True), tuple(x.get("producer_classes", ())), tuple(x.get("context_indices", ())), x.get("completes"), x.get("finite", False), x.get("nonempty", False))
+    def term(x):
+        x = _strict_object(x, {"variable", "value", "type"}, "term")
+        if "variable" in x:
+            if set(x) != {"variable"}: raise ValueError("variable term cannot have value/type")
+            return Variable(x["variable"])
+        if "value" not in x: raise ValueError("term needs variable or value")
+        return Constant(x["value"], x.get("type"))
+    def atom(x):
+        x = _strict_object(x, {"relation", "terms", "negated"}, "atom")
+        return Atom(x["relation"], tuple(term(t) for t in x.get("terms", ())), x.get("negated", False))
+    def comparison(x):
+        x = _strict_object(x, {"left", "operator", "right"}, "comparison")
+        return Comparison(term(x["left"]), x["operator"], term(x["right"]))
+    def rule(x):
+        x = _strict_object(x, {"head", "body", "name", "aggregation"}, "rule")
+        agg = x.get("aggregation")
+        if agg is not None:
+            _strict_object(agg, {"name", "relation", "group_by", "value_variable", "operator", "domain", "closure_witness"}, "aggregation")
+            agg = Aggregation(agg["name"], agg["relation"], tuple(agg.get("group_by", ())), agg["value_variable"], agg.get("operator", "count"), agg.get("domain"), agg.get("closure_witness"))
+        body = tuple(comparison(a["comparison"]) if isinstance(a, dict) and "comparison" in a else atom(a) for a in x.get("body", ()))
+        return Rule(atom(x["head"]), body, x.get("name", ""), agg)
+    def claim(x):
+        x = _strict_object(x, {"relation", "terms", "context", "quantifier", "domain"}, "claim")
+        return Claim(x["relation"], tuple(term(t) for t in x.get("terms", ())), Context.from_mapping(x.get("context", {})), x.get("quantifier", "exists"), x.get("domain"))
+    return Bundle(tuple(relation(x) for x in raw.get("relations", ())), tuple(atom(x) for x in raw.get("facts", ())), tuple(rule(x) for x in raw.get("rules", ())), tuple(claim(x) for x in raw.get("claims", ())), tuple(sorted((raw.get("metadata") or {}).items())))
+
+
+def from_json(source): return bundle_from_json(source)

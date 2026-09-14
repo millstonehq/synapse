@@ -33,7 +33,7 @@ def test_negation_requires_completeness_premise():
         Rule(Atom("done", (Variable("t"), Variable("e"))), (Atom("seen", (Variable("t"), Variable("e")), negated=True),)),))
     assert any(x.code == "missing-completeness" for x in validate_bundle(without))
     with_ = Bundle((rel("seen", "tenant", "event"), rel("done", "tenant", "event"),
-                    rel("complete", "tenant", "event", modality=Modality.COMPLETENESS)), rules=(
+                    RelationDecl("complete", (Column("tenant", TypeName.STRING, context=True), Column("event", TypeName.STRING)), modality=Modality.COMPLETENESS, completes="seen", context_indices=("tenant",))), rules=(
         Rule(Atom("done", (Variable("t"), Variable("e"))), (
             Atom("complete", (Variable("t"), Variable("e"))),
             Atom("seen", (Variable("t"), Variable("e")), negated=True),)),))
@@ -56,4 +56,3 @@ def test_aggregation_needs_domain_and_closure():
         Rule(Atom("b", (Variable("x"),)), (Atom("a", (Variable("x"),)),),
              aggregation=Aggregation("count_a", "a", ("x",), "x")),))
     assert {x.code for x in validate_bundle(bundle)} >= {"aggregation-domain", "aggregation-closure"}
-
