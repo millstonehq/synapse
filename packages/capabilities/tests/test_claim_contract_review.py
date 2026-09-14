@@ -61,7 +61,7 @@ class ContractReviewTests(unittest.TestCase):
         domain = R("tenants", (("tenant", TypeName.SYMBOL, True),), modality=Modality.ASSUMPTION, finite=True, nonempty=True, context_indices=("tenant",))
         closure = R("tenants_closed", (("tenant", TypeName.SYMBOL, True),), modality=Modality.COMPLETENESS, completes="tenants", context_indices=("tenant",))
         agg = Aggregation("sum", "src", ("tenant",), "n", operator="sum", domain="tenants", closure_witness="tenants_closed")
-        valid = Bundle((source, head, domain, closure), rules=(Rule(Atom("total", (Variable("t"), Variable("n"))), (Atom("src", (Variable("t"), Variable("n"))),), aggregation=agg),))
+        valid = Bundle((source, head, domain, closure), rules=(Rule(Atom("total", (Variable("t"), Variable("n"))), (Atom("src", (Variable("t"), Variable("n"))), Atom("tenants", (Variable("t"),)), Atom("tenants_closed", (Variable("t"),))), aggregation=agg),))
         self.assertNotIn("aggregation-domain", {i.code for i in validate_bundle(valid)})
         bad = Bundle((source, head, domain, closure), rules=(Rule(Atom("total", (Variable("t"), Variable("n"))), (Atom("src", (Variable("t"), Variable("n"))),), aggregation=Aggregation("x", "missing", (), "n", domain="tenants", closure_witness="wrong")),))
         self.assertTrue({i.code for i in validate_bundle(bad)} & {"aggregation-source", "aggregation-closure"})
@@ -86,6 +86,19 @@ class ContractReviewTests(unittest.TestCase):
         compat = RelationDecl("compat", (Column("left", TypeName.SYMBOL, context=True), Column("right", TypeName.SYMBOL, context=True), Column("payload", TypeName.SYMBOL)), modality=Modality.COMPATIBILITY, context_indices=("left", "right"), compatibility_targets=("a", "b"), compatibility_context_indices=("left", "right"))
         rule = Rule(Atom("out", (Variable("t"),)), (Atom("a", (Variable("u"),)), Atom("b", (Variable("v"),)), Atom("compat", (Variable("x"), Variable("y"), Variable("u")))))
         self.assertIn("missing-compatibility", {i.code for i in validate_bundle(Bundle((a, b, out, compat), rules=(rule,)))})
+
+    def test_compatibility_witness_matches_constant_context_terms(self):
+        a = R("a", (("tenant", TypeName.SYMBOL, True),), context_indices=("tenant",)); b = R("b", (("tenant", TypeName.SYMBOL, True),), context_indices=("tenant",)); out = R("out", (("tenant", TypeName.SYMBOL, True),), context_indices=("tenant",))
+        compat = RelationDecl("compat", (Column("left", TypeName.SYMBOL, context=True), Column("right", TypeName.SYMBOL, context=True)), modality=Modality.COMPATIBILITY, context_indices=("left", "right"), compatibility_targets=("a", "b"), compatibility_context_indices=("left", "right"))
+        rule = Rule(Atom("out", (Constant("left"),)), (Atom("a", (Constant("left"),)), Atom("b", (Constant("right"),)), Atom("compat", (Constant("wrong"), Constant("also-wrong")))))
+        self.assertIn("missing-compatibility", {i.code for i in validate_bundle(Bundle((a, b, out, compat), rules=(rule,)))})
+
+    def test_aggregation_requires_domain_and_closure_body_bindings(self):
+        src = R("src", (("tenant", TypeName.SYMBOL, True), ("n", TypeName.INTEGER, False)), context_indices=("tenant",)); out = R("out", (("tenant", TypeName.SYMBOL, True), ("n", TypeName.INTEGER, False)), context_indices=("tenant",)); dom = R("dom", (("tenant", TypeName.SYMBOL, True),), finite=True, nonempty=True, context_indices=("tenant",)); clo = R("closed", (("tenant", TypeName.SYMBOL, True),), modality=Modality.COMPLETENESS, completes="dom", context_indices=("tenant",))
+        agg = Aggregation("s", "src", ("tenant",), "n", "sum", "dom", "closed")
+        rule = Rule(Atom("out", (Variable("t"), Variable("n"))), (Atom("src", (Variable("t"), Variable("n"))), Atom("dom", (Variable("wrong"),)), Atom("closed", (Variable("other"),))), aggregation=agg)
+        codes = {i.code for i in validate_bundle(Bundle((src, out, dom, clo), rules=(rule,)))}
+        self.assertTrue({"aggregation-domain", "aggregation-closure"}.issubset(codes))
 
     def test_indirect_aggregation_cycle_is_rejected(self):
         a = R("a", (("x", TypeName.SYMBOL, False),)); b = R("b", (("x", TypeName.SYMBOL, False),)); c = R("c", (("x", TypeName.SYMBOL, False),))
