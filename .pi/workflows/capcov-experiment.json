@@ -13,16 +13,17 @@
       "title": "Pin the Nix and Shen toolchain",
       "planSections": ["14"],
       "dependsOn": [],
-      "writeSet": ["flake.nix", "flake.lock", "EXPERIMENT-PLAN.md", ".gitignore"],
+      "writeSet": ["flake.nix", "flake.lock", "EXPERIMENT-PLAN.md"],
       "acceptance": [
         "The root flake pins Python 3.12, uv, Go, Git, jq, hyperfine, and a clean shen-go revision.",
         "The existing capability tests and a Shen smoke test run through nix develop.",
         "Exact revisions and observed results are recorded in EXPERIMENT-PLAN.md."
       ],
       "gates": [
-        {"name": "flake-check", "command": ["nix", "flake", "check"]},
-        {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]},
-        {"name": "shen-smoke", "command": ["nix", "develop", "--command", "bash", "-lc", "shen --version || kl --version"]}
+        {"name": "flake-check", "command": ["nix", "flake", "check", "--no-update-lock-file"]},
+        {"name": "regression", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]},
+        {"name": "shen-smoke", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "set -eu; output=$(shen eval -e '(+ 20 22)'); test \"$output\" = 42; ! shen eval -e '(+ 1' >/dev/null 2>&1"]},
+        {"name": "all-systems-evaluate", "command": ["nix", "flake", "check", "--all-systems", "--no-build", "--no-update-lock-file"]}
       ]
     },
     {

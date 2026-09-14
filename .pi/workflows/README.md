@@ -28,7 +28,18 @@ harness, not part of capcov's production engine.
    /capcov-workflow retry <task-id>
    ```
 
-State, patches, and gate evidence are journaled under ignored
+Before `start` or any long resume, prove the installed Pi subprocess and parser
+contract cheaply in an interactive Pi session:
+
+```text
+/capcov-workflow smoke
+```
+
+The smoke is capped at two minutes, uses a read-only worker, requires an exact JSON
+result, appends a `smoke-result` event, and must leave actionable start/end details in
+`.capcov/pi-workflow/driver.log`.
+
+State, bounded worker diagnostics, patches, and gate evidence are journaled under ignored
 `.capcov/pi-workflow/`. `start` refuses to overwrite an existing journal. Remove that
 directory only when deliberately beginning a distinct experiment run.
 
@@ -70,6 +81,9 @@ Python notification behavior cannot satisfy it.
   should use separate worktrees and disjoint manifest write sets.
 - The run is bounded by task count, three attempts per task, subprocess timeouts,
   dependency edges, and explicit cancellation.
+- Manual retry cannot reset an exhausted attempt budget, and cannot race an active run.
+- Resume pins HEAD to the journal's initial base/latest checkpoint and permits dirty
+  files only inside the next task's declared write set.
 - Checkpoint commits are enabled in the manifest. The driver requires a clean tree
   on `start`, owns commits, and never pushes.
 - Project-controlled extensions and prompts are code. Review them before approving
