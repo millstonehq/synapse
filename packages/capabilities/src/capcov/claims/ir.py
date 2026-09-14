@@ -54,6 +54,14 @@ class Quantifier(_TextEnum):
     FORALL = "forall"
 
 
+class EvidenceEffect(_TextEnum):
+    """How a relation contributes to a claim's semantic polarity."""
+    SUPPORT = "support"
+    REFUTATION = "refutation"
+    OBSERVATION = "observation"
+    FORBIDDEN = "forbidden"
+
+
 @dataclass(frozen=True)
 class Column:
     name: str
@@ -139,6 +147,47 @@ class Atom:
 
 
 @dataclass(frozen=True)
+class Evidence:
+    """Authoritative fact identity and provenance, separate from its atom."""
+    id: str
+    atom: Atom
+    context: Context = field(default_factory=Context)
+    source: str = ""
+    depends_on: tuple[str, ...] = ()
+    kind: str = "fact"
+
+    def __post_init__(self) -> None:
+        if not self.id: raise ValueError("evidence id must not be empty")
+        object.__setattr__(self, "depends_on", tuple(sorted(set(self.depends_on))))
+
+
+@dataclass(frozen=True)
+class EvidenceMapping:
+    """Explicit relation-to-relation polarity mapping used by evaluators."""
+    claim_relation: str
+    evidence_relation: str
+    effect: EvidenceEffect | str
+    context_indices: tuple[str, ...] = ()
+    required: bool = False
+    allow_out_of_scope: bool = False
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "effect", EvidenceEffect(self.effect))
+        object.__setattr__(self, "context_indices", tuple(sorted(set(self.context_indices))))
+
+
+@dataclass(frozen=True)
+class DiagnosticPolicy:
+    """Declared handling policy for evidence diagnostics and revocation."""
+    missing_premises: str = "unresolved"
+    inconsistent_premises: str = "inconsistent-premises"
+    out_of_scope: str = "out-of-scope"
+    forbidden_evidence: str = "invalid-input"
+    revocation: str = "refutation"
+    completeness: str = "required"
+
+
+@dataclass(frozen=True)
 class Comparison:
     left: Term
     operator: str
@@ -176,6 +225,7 @@ class Claim:
     context: Context = field(default_factory=Context)
     quantifier: Quantifier | str = Quantifier.EXISTS
     domain: str | None = None
+    id: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "terms", tuple(self.terms))
@@ -190,6 +240,9 @@ class Bundle:
     claims: tuple[Claim, ...] = ()
     metadata: tuple[tuple[str, Any], ...] = ()
     schema_version: int = SCHEMA_VERSION
+    evidence: tuple[Evidence, ...] = ()
+    mappings: tuple[EvidenceMapping, ...] = ()
+    diagnostic_policy: DiagnosticPolicy = field(default_factory=DiagnosticPolicy)
 
     def __post_init__(self) -> None:
         # These collections denote sets in the language.  Normalize their
@@ -199,6 +252,8 @@ class Bundle:
         object.__setattr__(self, "facts", tuple(sorted(self.facts, key=_sort_key)))
         object.__setattr__(self, "rules", tuple(sorted(self.rules, key=_sort_key)))
         object.__setattr__(self, "claims", tuple(sorted(self.claims, key=_sort_key)))
+        object.__setattr__(self, "evidence", tuple(sorted(self.evidence, key=_sort_key)))
+        object.__setattr__(self, "mappings", tuple(sorted(self.mappings, key=_sort_key)))
         metadata_keys = [k for k, _ in self.metadata]
         if any(not isinstance(k, str) for k in metadata_keys): raise TypeError("metadata keys must be strings")
         if len(metadata_keys) != len(set(metadata_keys)): raise ValueError("duplicate metadata keys")
@@ -291,7 +346,7 @@ def bundle_from_json(source: str | bytes | Mapping[str, Any], *, validate: bool 
             result[key] = value
         return result
     raw = json.loads(source, parse_constant=reject_constant, object_pairs_hook=reject_duplicate) if isinstance(source, (str, bytes)) else source
-    _strict_object(raw, {"schema_version", "relations", "facts", "rules", "claims", "metadata"}, "bundle")
+    _strict_object(raw, {"schema_version", "relations", "facts", "evidence", "mappings", "diagnostic_policy", "rules", "claims", "metadata"}, "bundle")
     if isinstance(raw.get("schema_version"), bool) or raw.get("schema_version") != SCHEMA_VERSION: raise ValueError("unsupported claim schema version")
     def column(x):
         x = _strict_object(x, {"name", "type", "context"}, "column")
@@ -300,6 +355,10 @@ def bundle_from_json(source: str | bytes | Mapping[str, Any], *, validate: bool 
         x = _strict_object(x, {"name", "columns", "modality", "polarity", "binding", "primitive", "producer_classes", "context_indices", "completes", "finite", "nonempty", "compatibility_targets", "compatibility_context_indices"}, "relation")
         return RelationDecl(x["name"], tuple(column(c) for c in x.get("columns", ())), x.get("modality", "observation"), x.get("polarity", "positive"), x.get("binding", "runtime"), x.get("primitive", True), tuple(x.get("producer_classes", ())), tuple(x.get("context_indices", ())), x.get("completes"), x.get("finite", False), x.get("nonempty", False), tuple(x.get("compatibility_targets", ())), tuple(x.get("compatibility_context_indices", ())))
     def term(x):
+        # Accept both wire form (variable) and canonical dataclass form
+        # (name), so canonical bundles are strict-ingestible again.
+        if isinstance(x, dict) and "name" in x and "variable" not in x:
+            x = {"variable": x["name"]}
         x = _strict_object(x, {"variable", "value", "type"}, "term")
         if "variable" in x:
             if set(x) != {"variable"}: raise ValueError("variable term cannot have value/type")
@@ -321,9 +380,28 @@ def bundle_from_json(source: str | bytes | Mapping[str, Any], *, validate: bool 
         body = tuple(comparison(a["comparison"]) if isinstance(a, dict) and "comparison" in a else atom(a) for a in x.get("body", ()))
         return Rule(atom(x["head"]), body, x.get("name", ""), agg)
     def claim(x):
-        x = _strict_object(x, {"relation", "terms", "context", "quantifier", "domain"}, "claim")
-        return Claim(x["relation"], tuple(term(t) for t in x.get("terms", ())), Context.from_mapping(x.get("context", {})), x.get("quantifier", "exists"), x.get("domain"))
-    bundle = Bundle(tuple(relation(x) for x in raw.get("relations", ())), tuple(atom(x) for x in raw.get("facts", ())), tuple(rule(x) for x in raw.get("rules", ())), tuple(claim(x) for x in raw.get("claims", ())), tuple(sorted((raw.get("metadata") or {}).items())))
+        x = _strict_object(x, {"id", "relation", "terms", "context", "quantifier", "domain"}, "claim")
+        context_raw = x.get("context", {})
+        if isinstance(context_raw, dict) and set(context_raw) == {"values"}:
+            context_raw = dict(context_raw["values"])
+        return Claim(x["relation"], tuple(term(t) for t in x.get("terms", ())), Context.from_mapping(context_raw), x.get("quantifier", "exists"), x.get("domain"), x.get("id", ""))
+    def evidence(x):
+        x = _strict_object(x, {"id", "atom", "relation", "terms", "context", "source", "depends_on", "kind"}, "evidence")
+        raw_atom = x.get("atom")
+        if raw_atom is None: raw_atom = {"relation": x["relation"], "terms": x.get("terms", ())}
+        context_raw = x.get("context", {})
+        if isinstance(context_raw, dict) and set(context_raw) == {"values"}:
+            context_raw = dict(context_raw["values"])
+        return Evidence(x["id"], atom(raw_atom), Context.from_mapping(context_raw), x.get("source", ""), tuple(x.get("depends_on", ())), x.get("kind", "fact"))
+    def mapping(x):
+        x = _strict_object(x, {"claim_relation", "evidence_relation", "effect", "context_indices", "required", "allow_out_of_scope"}, "mapping")
+        return EvidenceMapping(x["claim_relation"], x["evidence_relation"], x["effect"], tuple(x.get("context_indices", ())), x.get("required", False), x.get("allow_out_of_scope", False))
+    policy_raw = raw.get("diagnostic_policy") or {}
+    _strict_object(policy_raw, {"missing_premises", "inconsistent_premises", "out_of_scope", "forbidden_evidence", "revocation", "completeness"}, "diagnostic_policy")
+    policy = DiagnosticPolicy(**policy_raw)
+    metadata_raw = raw.get("metadata") or {}
+    metadata_items = metadata_raw if isinstance(metadata_raw, list) else metadata_raw.items()
+    bundle = Bundle(tuple(relation(x) for x in raw.get("relations", ())), tuple(atom(x) for x in raw.get("facts", ())), tuple(rule(x) for x in raw.get("rules", ())), tuple(claim(x) for x in raw.get("claims", ())), tuple(sorted(metadata_items)), SCHEMA_VERSION, tuple(evidence(x) for x in raw.get("evidence", ())), tuple(mapping(x) for x in raw.get("mappings", ())), policy)
     if validate:
         from .validation import assert_valid
         assert_valid(bundle)
