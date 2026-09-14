@@ -500,7 +500,7 @@ def bundle_from_json(source: str | bytes | Mapping[str, Any], *, validate: bool 
             value = _strict_object(value, {"source", "column", "type", "value", "evidence_id"}, "output field")
             values.append((name, TemplateValue(value.get("source", "constant"), value.get("column", ""), value.get("type", "symbol"), value.get("value"), value.get("evidence_id"))))
         kind = x["kind"]
-        default_when = "underived" if kind == "discrepancy" else None
+        default_when = "unresolved" if kind in {"discrepancy", "missing_premise"} else None
         return OutputTemplate(kind, x["claim_id"], x.get("evidence_id"), x.get("relation"), tuple(values), tuple(x.get("requires_all_evidence", ())), tuple(x.get("requires_any_evidence", ())), tuple(x.get("excludes_evidence", ())), x.get("when_claim", default_when))
     policy_raw = raw.get("diagnostic_policy") or {}
     _strict_object(policy_raw, {"missing_premises", "inconsistent_premises", "out_of_scope", "forbidden_evidence", "revocation", "completeness"}, "diagnostic_policy")
