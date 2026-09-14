@@ -36,6 +36,17 @@ class PythonEvaluatorTests(unittest.TestCase):
         self.assertIn("fact:edge", report.claims[0].result.support[0])
         self.assertEqual(report.as_dict(), evaluate(bundle).as_dict())
 
+    def test_independent_alternative_derivations_retain_both_support_leaves(self) -> None:
+        bundle = Bundle(
+            relations=(rel("a", ("x", "symbol")), rel("b", ("x", "symbol")), rel("c", ("x", "symbol"))),
+            facts=(fact("a", "v"), fact("b", "v")),
+            rules=(Rule(Atom("c", (Variable("x"),)), (Atom("a", (Variable("x"),)),), "from-a"),
+                   Rule(Atom("c", (Variable("x"),)), (Atom("b", (Variable("x"),)),), "from-b")),
+            claims=(Claim("c", (Constant("v"),)),),
+        )
+        result = evaluate(bundle).claims[0].result
+        self.assertEqual(set(result.support), {"fact:a:[\"v\"]", "fact:b:[\"v\"]"})
+
     def test_comparison_and_negation_require_no_false_open_world_success(self) -> None:
         relations = (
             rel("item", ("name", "symbol"), ("n", "integer")),
@@ -167,6 +178,7 @@ class PythonEvaluatorTests(unittest.TestCase):
                         rules=(seed, step), claims=(Claim("paired", (Constant("a"), Constant("b"), Constant("e"))),))
         report = evaluate(bundle)
         self.assertIn(("a", "b", "e"), report.relation_rows("paired"))
+        self.assertLessEqual(dict(report.resources)["provenance_nodes"], 200)
 
 
 if __name__ == "__main__":
