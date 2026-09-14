@@ -22,16 +22,12 @@ class _TextEnum(str, Enum):
 
 class TypeName(_TextEnum):
     SYMBOL = "symbol"
-    STRING = "symbol"  # compatibility alias for early experimental callers
     INTEGER = "integer"
     UNSIGNED = "unsigned"
-    DECIMAL = "unsigned"  # compatibility alias
     BOOLEAN = "boolean"
     TIMESTAMP = "timestamp"  # epoch microseconds
     DIGEST = "digest"
     JSON_METADATA_ONLY = "json-metadata-only"
-    JSON = "json-metadata-only"  # compatibility alias
-    IDENTIFIER = "symbol"  # compatibility alias
 
 
 class Modality(_TextEnum):
