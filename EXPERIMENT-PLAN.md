@@ -745,29 +745,97 @@ Possible-histories classification is a separate evaluation basis: `derivational`
 
 ## 14. Stage 0 — Reproducible Nix toolchain
 
-Add root `flake.nix` and `flake.lock` files. The default development shell should pin:
+The root `flake.nix` and generated `flake.lock` now provide the Stage 0 toolchain. This does not change production capcov behavior or add claim behavior.
 
-- Python 3.12;
-- `uv`;
-- Go;
-- Git and `jq`;
-- a benchmark tool such as `hyperfine`;
-- the selected Shen runtime.
+### Stage 0 pinned inputs
 
-Package `github.com/pyrex41/shen-go` at a clean pinned revision using `buildGoModule`. Expose a stable `shen` or `kl` wrapper used by tests. Do not use the locally installed dirty binary.
+- Repository HEAD tested: `ba3d729f452b017b2f99e2d22d548863b97dd1de`; required integration ancestor: `d1550e4d49401a0e8fa8cdd813fb2fd7bbd00765` (verified with `git merge-base --is-ancestor`, exit 0).
+- nixpkgs: `34ab99075ac4f7e40cf037eef32cb1c360bb85e9`, lock `narHash` `sha256-hn1oU2rue2SYK8dAr8+WNZWtbsz1S2W5mnHlSEuh3bo=`. The generated lock file SHA-256 was `d078f9fba512323fd35b24afc6a81aa3bb95c63caa1d00acf700e0827f9e6bac` before and after frozen checks.
+- shen-go: clean upstream commit `610ba423795b38e58dde3515a0583a109411433c` (2026-09-09), fetched with source hash `sha256-nhJdMOcSFY5Kfd695pTGGRfrtnqBdFuy5ZLoa9tfT5Y=` and `buildGoModule` vendor hash `sha256-iTtlmSlY0qbH/1waOlfRMc1qAkBacQxI6pohRPni/so=`. The only built subpackage is `cmd/shen`, producing the actual executable `bin/shen`. No version-only shim or local executable is used: normal calls, `--version`, and `eval` all execute that packaged binary. Its standard library is embedded upstream. `GOTOOLCHAIN=local` prevents Go's automatic toolchain download.
+- Advertised systems: `aarch64-darwin`, `aarch64-linux`, and `x86_64-linux`. `x86_64-darwin` is intentionally excluded because this nixpkgs revision does not support it. All advertised outputs evaluated with `--all-systems --no-build`; only `aarch64-darwin` was built and executed in this run.
+- Host: `aarch64-darwin`, Darwin kernel `25.5.0`; Nix reported `nix (Determinate Nix 3.21.5) 2.34.8`.
+- Observed shell tools: Python `3.12.14`, uv `0.12.5`, Go `1.27.0`, Git `2.55.0`, jq `1.8.2`, and hyperfine `1.20.0`. Every resolved executable path was under `/nix/store`. The development shell sets `UV_PYTHON_DOWNLOADS=never`, `UV_PYTHON_PREFERENCE=only-system`, and `UV_PYTHON` to Nix Python; `uv python find` and `uv run --no-project python` both resolved `/nix/store/...python3-3.12.14/bin/python`. A small Nix `bash` launcher suppresses macOS login-profile `path_helper`, which otherwise put `/usr/bin/git` and `/usr/bin/jq` ahead of the pinned tools for the workflow's `bash -lc` form.
 
-Initial checks:
+### Stage 0 commands and observed results
 
 ```sh
-nix flake check
-nix develop --command bash -lc \
-  'cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t .'
-nix develop --command shen --version
+nix flake check --no-update-lock-file
 ```
 
-Record exact package revisions, closure information, commands, and initial test results here.
+Exit 0. On `aarch64-darwin` this built/checked the shen-go package, ran a real evaluator smoke (including malformed-input rejection), and ran the regression check in a writable source copy. The check's regression run reported `Ran 490 tests in 27.665s`, `OK (skipped=69)` during the uncached build. A final frozen invocation also exited 0. Nix warned that Linux checks were omitted on this host.
 
-**Exit criterion:** a clean checkout can run the Python and Shen smoke tests entirely through Nix.
+```sh
+nix develop --command bash -lc '
+  set -eu
+  python -c "import sys; assert sys.version_info[:2] == (3, 12); print(sys.executable, sys.version)"
+  uv --version
+  go version
+  git --version
+  jq --version
+  hyperfine --version
+  for command in python uv go git jq hyperfine shen; do
+    path=$(command -v "$command")
+    case "$path" in /nix/store/*) ;; *) exit 1;; esac
+  done
+  command -v shen
+  shen --version
+'
+```
+
+Exit 0 after correcting macOS login-shell PATH handling. The resolved Shen path was `/nix/store/m6vdgvc4g4djhm9ld1s16jrd39k001lm-shen-go-0-unstable-2026-09-09/bin/shen`; `shen --version` printed `42 (port ("Go" "1.0.0-rc1") implementation ("AOT+interpreter" "go1.27.0"))`. The upstream CLI reports the Shen language/runtime information rather than its Git revision, so the immutable revision is recorded above and in `flake.nix`.
+
+```sh
+nix develop --command bash -lc \
+  'cd packages/capabilities &&
+   PYTHONPATH=src python -m unittest discover -s tests -t .'
+```
+
+Exit 0: `Ran 490 tests in 3.347s`, `OK (skipped=67)`, no failures or errors. This exact development-shell run has two fewer skips than the Python-only Nix check because the full shell provides pinned Go and Git.
+
+```sh
+nix develop --command bash -lc \
+  'set -eu; output=$(shen eval -e "(+ 20 22)");
+   printf "%s\n" "$output"; test "$output" = 42;
+   ! shen eval -e "(+ 1" >/dev/null 2>&1'
+```
+
+Exit 0; evaluator output was exactly `42`, and malformed input exited nonzero. This is execution evidence; the weaker `--version` result is not treated as an evaluator smoke.
+
+```sh
+out=$(nix build .#shen-go --no-link --print-out-paths --no-update-lock-file)
+nix path-info -Sh "$out"
+"$out/bin/shen" --version
+"$out/bin/shen" eval -e '(+ 20 22)'
+```
+
+Exit 0. The independently built output was the store path above, closure size was `22.2 MiB`, and evaluation printed `42`.
+
+```sh
+nix flake check --all-systems --no-build --no-update-lock-file
+```
+
+Exit 0 and evaluated all advertised package, shell, and check derivations; it did not build or execute Linux derivations.
+
+Attempt 3 re-verified the frozen result with:
+
+```sh
+nix flake check --no-update-lock-file
+nix flake check --all-systems --no-build --no-update-lock-file
+nix develop --no-update-lock-file --command bash -lc '
+  set -eu
+  python -c "import sys; assert sys.version_info[:2] == (3,12); print(sys.version)"
+  uv --version; go version; git --version; jq --version; hyperfine --version
+  output=$(shen eval -e "(+ 20 22)"); test "$output" = 42
+  cd packages/capabilities
+  PYTHONPATH=src python -m unittest discover -s tests -t .
+'
+```
+
+All three commands exited 0. The two flake checks evaluated the current frozen outputs (the host checks were already present in the Nix store); all-system evaluation remained build-free. The development-shell run observed the same tool versions listed above, evaluated Shen to `42`, and reported `Ran 490 tests in 2.510s`, `OK (skipped=67)`. `shasum -a 256 flake.lock` still reported `d078f9fba512323fd35b24afc6a81aa3bb95c63caa1d00acf700e0827f9e6bac` after these commands.
+
+An initial `nix flake check` attempt failed because `-buildvcs=false` was incorrectly supplied as a linker flag; that flag was removed and is not present in the final derivation. The successful package build used the fixed vendor derivation and then passed upstream `cmd/shen` checks. No external prerequisite or host Shen executable was used.
+
+**Limit:** this run cannot honestly establish the clean-checkout exit criterion: the new flake and lock were necessarily uncommitted while being tested, and Linux was evaluation-only. The frozen lock, fixed source/vendor hashes, sandboxed checks, and Nix-store command paths provide reproducibility controls, but a driver-owned commit followed by a fresh clean-checkout build (and Linux execution) remains to be demonstrated.
 
 ## 15. Stage A — Adversarial semantic corpus
 
@@ -1172,3 +1240,46 @@ A project-local Pi driver is defined by:
 The driver deliberately runs one writer at a time because the semantic IR has one integrator and the stages are substantially ordered. It parallelizes only independent read-only scouts and skeptical reviewers. Each task is accepted only after write-set enforcement, manifest-authored gates, and two independent approvals; an implementer's completion claim is never authoritative. Gate and review failures become backpressure for the next bounded attempt. Events and review patches are retained under ignored `.capcov/pi-workflow/`, and successful tasks receive driver-owned git checkpoint commits.
 
 Use `/capcov-workflow start` from a clean checkout descending from `d1550e4d49401a0e8fa8cdd813fb2fd7bbd00765`. The default executes at most one completed task; `/capcov-workflow resume --tasks N` opts into a larger bounded run. `/capcov-workflow status`, `stop`, and `retry TASK` provide lifecycle control. The Go stage stops as blocked when its real external fixture is unavailable; the workflow cannot waive or mock that requirement.
+
+### 2026-09-14 harness diagnosis and repair
+
+The stopped run's exact subprocess failure is **UNKNOWN**, because the old driver discarded
+raw stdout whenever it could not find a completed assistant `message_end`, retained no exit
+or event diagnostics in the journal, and never wrote `driver.log`. That reduction explains
+the observed empty structured result; it does not prove why each child ended without a
+parseable final object. A direct current Pi JSON invocation succeeded, so the command shape
+itself is not disproven.
+
+The repaired driver accepts the installed Pi event envelope (`message_end`, `turn_end`,
+stream `text_end`, and final `agent_end` fallback), validates the implementer result shape,
+persists bounded agent diagnostics and gate/reviewer results as structured events, and writes
+timestamped phase/exit/byte-count lines to `driver.log`. It also uses an atomic lock, prevents
+retry races and exhausted-budget resets, and checks resume HEAD plus the next task's write set.
+Only the harness commits; read-only scouts/reviewers may fan out while semantic writing remains
+sequential.
+
+Cheap end-to-end smoke, run interactively after project resources are loaded:
+
+```text
+/capcov-workflow smoke
+```
+
+Observed result: **PASS twice** on Pi `0.84.1`, including after the lock/race repair. The
+latest bounded child exited `0` in about 5 seconds, wrote 13,300 stdout bytes and 0 stderr
+bytes, parsed the exact requested object, appended `smoke-result` event sequence 10, released
+its atomic lock, and left actionable entries in `driver.log`. This proves the repaired
+subprocess/parser/event/log/lock path, not the long workflow or any semantic stage.
+
+Stage 0's authoritative gates are now: frozen `nix flake check`; the full legacy regression
+suite in `nix develop`; a real Shen evaluation returning `42` plus malformed-input rejection;
+and frozen all-system derivation evaluation without builds. The fuller manual evidence above
+also checks every tool's Nix-store path, versions, the independently built Shen closure, and
+host-versus-Linux scope.
+
+`pyrex41/Shen-Backpressure` was inspected at `6b9dde09b3a98ee5d20d0a6556acceacad4657d8`.
+Its useful harness pattern is fail-closed, bounded Shen execution with an explicit runtime
+override. It has no Nix flake to reuse. It also warns that `shen-go` has memory-allocation
+crashes and moved its own Gate 4 to `shen-sbcl`; therefore the pinned `shen-go` runtime here is
+accepted only for the observed Stage 0 smoke, not presumed safe for Stage D. Before Stage D,
+run a bounded representative stress probe and either retain it with evidence or revise the
+pinned runtime. This is an explicit unresolved toolchain risk, not a passed semantic gate.

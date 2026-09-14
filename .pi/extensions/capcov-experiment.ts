@@ -38,7 +38,7 @@ type Event = {
   attempt?: number;
   data?: Record<string, unknown>;
 };
-type AgentResult = { code: number; output: string; stderr: string; parsed?: Record<string, any>; timedOut: boolean };
+type AgentResult = { code: number; output: string; rawOutput: string; stderr: string; parsed?: Record<string, any>; timedOut: boolean };
 type GateResult = { name: string; ok: boolean; code: number; output: string; durationMs: number };
 type Derived = {
   runId?: string;
@@ -54,7 +54,14 @@ const CONFIG_PATH = ".pi/workflows/capcov-experiment.json";
 const STATE_DIR = ".capcov/pi-workflow";
 const EVENTS_FILE = `${STATE_DIR}/events.jsonl`;
 const LOCK_FILE = `${STATE_DIR}/lock.json`;
+const DRIVER_LOG = `${STATE_DIR}/driver.log`;
 const OUTPUT_LIMIT = 200_000;
+
+async function appendLog(root: string, message: string): Promise<void> {
+  await fsp.mkdir(path.join(root, STATE_DIR), { recursive: true });
+  const line = `${new Date().toISOString()} ${message.replace(/[\r\n]+/g, " ")}\n`;
+  await fsp.appendFile(path.join(root, DRIVER_LOG), line, { mode: 0o600 });
+}
 
 function findRoot(cwd: string): string {
   let current = path.resolve(cwd);
@@ -71,8 +78,8 @@ async function loadConfig(root: string): Promise<Config> {
   if (config.schemaVersion !== 1 || !Array.isArray(config.tasks) || config.tasks.length === 0) {
     throw new Error(`Unsupported or empty workflow config: ${CONFIG_PATH}`);
   }
-  if (!Number.isInteger(config.maxAttemptsPerTask) || config.maxAttemptsPerTask < 1 || config.reviewerCount < 2) {
-    throw new Error("Workflow requires at least one attempt and two independent reviewers");
+  if (!Number.isInteger(config.maxAttemptsPerTask) || config.maxAttemptsPerTask < 1 || config.reviewerCount !== 2) {
+    throw new Error("Workflow requires at least one attempt and exactly two independent reviewer lenses");
   }
   const ids = new Set<string>();
   for (const task of config.tasks) {
@@ -132,6 +139,8 @@ function derive(events: Event[]): Derived {
       state.attempts.set(event.taskId, 0);
       state.blocked.delete(event.taskId);
       state.feedback.delete(event.taskId);
+    } else if (event.type === "task-unblocked" && event.taskId) {
+      state.blocked.delete(event.taskId);
     }
   }
   return state;
@@ -142,6 +151,7 @@ async function appendEvent(root: string, event: Omit<Event, "seq" | "at">): Prom
   const full: Event = { ...event, seq: (events.at(-1)?.seq ?? 0) + 1, at: new Date().toISOString() };
   await fsp.mkdir(path.join(root, STATE_DIR), { recursive: true });
   await fsp.appendFile(path.join(root, EVENTS_FILE), `${JSON.stringify(full)}\n`, { mode: 0o600 });
+  await appendLog(root, `event seq=${full.seq} type=${full.type}${full.taskId ? ` task=${full.taskId}` : ""}${full.attempt ? ` attempt=${full.attempt}` : ""}`);
   return full;
 }
 
@@ -160,8 +170,16 @@ function finalAssistantText(jsonLines: string): string {
     if (!line.trim()) continue;
     try {
       const event = JSON.parse(line);
-      if (event.type !== "message_end" || event.message?.role !== "assistant") continue;
-      for (const part of event.message.content ?? []) if (part.type === "text") final = part.text;
+      if ((event.type === "message_end" || event.type === "turn_end") && event.message?.role === "assistant") {
+        for (const part of event.message.content ?? []) if (part.type === "text") final = part.text;
+      } else if (event.type === "message_update" && event.assistantMessageEvent?.type === "text_end") {
+        final = event.assistantMessageEvent.content ?? final;
+      } else if (event.type === "agent_end") {
+        for (const message of event.messages ?? []) {
+          if (message.role !== "assistant") continue;
+          for (const part of message.content ?? []) if (part.type === "text") final = part.text;
+        }
+      }
     } catch { /* ignore non-event output */ }
   }
   return final;
@@ -191,6 +209,7 @@ async function runAgent(options: {
   writable: boolean;
   timeoutMs: number;
   signal: AbortSignal;
+  label: string;
 }): Promise<AgentResult> {
   const args = ["--mode", "json", "-p", "--no-session", "--no-extensions", "--no-skills", "--no-prompt-templates"];
   if (options.model) args.push("--model", options.model);
@@ -198,14 +217,18 @@ async function runAgent(options: {
   args.push("--tools", options.writable ? "read,bash,edit,write" : "read");
   args.push(options.prompt);
   const invocation = getPiInvocation(args);
+  await appendLog(options.root, `agent-start label=${options.label} command=${invocation.command} timeoutMs=${options.timeoutMs}`);
+  if (options.signal.aborted) return { code: 130, output: "", rawOutput: "", stderr: "cancelled before spawn", timedOut: false };
   return await new Promise<AgentResult>((resolve) => {
     const child = spawn(invocation.command, invocation.args, { cwd: options.root, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     let timedOut = false;
     const append = (current: string, chunk: Buffer) => (current + chunk.toString()).slice(-OUTPUT_LIMIT);
-    child.stdout.on("data", (chunk) => { stdout = append(stdout, chunk); });
-    child.stderr.on("data", (chunk) => { stderr = append(stderr, chunk); });
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    child.stdout.on("data", (chunk) => { stdoutBytes += chunk.length; stdout = append(stdout, chunk); });
+    child.stderr.on("data", (chunk) => { stderrBytes += chunk.length; stderr = append(stderr, chunk); });
     const stop = () => {
       child.kill("SIGTERM");
       setTimeout(() => child.kill("SIGKILL"), 5000).unref();
@@ -217,9 +240,16 @@ async function runAgent(options: {
       clearTimeout(timer);
       options.signal.removeEventListener("abort", stop);
       const output = finalAssistantText(stdout);
-      resolve({ code: code ?? 1, output, stderr, parsed: parseObject(output), timedOut });
+      void appendLog(options.root, `agent-end label=${options.label} code=${code ?? 1} timedOut=${timedOut} stdoutBytes=${stdoutBytes} stderrBytes=${stderrBytes} parsed=${Boolean(parseObject(output))}`)
+        .finally(() => resolve({ code: code ?? 1, output, rawOutput: stdout, stderr, parsed: parseObject(output), timedOut }));
     });
   });
+}
+
+function validImplementationResult(result: Record<string, any> | undefined): boolean {
+  return Boolean(result && (result.status === "ready" || result.status === "blocked") &&
+    typeof result.summary === "string" && Array.isArray(result.files_changed) &&
+    Array.isArray(result.tests_run) && Array.isArray(result.remaining_risks));
 }
 
 async function git(root: string, args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
@@ -263,6 +293,7 @@ function outsideWriteSet(files: string[], writeSet: string[]): string[] {
 async function runGate(root: string, gate: Gate, signal: AbortSignal, timeoutMs: number): Promise<GateResult> {
   const [command, ...args] = gate.command;
   const started = Date.now();
+  await appendLog(root, `gate-start name=${gate.name} timeoutMs=${timeoutMs}`);
   return await new Promise((resolve) => {
     const child = spawn(command, args, { cwd: root, stdio: ["ignore", "pipe", "pipe"], env: process.env });
     let output = "";
@@ -279,7 +310,8 @@ async function runGate(root: string, gate: Gate, signal: AbortSignal, timeoutMs:
     child.on("close", (code) => {
       clearTimeout(timer);
       signal.removeEventListener("abort", stop);
-      resolve({ name: gate.name, ok: code === 0 && !timedOut, code: timedOut ? 124 : (code ?? 1), output, durationMs: Date.now() - started });
+      const result = { name: gate.name, ok: code === 0 && !timedOut, code: timedOut ? 124 : (code ?? 1), output, durationMs: Date.now() - started };
+      void appendLog(root, `gate-end name=${gate.name} ok=${result.ok} code=${result.code} durationMs=${result.durationMs}`).finally(() => resolve(result));
     });
   });
 }
@@ -338,16 +370,23 @@ async function writePatch(root: string, runId: string, task: Task, attempt: numb
 async function acquireLock(root: string, runId: string): Promise<void> {
   const file = path.join(root, LOCK_FILE);
   await fsp.mkdir(path.dirname(file), { recursive: true });
-  try {
-    const existing = JSON.parse(await fsp.readFile(file, "utf8"));
-    if (existing.pid && existing.pid !== process.pid) {
-      try { process.kill(existing.pid, 0); throw new Error(`workflow already running in pid ${existing.pid}`); }
-      catch (error: any) { if (error?.code !== "ESRCH") throw error; }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await fsp.writeFile(file, JSON.stringify({ pid: process.pid, runId, at: new Date().toISOString() }), { flag: "wx", mode: 0o600 });
+      return;
+    } catch (error: any) {
+      if (error?.code !== "EEXIST") throw error;
+      let existing: any;
+      try { existing = JSON.parse(await fsp.readFile(file, "utf8")); }
+      catch { throw new Error("workflow lock exists but is unreadable; inspect it before retrying"); }
+      if (Number.isInteger(existing.pid) && existing.pid > 0) {
+        try { process.kill(existing.pid, 0); throw new Error(`workflow already running in pid ${existing.pid}`); }
+        catch (probe: any) { if (probe?.code !== "ESRCH") throw probe; }
+      } else throw new Error("workflow lock has invalid owner metadata; inspect it before retrying");
+      await fsp.unlink(file).catch(() => undefined);
     }
-  } catch (error: any) {
-    if (error?.code !== "ENOENT" && !String(error?.message).includes("Unexpected")) throw error;
   }
-  await fsp.writeFile(file, JSON.stringify({ pid: process.pid, runId, at: new Date().toISOString() }), { flag: "w", mode: 0o600 });
+  throw new Error("workflow lock was acquired concurrently; retry after the active process exits");
 }
 
 async function releaseLock(root: string): Promise<void> {
@@ -362,6 +401,20 @@ async function checkPreconditions(root: string, config: Config, requireClean: bo
     const relevant = changedPaths(status.stdout).filter((file) => !file.startsWith(".capcov/"));
     if (relevant.length) throw new Error(`Start requires a clean tree; commit or remove: ${relevant.join(", ")}`);
   }
+}
+
+async function checkResumePreconditions(root: string, config: Config, events: Event[]): Promise<void> {
+  await checkPreconditions(root, config, false);
+  const state = derive(events);
+  const expectedHead = String([...events].reverse().find((event) => event.type === "task-completed")?.data?.checkpoint ??
+    events.find((event) => event.type === "run-started")?.data?.head ?? "");
+  const currentHead = (await git(root, ["rev-parse", "HEAD"])).stdout.trim();
+  if (expectedHead && currentHead !== expectedHead) throw new Error(`Resume HEAD ${currentHead} differs from journal checkpoint ${expectedHead}`);
+  const task = nextTask(config, state);
+  const status = await git(root, ["status", "--porcelain=v1", "--untracked-files=all"]);
+  const files = changedPaths(status.stdout).filter((file) => !file.startsWith(".capcov/"));
+  const outside = task ? outsideWriteSet(files, task.writeSet) : files;
+  if (outside.length) throw new Error(`Resume found changes outside ${task?.id ?? "completed workflow"} write set: ${outside.join(", ")}`);
 }
 
 function nextTask(config: Config, state: Derived): Task | undefined {
@@ -393,7 +446,6 @@ export default function capcovExperiment(pi: ExtensionAPI) {
   const executeLoop = async (root: string, config: Config, ctx: ExtensionContext, runId: string, taskLimit: number) => {
     const controller = new AbortController();
     active = { controller, runId };
-    await acquireLock(root, runId);
     let tasksThisRun = 0;
     try {
       while (!controller.signal.aborted && tasksThisRun < taskLimit) {
@@ -430,7 +482,11 @@ export default function capcovExperiment(pi: ExtensionAPI) {
         const scoutLenses = ["semantic architect", "adversarial test designer"];
         const scoutResults = await Promise.all(scoutLenses.map((lens) => runAgent({
           root, prompt: scoutPrompt(config, task, lens), model, thinking, writable: false, timeoutMs, signal: controller.signal,
+          label: `${task.id}:scout:${lens}`,
         })));
+        await appendEvent(root, { runId, type: "agent-result", taskId: task.id, attempt, data: {
+          phase: "scout", results: scoutResults.map((result, index) => ({ lens: scoutLenses[index], code: result.code, timedOut: result.timedOut, parsed: Boolean(result.parsed), output: cap(result.output || result.stderr || result.rawOutput, 4000) })),
+        } });
         const scoutNotes = scoutResults.map((result) => result.code === 0 ? result.output : `Scout failed: ${result.stderr || result.output}`);
 
         events = await readEvents(root);
@@ -440,11 +496,17 @@ export default function capcovExperiment(pi: ExtensionAPI) {
         const implementation = await runAgent({
           root,
           prompt: implementerPrompt(config, task, attempt, state.feedback.get(task.id) ?? "", scoutNotes),
-          model, thinking, writable: true, timeoutMs, signal: controller.signal,
+          model, thinking, writable: true, timeoutMs, signal: controller.signal, label: `${task.id}:implementer`,
         });
+        await appendEvent(root, { runId, type: "agent-result", taskId: task.id, attempt, data: {
+          phase: "implementer", code: implementation.code, timedOut: implementation.timedOut,
+          parsed: implementation.parsed ?? null,
+          diagnostic: cap(implementation.output || implementation.stderr || implementation.rawOutput, 8000),
+        } });
         if (controller.signal.aborted) return;
-        if (implementation.code !== 0 || !implementation.parsed) {
-          const feedback = implementation.timedOut ? "Implementer timed out" : `Implementer failed or returned invalid JSON: ${implementation.stderr || implementation.output}`;
+        if (implementation.code !== 0 || !validImplementationResult(implementation.parsed)) {
+          const detail = cap(implementation.stderr || implementation.output || implementation.rawOutput || "<no subprocess output>");
+          const feedback = implementation.timedOut ? `Implementer timed out: ${detail}` : `Implementer failed or returned invalid JSON (exit ${implementation.code}): ${detail}`;
           await appendEvent(root, { runId, type: "task-feedback", taskId: task.id, attempt, data: { feedback: cap(feedback) } });
           continue;
         }
@@ -489,6 +551,7 @@ export default function capcovExperiment(pi: ExtensionAPI) {
         const reviewLenses = ["claim-semantics and trust-boundary", "implementation and test-quality"].slice(0, config.reviewerCount);
         const reviews = await Promise.all(reviewLenses.map((lens) => runAgent({
           root, prompt: reviewerPrompt(config, task, lens, patchPath, gates), model, thinking, writable: false, timeoutMs, signal: controller.signal,
+          label: `${task.id}:review:${lens}`,
         })));
         const badReviews = reviews.filter((review) => review.code !== 0 || !review.parsed || review.parsed.verdict !== "approve");
         await appendEvent(root, { runId, type: "review-result", taskId: task.id, attempt, data: {
@@ -538,8 +601,8 @@ export default function capcovExperiment(pi: ExtensionAPI) {
   };
 
   pi.registerCommand("capcov-workflow", {
-    description: "Drive the claim-semantics experiment: start|resume|status|stop|retry <task> [--tasks N]",
-    getArgumentCompletions: (prefix) => ["start", "resume", "status", "stop", "retry"].filter((x) => x.startsWith(prefix)).map((x) => ({ value: x, label: x })),
+    description: "Drive the claim-semantics experiment: smoke|start|resume|status|stop|retry <task> [--tasks N]",
+    getArgumentCompletions: (prefix) => ["smoke", "start", "resume", "status", "stop", "retry"].filter((x) => x.startsWith(prefix)).map((x) => ({ value: x, label: x })),
     handler: async (rawArgs, ctx) => {
       const root = findRoot(ctx.cwd);
       const config = await loadConfig(root);
@@ -557,29 +620,65 @@ export default function capcovExperiment(pi: ExtensionAPI) {
         return;
       }
       if (action === "retry") {
+        if (active) throw new Error(`Cannot retry while workflow ${active.runId} is active`);
         const taskId = args[1];
         if (!taskId || !config.tasks.some((task) => task.id === taskId)) throw new Error("Usage: /capcov-workflow retry <task-id>");
-        const events = await readEvents(root);
-        const runId = derive(events).runId ?? `claims-${Date.now()}`;
-        await appendEvent(root, { runId, type: "task-reset", taskId, data: { reason: "manual retry" } });
-        ctx.ui.notify(`Reset attempt counter and blocker for ${taskId}`, "info");
+        const lockRunId = `retry-${Date.now()}`;
+        await acquireLock(root, lockRunId);
+        try {
+          const events = await readEvents(root);
+          const state = derive(events);
+          const attempts = state.attempts.get(taskId) ?? 0;
+          if (attempts >= config.maxAttemptsPerTask) throw new Error(`Task ${taskId} exhausted its ${config.maxAttemptsPerTask} bounded attempts; preserve this run and begin a distinct journal after repair`);
+          const runId = state.runId ?? lockRunId;
+          await appendEvent(root, { runId, type: "task-unblocked", taskId, data: { reason: "manual retry", attemptsRemaining: config.maxAttemptsPerTask - attempts } });
+          ctx.ui.notify(`Cleared blocker for ${taskId}; ${config.maxAttemptsPerTask - attempts} bounded attempt(s) remain`, "info");
+        } finally { await releaseLock(root); }
+        return;
+      }
+      if (action === "smoke") {
+        if (active) throw new Error(`Cannot smoke-test while workflow ${active.runId} is active`);
+        const runId = `smoke-${new Date().toISOString().replace(/[-:.TZ]/g, "")}`;
+        await acquireLock(root, runId);
+        const controller = new AbortController();
+        try {
+          const result = await runAgent({
+            root,
+            prompt: 'Return only JSON: {"status":"ok","summary":"capcov workflow smoke","files_changed":[],"tests_run":[],"remaining_risks":[]}',
+            model: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined,
+            thinking: ctx.thinkingLevel,
+            writable: false,
+            timeoutMs: Math.min(config.agentTimeoutMinutes, 2) * 60_000,
+            signal: controller.signal,
+            label: "smoke:structured-output",
+          });
+          const ok = result.code === 0 && result.parsed?.status === "ok" && result.parsed?.summary === "capcov workflow smoke";
+          await appendEvent(root, { runId, type: "smoke-result", data: { ok, code: result.code, timedOut: result.timedOut, parsed: result.parsed ?? null, diagnostic: cap(result.output || result.stderr || result.rawOutput, 8000) } });
+          if (!ok) throw new Error(`Workflow smoke failed; inspect ${DRIVER_LOG} and the smoke-result event`);
+          ctx.ui.notify(`Workflow subprocess smoke passed; see ${DRIVER_LOG}`, "info");
+        } finally { await releaseLock(root); }
         return;
       }
       if (action !== "start" && action !== "resume") throw new Error("Usage: /capcov-workflow start|resume|status|stop|retry <task-id> [--tasks N]");
       if (active) throw new Error(`Workflow ${active.runId} is already running`);
-      const events = await readEvents(root);
-      if (action === "start" && events.length > 0) throw new Error("A journal already exists; use resume or remove .capcov/pi-workflow intentionally");
-      await checkPreconditions(root, config, action === "start");
-      const limitIndex = args.indexOf("--tasks");
-      const parsedLimit = limitIndex >= 0 ? Number(args[limitIndex + 1]) : 1;
-      const taskLimit = Number.isInteger(parsedLimit) && parsedLimit > 0 && parsedLimit <= config.tasks.length ? parsedLimit : 1;
-      const runId = action === "resume" && derive(events).runId ? derive(events).runId! : `claims-${new Date().toISOString().replace(/[-:.TZ]/g, "")}`;
-      await appendEvent(root, { runId, type: "run-started", data: { action, taskLimit, head: (await git(root, ["rev-parse", "HEAD"])).stdout.trim() } });
-      ctx.ui.notify(`Started ${runId}; ${taskLimit} task(s) maximum`, "info");
-      if (ctx.mode === "print" || ctx.mode === "json") {
-        await executeLoop(root, config, ctx, runId, taskLimit);
-      } else {
-        void executeLoop(root, config, ctx, runId, taskLimit);
+      const proposedRunId = `claims-${new Date().toISOString().replace(/[-:.TZ]/g, "")}`;
+      await acquireLock(root, proposedRunId);
+      try {
+        const events = await readEvents(root);
+        if (action === "start" && events.length > 0) throw new Error("A journal already exists; use resume or archive .capcov/pi-workflow intentionally");
+        if (action === "start") await checkPreconditions(root, config, true);
+        else await checkResumePreconditions(root, config, events);
+        const limitIndex = args.indexOf("--tasks");
+        const parsedLimit = limitIndex >= 0 ? Number(args[limitIndex + 1]) : 1;
+        const taskLimit = Number.isInteger(parsedLimit) && parsedLimit > 0 && parsedLimit <= config.tasks.length ? parsedLimit : 1;
+        const runId = action === "resume" && derive(events).runId ? derive(events).runId! : proposedRunId;
+        await appendEvent(root, { runId, type: "run-started", data: { action, taskLimit, head: (await git(root, ["rev-parse", "HEAD"])).stdout.trim() } });
+        ctx.ui.notify(`Started ${runId}; ${taskLimit} task(s) maximum`, "info");
+        if (ctx.mode === "print" || ctx.mode === "json") await executeLoop(root, config, ctx, runId, taskLimit);
+        else void executeLoop(root, config, ctx, runId, taskLimit);
+      } catch (error) {
+        await releaseLock(root);
+        throw error;
       }
     },
   });
