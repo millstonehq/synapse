@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import warnings
 from collections import deque
 
 
@@ -299,7 +300,15 @@ def reconcile(
     run: dict | None,
     only: str | None = None,
 ) -> dict:
-    """Accounted, executable, and proven are different denominators.
+    """DEPRECATION SHIM. Superseded by the unified four-cell reconcile in
+    ``capcov.core.reconcile``; retained (unchanged in behaviour) so consumers
+    pinned to the flows pipeline keep working until they bump. Reach the unified
+    engine via ``capcov observe --probe browser`` -> ``capcov reconcile`` ->
+    ``capcov gate``: the browser probe drives this same planner and projects its
+    covered/unproven/unmapped verdict onto the frozen both/static_only/runtime_only
+    cells.
+
+    Accounted, executable, and proven are different denominators.
 
     Obligations are the test-requirement denominator, and each branch outcome is
     its own obligation, never collapsed into one pass (Ammann & Offutt; see
@@ -313,6 +322,14 @@ def reconcile(
     other scenario's path stay unproven, so a caller can attribute coverage to one
     transition. With only=None every planned scenario folds.
     """
+    warnings.warn(
+        "capcov.flows.model.reconcile is deprecated; the unified four-cell reconcile "
+        "in capcov.core.reconcile now expresses covered/unproven/unmapped as "
+        "both/static_only/runtime_only. Reach it via `capcov observe --probe browser` "
+        "-> `capcov reconcile` -> `capcov gate`.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     validate(model)
     failures = []
     if execution_plan["model_sha256"] != digest(model):
