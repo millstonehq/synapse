@@ -28,9 +28,14 @@ const harness = execFileSync("node", [".pi/workflows/datalog-runtime-harness.mjs
 assert.match(harness, /semantic-contract/);
 const source = fs.readFileSync(new URL("../extensions/capcov-experiment.ts", import.meta.url), "utf8");
 for (const marker of ["task-fanout-completed", "fanout-patch-applied", "wave-checkpoint", "latestSmoke", "wave-repair"]) assert.match(source, new RegExp(marker));
+assert.match(source, /function nextTask[\s\S]*return undefined;/);
 const config = JSON.parse(fs.readFileSync(new URL("./capcov-experiment.json", import.meta.url), "utf8"));
 const modern = config.tasks.filter((task) => !config.legacyTaskIds.includes(task.id));
 assert.ok(modern.every((task) => task.gates.every((gate) => gate.failureKind)), "modern gates classify failures in the manifest");
+assert.ok(modern.every((task) => task.gates.every((gate) => gate.command.slice(0, 2).join(" ") === "nix develop")), "modern gates use the pinned Nix environment");
+assert.match(config.tasks.find((task) => task.id === "souffle-kernel").gates[0].command.join(" "), /command -v souffle/);
+assert.match(config.tasks.find((task) => task.id === "datalog-differential").gates[0].command.join(" "), /test_differential/);
 assert.equal(config.legacyTaskAliases["reference-evaluator"], undefined, "legacy evidence cannot satisfy the dual-kernel wave");
+assert.equal(config.tasks.filter((task) => !config.legacyTaskIds.includes(task.id) && task.legacy).length, 0, "modern tasks are not legacy");
 assert.ok(config.tasks.filter((task) => task.role === "parallel").every((task) => task.worktree), "parallel failure/retry has isolated worktree metadata");
 console.log("runtime workflow seam ok: worktree, patch capture, removal, fan-in, checkpoint, smoke and repair paths");
