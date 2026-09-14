@@ -138,6 +138,11 @@ def bundle_payload(fixture: dict[str, Any]) -> dict[str, Any]:
         for diagnostic in claim_entry.get("diagnostics", ()):
             diagnostic = dict(diagnostic); diagnostic["claim_id"] = claim_entry["id"]
             diagnostics.append(diagnostic)
+    outputs = []
+    for output in fixture.get("outputs", ()):
+        output = dict(output)
+        if "claim_id" not in output: raise ValueError("output template requires claim_id")
+        outputs.append(output)
     semantic_inputs = {
         "fixture_id": fixture["id"],
         "context": fixture["context"],
@@ -146,7 +151,7 @@ def bundle_payload(fixture: dict[str, Any]) -> dict[str, Any]:
         "claims": [dict(entry) for entry in fixture["claims"]],
     }
     return {"schema_version": 1, "relations": relations, "facts": facts, "evidence": evidence,
-            "mappings": mappings, "diagnostics": diagnostics, "rules": rules, "claims": claims,
+            "mappings": mappings, "diagnostics": diagnostics, "outputs": outputs, "rules": rules, "claims": claims,
             "diagnostic_policy": {"missing_premises": "unresolved", "inconsistent_premises": "inconsistent-premises",
                                    "out_of_scope": "out-of-scope", "forbidden_evidence": "invalid-input",
                                    "revocation": "refutation", "completeness": "required"},

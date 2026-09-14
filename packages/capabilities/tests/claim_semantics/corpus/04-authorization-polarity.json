@@ -14,6 +14,7 @@
     "policy": "document-read",
     "attempt": "attempt-04"
   },
+  "outputs": [{"kind":"observed","claim_id":"claim-allow","evidence_id":"fact-allow-200"},{"kind":"observed","claim_id":"claim-deny","evidence_id":"fact-deny-403"}],
   "rules": [{"name":"authorization_observation_allow","claim_id":"claim-allow","premises":[{"relation":"http_authorization","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"actor","evidence_column":"actor","type":"symbol"},{"claim_column":"operation","evidence_column":"operation","type":"symbol"},{"claim_column":"decision","evidence_column":"decision","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]}]},{"name":"authorization_observation_deny","claim_id":"claim-deny","premises":[{"relation":"http_authorization","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"actor","evidence_column":"actor","type":"symbol"},{"claim_column":"operation","evidence_column":"operation","type":"symbol"},{"claim_column":"decision","evidence_column":"decision","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]}]}],
   "claims": [
     {
