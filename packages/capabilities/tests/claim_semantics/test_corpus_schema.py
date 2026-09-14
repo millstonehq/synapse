@@ -7,9 +7,9 @@ import unittest
 from pathlib import Path
 
 try:
-    from .adapter import load_fixture
+    from .adapter import canonical_metadata, load_fixture
 except ImportError:  # unittest discover -s imports this directory as top-level
-    from adapter import load_fixture
+    from adapter import canonical_metadata, load_fixture
 
 ROOT = Path(__file__).parent
 CORPUS = ROOT / "corpus"
@@ -105,6 +105,26 @@ class CorpusSchemaTests(unittest.TestCase):
         interval = next(f for f in bounded["facts"] if f["id"] == "fact-no-resend-window")
         self.assertIn("interval", interval["arg_order"])
         self.assertIn("assumption-window-closed", bounded["expected"]["claims"]["claim-bounded"]["support_leaves"])
+
+    def test_strict_bundle_round_trip_retains_leaf_identity_and_provenance(self) -> None:
+        for path in FIXTURES:
+            fixture = load(path)
+            bundle = load_fixture(path)
+            retained = canonical_metadata(bundle)["semantic_inputs"]
+            with self.subTest(path=path.name):
+                self.assertEqual(fixture["id"], retained["fixture_id"])
+                self.assertEqual(fixture["context"], retained["context"])
+                for section in ("facts", "assumptions", "claims"):
+                    self.assertEqual(fixture[section], retained[section])
+                self.assertNotIn("expected", retained)
+
+    def test_shared_false_assumption_is_an_explicit_dependency_of_both_producers(self) -> None:
+        fixture = load(CORPUS / "07-shared-mistaken-assumption.json")
+        entries = {entry["id"]: entry for entry in fixture["facts"]}
+        self.assertIn("assumption-false", entries["fact-static"]["provenance"]["depends_on"])
+        self.assertIn("assumption-false", entries["fact-runtime"]["provenance"]["depends_on"])
+        discrepancies = fixture["expected"]["claims"]["claim-delivered"]["discrepancies"]
+        self.assertIn({"kind": "shared-assumption", "assumption": "assumption-false"}, discrepancies)
 
 
 if __name__ == "__main__":

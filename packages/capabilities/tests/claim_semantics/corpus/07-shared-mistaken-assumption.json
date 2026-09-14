@@ -78,7 +78,9 @@
       },
       "provenance": {
         "source": "static",
-        "depends_on": []
+        "depends_on": [
+          "assumption-false"
+        ]
       },
       "arg_order": [
         "tenant",
@@ -109,7 +111,9 @@
       },
       "provenance": {
         "source": "runtime",
-        "depends_on": []
+        "depends_on": [
+          "assumption-false"
+        ]
       },
       "arg_order": [
         "tenant",
