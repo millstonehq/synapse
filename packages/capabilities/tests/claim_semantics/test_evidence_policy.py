@@ -87,6 +87,7 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
 
     def test_mixed_history_false_rows_are_observation_discrepancies(self):
         bundle = load_fixture(ROOT / "11-compatible-history-sets.json")
+        self.assertTrue(all(mapping.effect == EvidenceEffect.OBSERVATION for mapping in bundle.mappings if mapping.evidence_relation == "compatible_history"))
         effects = {diagnostic.effect for diagnostic in bundle.diagnostics if diagnostic.trigger_relation == "compatible_history"}
         self.assertEqual({EvidenceEffect.OBSERVATION}, effects)
 
@@ -111,6 +112,9 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
         with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
         payload = bundle_payload(json.loads((ROOT / "12-unexpected-runtime-surface.json").read_text()))
         payload["diagnostics"][0]["predicate"]["column"] = "missing"
+        with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
+        payload = bundle_payload(json.loads((ROOT / "12-unexpected-runtime-surface.json").read_text()))
+        payload["diagnostics"][0]["predicate"]["value"] = "route-known"
         with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
 
 

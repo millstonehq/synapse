@@ -47,7 +47,7 @@
       ],
       "quantifier": "forall",
       "domain": "compatible_history",
-      "mappings": [{"evidence_relation":"compatible_history","effect":"support","context_indices":["tenant","run"],"bindings":[["tenant","tenant"],["run","run"]]}], "diagnostics": [{"trigger_relation":"compatible_history_domain_empty","effect":"observation","operational_status":"complete","context_indices":["tenant","run"],"when_missing":true,"required":true},{"trigger_relation":"compatible_history_domain__inconsistent","effect":"observation","operational_status":"inconsistent-premises","context_indices":["tenant","run"],"required":true}]
+      "mappings": [{"evidence_relation":"compatible_history","effect":"observation","context_indices":["tenant","run"],"bindings":[["tenant","tenant"],["run","run"]]}], "diagnostics": [{"trigger_relation":"compatible_history_domain_empty","effect":"observation","operational_status":"complete","context_indices":["tenant","run"],"when_missing":true,"required":true},{"trigger_relation":"compatible_history_domain__inconsistent","effect":"observation","operational_status":"inconsistent-premises","context_indices":["tenant","run"],"required":true}]
     },
     {
       "id": "claim-mixed",
@@ -79,7 +79,7 @@
       ],
       "quantifier": "forall",
       "domain": "compatible_history",
-      "mappings": [{"evidence_relation":"compatible_history","effect":"support","context_indices":["tenant","run"],"bindings":[["tenant","tenant"],["run","run"]]}], "diagnostics": [{"trigger_relation":"compatible_history","effect":"observation","operational_status":"complete","context_indices":["tenant","run"],"predicate":{"column":"holds","operator":"=","value":false},"required":true},{"trigger_relation":"compatible_history_domain__inconsistent","effect":"observation","operational_status":"inconsistent-premises","context_indices":["tenant","run"],"required":true}]
+      "mappings": [{"evidence_relation":"compatible_history","effect":"observation","context_indices":["tenant","run"],"bindings":[["tenant","tenant"],["run","run"]]}], "diagnostics": [{"trigger_relation":"compatible_history","effect":"observation","operational_status":"complete","context_indices":["tenant","run"],"predicate":{"column":"holds","operator":"=","value":false},"required":true},{"trigger_relation":"compatible_history_domain__inconsistent","effect":"observation","operational_status":"inconsistent-premises","context_indices":["tenant","run"],"required":true}]
     }
   ],
   "facts": [

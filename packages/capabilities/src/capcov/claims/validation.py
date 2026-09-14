@@ -129,8 +129,8 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
                 issues.append(ValidationIssue("diagnostic-predicate", "unsupported diagnostic predicate operator", path))
             if column is None: issues.append(ValidationIssue("diagnostic-predicate", "predicate column is not declared by trigger relation", path))
             value = predicate.get("value")
-            values = value if operator in {"in", "not-in"} else [value]
-            if operator in {"in", "not-in"} and not isinstance(value, list): issues.append(ValidationIssue("diagnostic-predicate", "set predicate value must be a list", path))
+            values = value if operator in {"in", "not-in"} and isinstance(value, (list, tuple)) else ([] if operator in {"in", "not-in"} else [value])
+            if operator in {"in", "not-in"} and not isinstance(value, (list, tuple)): issues.append(ValidationIssue("diagnostic-predicate", "set predicate value must be a list", path))
             if operator in {"=", "!=", "in", "not-in"} and column:
                 for item in values:
                     inferred = TypeName.BOOLEAN if isinstance(item, bool) else TypeName.INTEGER if isinstance(item, int) else TypeName.SYMBOL if isinstance(item, str) else None
