@@ -10,6 +10,24 @@ on:
   workflow_dispatch:
 
 jobs:
+  test-nix:
+    name: Test pinned Nix toolchain
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install pinned Determinate Nix
+        uses: DeterminateSystems/determinate-nix-action@c70cb8ae92d68c66953db28a26a63db1665bc837 # v3.21.5
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@135667ec418502fa5a3598af6fb9eb733888ce6a # v6.1.3
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.lock', '**/*.nix') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-
+          gc-max-store-size-linux: 2G
+      - name: Check all Linux derivations
+        run: nix flake check --no-update-lock-file
+
   test-capabilities:
     name: Test and build capability package
     runs-on: ubuntu-latest
