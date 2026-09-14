@@ -161,8 +161,28 @@ def _descendants(node: object):
 
 
 def discover(config_path: Path) -> dict:
+    """Run the discovery engine on a config file on disk.
+
+    Thin wrapper over `_discover_from_config`: the flows CLI reads a
+    `discovery.json`, while the promoted core adapters assemble the same config
+    in memory from `capcov.toml` and call the shared engine directly. Kept
+    byte-identical for existing flows callers -- the parsed config, its parent as
+    the base for `root`, and the file name used in the route boundary provenance.
+    """
     config = json.loads(config_path.read_text())
-    root = (config_path.parent / config["root"]).resolve()
+    return _discover_from_config(config, config_path.parent, config_path.name)
+
+
+def _discover_from_config(config: dict, base: Path, config_name: str) -> dict:
+    """The discovery engine over an already-parsed config.
+
+    `base` is the directory `config["root"]` is resolved against; `config_name`
+    is the label stamped on the route-reading boundary obligations (a real file
+    name for the flows CLI, `capcov.toml` for a core adapter). This is an
+    additive extraction: `discover(config_path)` is its only on-disk caller and
+    its behaviour is unchanged.
+    """
+    root = (base / config["root"]).resolve()
     obligations: list[dict] = []
     sources = {}
     graphs = []
@@ -362,7 +382,7 @@ def discover(config_path: Path) -> dict:
                     "roles-and-configurations",
                     "external-effects",
                 ):
-                    add(f"boundary:python:{category}", "unresolved", config_path.name, 1)
+                    add(f"boundary:python:{category}", "unresolved", config_name, 1)
                 route_boundaries_added = True
         elif kind == "openapi-json":
             relative = adapter["document"]

@@ -31,6 +31,50 @@ from __future__ import annotations
 CELLS = ("both", "static_only", "runtime_only", "neither")
 FAILING_CELLS = ("static_only", "runtime_only", "neither")
 
+# The residue summary the python adapter emits, all zero. A route/spec reader has
+# no call graph to resolve, so it forwards this shape empty-but-present; forwarding
+# an explicit default (rather than dropping the key when a side lacks it) is what
+# keeps the denominator legible instead of reading as absent.
+_EMPTY_RESIDUE_SUMMARY = {
+    "resolved_by_import": 0,
+    "resolved_by_name": 0,
+    "ambiguous": 0,
+    "external": 0,
+    "chained": 0,
+    "builtin_shadowed": 0,
+}
+
+
+def _merge_excluded_surfaces(capabilities: dict, observed: dict) -> dict:
+    """Union the static and runtime saw-but-filtered surfaces.
+
+    Both inputs are visible here, so this is where the narrowed denominator is
+    made whole: a surface the query saw and the verb allowlist dropped (static
+    side) and a scenario seen but out of scope (runtime side) are different
+    origins of the same fact -- N was narrowed, visibly -- so they are kept
+    together, not deduplicated. Defaults explicitly to the empty block so a side
+    that declares nothing reads as zero rather than as missing.
+    """
+    surfaces: list[dict] = []
+    for source in (capabilities, observed):
+        block = source.get("excluded_surfaces") or {}
+        surfaces.extend(block.get("surfaces", []))
+    return {"count": len(surfaces), "surfaces": surfaces}
+
+
+def _merge_unresolved(capabilities: dict, observed: dict) -> list[dict]:
+    """Union the static and runtime could-not-resolve material.
+
+    Static side: adapters that produced no surface, dynamic (non-literal) route
+    paths, and the boundary obligations that are the honest limits of static
+    reading. Runtime side: a probe's own unevaluable / unattributed material.
+    Concatenated, never dropped -- each named entry reaches the gate.
+    """
+    out: list[dict] = []
+    for source in (capabilities, observed):
+        out.extend(source.get("unresolved") or [])
+    return out
+
 
 def reconcile(capabilities: dict, observed: dict) -> dict:
     entities = [e["name"] for e in capabilities["entities"]]
@@ -132,5 +176,23 @@ def reconcile(capabilities: dict, observed: dict) -> dict:
         ),
         "unmounted_surfaces": sorted(
             s["id"] for s in capabilities["surfaces"] if not s.get("mounted", True)
+        ),
+        # Honest denominator (Property 3): the first-class carriers, threaded
+        # discover -> reconcile -> gate. reconcile sees both inputs, so it is where
+        # the static-side and runtime-side provenance are unioned. Present with an
+        # explicit empty default even on the python-fastapi-sqlalchemy path (which
+        # emits neither), so the gate's accounting is byte-for-byte unchanged there
+        # while a promoted route/spec adapter's narrowing survives to the gate.
+        "excluded_surfaces": _merge_excluded_surfaces(capabilities, observed),
+        "unresolved": _merge_unresolved(capabilities, observed),
+        # Repair the reconcile->coverage leak: residue and its summary were built
+        # by discover and written to capabilities.json, then dropped here, so the
+        # enumerated-but-unresolved call sites never reached the gate or the report.
+        # Forward them from the static inventory (empty-but-present when the adapter
+        # read no call graph). This is the leak NOT to replicate for the new
+        # carriers above.
+        "residue": capabilities.get("residue", []),
+        "residue_summary": capabilities.get(
+            "residue_summary", dict(_EMPTY_RESIDUE_SUMMARY)
         ),
     }
