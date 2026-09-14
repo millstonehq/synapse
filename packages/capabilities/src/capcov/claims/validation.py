@@ -159,12 +159,18 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
         explicit_triggers = (*output.requires_all_evidence, *output.requires_any_evidence, *output.excludes_evidence)
         all_triggers = (*explicit_triggers, *((output.evidence_id,) if output.evidence_id else ()))
         if len(set(explicit_triggers)) != len(explicit_triggers): issues.append(ValidationIssue("output-trigger", "duplicate evidence trigger", path))
-        for evidence_id in all_triggers:
+        # The output's payload evidence_id is the value being rendered; only
+        # explicit trigger declarations are causal prerequisites.
+        for evidence_id in explicit_triggers:
             if not isinstance(evidence_id, str) or not evidence_id or evidence_id not in evidence_by_id:
                 issues.append(ValidationIssue("output-trigger", "trigger evidence is not declared", path))
         if output.requires_any_evidence is not None and not isinstance(output.requires_any_evidence, tuple): issues.append(ValidationIssue("output-trigger", "any-evidence trigger must be a sequence", path))
         if output.when_claim not in {None, "derived", "underived", "supported", "refuted", "unresolved", "conflicting", "always"}:
             issues.append(ValidationIssue("output-trigger", "unknown claim trigger", path))
+        if output.when_claim == "always" and output.kind in {OutputKind.DISCREPANCY, OutputKind.MISSING_PREMISE}:
+            issues.append(ValidationIssue("output-trigger", "diagnostic output cannot use always claim trigger", path))
+        if output.relation and output.kind != OutputKind.MISSING_PREMISE:
+            issues.append(ValidationIssue("output-relation", "relation is only valid for missing premise outputs", path))
         if output.kind in {OutputKind.DISCREPANCY, OutputKind.MISSING_PREMISE} and not (output.requires_all_evidence or output.requires_any_evidence or output.when_claim or output.relation):
             issues.append(ValidationIssue("output-trigger", "diagnostic output has no trigger", path))
         if output.kind in {OutputKind.OBSERVED, OutputKind.FORBIDDEN} and (not output.evidence_id or output.evidence_id not in evidence_by_id):
@@ -172,6 +178,15 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
         if output.kind == OutputKind.MISSING_PREMISE and not output.relation: issues.append(ValidationIssue("output-relation", "missing premise output needs a relation", path))
         if output.kind == OutputKind.MISSING_PREMISE and output.relation not in relations and output.relation not in DIAGNOSTIC_VOCABULARY:
             issues.append(ValidationIssue("output-relation", "unknown diagnostic vocabulary relation", path))
+        causal_relations = {mapping.evidence_relation for mapping in bundle.mappings if mapping.claim_id == output.claim_id}
+        causal_relations.update(diagnostic.trigger_relation for diagnostic in bundle.diagnostics if diagnostic.claim_id == output.claim_id)
+        claim = next((claim for claim in bundle.claims if claim.id == output.claim_id), None)
+        if claim:
+            causal_relations.update(atom.relation for rule in bundle.rules if rule.head.relation == claim.relation for atom in rule.body)
+        for evidence_id in explicit_triggers:
+            evidence = evidence_by_id.get(evidence_id)
+            if evidence and evidence.atom.relation not in causal_relations:
+                issues.append(ValidationIssue("output-trigger", "trigger evidence is not causally connected to claim", path))
         for name, value in output.fields:
             if not isinstance(name, str) or not name: issues.append(ValidationIssue("output-field", "field names must be non-empty strings", path))
             if value.source not in {"constant", "claim", "evidence"}: issues.append(ValidationIssue("output-source", "unknown template value source", path)); continue
