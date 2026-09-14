@@ -152,6 +152,18 @@ class SouffleBackendTests(unittest.TestCase):
             self.assertIn(".decl __capcov_agg_", program)
             self.assertNotIn("(, n_true", program)
 
+    def test_nullary_input_and_derived_predicates_round_trip(self):
+        seed = R("seed")
+        derived = R("derived")
+        bundle = Bundle((seed, derived), facts=(Atom("seed", ()),), rules=(Rule(Atom("derived", ()), (Atom("seed", ()),)),))
+        program = translate_bundle(bundle).program
+        self.assertIn(".decl seed()", program)
+        self.assertIn(".decl derived()", program)
+        self.assertIn("derived() :- seed().", program)
+        result = run_bundle(bundle)
+        self.assertEqual(result.relations["seed"], ((),))
+        self.assertEqual(result.relations["derived"], ((),))
+
     def test_claim_context_filters_rows_and_negative_polarity_is_evidence(self):
         rel = R("rejected", ("tenant", TypeName.SYMBOL, True), ("actor", TypeName.SYMBOL), polarity="negative", context_indices=("tenant",))
         claim = Claim("rejected", (Variable("tenant"), Constant("actor")), Context.from_mapping({"tenant": "t1"}))

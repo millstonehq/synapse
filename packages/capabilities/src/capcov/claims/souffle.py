@@ -278,6 +278,9 @@ def run_bundle(bundle: Bundle, *, executable: str = "souffle", timeout: float = 
             rows = []
             if path.exists():
                 for line in path.read_text(encoding="utf-8").splitlines():
+                    if relation.arity == 0:
+                        rows.append(())
+                        continue
                     if not line: continue
                     fields = line.split("\t")
                     if len(fields) != relation.arity: raise ValueError(f"malformed output row for {name}")
