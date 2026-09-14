@@ -10,6 +10,16 @@ this one honest:
    the file rots into fiction while the build stays green.
 3. Every exemption carries a reason and a date. An exemption with no reason is
    a silenced check.
+
+The four cells are not the only obligations. A route/spec adapter that could not
+resolve something -- an empty document, a dynamic (non-literal) route path, a
+boundary that is the honest limit of static reading -- names it in `unresolved`
+rather than dropping it. An unresolved obligation of surface/spec kind fails the
+gate unless exempted, exactly as an unmapped obligation did: it is why empty
+input has no green denominator. Its exemption uses the same cell-typed, dated
+scheme (cell = "unresolved"), the sole exemption scheme. `excluded_surfaces`
+(surfaces the query saw and a verb allowlist deliberately dropped) are legitimate
+narrowing: reported so N stays legible, never auto-failed.
 """
 
 from __future__ import annotations
@@ -18,6 +28,50 @@ import tomllib
 from pathlib import Path
 
 from .reconcile import FAILING_CELLS
+
+# The pseudo-cell an exemption names to waive an `unresolved` obligation. It is
+# not one of the four reconcile cells (an unresolved obligation never entered the
+# diff), but it rides the same cell-typed, dated exemption scheme so there is one
+# exemption format, not two.
+UNRESOLVED_CELL = "unresolved"
+
+
+def _gates(entry: dict) -> bool:
+    """Whether an `unresolved` entry is a gate failure or reported-only.
+
+    Surface/spec-kind material -- what a route/spec adapter could not resolve --
+    gates: this is the honest denominator, and it is why empty input has no green
+    denominator. That is the default, so an entry that names nothing special still
+    counts (unresolved is never silently dropped). A runtime probe's own
+    unevaluable / unattributed material is carried for legibility but is not a
+    static surface/spec obligation, so it marks itself reported-only with
+    `gating = False`.
+    """
+    return entry.get("gating", True) is not False
+
+
+def _unresolved_key(entry: dict) -> str:
+    """A stable identity an exemption can name.
+
+    Prefer the obligation's own id (boundary obligations and dynamic-route
+    obligations carry one); otherwise compose a deterministic key from the adapter
+    and kind so even an adapter-produced-no-surface entry is addressable.
+    """
+    stated = entry.get("id")
+    if stated:
+        return stated
+    return f"unresolved:{entry.get('adapter')}:{entry.get('kind')}"
+
+
+def _explain_unresolved(entry: dict) -> str:
+    reason = entry.get("reason") or "no reason recorded"
+    return (
+        f"static reading did not resolve this to a surface or spec "
+        f"({entry.get('kind')}): {reason}. It is part of the denominator, not "
+        "outside it. Either the target declares it in capcov.toml, the adapter "
+        "grows to read it, or you record in the exemptions file (cell "
+        f'"{UNRESOLVED_CELL}") why it stays unresolved.'
+    )
 
 
 class Failure:
@@ -136,6 +190,33 @@ def gate(coverage: dict, exemptions_path: Path | None) -> list[Failure]:
                 "evidence before classifying it.",
             )
         )
+
+    for entry in coverage.get("unresolved", []):
+        if not _gates(entry):
+            # Reported-only (a runtime probe's unevaluable/unattributed material).
+            # Carried into coverage for legibility, but not a static surface/spec
+            # obligation, so it does not fail the gate. It is still visible in the
+            # coverage artifact -- N stays legible.
+            continue
+        key = _unresolved_key(entry)
+        exemption = exemptions.get(key)
+        if exemption is None:
+            failures.append(
+                Failure("unresolved-obligation", key, _explain_unresolved(entry))
+            )
+        elif exemption["cell"] != UNRESOLVED_CELL:
+            used.add(key)
+            failures.append(
+                Failure(
+                    "stale-exemption",
+                    key,
+                    f"exempted as {exemption['cell']!r}, but this is an unresolved "
+                    f'obligation (cell "{UNRESOLVED_CELL}"). The reason recorded no '
+                    "longer describes what is happening.",
+                )
+            )
+        else:
+            used.add(key)
 
     for key in sorted(set(exemptions) - used):
         failures.append(
