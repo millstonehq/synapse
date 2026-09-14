@@ -1,9 +1,33 @@
 """Evaluator-independent conditional diagnostic output rendering."""
 from __future__ import annotations
 
-from typing import Any, Mapping
+from dataclasses import dataclass
+from typing import Any
 
 from .ir import Bundle, Claim, Constant, Evidence, EvidenceMapping, OutputKind, OutputTemplate
+
+
+@dataclass(frozen=True)
+class VerifiedProofEvidence:
+    """Evaluator-issued ground proof leaves; not a certificate verifier."""
+    claim_id: str
+    leaf_ids: frozenset[str]
+    claim_row_digest: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.claim_id, str) or not self.claim_id:
+            raise ValueError("verified proof requires a claim id")
+        object.__setattr__(self, "leaf_ids", frozenset(self.leaf_ids))
+
+    @classmethod
+    def from_bundle(cls, bundle: Bundle, claim_id: str, leaf_ids: set[str] | frozenset[str], claim_row_digest: str | None = None) -> "VerifiedProofEvidence":
+        known = {record.id for record in bundle.evidence}
+        unknown = set(leaf_ids) - known
+        if unknown:
+            raise ValueError(f"unknown proof leaves: {sorted(unknown)}")
+        if not any(claim.id == claim_id for claim in bundle.claims):
+            raise ValueError(f"unknown proof claim: {claim_id}")
+        return cls(claim_id, frozenset(leaf_ids), claim_row_digest)
 
 
 def _claim(bundle: Bundle, claim_id: str) -> Claim | None:
@@ -78,10 +102,17 @@ def _triggered(output: OutputTemplate, relevant: set[str], claim_state: str | No
     return output.when_claim in (None, "always") or output.when_claim == claim_state
 
 
-def render_outputs(bundle: Bundle, claim_id: str, active_evidence: set[str] | frozenset[str], proof_evidence: set[str] | frozenset[str] = frozenset(), claim_state: str | None = None, missing_relations: set[str] | frozenset[str] = frozenset()) -> tuple[dict[str, Any], ...]:
+def render_outputs(bundle: Bundle, claim_id: str, active_evidence: set[str] | frozenset[str], proof_evidence: VerifiedProofEvidence | None = None, claim_state: str | None = None, missing_relations: set[str] | frozenset[str] = frozenset()) -> tuple[dict[str, Any], ...]:
     """Render active, typed output templates for one claim deterministically."""
     active = set(active_evidence)
-    proof = set(proof_evidence)
+    if proof_evidence is not None and not isinstance(proof_evidence, VerifiedProofEvidence):
+        raise TypeError("proof_evidence must be VerifiedProofEvidence")
+    if proof_evidence is not None and proof_evidence.claim_id != claim_id:
+        raise ValueError("proof claim does not match rendered claim")
+    known_ids = {record.id for record in bundle.evidence}
+    if proof_evidence and not proof_evidence.leaf_ids.issubset(known_ids):
+        raise ValueError("proof contains unknown evidence leaves")
+    proof = set(proof_evidence.leaf_ids) if proof_evidence else set()
     relevant = {evidence_id for evidence_id in active if _relevant(bundle, claim_id, evidence_id, proof)}
     rendered = []
     for output in bundle.outputs:
