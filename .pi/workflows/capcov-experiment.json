@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "name": "capcov-claim-semantics",
+  "plan": "EXPERIMENT-PLAN.md",
+  "requiredAncestor": "d1550e4d49401a0e8fa8cdd813fb2fd7bbd00765",
+  "maxAttemptsPerTask": 3,
+  "agentTimeoutMinutes": 30,
+  "reviewerCount": 2,
+  "commitCheckpoints": true,
+  "tasks": [
+    {
+      "id": "toolchain",
+      "title": "Pin the Nix and Shen toolchain",
+      "planSections": ["14"],
+      "dependsOn": [],
+      "writeSet": ["flake.nix", "flake.lock", "EXPERIMENT-PLAN.md", ".gitignore"],
+      "acceptance": [
+        "The root flake pins Python 3.12, uv, Go, Git, jq, hyperfine, and a clean shen-go revision.",
+        "The existing capability tests and a Shen smoke test run through nix develop.",
+        "Exact revisions and observed results are recorded in EXPERIMENT-PLAN.md."
+      ],
+      "gates": [
+        {"name": "flake-check", "command": ["nix", "flake", "check"]},
+        {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]},
+        {"name": "shen-smoke", "command": ["nix", "develop", "--command", "bash", "-lc", "shen --version || kl --version"]}
+      ]
+    },
+    {
+      "id": "corpus",
+      "title": "Create the reviewed adversarial semantic corpus",
+      "planSections": ["13", "15"],
+      "dependsOn": ["toolchain"],
+      "writeSet": ["packages/capabilities/tests/claim_semantics/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
+      "acceptance": [
+        "All fourteen required cases are represented and clearly label synthetic histories and seeded faults.",
+        "Expected verdicts, operational states, required and forbidden leaves, discrepancies, and missing premises are reviewable without an evaluator.",
+        "Corpus schema tests pass."
+      ],
+      "gates": [
+        {"name": "corpus-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]}
+      ]
+    },
+    {
+      "id": "typed-ir",
+      "title": "Implement the canonical typed IR and authority validation",
+      "planSections": ["13", "16"],
+      "dependsOn": ["corpus"],
+      "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/claim_semantics/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
+      "acceptance": [
+        "Records are frozen, canonically serialized, versioned, and hashable.",
+        "Validation rejects unsafe variables, ambiguous context widening, recursive negation, and closure-free telemetry negation.",
+        "Multiple producers remain separately attributable."
+      ],
+      "gates": [
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]},
+        {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]}
+      ]
+    },
+    {
+      "id": "reference-evaluator",
+      "title": "Implement verdict algebra, reference evaluation, and experimental CLI",
+      "planSections": ["16"],
+      "dependsOn": ["typed-ir"],
+      "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/src/capcov/cli.py", "packages/capabilities/tests/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
+      "acceptance": [
+        "The deterministic fixed-point evaluator independently derives support and refutation with explicit resource state.",
+        "All reviewed corpus expectations pass under shuffled input order.",
+        "The feature is reachable only through capcov experiment claims and production commands remain unchanged."
+      ],
+      "gates": [
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]},
+        {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]}
+      ]
+    },
+    {
+      "id": "certificates",
+      "title": "Add derivation certificates and the independent ground checker",
+      "planSections": ["17"],
+      "dependsOn": ["reference-evaluator"],
+      "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
+      "acceptance": [
+        "Every supported corpus claim has a replayable ground certificate.",
+        "The checker performs no search, process launch, or evidence collection.",
+        "Stale digests, substituted leaves, cycles, and scope widening are rejected."
+      ],
+      "gates": [
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]},
+        {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]}
+      ]
+    },
+    {
+      "id": "support-maintenance",
+      "title": "Implement bounded support, invalidation, why, and why-not queries",
+      "planSections": ["17"],
+      "dependsOn": ["certificates"],
+      "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/**", "EXPERIMENT-PLAN.md"],
+      "acceptance": [
+        "Hash-consed AND/OR support retains alternative derivations and shared premises.",
+        "Impact, support-cut, conflict, why, and why-not queries are bounded and expose truncation.",
+        "Invalidation changes exactly the dependent paths in brute-force checked small cases."
+      ],
+      "gates": [
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]},
+        {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]}
+      ]
+    },
+    {
+      "id": "shen-workbench",
+      "title": "Implement real Shen elaboration, search, authority checks, and why-not",
+      "planSections": ["18"],
+      "dependsOn": ["support-maintenance"],
+      "writeSet": ["packages/capabilities/shen/**", "packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
+      "acceptance": [
+        "Shen consumes canonical normalized rules and performs real elaboration and proof search.",
+        "It emits portable certificates and bounded missing-premise alternatives replayed by Python.",
+        "No mocked result or Python-precomputed semantic answer is accepted."
+      ],
+      "gates": [
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]},
+        {"name": "shen-differential", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -p 'test_shen*.py' -t ."]}
+      ]
+    },
+    {
+      "id": "specialization",
+      "title": "Implement first-projection specialization and residual checking",
+      "planSections": ["19"],
+      "dependsOn": ["shen-workbench"],
+      "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
+      "acceptance": [
+        "The residual checker is generated by specializing the executable interpreter representation, not duplicated templates.",
+        "It preserves malformed, incomplete, contradictory, stale, out-of-scope, and unexpected inputs plus certificate construction.",
+        "Interpreter and residual agree on verdicts, explanations, discrepancies, and normalized certificates."
+      ],
+      "gates": [
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]},
+        {"name": "stdlib-residual", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -p 'test_special*.py' -t ."]}
+      ]
+    },
+    {
+      "id": "mutation-validation",
+      "title": "Prove specialization validation detects controlled defects",
+      "planSections": ["19"],
+      "dependsOn": ["specialization"],
+      "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
+      "acceptance": [
+        "A controlled dropped identity check is detected.",
+        "A controlled ignored unexpected-surface path is detected.",
+        "Defects are test inputs or mutation hooks and cannot silently ship enabled."
+      ],
+      "gates": [
+        {"name": "mutation-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -p 'test_*mutation*.py' -t ."]},
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]}
+      ]
+    },
+    {
+      "id": "experiment-planner",
+      "title": "Generate and execute one bounded catalog experiment",
+      "planSections": ["20"],
+      "dependsOn": ["mutation-validation"],
+      "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
+      "acceptance": [
+        "The planner can request a missing SQL premise, challenge a shared assumption, and distinguish held-notification histories.",
+        "Actions come only from a closed catalog and distinguish evidence perturbation from application fault injection.",
+        "At least one consumer-owned isolated fixture action is executed and fresh evidence changes a verdict."
+      ],
+      "gates": [
+        {"name": "experiment-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -p 'test_experiment*.py' -t ."]},
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]}
+      ]
+    },
+    {
+      "id": "go-execution",
+      "title": "Integrate one actual Go notification execution and negative control",
+      "planSections": ["21"],
+      "dependsOn": ["experiment-planner"],
+      "externalPrerequisites": ["CAPCOV_GO_FIXTURE_ROOT"],
+      "mayBlock": true,
+      "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
+      "acceptance": [
+        "A pinned external Go application revision and its consumer-owned reset/execution machinery are used.",
+        "One real receipt and one negative control traverse admission, Shen derivation, Python replay, and residual agreement.",
+        "No Python notification business behavior or synthetic replacement is accepted."
+      ],
+      "gates": [
+        {"name": "go-integration", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && test -n \"$CAPCOV_GO_FIXTURE_ROOT\" && PYTHONPATH=src python -m unittest discover -s tests -p 'test_go_receipt*.py' -t ."]},
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]}
+      ]
+    },
+    {
+      "id": "evaluation",
+      "title": "Run the complete evaluation and record a recommendation",
+      "planSections": ["22", "23", "25"],
+      "dependsOn": ["go-execution"],
+      "writeSet": ["packages/capabilities/tests/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
+      "acceptance": [
+        "Semantic, certificate, invalidation, Shen, specialization, mutation, experiment, and real-Go results are reported with failures.",
+        "Runtime, startup, generation cost, memory, artifact size, Nix closure, and maintenance burden are measured.",
+        "The report recommends retain, revise, or named production adoption without overstating evidence."
+      ],
+      "gates": [
+        {"name": "flake-check", "command": ["nix", "flake", "check"]},
+        {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]}
+      ]
+    }
+  ]
+}
