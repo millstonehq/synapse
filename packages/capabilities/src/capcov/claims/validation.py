@@ -174,15 +174,15 @@ def _validate_context_joins(rule, relations, issues, path):
     for i, (_, left) in enumerate(context_bindings):
         for _, right in context_bindings[i + 1:]:
             differing = {k for k in left.keys() & right.keys() if repr(left[k]) != repr(right[k])}
-            differing_terms = {term.name for key in differing for term in (left[key], right[key]) if isinstance(term, Variable)}
+            differing_terms = tuple(term for key in differing for term in (left[key], right[key]))
             left_rel = next((a.relation for a, b in context_bindings if b is left), None)
             right_rel = next((a.relation for a, b in context_bindings if b is right), None)
             def witness_matches(atom, decl):
                 if not {left_rel, right_rel}.issubset(set(decl.compatibility_targets)): return False
                 names = [c.name for c in decl.columns]
                 positions = decl.compatibility_context_indices or decl.context_indices
-                payload = {atom.terms[names.index(p)] for p in positions if p in names}
-                return differing and differing_terms.issubset({t.name for t in payload if isinstance(t, Variable)})
+                payload = tuple(atom.terms[names.index(p)] for p in positions if p in names)
+                return bool(differing) and all(term in payload for term in differing_terms)
             witnessed = any(witness_matches(atom, decl) for atom, decl in compatibility)
             if differing and not witnessed:
                 issues.append(ValidationIssue("missing-compatibility", "cross-context joins require an explicit compatibility witness", path)); return
@@ -203,6 +203,20 @@ def _validate_aggregation(a, rule, relations, issues, path):
         if not source_atoms: issues.append(ValidationIssue("aggregation-source", "aggregation source must be a positive body atom", path))
         else:
             source_atom = source_atoms[0]; source_names = [c.name for c in source.columns]
+            domain_atoms = [x for x in rule.body if isinstance(x, Atom) and not x.negated and x.relation == a.domain]
+            closure_atoms = [x for x in rule.body if isinstance(x, Atom) and not x.negated and x.relation == a.closure_witness]
+            if not domain_atoms: issues.append(ValidationIssue("aggregation-domain", "finite aggregation domain must be a positive body atom", path))
+            if not closure_atoms: issues.append(ValidationIssue("aggregation-closure", "aggregation closure witness must be a positive body atom", path))
+            if domain_atoms and domain:
+                domain_atom = domain_atoms[0]; domain_names = [c.name for c in domain.columns]
+                for context_name in source.context_indices:
+                    if context_name not in domain_names or repr(source_atom.terms[source_names.index(context_name)]) != repr(domain_atom.terms[domain_names.index(context_name)]):
+                        issues.append(ValidationIssue("aggregation-domain", f"domain binding does not match source context {context_name!r}", path))
+            if closure_atoms and domain:
+                closure_atom = closure_atoms[0]; closure_names = [c.name for c in closure.columns]
+                for context_name in domain.context_indices:
+                    if context_name not in closure_names or repr(domain_atoms[0].terms[[c.name for c in domain.columns].index(context_name)]) != repr(closure_atom.terms[closure_names.index(context_name)]):
+                        issues.append(ValidationIssue("aggregation-closure", f"closure binding does not match domain context {context_name!r}", path))
             head_decl = relations.get(rule.head.relation)
             required_head_columns = set(a.group_by) | set(source.context_indices)
             head_names = [c.name for c in head_decl.columns] if head_decl else []
