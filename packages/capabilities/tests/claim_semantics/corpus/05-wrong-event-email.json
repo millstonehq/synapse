@@ -55,7 +55,7 @@
       ],
       "quantifier": "exists",
       "domain": null,
-      "mappings": [{"evidence_relation":"smtp_accepted","effect":"support","context_indices":["tenant","event","recipient","run","attempt"],"bindings":[["tenant","tenant"],["event","event"],["recipient","recipient"],["run","run"],["attempt","attempt"]]},{"evidence_relation":"smtp_acceptance_missing","effect":"observation","context_indices":["tenant","event","recipient","run"],"bindings":[["tenant","tenant"],["event","event"],["recipient","recipient"],["run","run"]]}], "diagnostics": []
+      "mappings": [{"evidence_relation":"smtp_accepted","effect":"support","context_indices":["tenant","event","recipient","run","attempt"],"bindings":[["tenant","tenant"],["event","event"],["recipient","recipient"],["run","run"],["attempt","attempt"]]},{"evidence_relation":"smtp_accepted","effect":"observation","context_indices":["tenant"],"bindings":[["tenant","tenant"]]},{"evidence_relation":"smtp_acceptance_missing","effect":"observation","context_indices":["tenant","event","recipient","run"],"bindings":[["tenant","tenant"],["event","event"],["recipient","recipient"],["run","run"]]}], "diagnostics": []
     }
   ],
   "facts": [

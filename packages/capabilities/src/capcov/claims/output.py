@@ -57,6 +57,13 @@ def _relevant(bundle: Bundle, claim_id: str, evidence_id: str, proof: set[str]) 
             continue
         return True
     if evidence_id in proof:
+        claim_context = claim.context.as_dict()
+        if any(evidence.context.as_dict().get(name) != value for name, value in claim_context.items() if name in evidence.context.as_dict()):
+            return False
+        claim_relation = next((r for r in bundle.relations if r.name == claim.relation), None)
+        claim_values = {column.name: term.value for column, term in zip(claim_relation.columns, claim.terms) if isinstance(term, Constant)} if claim_relation else {}
+        if any(name in values and values[name] != value for name, value in claim_values.items()):
+            return False
         return any(rule.head.relation == claim.relation and any(atom.relation == evidence.atom.relation for atom in rule.body) for rule in bundle.rules)
     return False
 
