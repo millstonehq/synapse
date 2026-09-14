@@ -1,0 +1,219 @@
+{
+  "schema_version": 1,
+  "id": "07-shared-mistaken-assumption",
+  "title": "Shared false assumption is not independent support",
+  "provenance": {
+    "kind": "synthetic",
+    "source": "hand-authored semantic control",
+    "seeded_fault": "shared-fake-provider"
+  },
+  "context": {
+    "tenant": "tenant-a",
+    "run": "run-7",
+    "event": "evt-7",
+    "attempt": "attempt-07",
+    "recipient": "a@example.test"
+  },
+  "claims": [
+    {
+      "id": "claim-delivered",
+      "arguments": {
+        "tenant": "tenant-a",
+        "event": "evt-7",
+        "run": "run-7",
+        "recipient": "a@example.test",
+        "attempt": "attempt-07"
+      },
+      "relation": "notification_delivery_terminal",
+      "args": [
+        "tenant-a",
+        "evt-7",
+        "a@example.test",
+        "run-7",
+        "attempt-07"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-7",
+        "event": "evt-7",
+        "attempt": "attempt-07",
+        "recipient": "a@example.test"
+      },
+      "provenance": {
+        "source": "reviewed-claim",
+        "depends_on": []
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "quantifier": "exists",
+      "domain": null
+    }
+  ],
+  "facts": [
+    {
+      "id": "fact-static",
+      "arguments": {
+        "tenant": "tenant-a",
+        "event": "evt-7",
+        "run": "run-7"
+      },
+      "source": "static",
+      "relation": "mail_path_declared",
+      "args": [
+        "tenant-a",
+        "evt-7",
+        "run-7"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-7",
+        "event": "evt-7",
+        "attempt": "attempt-07",
+        "recipient": "a@example.test"
+      },
+      "provenance": {
+        "source": "static",
+        "depends_on": [
+          "assumption-false"
+        ]
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ]
+    },
+    {
+      "id": "fact-runtime",
+      "arguments": {
+        "tenant": "tenant-a",
+        "event": "evt-7",
+        "run": "run-7"
+      },
+      "source": "runtime",
+      "relation": "mail_path_observed",
+      "args": [
+        "tenant-a",
+        "evt-7",
+        "run-7"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-7",
+        "event": "evt-7",
+        "attempt": "attempt-07",
+        "recipient": "a@example.test"
+      },
+      "provenance": {
+        "source": "runtime",
+        "depends_on": [
+          "assumption-false"
+        ]
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "assumption-false",
+      "arguments": {
+        "provider": "loopback"
+      },
+      "relation": "provider_is_real__rejected",
+      "args": [
+        "loopback"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-7",
+        "event": "evt-7",
+        "attempt": "attempt-07",
+        "recipient": "a@example.test"
+      },
+      "provenance": {
+        "source": "reviewed-assumption",
+        "depends_on": []
+      },
+      "subject_relation": "provider_is_real",
+      "arg_order": [
+        "provider"
+      ]
+    },
+    {
+      "id": "assumption-false-independent",
+      "arguments": {
+        "paths": [
+          "static",
+          "runtime"
+        ]
+      },
+      "relation": "independent_support__rejected",
+      "args": [
+        [
+          "static",
+          "runtime"
+        ]
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-7",
+        "event": "evt-7",
+        "attempt": "attempt-07",
+        "recipient": "a@example.test"
+      },
+      "provenance": {
+        "source": "reviewed-assumption",
+        "depends_on": []
+      },
+      "subject_relation": "independent_support",
+      "arg_order": [
+        "paths"
+      ]
+    }
+  ],
+  "expected": {
+    "claims": {
+      "claim-delivered": {
+        "semantic_verdict": "unresolved",
+        "operational_status": "complete",
+        "support_leaves": [],
+        "refutation_leaves": [],
+        "observed_leaves": [
+          "fact-static",
+          "fact-runtime"
+        ],
+        "forbidden_leaves": [
+          "assumption-false-independent"
+        ],
+        "discrepancies": [
+          {
+            "kind": "shared-assumption",
+            "assumption": "assumption-false"
+          }
+        ],
+        "missing_premises": [
+          {
+            "reason": "both producers depend on one false assumption",
+            "relation": "independent_support"
+          }
+        ]
+      }
+    }
+  },
+  "schema_ref": "schema-v1",
+  "context_indices": [
+    "tenant",
+    "run",
+    "event",
+    "attempt"
+  ]
+}
