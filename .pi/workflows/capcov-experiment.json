@@ -9,7 +9,7 @@
   "commitCheckpoints": true,
   "mismatchRepairCap": 3,
   "legacyTaskIds": ["toolchain", "corpus", "typed-ir", "reference-evaluator", "certificates", "support-maintenance", "shen-workbench", "specialization", "mutation-validation", "experiment-planner", "go-execution", "evaluation"],
-  "legacyTaskAliases": {"toolchain": "semantic-contract", "typed-ir": "semantic-contract", "reference-evaluator": "python-reference", "support-maintenance": "certificates"},
+  "legacyTaskAliases": {"toolchain": "semantic-contract", "typed-ir": "semantic-contract"},
   "waves": [
     {"id": "semantic-contract", "title": "Datalog semantic contract", "maxParallel": 1, "pauseAfter": true, "reducer": "semantic-contract"},
     {"id": "datalog-corpus", "title": "Adversarial Datalog corpus", "maxParallel": 1, "pauseAfter": true, "reducer": "datalog-corpus"},
@@ -37,7 +37,7 @@
       "planSections": ["13", "16"], "dependsOn": [], "wave": "semantic-contract", "role": "reducer",
       "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/claim_semantics/**", "EXPERIMENT-PLAN.md"],
       "acceptance": ["Typed finite relations, context identity, verdicts, operational states, and completeness rules are explicit."],
-      "gates": [{"name": "contract-tests", "command": ["nix", "flake", "check", "--no-update-lock-file"]}]
+      "gates": [{"name": "contract-tests", "failureKind": "gate-failure", "command": ["node", ".pi/workflows/datalog-runtime-harness.mjs", "--task", "semantic-contract"]}]
     },
     {
       "id": "datalog-corpus",
@@ -45,7 +45,7 @@
       "planSections": ["13", "15"], "dependsOn": ["semantic-contract"], "wave": "datalog-corpus", "role": "reducer",
       "writeSet": ["packages/capabilities/tests/claim_semantics/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
       "acceptance": ["All required positive, negative, incomplete, contradictory, stale, and out-of-scope cases have reviewable expected relations."],
-      "gates": [{"name": "corpus-tests", "command": ["nix", "flake", "check", "--no-update-lock-file"]}]
+      "gates": [{"name": "corpus-tests", "failureKind": "gate-failure", "command": ["node", ".pi/workflows/datalog-runtime-harness.mjs", "--task", "datalog-corpus"]}]
     },
     {
       "id": "python-reference",
@@ -53,7 +53,7 @@
       "planSections": ["16", "17"], "dependsOn": ["datalog-corpus"], "wave": "datalog-kernels", "role": "parallel", "worktree": ".capcov/pi-workflow/worktrees/python-reference",
       "writeSet": ["packages/capabilities/src/capcov/claims/python/**", "packages/capabilities/tests/claim_semantics/python/**"],
       "acceptance": ["A deterministic bounded fixed-point oracle emits normalized relations, provenance, verdicts, and resource status."],
-      "gates": [{"name": "python-kernel-tests", "command": ["nix", "flake", "check", "--no-update-lock-file"]}]
+      "gates": [{"name": "python-kernel-tests", "failureKind": "gate-failure", "command": ["node", ".pi/workflows/datalog-runtime-harness.mjs", "--task", "python-reference"]}]
     },
     {
       "id": "souffle-kernel",
@@ -61,7 +61,7 @@
       "planSections": ["16", "22"], "dependsOn": ["datalog-corpus"], "wave": "datalog-kernels", "role": "parallel", "worktree": ".capcov/pi-workflow/worktrees/souffle-kernel",
       "writeSet": ["packages/capabilities/experiments/claim-semantics/souffle/**", "packages/capabilities/tests/claim_semantics/souffle/**"],
       "acceptance": ["Canonical relations compile and execute in real Souffle with bounded subprocesses and normalized output."],
-      "gates": [{"name": "souffle-kernel-tests", "command": ["nix", "flake", "check", "--no-update-lock-file"]}]
+      "gates": [{"name": "souffle-kernel-tests", "failureKind": "gate-failure", "command": ["node", ".pi/workflows/datalog-runtime-harness.mjs", "--task", "souffle-kernel"]}]
     },
     {
       "id": "datalog-differential",
@@ -69,7 +69,7 @@
       "planSections": ["16", "22"], "dependsOn": ["python-reference", "souffle-kernel"], "wave": "datalog-kernels", "role": "reducer",
       "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/claim_semantics/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
       "acceptance": ["Both engines agree on canonical results; any disagreement yields a minimized replay bundle and blocks admission."],
-      "gates": [{"name": "differential-tests", "command": ["nix", "flake", "check", "--no-update-lock-file"]}]
+      "gates": [{"name": "differential-tests", "failureKind": "differential-mismatch", "command": ["node", ".pi/workflows/datalog-runtime-harness.mjs", "--task", "datalog-differential"]}]
     },
     {
       "id": "datalog-certificates",
@@ -77,7 +77,7 @@
       "planSections": ["17"], "dependsOn": ["datalog-differential"], "wave": "datalog-certificates", "role": "reducer",
       "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/claim_semantics/**", "EXPERIMENT-PLAN.md"],
       "acceptance": ["Ground certificates replay without search and bounded why/why-not results preserve truncation and scope."],
-      "gates": [{"name": "certificate-tests", "command": ["nix", "flake", "check", "--no-update-lock-file"]}]
+      "gates": [{"name": "certificate-tests", "failureKind": "gate-failure", "command": ["node", ".pi/workflows/datalog-runtime-harness.mjs", "--task", "datalog-certificates"]}]
     },
     {
       "id": "datalog-target-go",
@@ -87,7 +87,7 @@
       "externalPrerequisites": ["CAPCOV_GO_FIXTURE_ROOT"],
       "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/claim_semantics/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
       "acceptance": ["Fresh real Go evidence and a negative control traverse both engines without trusting a receipt verdict."],
-      "gates": [{"name": "target-go-tests", "command": ["nix", "flake", "check", "--no-update-lock-file"]}]
+      "gates": [{"name": "target-go-tests", "failureKind": "gate-failure", "command": ["node", ".pi/workflows/datalog-runtime-harness.mjs", "--task", "datalog-target-go"]}]
     },
     {
       "id": "datalog-evaluation",
@@ -95,7 +95,7 @@
       "planSections": ["22", "23", "25"], "dependsOn": ["datalog-target-go"], "wave": "datalog-evaluation", "role": "reducer",
       "writeSet": ["packages/capabilities/tests/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
       "acceptance": ["Correctness, mismatch, explanation, runtime, startup, memory, closure, and maintenance evidence produce a bounded recommendation."],
-      "gates": [{"name": "datalog-evaluation-tests", "command": ["nix", "flake", "check", "--no-update-lock-file"]}]
+      "gates": [{"name": "datalog-evaluation-tests", "failureKind": "gate-failure", "command": ["node", ".pi/workflows/datalog-runtime-harness.mjs", "--task", "datalog-evaluation"]}]
     },
     {
       "id": "toolchain",

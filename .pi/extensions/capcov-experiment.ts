@@ -6,7 +6,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-type Gate = { name: string; command: string[] };
+type FailureKind = "differential-mismatch" | "gate-failure" | "review-request" | "worker-failure";
+type Gate = { name: string; command: string[]; failureKind?: FailureKind };
 type Task = {
   id: string;
   title: string;
@@ -110,6 +111,7 @@ async function loadConfig(root: string): Promise<Config> {
     if (!task.id || ids.has(task.id)) throw new Error(`Duplicate or missing task id: ${task.id}`);
     ids.add(task.id);
     if (!task.writeSet?.length || !task.gates?.length) throw new Error(`Task ${task.id} needs writeSet and gates`);
+    if (!task.legacy && task.gates.some((gate) => !gate.failureKind)) throw new Error(`Modern task ${task.id} gates must declare failureKind`);
   }
   const waves = config.waves ?? config.tasks.map((task) => ({ id: task.id, title: task.title, maxParallel: 1, pauseAfter: true, reducer: task.id }));
   const waveIds = new Set(waves.map((wave) => wave.id));
@@ -139,6 +141,14 @@ async function loadConfig(root: string): Promise<Config> {
     }
     for (let i = 0; i < parallel.length; i++) for (let j = i + 1; j < parallel.length; j++) {
       if (writeSetsOverlap(parallel[i].writeSet, parallel[j].writeSet)) throw new Error(`Parallel tasks ${parallel[i].id} and ${parallel[j].id} have overlapping write sets`);
+    }
+    if (wave.reducer) {
+      const reducer = members.find((task) => task.id === wave.reducer)!;
+      for (const worker of parallel) for (const pattern of worker.writeSet) {
+        if (!reducer.writeSet.some((owned) => globRegex(owned).test(pattern) || globRegex(pattern).test(owned))) {
+          throw new Error(`Reducer ${reducer.id} does not own parallel artifact path ${pattern}`);
+        }
+      }
     }
   }
   for (const task of config.tasks) {
@@ -389,19 +399,17 @@ function writeSetsOverlap(left: string[], right: string[]): boolean {
 }
 
 function waveFor(config: Config, state: Derived): Wave | undefined {
-  const modernRemaining = config.tasks.some((task) => !task.legacy && !state.completed.has(task.id));
   return (config.waves ?? []).find((wave) => {
-    const members = config.tasks.filter((task) => (task.wave ?? task.id) === wave.id);
-    if (modernRemaining && members.every((task) => task.legacy)) return false;
+    const members = config.tasks.filter((task) => (task.wave ?? task.id) === wave.id && !task.legacy);
+    if (!members.length) return false;
     return members.some((task) => !state.completed.has(task.id)) &&
       (wave.requiresCompleted ?? []).every((id) => state.completed.has(id));
   });
 }
 
 function waveTasks(config: Config, state: Derived, wave: Wave): Task[] {
-  const modernRemaining = config.tasks.some((task) => !task.legacy && !state.completed.has(task.id));
   return config.tasks.filter((task) => (task.wave ?? task.id) === wave.id &&
-    (!modernRemaining || !task.legacy) &&
+    !task.legacy &&
     !state.completed.has(task.id) && task.dependsOn.every((dep) => state.completed.has(dep)));
 }
 
@@ -412,10 +420,6 @@ function hasAdmissionEvidence(events: Event[], task: Task): string[] {
     if (type === "wave-checkpoint" && wave) {
       const legacyCheckpoint: Record<string, string[]> = {
         "semantic-contract": ["toolchain", "typed-ir"],
-        "datalog-corpus": ["corpus"],
-        "datalog-kernels": ["reference-evaluator"],
-        "datalog-certificates": ["certificates", "support-maintenance"],
-        "datalog-evaluation": ["evaluation"],
       };
       return !events.some((event) => event.type === "task-completed" && event.taskId && (legacyCheckpoint[wave] ?? []).includes(event.taskId));
     }
@@ -458,10 +462,6 @@ async function runGate(root: string, gate: Gate, signal: AbortSignal, timeoutMs:
 
 function cap(text: string, length = 12_000): string {
   return text.length <= length ? text : `${text.slice(-length)}\n[earlier output truncated]`;
-}
-
-function failureKind(text: string): "differential-mismatch" | "gate-failure" | "review-request" {
-  return /mismatch|differential|discrepanc|counterexample/i.test(text) ? "differential-mismatch" : "gate-failure";
 }
 
 function taskPacket(config: Config, task: Task, attempt: number, feedback: string): string {
@@ -555,7 +555,7 @@ async function removeWorkerWorktree(root: string, worker: string): Promise<void>
 async function executeFanoutTask(options: {
   root: string; config: Config; task: Task; runId: string; attempt: number;
   model?: string; thinking?: string; timeoutMs: number; signal: AbortSignal;
-}): Promise<{ ok: boolean; feedback?: string; patchPath?: string }> {
+}): Promise<{ ok: boolean; feedback?: string; patchPath?: string; failureKind?: FailureKind }> {
   const { root, config, task, runId, attempt, model, thinking, timeoutMs, signal } = options;
   const worker = await createWorkerWorktree(root, runId, task);
   try {
@@ -583,7 +583,7 @@ async function executeFanoutTask(options: {
       const gateResult = await runGate(root, gate, signal, timeoutMs, worker);
       gates.push(gateResult);
       await appendEvent(root, { runId, type: "gate-result", taskId: task.id, attempt, data: { ...gateResult, phase: "parallel-worker", output: cap(gateResult.output) } });
-      if (!gateResult.ok) return { ok: false, feedback: `Parallel gate ${gate.name} failed: ${cap(gateResult.output)}` };
+      if (!gateResult.ok) return { ok: false, failureKind: gate.failureKind ?? "gate-failure", feedback: `Parallel gate ${gate.name} failed: ${cap(gateResult.output)}` };
     }
     const patchPath = await writePatch(worker, root, runId, task, attempt);
     await appendEvent(root, { runId, type: "task-fanout-completed", taskId: task.id, attempt, data: { files, patchPath, gates: gates.map((gate) => gate.name), worktree: worker } });
@@ -591,6 +591,28 @@ async function executeFanoutTask(options: {
   } finally {
     await removeWorkerWorktree(root, worker);
   }
+}
+
+async function integrateFanoutPatches(root: string, config: Config, task: Task, events: Event[]): Promise<string[]> {
+  const artifacts = task.dependsOn.flatMap((dependency) => events.filter((event) => event.type === "task-fanout-completed" && event.taskId === dependency));
+  const applied: string[] = [];
+  for (const event of artifacts) {
+    const patchPath = String(event.data?.patchPath ?? "");
+    if (!patchPath || !patchPath.startsWith(`${STATE_DIR}/patches/`)) throw new Error(`invalid fan-out patch path for ${event.taskId}`);
+    if (events.some((candidate) => candidate.type === "fanout-patch-applied" && candidate.taskId === event.taskId && candidate.data?.patchPath === patchPath)) continue;
+    const patchFile = path.join(root, patchPath);
+    const check = await git(root, ["apply", "--check", "--whitespace=error", patchFile]);
+    if (check.code !== 0) {
+      const reverse = await git(root, ["apply", "--reverse", "--check", "--whitespace=error", patchFile]);
+      if (reverse.code !== 0) throw new Error(`fan-out patch rejected for ${event.taskId}: ${check.stderr || check.stdout}`);
+    } else {
+      const apply = await git(root, ["apply", "--whitespace=error", patchFile]);
+      if (apply.code !== 0) throw new Error(`fan-out patch failed for ${event.taskId}: ${apply.stderr || apply.stdout}`);
+    }
+    applied.push(patchPath);
+    await appendEvent(root, { runId: String(events.find((candidate) => candidate.type === "run-started")?.runId ?? ""), type: "fanout-patch-applied", taskId: event.taskId, data: { reducer: task.id, patchPath } });
+  }
+  return applied;
 }
 
 async function checkPreconditions(root: string, config: Config, requireClean: boolean): Promise<void> {
@@ -677,8 +699,8 @@ export default function capcovExperiment(pi: ExtensionAPI) {
           }));
           for (const job of jobs) if (!job.result.ok) {
             const feedback = job.result.feedback ?? "parallel worker failed";
-            const kind = failureKind(feedback);
-            if (kind === "differential-mismatch") await appendEvent(root, { runId, type: "wave-repair", data: { wave: wave.id, task: job.candidate.id, failureKind: kind, reason: "parallel worker" } });
+            const kind: FailureKind = job.result.failureKind ?? "worker-failure";
+            if (kind === "differential-mismatch") await appendEvent(root, { runId, type: "wave-repair", data: { wave: wave.id, task: job.candidate.id, failureKind: kind, reason: "parallel gate" } });
             await appendEvent(root, { runId, type: "task-feedback", taskId: job.candidate.id, attempt: job.attempt, data: { failureKind: kind, feedback } });
           }
           tasksThisRun += jobs.filter((job) => job.result.ok).length;
@@ -743,8 +765,8 @@ export default function capcovExperiment(pi: ExtensionAPI) {
           const fanout = await executeFanoutTask({ root, config, task, runId, attempt, model, thinking, timeoutMs, signal: controller.signal });
           if (!fanout.ok) {
             const feedback = fanout.feedback ?? "parallel worker failed";
-            const kind = failureKind(feedback);
-            if (wave && kind === "differential-mismatch") await appendEvent(root, { runId, type: "wave-repair", data: { wave: wave.id, task: task.id, failureKind: kind, reason: "parallel worker" } });
+            const kind: FailureKind = fanout.failureKind ?? "worker-failure";
+            if (wave && kind === "differential-mismatch") await appendEvent(root, { runId, type: "wave-repair", data: { wave: wave.id, task: task.id, failureKind: kind, reason: "parallel gate" } });
             await appendEvent(root, { runId, type: "task-feedback", taskId: task.id, attempt, data: { failureKind: kind, feedback } });
             continue;
           }
@@ -765,6 +787,11 @@ export default function capcovExperiment(pi: ExtensionAPI) {
         events = await readEvents(root);
         state = derive(events);
         updateUi(ctx, config, state, `${task.id} implement`);
+        if (task.role === "reducer" && task.dependsOn.some((dependency) => config.tasks.some((candidate) => candidate.id === dependency && candidate.role === "parallel"))) {
+          await integrateFanoutPatches(root, config, task, events);
+          events = await readEvents(root);
+          state = derive(events);
+        }
         const headBeforeImplementation = (await git(root, ["rev-parse", "HEAD"])).stdout.trim();
         const implementation = await runAgent({
           root,
@@ -818,10 +845,10 @@ export default function capcovExperiment(pi: ExtensionAPI) {
         }
         const failed = gates.find((gate) => !gate.ok);
         if (failed) {
-          if (wave && /mismatch|differential|discrepanc|counterexample/i.test(failed.name + " " + failed.output)) {
+          if (wave && (task.gates.find((gate) => gate.name === failed.name)?.failureKind === "differential-mismatch")) {
             await appendEvent(root, { runId, type: "wave-repair", data: { wave: wave.id, task: task.id, failureKind: "differential-mismatch", reason: failed.name } });
           }
-          await appendEvent(root, { runId, type: "task-feedback", taskId: task.id, attempt, data: { failureKind: failureKind(failed.name + " " + failed.output), feedback: `Gate ${failed.name} failed (exit ${failed.code}):\n${cap(failed.output)}` } });
+          await appendEvent(root, { runId, type: "task-feedback", taskId: task.id, attempt, data: { failureKind: task.gates.find((gate) => gate.name === failed.name)?.failureKind ?? "gate-failure", feedback: `Gate ${failed.name} failed (exit ${failed.code}):\n${cap(failed.output)}` } });
           continue;
         }
 
@@ -837,11 +864,10 @@ export default function capcovExperiment(pi: ExtensionAPI) {
           reviews: reviews.map((review, index) => ({ lens: reviewLenses[index], code: review.code, verdict: review.parsed?.verdict ?? "invalid", output: cap(review.output || review.stderr) })),
         } });
         if (badReviews.length) {
-          if (wave && reviews.some((review) => /mismatch|differential|discrepanc|counterexample/i.test(review.output || review.stderr))) {
-            await appendEvent(root, { runId, type: "wave-repair", data: { wave: wave.id, task: task.id, failureKind: "differential-mismatch", reason: "review mismatch" } });
-          }
+          // Review failures are bounded review requests; differential repair is
+          // charged only by the manifest-declared differential gate.
           const feedback = badReviews.map((review, index) => `Reviewer ${index + 1}: ${JSON.stringify(review.parsed ?? { error: review.stderr || review.output })}`).join("\n");
-          await appendEvent(root, { runId, type: "task-feedback", taskId: task.id, attempt, data: { failureKind: failureKind(feedback), feedback: cap(feedback) } });
+          await appendEvent(root, { runId, type: "task-feedback", taskId: task.id, attempt, data: { failureKind: "review-request", feedback: cap(feedback) } });
           continue;
         }
 

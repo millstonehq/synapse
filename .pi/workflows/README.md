@@ -39,6 +39,7 @@ The deterministic manifest seam can be checked without Pi or a model:
 
 ```text
 node .pi/workflows/test-capcov-experiment.mjs
+node .pi/workflows/test-capcov-runtime.mjs
 ```
 
 The smoke is capped at two minutes, uses a read-only worker, requires an exact JSON
@@ -77,7 +78,9 @@ hard conditional downstream admission for the Shen, specialization, and real-Go
 tracks without treating an agent's report as evidence. Existing task checkpoints
 are treated as virtual legacy checkpoints through the configured alias map.
 
-Differential/mismatch failures are recorded as `wave-repair` events. A wave is
+Differential/mismatch failures are identified only by the manifest's explicit
+gate `failureKind`, never by matching diagnostic text. They are recorded as
+`wave-repair` events. A wave is
 blocked after its configured (default three) repair attempts; retries cannot
 silently turn an unresolved counterexample into a pass.
 
@@ -94,8 +97,9 @@ Python notification behavior cannot satisfy it.
 The active manifest is Datalog-first: semantic contract, adversarial corpus,
 parallel Python-reference and real Souffle kernels, differential shrinking,
 certificates, fresh target-go qualification, and bounded Datalog evaluation. The
-older Shen/specialization chain remains only as a legacy compatibility tail and
-cannot preempt the Datalog waves.
+older Shen/specialization chain remains represented only for journal aliasing.
+Legacy tasks are disabled and cannot run or satisfy the independent
+Python-plus-Souffle evidence gate.
 
 ## Trust and safety
 
@@ -106,8 +110,8 @@ cannot preempt the Datalog waves.
 - Reviewers receive only Pi's `read` tool. They inspect the persisted patch and
   source but cannot invoke shell commands or edit.
 - Only one reducer writer integrates a wave at a time. Read-only scouts and
-  reviewers run in parallel. Any future parallel writer lane must use separate
-  worktrees and disjoint manifest write sets; this is validated at load time.
+  declared parallel workers run in isolated worktrees. Parallel worktrees and
+  disjoint manifest write sets are validated at load time.
 - The run is bounded by task count, three attempts per task, subprocess timeouts,
   dependency edges, and explicit cancellation.
 - Manual retry cannot reset an exhausted attempt budget, and cannot race an active run.
