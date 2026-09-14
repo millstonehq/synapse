@@ -44,6 +44,33 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
         self.assertEqual(schema_digest(first), schema_digest(second))
         self.assertNotIn("expected", payload)
 
+    def test_domain_rules_require_conjunction_and_preserve_scope(self):
+        positive = load_fixture(ROOT / "01-correlated-positive.json")
+        rule = next(r for r in positive.rules if r.head.relation == "notification_delivery_terminal")
+        self.assertEqual({a.relation for a in rule.body}, {"http_save_succeeded", "issue_changed_observed", "smtp_accepted", "sql_terminal_state"})
+        scoped = load_fixture(ROOT / "11-compatible-history-sets.json")
+        self.assertTrue(all(any(a.relation == "compatible_history" for a in rule.body) for rule in scoped.rules if rule.head.relation == "capability_holds_in_all_compatible_histories"))
+        out_of_scope = load_fixture(ROOT / "12-unexpected-runtime-surface.json")
+        self.assertFalse(any(rule.head.relation == "model_complete" for rule in out_of_scope.rules))
+        self.assertTrue(any(mapping.effect == EvidenceEffect.OBSERVATION for mapping in out_of_scope.mappings))
+
+    def test_malformed_evidence_policy_is_rejected(self):
+        payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
+        payload["evidence"][0]["depends_on"] = ["missing-id"]
+        with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
+        payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
+        payload["diagnostics"] = [{"trigger_relation": "smtp_accepted", "effect": "support", "operational_status": "not-a-status"}]
+        with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
+        payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
+        payload["claims"][0].pop("id")
+        with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
+        payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
+        payload["mappings"][0]["bindings"] = [["not-a-column", "tenant"]]
+        with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
+        payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
+        payload["evidence"][0]["context"]["tenant"] = "wrong-tenant"
+        with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
+
 
 if __name__ == "__main__":
     unittest.main()
