@@ -55,10 +55,19 @@ func main() {
 	var p plan
 	must(json.Unmarshal(planBytes, &p))
 	sum := sha256.Sum256(planBytes)
+	buildDir, err := os.MkdirTemp("", "capcov-go-save-read-")
+	must(err)
+	defer os.RemoveAll(buildDir)
+	server := buildDir + "/server"
+	build := exec.Command("go", "build", "-o", server, ".")
+	build.Dir = os.Getenv("CAPCOV_FIXTURE_ROOT")
+	build.Stdout = os.Stderr
+	build.Stderr = os.Stderr
+	must(build.Run())
 	results := make([]result, 0, len(p.Scenarios))
 	allPassed := true
 	for _, scenario := range p.Scenarios {
-		r := runScenario(scenario)
+		r := runScenario(server, scenario)
 		if r.Status != "passed" {
 			allPassed = false
 		}
@@ -74,31 +83,32 @@ func main() {
 	must(os.WriteFile(os.Getenv("CAPCOV_FLOW_OUT"), b, 0o600))
 }
 
-func runScenario(s scenario) result {
+func runScenario(server string, s scenario) result {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	must(err)
 	port := listener.Addr().(*net.TCPAddr).Port
 	must(listener.Close())
-	cmd := exec.Command("go", "run", ".")
-	cmd.Dir = os.Getenv("CAPCOV_FIXTURE_ROOT")
+	cmd := exec.Command(server)
 	cmd.Env = append(os.Environ(), "PORT="+strconv.Itoa(port))
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	must(cmd.Start())
-	defer func() {
-		_ = exec.Command("pkill", "-P", strconv.Itoa(cmd.Process.Pid)).Run()
-		_ = cmd.Process.Kill()
-		_, _ = cmd.Process.Wait()
-	}()
+	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
 	base := "http://127.0.0.1:" + strconv.Itoa(port)
-	for i := 0; i < 80; i++ {
+	ready := false
+	for i := 0; i < 400; i++ {
 		if resp, e := http.Get(base + "/notes"); e == nil {
 			_ = resp.Body.Close()
+			ready = true
 			break
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
 	r := result{ID: s.ID, Status: "passed", Assertions: []string{}, Requests: []request{}}
+	if !ready {
+		r.Status = "failed"
+		return r
+	}
 	for i, st := range s.Steps {
 		for _, c := range st.Commands {
 			if c.Op != "assert" || c.Mode != "http" {
