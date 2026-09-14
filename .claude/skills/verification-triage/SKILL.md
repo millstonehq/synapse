@@ -157,3 +157,11 @@ behavior. Likewise, a missing-object fixture cannot establish present-object
 serialization; retain that conditional dependency instead of hardcoding its
 observed output as the general contract. A discovered shared assumption invalidates
 the affected earlier evidence until the independent comparison is rerun.
+
+Bind the reference to the deployed incumbent revision when qualifying a deployed
+replacement, and verify the relevant source hashes rather than assuming the local
+checkout matches. Compare a nonempty wire response without projecting away fields;
+an empty child collection or a normalizer that discards fields cannot prove the
+populated contract. Apply that revision's required migrations to the disposable
+fixture. Any excluded runtime-only field must be observed, source-anchored and
+reported separately from full response equality.

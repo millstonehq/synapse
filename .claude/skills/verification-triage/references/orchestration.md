@@ -158,6 +158,15 @@ receipts after integration and rerun checks affected by changed inputs. Publish
 coherent validated checkpoints using the user's existing branch/mainline policy;
 this workflow does not require stacked PRs or introduce new approval gates.
 
+Namespaced Crossplane claims can still own the same external service and fight
+over its revision. Before retiring a duplicate, compare managed-resource external
+IDs and owner references. To preserve the shared service, pause the stale
+controller, set its owned resources to orphan on deletion and observe-only, and
+verify those policies before deleting its claim. Confirm the stale XR is deleting,
+then remove its pause so deletion and finalizer handling can finish without a
+normal reconciliation restoring destructive policies; verify the stale children
+are gone and the external service remains intact.
+
 Use native spawn/message/follow-up/interrupt facilities to coordinate workers.
 Interrupt for an actual redirect, cancellation or unsafe overlap, not because an
 observation timed out. Preserve live process handles and perform required cleanup.
@@ -195,6 +204,12 @@ maintenance, specialization, learned state machines and lineage-driven faults ar
 possible techniques, not mandatory architecture. Add one only when an actual
 qualification exposes a concrete blocking gap and the engine-extension rule permits
 it. Research interest is not a worker assignment in a product rebuild by default.
+
+An oracle manifest can name one revision while its executed source was copied
+from another runtime checkout. Before starting fixtures, resolve the immutable
+revision and compare its application-source bytes with the copied and executed
+bytes. Record vendor and generated ORM inputs separately as runtime prerequisites;
+their presence does not establish application-source identity.
 
 This workflow is a separation of responsibilities, not deterministic enforcement.
 Subagents share model limitations; a parent can still accept bad reasoning. Native
