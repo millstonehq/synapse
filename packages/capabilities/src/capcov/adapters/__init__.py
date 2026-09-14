@@ -57,7 +57,12 @@ def source_patterns(specs: list[tuple[str, dict | None]]) -> tuple[str, ...]:
     """
     patterns: list[str] = []
     for name, config in specs:
-        declared = list((config or {}).get("globs") or [])
+        config = config or {}
+        declared = list(config.get("globs") or [])
+        if not declared and name == "treesitter-routes":
+            declared = list(config.get("files") or [])
+        if not declared and name == "structured-spec" and config.get("document"):
+            declared = [config["document"]]
         patterns.extend(
             declared or ADAPTER_SOURCE_PATTERNS.get(name, DEFAULT_SOURCE_PATTERNS)
         )

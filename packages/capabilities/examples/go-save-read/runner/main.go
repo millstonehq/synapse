@@ -122,30 +122,33 @@ func start(server string) (*process, bool) {
 		must(cmd.Start())
 		p := &process{cmd: cmd, base: "http://127.0.0.1:" + port, done: make(chan error, 1)}
 		go func() { p.done <- cmd.Wait() }()
-		if p.ready() {
+		ready, exited := p.ready()
+		if ready {
 			return p, true
 		}
-		p.stop()
+		if !exited {
+			p.stop()
+		}
 	}
 	return nil, false
 }
 
 // ready returns false the moment the process exits, so a bind failure costs one
 // retry instead of the whole readiness budget.
-func (p *process) ready() bool {
+func (p *process) ready() (ready bool, exited bool) {
 	for i := 0; i < 400; i++ {
 		select {
 		case <-p.done:
-			return false
+			return false, true
 		default:
 		}
 		if resp, e := http.Get(p.base + "/notes"); e == nil {
 			_ = resp.Body.Close()
-			return true
+			return true, false
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
-	return false
+	return false, false
 }
 
 func (p *process) stop() {

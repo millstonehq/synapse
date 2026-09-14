@@ -425,7 +425,10 @@ class SourcePatternTests(unittest.TestCase):
             ("treesitter-routes", {"globs": ["**/*.go", "routes/*.go"]}),
             ("structured-spec", {"document": "openapi.json"}),
         ]
-        self.assertEqual(cli._source_patterns(specs), ("**/*.go", "routes/*.go"))
+        self.assertEqual(
+            cli._source_patterns(specs),
+            ("**/*.go", "routes/*.go", "openapi.json"),
+        )
 
     def test_legacy_adapter_keeps_python_provenance_default(self) -> None:
         self.assertEqual(
@@ -451,6 +454,17 @@ class SourcePatternTests(unittest.TestCase):
     def test_unknown_adapter_never_shrinks_the_tree_to_nothing(self) -> None:
         self.assertEqual(
             cli._source_patterns([("some-future-adapter", {})]), ("**/*.py",)
+        )
+
+    def test_route_files_and_structured_document_are_hashed(self) -> None:
+        self.assertEqual(
+            cli._source_patterns(
+                [
+                    ("treesitter-routes", {"files": ["routes.go"]}),
+                    ("structured-spec", {"document": "openapi.json"}),
+                ]
+            ),
+            ("routes.go", "openapi.json"),
         )
 
     def test_discover_records_the_patterns_its_hash_was_taken_over(self) -> None:
