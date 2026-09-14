@@ -61,6 +61,7 @@
             git
             jq
             hyperfine
+            souffle
             values.shenGo
           ];
           # macOS login shells run path_helper after `nix develop` sets PATH.
@@ -108,6 +109,19 @@
               echo "malformed Shen unexpectedly succeeded" >&2
               exit 1
             fi
+          '';
+
+          souffle-recursive-typed-smoke = pkgs.runCommand "souffle-recursive-typed-smoke" {
+            nativeBuildInputs = [ pkgs.souffle ];
+          } ''
+            mkdir -p facts output "$out"
+            cp ${./tests/souffle/recursive-typed.dl} recursive-typed.dl
+            cp ${./tests/souffle/edge.facts} facts/edge.facts
+            souffle --version | tee "$out/version.txt"
+            souffle -F facts -D output recursive-typed.dl
+            sort output/reachable.csv > reachable.sorted.csv
+            diff -u ${./tests/souffle/reachable.expected.csv} reachable.sorted.csv
+            cp reachable.sorted.csv "$out/reachable.csv"
           '';
 
           capability-regression = pkgs.runCommand "capcov-capability-regression" {
