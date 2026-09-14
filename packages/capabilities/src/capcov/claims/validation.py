@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Iterable, Mapping
 
 from .ir import (Aggregation, Atom, Bundle, Claim, Comparison, Constant,
-                 RelationDecl, Rule, TypeName, Variable)
+                 RelationDecl, Rule, TypeName, Variable, Evidence, EvidenceMapping, DiagnosticRule, EvidenceEffect)
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,19 @@ def _atom_vars(atom): return set().union(*(_variables(t) for t in atom.terms)) i
 
 def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
     issues: list[ValidationIssue] = []
+    policy = bundle.diagnostic_policy
+    policy_fields = {
+        "missing_premises": {"unresolved", "refuted", "invalid-input", "out-of-scope"},
+        "inconsistent_premises": {"inconsistent-premises"},
+        "out_of_scope": {"out-of-scope"},
+        "forbidden_evidence": {"invalid-input", "out-of-scope"},
+        "revocation": {"refutation", "stale"},
+        "completeness": {"required", "unresolved"},
+    }
+    for field_name, allowed in policy_fields.items():
+        value = getattr(policy, field_name, None)
+        if not isinstance(value, str) or value not in allowed:
+            issues.append(ValidationIssue("diagnostic-policy", f"invalid {field_name} policy value", f"diagnostic_policy.{field_name}"))
     relations = {r.name: r for r in bundle.relations if isinstance(r, RelationDecl)}
     if len(relations) != len(bundle.relations):
         issues.append(ValidationIssue("duplicate-relation", "relation names must be unique", "relations"))
@@ -37,12 +50,102 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
     for i, fact in enumerate(bundle.facts):
         _validate_atom(fact, relations, issues, f"facts[{i}]", {}, fact_only=True)
         if isinstance(fact, Atom) and fact.negated: issues.append(ValidationIssue("negative-fact", "facts must be positive", f"facts[{i}]"))
+    evidence_ids = set()
+    for i, record in enumerate(bundle.evidence):
+        path = f"evidence[{i}]"
+        if not isinstance(record, Evidence):
+            issues.append(ValidationIssue("evidence-type", "expected Evidence", path)); continue
+        if not isinstance(record.id, str) or not record.id: issues.append(ValidationIssue("evidence-id", "evidence id must be a non-empty string", path))
+        if record.id in evidence_ids: issues.append(ValidationIssue("duplicate-evidence-id", record.id, path))
+        evidence_ids.add(record.id)
+        _validate_atom(record.atom, relations, issues, path + ".atom", {}, fact_only=True)
+        if record.atom.negated: issues.append(ValidationIssue("negative-evidence", "evidence atoms must be positive", path))
+        declared = relations.get(record.atom.relation)
+        if declared and set(record.context.as_dict()) != set(declared.context_indices):
+            issues.append(ValidationIssue("evidence-context", "evidence context must exactly match relation context indices", path))
+        if not isinstance(record.source, str) or not record.source: issues.append(ValidationIssue("evidence-source", "evidence source must be a non-empty string", path))
+        if not isinstance(record.kind, str) or not record.kind: issues.append(ValidationIssue("evidence-kind", "evidence kind must be a non-empty string", path))
+        if declared:
+            names = [c.name for c in declared.columns]
+            for name, value in record.context.values:
+                if name in names:
+                    index = names.index(name)
+                    if not isinstance(record.atom.terms[index], Constant) or record.atom.terms[index].value != value:
+                        issues.append(ValidationIssue("evidence-context", f"context value does not equal atom column {name!r}", path))
     for i, rule in enumerate(bundle.rules):
         if isinstance(rule, Rule): _validate_rule(rule, relations, issues, f"rules[{i}]")
         else: issues.append(ValidationIssue("rule-type", "expected Rule", f"rules[{i}]"))
     for i, claim in enumerate(bundle.claims):
         if isinstance(claim, Claim): _validate_claim(claim, relations, issues, f"claims[{i}]")
         else: issues.append(ValidationIssue("claim-type", "expected Claim", f"claims[{i}]"))
+    seen_claim_ids = set()
+    for i, claim in enumerate(bundle.claims):
+        if isinstance(claim, Claim) and (not isinstance(claim.id, str) or not claim.id):
+            issues.append(ValidationIssue("claim-id", "claim id is mandatory", f"claims[{i}]"))
+        if isinstance(claim, Claim) and claim.id:
+            if claim.id in seen_claim_ids: issues.append(ValidationIssue("duplicate-claim-id", claim.id, f"claims[{i}]"))
+            seen_claim_ids.add(claim.id)
+    if any(isinstance(c, Claim) and c.id for c in bundle.claims):
+        for i, mapping in enumerate(bundle.mappings):
+            if not mapping.claim_id or mapping.claim_id not in seen_claim_ids:
+                issues.append(ValidationIssue("mapping-claim-id", "mapping must name an existing claim id", f"mappings[{i}]"))
+        for i, diagnostic in enumerate(bundle.diagnostics):
+            if not diagnostic.claim_id or diagnostic.claim_id not in seen_claim_ids:
+                issues.append(ValidationIssue("diagnostic-claim-id", "diagnostic must name an existing claim id", f"diagnostics[{i}]"))
+    for i, mapping in enumerate(bundle.mappings):
+        path = f"mappings[{i}]"
+        if not isinstance(mapping, EvidenceMapping):
+            issues.append(ValidationIssue("mapping-type", "expected EvidenceMapping", path)); continue
+        if not isinstance(mapping.effect, EvidenceEffect): issues.append(ValidationIssue("mapping-effect", "unsupported evidence effect", path))
+        if mapping.claim_relation not in relations: issues.append(ValidationIssue("mapping-claim", mapping.claim_relation, path))
+        if mapping.evidence_relation not in relations: issues.append(ValidationIssue("mapping-evidence", mapping.evidence_relation, path))
+        for context_name in mapping.context_indices:
+            claim_decl = relations.get(mapping.claim_relation)
+            evidence_decl = relations.get(mapping.evidence_relation)
+            if not claim_decl or context_name not in claim_decl.context_indices: issues.append(ValidationIssue("mapping-context", context_name, path))
+            if not evidence_decl or context_name not in evidence_decl.context_indices: issues.append(ValidationIssue("mapping-context", context_name, path))
+        claim_decl = relations.get(mapping.claim_relation); evidence_decl = relations.get(mapping.evidence_relation)
+        if claim_decl and evidence_decl:
+            c_names = {c.name for c in claim_decl.columns}; e_names = {c.name for c in evidence_decl.columns}
+            for left, right in mapping.bindings:
+                if left not in c_names or right not in e_names:
+                    issues.append(ValidationIssue("mapping-binding", f"unknown projection {left!r}->{right!r}", path))
+            if len({left for left, _ in mapping.bindings}) != len(mapping.bindings) or len({right for _, right in mapping.bindings}) != len(mapping.bindings):
+                issues.append(ValidationIssue("mapping-binding", "duplicate projection binding", path))
+            covered = {left for left, _ in mapping.bindings}
+            if not set(mapping.context_indices).issubset(covered):
+                issues.append(ValidationIssue("mapping-coverage", "context mapping is not covered by bindings", path))
+    allowed_status = {"complete", "invalid-input", "inconsistent-premises", "resource-exhausted", "unsupported-construct", "stale", "out-of-scope"}
+    for i, diagnostic in enumerate(bundle.diagnostics):
+        path = f"diagnostics[{i}]"
+        if not isinstance(diagnostic, DiagnosticRule): issues.append(ValidationIssue("diagnostic-type", "expected DiagnosticRule", path)); continue
+        if not isinstance(diagnostic.effect, EvidenceEffect): issues.append(ValidationIssue("diagnostic-effect", "unsupported diagnostic effect", path))
+        predicate = dict(diagnostic.predicate)
+        if predicate:
+            operator = predicate.get("operator")
+            relation = relations.get(diagnostic.trigger_relation)
+            column = next((c for c in relation.columns if c.name == predicate.get("column")), None) if relation else None
+            if operator not in {"=", "!=", "in", "not-in", "exists"}:
+                issues.append(ValidationIssue("diagnostic-predicate", "unsupported diagnostic predicate operator", path))
+            if column is None: issues.append(ValidationIssue("diagnostic-predicate", "predicate column is not declared by trigger relation", path))
+            value = predicate.get("value")
+            values = value if operator in {"in", "not-in"} and isinstance(value, (list, tuple)) else ([] if operator in {"in", "not-in"} else [value])
+            if operator in {"in", "not-in"} and not isinstance(value, (list, tuple)): issues.append(ValidationIssue("diagnostic-predicate", "set predicate value must be a list", path))
+            if operator in {"=", "!=", "in", "not-in"} and column:
+                for item in values:
+                    inferred = TypeName.BOOLEAN if isinstance(item, bool) else TypeName.INTEGER if isinstance(item, int) else TypeName.SYMBOL if isinstance(item, str) else None
+                    if inferred != column.type: issues.append(ValidationIssue("diagnostic-predicate", "predicate value type does not match column", path))
+        if diagnostic.trigger_relation not in relations: issues.append(ValidationIssue("diagnostic-trigger", diagnostic.trigger_relation, path))
+        if diagnostic.operational_status not in allowed_status: issues.append(ValidationIssue("diagnostic-status", diagnostic.operational_status, path))
+        relation = relations.get(diagnostic.trigger_relation)
+        if relation and not set(diagnostic.context_indices).issubset(set(relation.context_indices)):
+            issues.append(ValidationIssue("diagnostic-context", "diagnostic context is not declared by trigger relation", path))
+    known_ids = set(evidence_ids)
+    for i, record in enumerate(bundle.evidence):
+        for dependency in record.depends_on:
+            if not isinstance(dependency, str) or not dependency: issues.append(ValidationIssue("evidence-dependency", "dependency ids must be non-empty strings", f"evidence[{i}]"))
+            elif dependency not in known_ids and not dependency.startswith("external:"):
+                issues.append(ValidationIssue("unknown-evidence-dependency", dependency, f"evidence[{i}]"))
     _validate_recursion(bundle, relations, issues)
     return tuple(issues)
 

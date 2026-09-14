@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "program_schema_version": 1,
   "id": "12-unexpected-runtime-surface",
   "title": "Unknown runtime surface blocks whole-model completeness",
   "provenance": {
@@ -13,6 +14,7 @@
     "event": "evt-12",
     "attempt": "attempt-12"
   },
+  "rules": [],
   "claims": [
     {
       "id": "claim-model-complete",
@@ -40,7 +42,8 @@
         "run"
       ],
       "quantifier": "exists",
-      "domain": null
+      "domain": null,
+      "mappings": [{"evidence_relation":"runtime_surface_observed","effect":"observation","context_indices":["tenant","run"],"bindings":[["tenant","tenant"],["run","run"]]}], "diagnostics": [{"trigger_relation":"runtime_surface_observed","effect":"forbidden","operational_status":"out-of-scope","context_indices":["tenant","run"],"predicate":{"column":"surface","operator":"not-in","value":["route-known"]},"required":true}]
     }
   ],
   "facts": [
