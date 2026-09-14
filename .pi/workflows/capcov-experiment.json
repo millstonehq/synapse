@@ -7,7 +7,96 @@
   "agentTimeoutMinutes": 30,
   "reviewerCount": 2,
   "commitCheckpoints": true,
+  "mismatchRepairCap": 3,
+  "legacyTaskIds": ["toolchain", "corpus", "typed-ir", "reference-evaluator", "certificates", "support-maintenance", "shen-workbench", "specialization", "mutation-validation", "experiment-planner", "go-execution", "evaluation"],
+  "legacyTaskAliases": {"toolchain": "semantic-contract", "typed-ir": "semantic-contract"},
+  "waves": [
+    {"id": "semantic-contract", "title": "Datalog semantic contract", "maxParallel": 1, "pauseAfter": true, "reducer": "semantic-contract"},
+    {"id": "datalog-corpus", "title": "Adversarial Datalog corpus", "maxParallel": 1, "pauseAfter": true, "reducer": "datalog-corpus"},
+    {"id": "datalog-kernels", "title": "Independent Python and Souffle kernels", "maxParallel": 2, "pauseAfter": true, "reducer": "datalog-differential"},
+    {"id": "datalog-certificates", "title": "Engine-independent certificates", "maxParallel": 1, "pauseAfter": true, "reducer": "datalog-certificates"},
+    {"id": "datalog-target-go", "title": "Fresh target-go qualification", "maxParallel": 1, "pauseAfter": true, "reducer": "datalog-target-go"},
+    {"id": "datalog-evaluation", "title": "Datalog evaluation", "maxParallel": 1, "pauseAfter": true, "reducer": "datalog-evaluation"},
+    {"id": "toolchain", "title": "Reproducible toolchain", "maxParallel": 1, "pauseAfter": true, "reducer": "toolchain"},
+    {"id": "corpus", "title": "Reviewed adversarial corpus", "maxParallel": 1, "pauseAfter": true, "reducer": "corpus"},
+    {"id": "typed-ir", "title": "Canonical typed IR", "maxParallel": 1, "pauseAfter": true, "reducer": "typed-ir"},
+    {"id": "reference-evaluator", "title": "Reference evaluator", "maxParallel": 1, "pauseAfter": true, "reducer": "reference-evaluator"},
+    {"id": "certificates", "title": "Ground certificates", "maxParallel": 1, "pauseAfter": true, "reducer": "certificates"},
+    {"id": "support-maintenance", "title": "Support and maintenance queries", "maxParallel": 1, "pauseAfter": true, "reducer": "support-maintenance"},
+    {"id": "shen-workbench", "title": "Conditional Shen workbench", "maxParallel": 1, "pauseAfter": true, "reducer": "shen-workbench"},
+    {"id": "specialization", "title": "Conditional specialization", "maxParallel": 1, "pauseAfter": true, "reducer": "specialization"},
+    {"id": "mutation-validation", "title": "Mutation validation", "maxParallel": 1, "pauseAfter": true, "reducer": "mutation-validation"},
+    {"id": "experiment-planner", "title": "Bounded catalog experiment", "maxParallel": 1, "pauseAfter": true, "reducer": "experiment-planner"},
+    {"id": "go-execution", "title": "Real Go execution", "maxParallel": 1, "pauseAfter": true, "reducer": "go-execution"},
+    {"id": "evaluation", "title": "Complete evaluation", "maxParallel": 1, "pauseAfter": true, "reducer": "evaluation"}
+  ],
   "tasks": [
+    {
+      "id": "semantic-contract",
+      "title": "Freeze the typed Datalog semantic contract",
+      "planSections": ["13", "16"], "dependsOn": [], "wave": "semantic-contract", "role": "reducer",
+      "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/claim_semantics/**", "EXPERIMENT-PLAN.md"],
+      "acceptance": ["Typed finite relations, context identity, verdicts, operational states, and completeness rules are explicit."],
+      "gates": [{"name": "contract-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_contract*.py' -t ."]}]
+    },
+    {
+      "id": "datalog-corpus",
+      "title": "Create the reviewed adversarial Datalog corpus",
+      "planSections": ["13", "15"], "dependsOn": ["semantic-contract"], "wave": "datalog-corpus", "role": "reducer",
+      "writeSet": ["packages/capabilities/tests/claim_semantics/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
+      "acceptance": ["All required positive, negative, incomplete, contradictory, stale, and out-of-scope cases have reviewable expected relations."],
+      "gates": [{"name": "corpus-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_corpus*.py' -t ."]}]
+    },
+    {
+      "id": "python-reference",
+      "title": "Implement the independent Python Datalog reference kernel",
+      "planSections": ["16", "17"], "dependsOn": ["datalog-corpus"], "wave": "datalog-kernels", "role": "parallel", "worktree": ".capcov/pi-workflow/worktrees/python-reference",
+      "writeSet": ["packages/capabilities/src/capcov/claims/python/**", "packages/capabilities/tests/claim_semantics/python/**"],
+      "acceptance": ["A deterministic bounded fixed-point oracle emits normalized relations, provenance, verdicts, and resource status."],
+      "gates": [{"name": "python-kernel-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_evaluator_python*.py' -t ."]}]
+    },
+    {
+      "id": "souffle-kernel",
+      "title": "Implement the independent Souffle Datalog kernel",
+      "planSections": ["16", "22"], "dependsOn": ["datalog-corpus"], "wave": "datalog-kernels", "role": "parallel", "worktree": ".capcov/pi-workflow/worktrees/souffle-kernel",
+      "writeSet": ["packages/capabilities/experiments/claim-semantics/souffle/**", "packages/capabilities/tests/claim_semantics/souffle/**"],
+      "acceptance": ["Canonical relations compile and execute in real Souffle with bounded subprocesses and normalized output."],
+      "gates": [{"name": "souffle-kernel-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_souffle*.py' -t ."]}]
+    },
+    {
+      "id": "datalog-differential",
+      "title": "Differentially compare kernels and shrink mismatches",
+      "planSections": ["16", "22"], "dependsOn": ["python-reference", "souffle-kernel"], "wave": "datalog-kernels", "role": "reducer",
+      "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/claim_semantics/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
+      "acceptance": ["Both engines agree on canonical results; any disagreement yields a minimized replay bundle and blocks admission."],
+      "gates": [{"name": "differential-tests", "failureKind": "differential-mismatch", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_differential*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_shrinker*.py' -t ."]}]
+    },
+    {
+      "id": "datalog-certificates",
+      "title": "Add engine-independent certificates and explanations",
+      "planSections": ["17"], "dependsOn": ["datalog-differential"], "wave": "datalog-certificates", "role": "reducer",
+      "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/claim_semantics/**", "EXPERIMENT-PLAN.md"],
+      "acceptance": ["Ground certificates replay without search and bounded why/why-not results preserve truncation and scope."],
+      "gates": [{"name": "certificate-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_certificate*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_mutation*.py' -t ."]}]
+    },
+    {
+      "id": "datalog-target-go",
+      "title": "Qualify one fresh target-go notification claim",
+      "planSections": ["21"], "dependsOn": ["datalog-certificates"], "wave": "datalog-target-go", "role": "reducer", "mayBlock": true,
+      "admission": {"requiresEvents": ["wave-checkpoint:datalog-certificates"]},
+      "externalPrerequisites": ["CAPCOV_GO_FIXTURE_ROOT"],
+      "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/claim_semantics/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
+      "acceptance": ["Fresh real Go evidence and a negative control traverse both engines without trusting a receipt verdict."],
+      "gates": [{"name": "target-go-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "test -n \"$CAPCOV_GO_FIXTURE_ROOT\" && cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_go_receipt*.py' -t ."]}]
+    },
+    {
+      "id": "datalog-evaluation",
+      "title": "Run the Datalog evaluation and recommendation",
+      "planSections": ["22", "23", "25"], "dependsOn": ["datalog-target-go"], "wave": "datalog-evaluation", "role": "reducer",
+      "writeSet": ["packages/capabilities/tests/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
+      "acceptance": ["Correctness, mismatch, explanation, runtime, startup, memory, closure, and maintenance evidence produce a bounded recommendation."],
+      "gates": [{"name": "datalog-evaluation-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_benchmark*.py' -t ."]}]
+    },
     {
       "id": "toolchain",
       "title": "Pin the Nix and Shen toolchain",
@@ -20,10 +109,10 @@
         "Exact revisions and observed results are recorded in EXPERIMENT-PLAN.md."
       ],
       "gates": [
-        {"name": "flake-check", "command": ["nix", "flake", "check", "--no-update-lock-file"]},
+        {"name": "flake-check", "command": ["nix", "develop", "--no-update-lock-file", "--command", "nix", "flake", "check", "--no-update-lock-file"]},
         {"name": "regression", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]},
         {"name": "shen-smoke", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "set -eu; output=$(shen eval -e '(+ 20 22)'); test \"$output\" = 42; ! shen eval -e '(+ 1' >/dev/null 2>&1"]},
-        {"name": "all-systems-evaluate", "command": ["nix", "flake", "check", "--all-systems", "--no-build", "--no-update-lock-file"]}
+        {"name": "all-systems-evaluate", "command": ["nix", "develop", "--no-update-lock-file", "--command", "nix", "flake", "check", "--all-systems", "--no-build", "--no-update-lock-file"]}
       ]
     },
     {
@@ -110,6 +199,7 @@
       "title": "Implement real Shen elaboration, search, authority checks, and why-not",
       "planSections": ["18"],
       "dependsOn": ["support-maintenance"],
+      "admission": {"requiresEvents": ["wave-checkpoint:support-maintenance"]},
       "writeSet": ["packages/capabilities/shen/**", "packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
       "acceptance": [
         "Shen consumes canonical normalized rules and performs real elaboration and proof search.",
@@ -126,6 +216,7 @@
       "title": "Implement first-projection specialization and residual checking",
       "planSections": ["19"],
       "dependsOn": ["shen-workbench"],
+      "admission": {"requiresEvents": ["wave-checkpoint:shen-workbench"]},
       "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
       "acceptance": [
         "The residual checker is generated by specializing the executable interpreter representation, not duplicated templates.",
@@ -176,6 +267,7 @@
       "dependsOn": ["experiment-planner"],
       "externalPrerequisites": ["CAPCOV_GO_FIXTURE_ROOT"],
       "mayBlock": true,
+      "admission": {"requiresEvents": ["wave-checkpoint:experiment-planner"]},
       "writeSet": ["packages/capabilities/src/capcov/claims/**", "packages/capabilities/tests/**", "packages/capabilities/experiments/claim-semantics/**", "EXPERIMENT-PLAN.md"],
       "acceptance": [
         "A pinned external Go application revision and its consumer-owned reset/execution machinery are used.",
@@ -199,7 +291,7 @@
         "The report recommends retain, revise, or named production adoption without overstating evidence."
       ],
       "gates": [
-        {"name": "flake-check", "command": ["nix", "flake", "check"]},
+        {"name": "flake-check", "command": ["nix", "develop", "--no-update-lock-file", "--command", "nix", "flake", "check"]},
         {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]}
       ]
     }
