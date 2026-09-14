@@ -146,3 +146,14 @@ Verbs: `discover` / `plan` / `coverage` / `run` / `report` / `gate`. States: `co
 Do not re-teach the gate/baseline discipline — `tools/axon/capcov/baseline.README.md` already does, correctly; point at it rather than forking it.
 
 Tooling gaps this method exposes (extend the tool, do not file the method down to fit it): a `mutations` field + generalized fault-matrix runner; `discover` emitting the excluded-surface count and unresolved-language list as first-class fields; `plan` emitting the unreachable-from-initial set; a `--only <transition>` selector; and wiring `capcov flows run` into the driver that currently omits it. See `TOOLING-EXTENSIONS.md` beside this file.
+
+## Keep fixture premises independent of the candidate
+
+Build SQL fixtures from pinned incumbent DDL or executed migrations, and retain
+the source identity. Do not infer column names or types from candidate queries: a
+test schema that repeats the implementation can pass while the real database
+rejects it. Check required columns against the migrated fixture before running
+behavior. Likewise, a missing-object fixture cannot establish present-object
+serialization; retain that conditional dependency instead of hardcoding its
+observed output as the general contract. A discovered shared assumption invalidates
+the affected earlier evidence until the independent comparison is rerun.
