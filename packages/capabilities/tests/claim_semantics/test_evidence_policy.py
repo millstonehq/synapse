@@ -6,7 +6,7 @@ from pathlib import Path
 from .adapter import ROOT, bundle_payload, load_fixture
 from capcov.claims import (Bundle, Claim, Column, Constant, EvidenceEffect,
                            RelationDecl, assert_valid, bundle_from_json,
-                           canonical_json, schema_digest)
+                           canonical_json, schema_digest, render_outputs)
 
 
 class EvidencePolicyCompilationTests(unittest.TestCase):
@@ -125,6 +125,26 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
         # claims the two-evidence discrepancy; the renderer must not emit it.
         weakened = bundle_from_json(mutated, validate=True)
         self.assertNotEqual(set(weakened.outputs[2].requires_all_evidence), set(discrepancy.requires_all_evidence))
+        active = {"fact-route-a-static", "fact-route-b-runtime"}
+        self.assertTrue(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", active, "underived")))
+        self.assertFalse(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", {"fact-route-a-static"}, "underived")))
+        self.assertFalse(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", active, "supported")))
+
+    def test_rendered_output_shapes_match_all_four_expected_payload_classes(self):
+        expected = json.loads((ROOT / "expected.json").read_text())["cases"]
+        for path in sorted(ROOT.glob("[0-9][0-9]-*.json")):
+            bundle = load_fixture(path)
+            active = {record.id for record in bundle.evidence}
+            for claim_id, table in expected[path.stem]["claims"].items():
+                rendered = render_outputs(bundle, claim_id, active, "underived")
+                observed = {item["evidence_id"] for item in rendered if item["kind"] == "observed"}
+                forbidden = {item["evidence_id"] for item in rendered if item["kind"] == "forbidden"}
+                discrepancies = [item.get("fields", {}) for item in rendered if item["kind"] == "discrepancy"]
+                missing = [{**item.get("fields", {}), "relation": item.get("relation")} for item in rendered if item["kind"] == "missing_premise"]
+                self.assertEqual(observed, set(table["observed_leaves"]), path.stem)
+                self.assertEqual(forbidden, set(table["forbidden_leaves"]), path.stem)
+                self.assertEqual(discrepancies, table["discrepancies"], path.stem)
+                self.assertEqual(missing, table["missing_premises"], path.stem)
         payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
         payload["outputs"] = [{"kind": "missing_premise", "claim_id": "claim-terminal-delivery", "relation": "smtp_accepted", "fields": {"x": {"source": "constant", "type": "boolean", "value": "not-bool"}}}]
         with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
