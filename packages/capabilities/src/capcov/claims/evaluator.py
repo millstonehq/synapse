@@ -22,6 +22,8 @@ from .verdicts import (EvaluationBasis, EvaluationResult, OperationalStatus,
 
 Row = tuple[Any, ...]
 Environment = dict[str, Any]
+_MAX_PROOFS_PER_ROW = 32
+_MAX_CHILD_PROOFS_PER_MATCH = 4
 
 
 @dataclass(frozen=True)
@@ -149,14 +151,9 @@ class _Engine:
         self.check_limits()
         row = tuple(row)
         if row in self.rows[relation]:
-            # Retain a bounded collection of distinct proof paths.
-            paths = self.proofs[relation].setdefault(row, [])
-            key = canonical_json(proof.as_dict())
-            if all(canonical_json(existing.as_dict()) != key for existing in paths):
-                if self.limits.max_provenance is None or self.provenance_count < self.limits.max_provenance:
-                    paths.append(proof)
-                    paths.sort(key=lambda p: canonical_json(p.as_dict()))
-                    self.provenance_count += 1
+            # Keep the first canonical ground proof for each tuple.  Retaining
+            # every recursive alternative would recursively duplicate proof
+            # trees and make a finite closure exceed its resource budget.
             return False
         self.rows[relation].add(row)
         self.proofs[relation][row] = [proof]
@@ -240,7 +237,7 @@ class _Engine:
             for env, children in self._match_body(body, {}):
                 source_atom = rule.body[source_index]  # type: ignore[index]
                 candidates = list(self._match_atom(source_atom, env, positive_only=True))
-                if not candidates:
+                if not candidates and aggregate.operator in {"sum", "min", "max"}:
                     continue
                 source_decl = self.relations[aggregate.relation]
                 source_names = [c.name for c in source_decl.columns]
@@ -257,7 +254,8 @@ class _Engine:
                 elif aggregate.operator == "max":
                     result = max(_ground_term(source_atom.terms[index], candidate_env) for candidate_env, _ in candidates)
                 elif aggregate.operator == "any":
-                    result = bool(candidates)
+                    result = any(bool(_ground_term(source_atom.terms[index], candidate_env))
+                                 for candidate_env, _ in candidates)
                 elif aggregate.operator == "all":
                     result = bool(candidates) and all(bool(_ground_term(source_atom.terms[index], candidate_env))
                                                        for candidate_env, _ in candidates)
@@ -337,7 +335,8 @@ class _Engine:
                     ok = False
                     break
             if ok:
-                yield next_env, list(self.proofs[decl.name].get(row, ()))
+                proofs = self.proofs[decl.name].get(row, ())
+                yield next_env, list(proofs[:_MAX_CHILD_PROOFS_PER_MATCH])
 
     def evaluate_claim(self, index: int, claim: Claim) -> ClaimResult:
         decl = self.relations[claim.relation]
@@ -353,7 +352,12 @@ class _Engine:
             subresults = []
             for drow in domain_rows:
                 env = {name: value for name, value in zip(domain_names, drow)}
-                subclaim_terms = tuple(_ground_term(t, env) if isinstance(t, Variable) and t.name in env else t for t in claim.terms)
+                claim_decl = self.relations[claim.relation]
+                subclaim_terms = tuple(
+                    Constant(env[t.name], claim_decl.columns[position].type)
+                    if isinstance(t, Variable) and t.name in env else t
+                    for position, t in enumerate(claim.terms)
+                )
                 subclaim = Claim(claim.relation, subclaim_terms, claim.context, "exists", None)
                 subresults.append(self.evaluate_claim(index, subclaim).result)
             if any(r.operational != OperationalStatus.COMPLETE for r in subresults):
