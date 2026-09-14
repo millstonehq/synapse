@@ -47,6 +47,21 @@ class PythonEvaluatorTests(unittest.TestCase):
         result = evaluate(bundle).claims[0].result
         self.assertEqual(set(result.support), {"fact:a:[\"v\"]", "fact:b:[\"v\"]"})
 
+    def test_provenance_cap_is_complete_at_boundary_and_exhausted_one_over(self) -> None:
+        bundle = Bundle(
+            relations=(rel("a", ("x", "symbol")), rel("b", ("x", "symbol")), rel("c", ("x", "symbol"))),
+            facts=(fact("a", "v"), fact("b", "v")),
+            rules=(Rule(Atom("c", (Variable("x"),)), (Atom("a", (Variable("x"),)),), "from-a"),
+                   Rule(Atom("c", (Variable("x"),)), (Atom("b", (Variable("x"),)),), "from-b")),
+            claims=(Claim("c", (Constant("v"),)),),
+        )
+        # Two fact proofs plus two distinct c proofs exactly fill the cap.
+        complete = evaluate(bundle, ResourceLimits(max_provenance=4))
+        self.assertEqual(complete.status, OperationalStatus.COMPLETE)
+        exhausted = evaluate(bundle, ResourceLimits(max_provenance=3))
+        self.assertEqual(exhausted.status, OperationalStatus.RESOURCE_EXHAUSTED)
+        self.assertEqual(exhausted.claims[0].operational, OperationalStatus.RESOURCE_EXHAUSTED)
+
     def test_comparison_and_negation_require_no_false_open_world_success(self) -> None:
         relations = (
             rel("item", ("name", "symbol"), ("n", "integer")),

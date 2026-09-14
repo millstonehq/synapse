@@ -165,14 +165,16 @@ class _Engine:
         row = tuple(row)
         if row in self.rows[relation]:
             paths = self.proofs[relation].setdefault(row, [])
-            if self.limits.max_provenance is None or self.provenance_count < self.limits.max_provenance:
-                if any(child.contains(relation, row) for child in proof.children):
-                    return False
-                signature = proof.signature()
-                if all(existing.signature() != signature for existing in paths):
-                    paths.append(proof)
-                    paths.sort(key=repr)
-                    self.provenance_count += 1
+            if any(child.contains(relation, row) for child in proof.children):
+                return False
+            signature = proof.signature()
+            if any(existing.signature() == signature for existing in paths):
+                return False
+            if self.limits.max_provenance is not None and self.provenance_count >= self.limits.max_provenance:
+                raise _LimitReached("evaluation exceeded the provenance limit")
+            paths.append(proof)
+            paths.sort(key=repr)
+            self.provenance_count += 1
             return False
         self.rows[relation].add(row)
         self.proofs[relation][row] = [proof]
@@ -355,11 +357,7 @@ class _Engine:
                     break
             if ok:
                 proofs = self.proofs[decl.name].get(row, ())
-                if self.limits.max_provenance is None:
-                    selected = proofs
-                else:
-                    selected = proofs[:max(1, self.limits.max_provenance - self.provenance_count)]
-                yield next_env, list(selected)
+                yield next_env, list(proofs)
 
     def evaluate_claim(self, index: int, claim: Claim) -> ClaimResult:
         decl = self.relations[claim.relation]
