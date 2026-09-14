@@ -93,6 +93,7 @@ class OutputTemplate:
     requires_any_evidence: tuple[str, ...] = ()
     excludes_evidence: tuple[str, ...] = ()
     when_claim: str | None = None
+    causal_missing: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "kind", OutputKind(self.kind))
@@ -483,7 +484,7 @@ def bundle_from_json(source: str | bytes | Mapping[str, Any], *, validate: bool 
             raise ValueError("diagnostic predicate column/operator must be strings")
         return DiagnosticRule(x["trigger_relation"], x["effect"], x.get("operational_status", "complete"), tuple(x.get("context_indices", ())), x.get("when_missing", False), x.get("required", False), x.get("message", ""), x.get("claim_id", ""), tuple(sorted(predicate.items())))
     def output(x):
-        x = _strict_object(x, {"kind", "claim_id", "evidence_id", "relation", "fields", "requires_all_evidence", "requires_any_evidence", "excludes_evidence", "when_claim"}, "output")
+        x = _strict_object(x, {"kind", "claim_id", "evidence_id", "relation", "fields", "requires_all_evidence", "requires_any_evidence", "excludes_evidence", "when_claim", "causal_missing"}, "output")
         fields_raw = x.get("fields") or {}
         if isinstance(fields_raw, (list, tuple)):
             pairs = []
@@ -501,7 +502,7 @@ def bundle_from_json(source: str | bytes | Mapping[str, Any], *, validate: bool 
             values.append((name, TemplateValue(value.get("source", "constant"), value.get("column", ""), value.get("type", "symbol"), value.get("value"), value.get("evidence_id"))))
         kind = x["kind"]
         default_when = "underived" if kind == "discrepancy" else None
-        return OutputTemplate(kind, x["claim_id"], x.get("evidence_id"), x.get("relation"), tuple(values), tuple(x.get("requires_all_evidence", ())), tuple(x.get("requires_any_evidence", ())), tuple(x.get("excludes_evidence", ())), x.get("when_claim", default_when))
+        return OutputTemplate(kind, x["claim_id"], x.get("evidence_id"), x.get("relation"), tuple(values), tuple(x.get("requires_all_evidence", ())), tuple(x.get("requires_any_evidence", ())), tuple(x.get("excludes_evidence", ())), x.get("when_claim", default_when), x.get("causal_missing", False))
     policy_raw = raw.get("diagnostic_policy") or {}
     _strict_object(policy_raw, {"missing_premises", "inconsistent_premises", "out_of_scope", "forbidden_evidence", "revocation", "completeness"}, "diagnostic_policy")
     policy = DiagnosticPolicy(**policy_raw)

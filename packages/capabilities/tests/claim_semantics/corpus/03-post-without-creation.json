@@ -83,7 +83,7 @@
       ],
       "quantifier": "exists",
       "domain": null,
-      "mappings": [],
+      "mappings": [{"evidence_relation":"http_post_accepted","effect":"observation","context_indices":["tenant","event"],"bindings":[["tenant","tenant"],["event","event"]]}],
       "diagnostics": [{"trigger_relation":"response_implies_commit__rejected","effect":"forbidden","operational_status":"invalid-input","context_indices":[],"required":true}]
     }
   ],

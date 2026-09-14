@@ -126,9 +126,9 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
         weakened = bundle_from_json(mutated, validate=True)
         self.assertNotEqual(set(weakened.outputs[2].requires_all_evidence), set(discrepancy.requires_all_evidence))
         active = {"fact-route-a-static", "fact-route-b-runtime"}
-        self.assertTrue(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", active, "underived")))
-        self.assertFalse(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", {"fact-route-a-static"}, "underived")))
-        self.assertFalse(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", active, "supported")))
+        self.assertTrue(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", active, active, "underived", {"same_surface"})))
+        self.assertFalse(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", {"fact-route-a-static"}, {"fact-route-a-static"}, "underived", {"same_surface"})))
+        self.assertFalse(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", active, active, "supported", {"same_surface"})))
 
     def test_rendered_output_shapes_match_all_four_expected_payload_classes(self):
         expected = json.loads((ROOT / "expected.json").read_text())["cases"]
@@ -136,7 +136,7 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
             bundle = load_fixture(path)
             active = {record.id for record in bundle.evidence}
             for claim_id, table in expected[path.stem]["claims"].items():
-                rendered = render_outputs(bundle, claim_id, active, "underived")
+                rendered = render_outputs(bundle, claim_id, active, active, "underived", {item["relation"] for item in table["missing_premises"]})
                 observed = {item["evidence_id"] for item in rendered if item["kind"] == "observed"}
                 forbidden = {item["evidence_id"] for item in rendered if item["kind"] == "forbidden"}
                 discrepancies = [item.get("fields", {}) for item in rendered if item["kind"] == "discrepancy"]
