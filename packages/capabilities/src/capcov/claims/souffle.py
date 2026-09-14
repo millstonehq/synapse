@@ -181,13 +181,15 @@ def translate_bundle(bundle: Bundle) -> SouffleProgram:
                 source_columns = {column.name: column.type for column in source.columns}
                 group_terms = [variable_aliases.get(name, _identifier(name)) for name in agg.group_by]
                 group_types = [_stype(source_columns[name]) for name in agg.group_by]
-                extra_decls.append(f".decl {helper}({', '.join(g + ':' + t for g, t in zip(group_terms, group_types))}, n_true:number, n_total:number)")
+                helper_fields = [g + ':' + t for g, t in zip(group_terms, group_types)] + ["n_true:number", "n_total:number"]
+                extra_decls.append(f".decl {helper}({', '.join(helper_fields)})")
                 helper_body = [x for x in body if x != source_text]
                 true_source = _atom(source_atom, relation_map, relation_aliases, column_aliases, variable_aliases, {value_index: "1"})
                 helper_body.extend([f"n_total = count : {source_text}", f"n_true = count : {true_source}"])
-                extra_rules.append(f"{helper}({', '.join(group_terms)}, n_true, n_total) :- {', '.join(helper_body)}.")
+                helper_call = ", ".join([*group_terms, "n_true", "n_total"])
+                extra_rules.append(f"{helper}({helper_call}) :- {', '.join(helper_body)}.")
                 body = [x for x in body if x != source_text]
-                body.append(f"{helper}({', '.join(group_terms)}, n_true, n_total)")
+                body.append(f"{helper}({helper_call})")
                 if agg.operator == "any":
                     body.append("n_true > 0")
                 else:
