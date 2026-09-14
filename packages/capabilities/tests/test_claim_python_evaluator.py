@@ -141,12 +141,32 @@ class PythonEvaluatorTests(unittest.TestCase):
                          Atom("group_closed", (Variable("name"),))), "all-ok",
                         Aggregation("ok", "item", ("name",), "ok", "all", "group", "group_closed"))
         bundle = Bundle(relations=relations,
-                        facts=(fact("item", "a", True), fact("item", "a", False), fact("group", "a"), fact("group_closed", "a")),
+                        facts=(fact("item", "a", True), fact("item", "a", False), fact("group", "a"),
+                               fact("group", "b"), fact("group_closed", "a"), fact("group_closed", "b")),
                         rules=(any_rule, all_rule), claims=(Claim("any_ok", (Constant("a"), Constant(True))),))
         report = evaluate(bundle)
-        self.assertEqual(report.relation_rows("any_ok"), (("a", True),))
-        self.assertEqual(report.relation_rows("all_ok"), (("a", False),))
+        self.assertEqual(report.relation_rows("any_ok"), (("a", True), ("b", False)))
+        self.assertEqual(report.relation_rows("all_ok"), (("a", False), ("b", False)))
         self.assertEqual(report.claims[0].semantic, SemanticVerdict.SUPPORTED)
+
+    def test_multiple_recursive_body_atoms_each_use_delta_pivots(self) -> None:
+        relations = (
+            rel("edge", ("src", "symbol"), ("dst", "symbol")),
+            rel("paired", ("src", "symbol"), ("left", "symbol"), ("right", "symbol")),
+        )
+        seed = Rule(Atom("paired", (Variable("x"), Variable("y"), Variable("z"))),
+                    (Atom("edge", (Variable("x"), Variable("y"))),
+                     Atom("edge", (Variable("x"), Variable("z")))), "seed-pairs")
+        # Both body atoms depend on the same recursive relation.  The result
+        # requires using each newly-added tuple as a possible pivot.
+        step = Rule(Atom("paired", (Variable("x"), Variable("y"), Variable("w"))),
+                    (Atom("paired", (Variable("x"), Variable("y"), Variable("z"))),
+                     Atom("paired", (Variable("x"), Variable("z"), Variable("w")))), "extend-pairs")
+        bundle = Bundle(relations=relations,
+                        facts=(fact("edge", "a", "b"), fact("edge", "a", "c"), fact("edge", "a", "e")),
+                        rules=(seed, step), claims=(Claim("paired", (Constant("a"), Constant("b"), Constant("e"))),))
+        report = evaluate(bundle)
+        self.assertIn(("a", "b", "e"), report.relation_rows("paired"))
 
 
 if __name__ == "__main__":
