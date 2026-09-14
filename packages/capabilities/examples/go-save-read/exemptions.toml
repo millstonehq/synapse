@@ -8,7 +8,7 @@ reason = "This shallow route experiment claims HTTP surface behavior, not branch
 entity = "boundary:python:mounted-route-confirmation"
 cell = "unresolved"
 date = "2026-09-14"
-reason = "The runner reports an exact mount census, but the core reconciliation path does not yet discharge this static boundary."
+reason = "The runner DECLARES the two surfaces it drives; the fixture server does not enumerate its mux, so this is not an observed census and the core reconciliation path does not discharge this static boundary."
 
 [[exempt]]
 entity = "boundary:python:roles-and-configurations"
