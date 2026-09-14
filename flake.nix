@@ -93,6 +93,7 @@
         let
           values = forSystem system;
           pkgs = values.pkgs;
+          capabilitiesSource = pkgs.lib.cleanSource ./packages/capabilities;
         in {
           shen-package = values.shenGo;
 
@@ -112,7 +113,7 @@
           capability-regression = pkgs.runCommand "capcov-capability-regression" {
             nativeBuildInputs = [ pkgs.python312 ];
           } ''
-            cp -R ${self}/packages/capabilities source
+            cp -R ${capabilitiesSource} source
             chmod -R u+w source
             cd source
             PYTHONPATH=src python -m unittest discover -s tests -t .
