@@ -15,6 +15,7 @@
     "recipient": "a@example.test",
     "attempt": "attempt-05"
   },
+  "outputs": [{"kind":"observed","claim_id":"claim-target-mail","evidence_id":"fact-mail-other-event"},{"kind":"observed","claim_id":"claim-target-mail","evidence_id":"fact-mail-target"},{"kind":"forbidden","claim_id":"claim-target-mail","evidence_id":"fact-mail-target"},{"kind":"discrepancy","claim_id":"claim-target-mail","fields":{"kind":{"value":"wrong-event"},"observed":{"value":"evt-other"},"claimed":{"value":"evt-target"}}},{"kind":"missing_premise","claim_id":"claim-target-mail","relation":"mail_sent","fields":{"reason":{"value":"no accepted message for target event"}}}],
   "rules": [{"name":"target_mail_requires_event_match","claim_id":"claim-target-mail","premises":[{"relation":"smtp_accepted","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"recipient","evidence_column":"recipient","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"},{"claim_column":"attempt","evidence_column":"attempt","type":"symbol"}]}]}],
   "claims": [
     {
@@ -54,7 +55,7 @@
       ],
       "quantifier": "exists",
       "domain": null,
-      "mappings": [{"evidence_relation":"smtp_accepted","effect":"support","context_indices":["tenant","event","recipient","run","attempt"],"bindings":[["tenant","tenant"],["event","event"],["recipient","recipient"],["run","run"],["attempt","attempt"]]}], "diagnostics": []
+      "mappings": [{"evidence_relation":"smtp_accepted","effect":"support","context_indices":["tenant","event","recipient","run","attempt"],"bindings":[["tenant","tenant"],["event","event"],["recipient","recipient"],["run","run"],["attempt","attempt"]]},{"evidence_relation":"smtp_accepted","effect":"observation","context_indices":["tenant"],"bindings":[["tenant","tenant"]]},{"evidence_relation":"smtp_acceptance_missing","effect":"observation","context_indices":["tenant","event","recipient","run"],"bindings":[["tenant","tenant"],["event","event"],["recipient","recipient"],["run","run"]]}], "diagnostics": []
     }
   ],
   "facts": [

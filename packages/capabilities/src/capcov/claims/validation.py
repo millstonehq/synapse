@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from typing import Iterable, Mapping
 
 from .ir import (Aggregation, Atom, Bundle, Claim, Comparison, Constant,
-                 RelationDecl, Rule, TypeName, Variable, Evidence, EvidenceMapping, DiagnosticRule, EvidenceEffect)
+                 RelationDecl, Rule, TypeName, Variable, Evidence, EvidenceMapping, DiagnosticRule, EvidenceEffect, OutputTemplate, OutputKind)
+
+DIAGNOSTIC_VOCABULARY = frozenset({"same_surface", "row_committed", "mail_sent", "same_context", "independent_support", "all_compatible_histories_agree", "model_complete", "sql_terminal_ack", "no_resend_forever"})
 
 
 @dataclass(frozen=True)
@@ -147,6 +149,67 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
             if not isinstance(dependency, str) or not dependency: issues.append(ValidationIssue("evidence-dependency", "dependency ids must be non-empty strings", f"evidence[{i}]"))
             elif dependency not in known_ids and not dependency.startswith("external:"):
                 issues.append(ValidationIssue("unknown-evidence-dependency", dependency, f"evidence[{i}]"))
+    claim_ids = {claim.id for claim in bundle.claims if isinstance(claim, Claim) and claim.id}
+    evidence_by_id = {record.id: record for record in bundle.evidence if isinstance(record, Evidence)}
+    for i, output in enumerate(bundle.outputs):
+        path = f"outputs[{i}]"
+        if not isinstance(output, OutputTemplate): issues.append(ValidationIssue("output-type", "expected OutputTemplate", path)); continue
+        if not isinstance(output.kind, OutputKind): issues.append(ValidationIssue("output-kind", "unknown output kind", path)); continue
+        if output.claim_id not in claim_ids: issues.append(ValidationIssue("output-claim", output.claim_id, path))
+        explicit_triggers = (*output.requires_all_evidence, *output.requires_any_evidence, *output.excludes_evidence)
+        all_triggers = (*explicit_triggers, *((output.evidence_id,) if output.evidence_id else ()))
+        if len(set(explicit_triggers)) != len(explicit_triggers): issues.append(ValidationIssue("output-trigger", "duplicate evidence trigger", path))
+        # The output's payload evidence_id is the value being rendered; only
+        # explicit trigger declarations are causal prerequisites.
+        for evidence_id in explicit_triggers:
+            if not isinstance(evidence_id, str) or not evidence_id or evidence_id not in evidence_by_id:
+                issues.append(ValidationIssue("output-trigger", "trigger evidence is not declared", path))
+        if output.requires_any_evidence is not None and not isinstance(output.requires_any_evidence, tuple): issues.append(ValidationIssue("output-trigger", "any-evidence trigger must be a sequence", path))
+        if output.when_claim not in {None, "derived", "underived", "supported", "refuted", "unresolved", "conflicting", "always"}:
+            issues.append(ValidationIssue("output-trigger", "unknown claim trigger", path))
+        if output.when_claim == "always" and output.kind in {OutputKind.DISCREPANCY, OutputKind.MISSING_PREMISE}:
+            issues.append(ValidationIssue("output-trigger", "diagnostic output cannot use always claim trigger", path))
+        if output.relation and output.kind != OutputKind.MISSING_PREMISE:
+            issues.append(ValidationIssue("output-relation", "relation is only valid for missing premise outputs", path))
+        if output.kind in {OutputKind.DISCREPANCY, OutputKind.MISSING_PREMISE} and not (output.requires_all_evidence or output.requires_any_evidence or output.when_claim or output.relation):
+            issues.append(ValidationIssue("output-trigger", "diagnostic output has no trigger", path))
+        if output.kind in {OutputKind.OBSERVED, OutputKind.FORBIDDEN} and (not output.evidence_id or output.evidence_id not in evidence_by_id):
+            issues.append(ValidationIssue("output-evidence", "observed/forbidden output must reference evidence", path))
+        if output.kind == OutputKind.MISSING_PREMISE and not output.relation: issues.append(ValidationIssue("output-relation", "missing premise output needs a relation", path))
+        if output.kind == OutputKind.MISSING_PREMISE and output.relation not in relations and output.relation not in DIAGNOSTIC_VOCABULARY:
+            issues.append(ValidationIssue("output-relation", "unknown diagnostic vocabulary relation", path))
+        causal_relations = {mapping.evidence_relation for mapping in bundle.mappings if mapping.claim_id == output.claim_id}
+        causal_relations.update(diagnostic.trigger_relation for diagnostic in bundle.diagnostics if diagnostic.claim_id == output.claim_id)
+        claim = next((claim for claim in bundle.claims if claim.id == output.claim_id), None)
+        if claim:
+            causal_relations.update(atom.relation for rule in bundle.rules if rule.head.relation == claim.relation for atom in rule.body)
+        for evidence_id in explicit_triggers:
+            evidence = evidence_by_id.get(evidence_id)
+            if evidence and evidence.atom.relation not in causal_relations:
+                issues.append(ValidationIssue("output-trigger", "trigger evidence is not causally connected to claim", path))
+        for name, value in output.fields:
+            if not isinstance(name, str) or not name: issues.append(ValidationIssue("output-field", "field names must be non-empty strings", path))
+            if value.source not in {"constant", "claim", "evidence"}: issues.append(ValidationIssue("output-source", "unknown template value source", path)); continue
+            if value.source == "constant":
+                _validate_term(Constant(value.value, value.type), value.type, {}, issues, f"{path}.fields.{name}")
+                continue
+            relation = None
+            if value.source == "claim":
+                claim = next((c for c in bundle.claims if isinstance(c, Claim) and c.id == output.claim_id), None)
+                relation = relations.get(claim.relation) if claim else None
+            elif value.source == "evidence":
+                evidence = evidence_by_id.get(value.evidence_id or output.evidence_id or "")
+                relation = relations.get(evidence.atom.relation) if evidence else None
+            if value.source != "constant" and not relation: issues.append(ValidationIssue("output-reference", "template relation reference is unavailable", path)); continue
+            if value.source != "constant":
+                if value.column == "id" and value.type != TypeName.SYMBOL: issues.append(ValidationIssue("output-type", "evidence id references are symbols", path))
+                elif value.column not in {column.name for column in relation.columns}: issues.append(ValidationIssue("output-column", value.column, path))
+                elif value.type != next(column.type for column in relation.columns if column.name == value.column): issues.append(ValidationIssue("output-type", "template reference type mismatch", path))
+    output_keys = []
+    for output in bundle.outputs:
+        output_keys.append(repr((output.kind, output.claim_id, output.evidence_id, output.relation, output.fields, output.requires_all_evidence, output.requires_any_evidence, output.excludes_evidence, output.when_claim)))
+    if len(output_keys) != len(set(output_keys)):
+        issues.append(ValidationIssue("output-duplicate", "duplicate canonical output template", "outputs"))
     _validate_recursion(bundle, relations, issues)
     return tuple(issues)
 

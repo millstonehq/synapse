@@ -16,6 +16,7 @@
     "recipient": "a@example.test"
   },
   "rules": [],
+  "outputs": [{"kind":"observed","claim_id":"claim-terminal","evidence_id":"fact-allow"},{"kind":"observed","claim_id":"claim-terminal","evidence_id":"fact-deny"},{"kind":"discrepancy","claim_id":"claim-terminal","when_claim":"conflicting","fields":{"kind":{"value":"same-scope-polarity-conflict"}}}],
   "claims": [
     {
       "id": "claim-terminal",

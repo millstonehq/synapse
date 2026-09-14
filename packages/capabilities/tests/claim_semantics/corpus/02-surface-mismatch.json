@@ -16,6 +16,7 @@
     "surface": "route-b",
     "attempt": "attempt-02"
   },
+  "outputs": [{"kind":"observed","claim_id":"claim-effect","evidence_id":"fact-route-a-static","requires_all_evidence":["fact-route-a-static"]},{"kind":"observed","claim_id":"claim-effect","evidence_id":"fact-route-b-runtime","requires_all_evidence":["fact-route-b-runtime"]},{"kind":"discrepancy","claim_id":"claim-effect","requires_all_evidence":["fact-route-a-static","fact-route-b-runtime"],"fields":{"kind":{"value":"surface-mismatch"},"surfaces":{"value":["route-a","route-b"],"type":"json-metadata-only"}}},{"kind":"missing_premise","claim_id":"claim-effect","relation":"same_surface","requires_all_evidence":["fact-route-a-static","fact-route-b-runtime"],"fields":{"reason":{"value":"static and runtime observations name different routes"}}}],
   "rules": [{"name":"effect_requires_static_and_runtime_route","claim_id":"claim-effect","premises":[{"relation":"static_route_exists","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"surface","evidence_column":"surface","type":"symbol"}]},{"relation":"runtime_route_observed","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"surface","evidence_column":"surface","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]}]}],
   "claims": [
     {
@@ -52,7 +53,7 @@
       ],
       "quantifier": "exists",
       "domain": null,
-      "mappings": [{"evidence_relation":"static_route_exists","effect":"support","context_indices":["tenant","surface"],"bindings":[["tenant","tenant"],["surface","surface"]]},{"evidence_relation":"runtime_route_observed","effect":"support","context_indices":["tenant","surface","event","run"],"bindings":[["tenant","tenant"],["surface","surface"],["event","event"],["run","run"]]}],
+      "mappings": [{"evidence_relation":"static_route_exists","effect":"support","context_indices":["tenant","surface"],"bindings":[["tenant","tenant"],["surface","surface"]]},{"evidence_relation":"runtime_route_observed","effect":"support","context_indices":["tenant","surface","event","run"],"bindings":[["tenant","tenant"],["surface","surface"],["event","event"],["run","run"]]},{"evidence_relation":"static_route_exists","effect":"observation","context_indices":["tenant"],"bindings":[["tenant","tenant"]]},{"evidence_relation":"runtime_route_observed","effect":"observation","context_indices":["tenant"],"bindings":[["tenant","tenant"]]}],
       "diagnostics": []
     }
   ],
