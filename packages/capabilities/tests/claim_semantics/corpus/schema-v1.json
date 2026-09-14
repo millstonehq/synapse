@@ -1,0 +1,499 @@
+{
+  "schema_version": 1,
+  "id": "claim-semantics-v1",
+  "description": "Ordered, finite, evaluator-independent relation signatures for Stage A.",
+  "context_indices": [
+    "tenant",
+    "run",
+    "event",
+    "attempt",
+    "recipient",
+    "surface",
+    "window",
+    "policy",
+    "request",
+    "capability",
+    "actor",
+    "operation",
+    "decision",
+    "provider",
+    "commit",
+    "revision",
+    "interval",
+    "claim_scope"
+  ],
+  "types": {
+    "tenant": "symbol",
+    "run": "symbol",
+    "event": "symbol",
+    "attempt": "symbol",
+    "recipient": "symbol",
+    "surface": "symbol",
+    "window": "symbol",
+    "policy": "symbol",
+    "request": "symbol",
+    "capability": "symbol",
+    "actor": "symbol",
+    "operation": "symbol",
+    "decision": "symbol",
+    "provider": "symbol",
+    "commit": "symbol",
+    "revision": "symbol",
+    "interval": "symbol",
+    "status": "symbol",
+    "cardinality": "integer",
+    "claim_scope": "symbol",
+    "claimed": "symbol",
+    "left": "symbol",
+    "observed": "symbol",
+    "paths": "list[symbol]",
+    "right": "symbol",
+    "runtime": "symbol",
+    "static": "symbol",
+    "version": "symbol"
+    ,"outcomes": "list[symbol]"
+  },
+  "relations": {
+    "smtp_accepted__claim": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "polarity": "positive",
+      "modality": "claim"
+    },
+    "notification_delivery_terminal": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "polarity": "positive",
+      "modality": "claim"
+    },
+    "effect_reached": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "surface",
+        "run"
+      ],
+      "polarity": "positive",
+      "modality": "claim"
+    },
+    "post_request_succeeded": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "request"
+      ],
+      "polarity": "positive",
+      "modality": "claim"
+    },
+    "row_created": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "polarity": "positive",
+      "modality": "claim"
+    },
+    "authorized": {
+      "arg_order": [
+        "tenant",
+        "actor",
+        "operation",
+        "decision",
+        "run"
+      ],
+      "polarity": "positive",
+      "modality": "claim"
+    },
+    "smtp_accepted": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "polarity": "positive",
+      "modality": "observed"
+    },
+    "smtp_rejected": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "polarity": "negative",
+      "modality": "observed"
+    },
+    "static_route_exists": {
+      "arg_order": [
+        "tenant",
+        "surface"
+      ],
+      "polarity": "positive",
+      "modality": "observed"
+    },
+    "runtime_route_observed": {
+      "arg_order": [
+        "tenant",
+        "surface",
+        "event",
+        "run"
+      ],
+      "polarity": "positive",
+      "modality": "observed"
+    },
+    "http_post_accepted": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "request",
+        "run"
+      ],
+      "polarity": "positive",
+      "modality": "observed"
+    },
+    "http_authorization": {
+      "arg_order": [
+        "tenant",
+        "actor",
+        "operation",
+        "decision",
+        "run"
+      ],
+      "polarity": "positive",
+      "modality": "observed"
+    },
+    "authorization_rejected": {
+      "arg_order": [
+        "tenant",
+        "actor",
+        "decision",
+        "run"
+      ],
+      "polarity": "negative",
+      "modality": "observed"
+    },
+    "authorization_observation_missing": {
+      "arg_order": [
+        "tenant",
+        "actor",
+        "run"
+      ],
+      "polarity": "neutral",
+      "modality": "completeness"
+    },
+    "http_save_succeeded": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "polarity": "positive",
+      "modality": "observed"
+    },
+    "issue_changed_observed": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "polarity": "positive",
+      "modality": "observed"
+    },
+    "sql_terminal_state": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ],
+      "polarity": "positive",
+      "modality": "observed"
+    },
+    "sql_row_exists": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "run",
+        "commit"
+      ],
+      "polarity": "positive",
+      "modality": "observed"
+    },
+    "sql_ack_failed": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ],
+      "polarity": "negative",
+      "modality": "observed"
+    },
+    "mail_path_declared": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "polarity": "positive",
+      "modality": "observed"
+    },
+    "mail_path_observed": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "polarity": "positive",
+      "modality": "observed"
+    },
+    "runtime_surface_observed": {
+      "arg_order": [
+        "tenant",
+        "surface",
+        "run"
+      ],
+      "polarity": "positive",
+      "modality": "observed"
+    },
+    "compatible_history_set": {
+      "arg_order": [
+        "tenant",
+        "run",
+        "cardinality",
+        "outcomes"
+      ],
+      "polarity": "neutral",
+      "modality": "completeness"
+    },
+    "one_delivery": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "run",
+        "attempt"
+      ],
+      "polarity": "positive",
+      "modality": "observed"
+    },
+    "no_resend_observed": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "run",
+        "window",
+        "interval"
+      ],
+      "polarity": "positive",
+      "modality": "completeness"
+    },
+    "smtp_acceptance_missing": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ],
+      "polarity": "neutral",
+      "modality": "completeness"
+    },
+    "sql_acknowledged": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ],
+      "polarity": "positive",
+      "modality": "observed"
+    },
+    "capability_holds_in_all_compatible_histories": {
+      "arg_order": [
+        "tenant",
+        "capability",
+        "run"
+      ],
+      "polarity": "positive",
+      "modality": "claim"
+    },
+    "model_complete": {
+      "arg_order": [
+        "tenant",
+        "run"
+      ],
+      "polarity": "positive",
+      "modality": "claim"
+    },
+    "provider_accepted": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ],
+      "polarity": "positive",
+      "modality": "claim"
+    },
+    "no_resend_during_window": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "run",
+        "window"
+      ],
+      "polarity": "positive",
+      "modality": "claim"
+    },
+    "no_resend_forever": {
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "polarity": "positive",
+      "modality": "claim"
+    },
+    "context_domain_closed": {
+      "arg_order": [
+        "tenant",
+        "run"
+      ],
+      "polarity": "neutral",
+      "modality": "assumption"
+    },
+    "same_surface": {
+      "arg_order": [
+        "static",
+        "runtime"
+      ],
+      "polarity": "neutral",
+      "modality": "assumption"
+    },
+    "response_implies_commit": {
+      "arg_order": [
+        "status"
+      ],
+      "polarity": "neutral",
+      "modality": "assumption"
+    },
+    "policy_version": {
+      "arg_order": [
+        "policy",
+        "version"
+      ],
+      "polarity": "neutral",
+      "modality": "assumption"
+    },
+    "same_event": {
+      "arg_order": [
+        "observed",
+        "claimed"
+      ],
+      "polarity": "neutral",
+      "modality": "assumption"
+    },
+    "same_context": {
+      "arg_order": [
+        "left",
+        "right"
+      ],
+      "polarity": "neutral",
+      "modality": "assumption"
+    },
+    "provider_is_real": {
+      "arg_order": [
+        "provider"
+      ],
+      "polarity": "neutral",
+      "modality": "assumption"
+    },
+    "independent_support": {
+      "arg_order": [
+        "paths"
+      ],
+      "polarity": "neutral",
+      "modality": "assumption"
+    },
+    "auth_log_complete": {
+      "arg_order": [
+        "tenant",
+        "run"
+      ],
+      "polarity": "neutral",
+      "modality": "assumption"
+    },
+    "one_terminal_outcome": {
+      "arg_order": [
+        "attempt"
+      ],
+      "polarity": "neutral",
+      "modality": "assumption"
+    },
+    "model_revision_current": {
+      "arg_order": [
+        "revision"
+      ],
+      "polarity": "neutral",
+      "modality": "assumption"
+    },
+    "sql_snapshot_current": {
+      "arg_order": [
+        "commit"
+      ],
+      "polarity": "neutral",
+      "modality": "assumption"
+    },
+    "compatible_history_domain": {
+      "arg_order": [
+        "tenant",
+        "run",
+        "cardinality"
+      ],
+      "polarity": "neutral",
+      "modality": "assumption"
+    },
+    "surface_inventory_closed": {
+      "arg_order": [
+        "tenant",
+        "run"
+      ],
+      "polarity": "neutral",
+      "modality": "assumption"
+    },
+    "provider_acceptance_implies_terminal": {
+      "arg_order": [
+        "provider"
+      ],
+      "polarity": "neutral",
+      "modality": "assumption"
+    },
+    "observation_window_closed": {
+      "arg_order": [
+        "window",
+        "interval"
+      ],
+      "polarity": "neutral",
+      "modality": "assumption"
+    }
+  },
+  "operational_statuses": [
+    "complete",
+    "incomplete",
+    "inconsistent-premises",
+    "out-of-scope"
+  ]
+}

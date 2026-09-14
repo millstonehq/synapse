@@ -2,13 +2,169 @@
   "schema_version": 1,
   "id": "10-revoked-assumption-alternative",
   "title": "Independent support survives one revoked assumption",
-  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": "stale-model-assumption"},
-  "context": {"tenant": "tenant-a", "run": "run-10", "event": "evt-10"},
-  "claims": [{"id": "claim-saved", "predicate": "row_created", "arguments": {"tenant": "tenant-a", "event": "evt-10", "run": "run-10"}}],
-  "facts": [{"id": "fact-independent-proof", "predicate": "sql_row_exists", "arguments": {"tenant": "tenant-a", "event": "evt-10", "run": "run-10", "commit": "commit-10"}, "source": "sql"}],
-  "assumptions": [
-    {"id": "assumption-revoked", "predicate": "model_revision_current", "arguments": {"revision": "old"}, "status": "revoked"},
-    {"id": "assumption-independent-source", "predicate": "sql_snapshot_current", "arguments": {"commit": "commit-10"}, "status": "accepted"}
+  "provenance": {
+    "kind": "synthetic",
+    "source": "hand-authored semantic control",
+    "seeded_fault": "stale-model-assumption"
+  },
+  "context": {
+    "tenant": "tenant-a",
+    "run": "run-10",
+    "event": "evt-10",
+    "attempt": "attempt-10"
+  },
+  "claims": [
+    {
+      "id": "claim-saved",
+      "predicate": "row_created",
+      "arguments": {
+        "tenant": "tenant-a",
+        "event": "evt-10",
+        "run": "run-10"
+      },
+      "relation": "row_created",
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "args": [
+        "tenant-a",
+        "evt-10",
+        "run-10"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-10",
+        "event": "evt-10",
+        "attempt": "attempt-10"
+      },
+      "provenance": {
+        "source": "reviewed-claim",
+        "depends_on": []
+      }
+    }
   ],
-  "expected": {"semantic_verdict": "supported", "operational_status": "complete-with-discrepancy", "required_leaves": ["fact-independent-proof"], "forbidden_leaves": ["assumption-revoked"], "discrepancies": [{"kind": "revoked-assumption", "assumption": "assumption-revoked"}], "missing_premises": []}
+  "facts": [
+    {
+      "id": "fact-independent-proof",
+      "predicate": "sql_row_exists",
+      "arguments": {
+        "tenant": "tenant-a",
+        "event": "evt-10",
+        "run": "run-10",
+        "commit": "commit-10"
+      },
+      "source": "sql",
+      "relation": "sql_row_exists",
+      "arg_order": [
+        "tenant",
+        "event",
+        "run",
+        "commit"
+      ],
+      "args": [
+        "tenant-a",
+        "evt-10",
+        "run-10",
+        "commit-10"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-10",
+        "event": "evt-10",
+        "attempt": "attempt-10"
+      },
+      "provenance": {
+        "source": "sql",
+        "depends_on": [
+          "assumption-independent-source"
+        ]
+      }
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "assumption-revoked",
+      "predicate": "model_revision_current",
+      "arguments": {
+        "revision": "old"
+      },
+      "status": "revoked",
+      "relation": "model_revision_current",
+      "arg_order": [
+        "revision"
+      ],
+      "args": [
+        "old"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-10",
+        "event": "evt-10",
+        "attempt": "attempt-10"
+      },
+      "provenance": {
+        "source": "reviewed-assumption",
+        "depends_on": []
+      }
+    },
+    {
+      "id": "assumption-independent-source",
+      "predicate": "sql_snapshot_current",
+      "arguments": {
+        "commit": "commit-10"
+      },
+      "status": "accepted",
+      "relation": "sql_snapshot_current",
+      "arg_order": [
+        "commit"
+      ],
+      "args": [
+        "commit-10"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-10",
+        "event": "evt-10",
+        "attempt": "attempt-10"
+      },
+      "provenance": {
+        "source": "reviewed-assumption",
+        "depends_on": []
+      }
+    }
+  ],
+  "expected": {
+    "claims": {
+      "claim-saved": {
+        "semantic_verdict": "supported",
+        "operational_status": "complete",
+        "support_leaves": [
+          "fact-independent-proof"
+        ],
+        "refutation_leaves": [],
+        "observed_leaves": [
+          "fact-independent-proof"
+        ],
+        "forbidden_leaves": [
+          "assumption-revoked"
+        ],
+        "discrepancies": [
+          {
+            "kind": "revoked-assumption",
+            "assumption": "assumption-revoked"
+          }
+        ],
+        "missing_premises": []
+      }
+    }
+  },
+  "schema_ref": "schema-v1",
+  "context_indices": [
+    "tenant",
+    "run",
+    "event",
+    "attempt"
+  ]
 }

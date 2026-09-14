@@ -2,15 +2,265 @@
   "schema_version": 1,
   "id": "01-correlated-positive",
   "title": "Correlated notification execution supports terminal delivery",
-  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": null},
-  "context": {"tenant": "tenant-a", "run": "run-1", "event": "evt-1", "attempt": "attempt-1", "recipient": "a@example.test"},
-  "claims": [{"id": "claim-terminal-delivery", "predicate": "notification_delivery_terminal", "arguments": {"tenant": "tenant-a", "event": "evt-1", "recipient": "a@example.test", "run": "run-1"}}],
-  "facts": [
-    {"id": "fact-http-save", "predicate": "http_save_succeeded", "arguments": {"tenant": "tenant-a", "event": "evt-1", "run": "run-1"}, "source": "http"},
-    {"id": "fact-issue-changed", "predicate": "issue_changed_observed", "arguments": {"tenant": "tenant-a", "event": "evt-1", "run": "run-1"}, "source": "worker"},
-    {"id": "fact-mail-250", "predicate": "smtp_accepted", "arguments": {"tenant": "tenant-a", "event": "evt-1", "recipient": "a@example.test", "run": "run-1"}, "source": "smtp"},
-    {"id": "fact-sql-terminal", "predicate": "sql_terminal_state", "arguments": {"tenant": "tenant-a", "event": "evt-1", "recipient": "a@example.test", "run": "run-1"}, "source": "sql"}
+  "provenance": {
+    "kind": "synthetic",
+    "source": "hand-authored semantic control",
+    "seeded_fault": null
+  },
+  "context": {
+    "tenant": "tenant-a",
+    "run": "run-1",
+    "event": "evt-1",
+    "attempt": "attempt-1",
+    "recipient": "a@example.test"
+  },
+  "claims": [
+    {
+      "id": "claim-terminal-delivery",
+      "predicate": "notification_delivery_terminal",
+      "arguments": {
+        "tenant": "tenant-a",
+        "event": "evt-1",
+        "recipient": "a@example.test",
+        "run": "run-1",
+        "attempt": "attempt-1"
+      },
+      "relation": "notification_delivery_terminal",
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "args": [
+        "tenant-a",
+        "evt-1",
+        "a@example.test",
+        "run-1",
+        "attempt-1"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-1",
+        "event": "evt-1",
+        "attempt": "attempt-1",
+        "recipient": "a@example.test"
+      },
+      "provenance": {
+        "source": "reviewed-claim",
+        "depends_on": []
+      }
+    }
   ],
-  "assumptions": [{"id": "assumption-context-closed", "predicate": "context_domain_closed", "arguments": {"tenant": "tenant-a", "run": "run-1"}, "status": "accepted"}],
-  "expected": {"semantic_verdict": "supported", "operational_status": "complete", "required_leaves": ["fact-http-save", "fact-issue-changed", "fact-mail-250", "fact-sql-terminal"], "forbidden_leaves": [], "discrepancies": [], "missing_premises": []}
+  "facts": [
+    {
+      "id": "fact-http-save",
+      "predicate": "http_save_succeeded",
+      "arguments": {
+        "tenant": "tenant-a",
+        "event": "evt-1",
+        "run": "run-1"
+      },
+      "source": "http",
+      "relation": "http_save_succeeded",
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "args": [
+        "tenant-a",
+        "evt-1",
+        "run-1"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-1",
+        "event": "evt-1",
+        "attempt": "attempt-1",
+        "recipient": "a@example.test"
+      },
+      "provenance": {
+        "source": "http",
+        "depends_on": [
+          "assumption-context-closed"
+        ]
+      }
+    },
+    {
+      "id": "fact-issue-changed",
+      "predicate": "issue_changed_observed",
+      "arguments": {
+        "tenant": "tenant-a",
+        "event": "evt-1",
+        "run": "run-1"
+      },
+      "source": "worker",
+      "relation": "issue_changed_observed",
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "args": [
+        "tenant-a",
+        "evt-1",
+        "run-1"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-1",
+        "event": "evt-1",
+        "attempt": "attempt-1",
+        "recipient": "a@example.test"
+      },
+      "provenance": {
+        "source": "worker",
+        "depends_on": [
+          "assumption-context-closed"
+        ]
+      }
+    },
+    {
+      "id": "fact-mail-250",
+      "predicate": "smtp_accepted",
+      "arguments": {
+        "tenant": "tenant-a",
+        "event": "evt-1",
+        "recipient": "a@example.test",
+        "run": "run-1",
+        "attempt": "attempt-1"
+      },
+      "source": "smtp",
+      "relation": "smtp_accepted",
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "args": [
+        "tenant-a",
+        "evt-1",
+        "a@example.test",
+        "run-1",
+        "attempt-1"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-1",
+        "event": "evt-1",
+        "attempt": "attempt-1",
+        "recipient": "a@example.test"
+      },
+      "provenance": {
+        "source": "smtp",
+        "depends_on": [
+          "assumption-context-closed"
+        ]
+      }
+    },
+    {
+      "id": "fact-sql-terminal",
+      "predicate": "sql_terminal_state",
+      "arguments": {
+        "tenant": "tenant-a",
+        "event": "evt-1",
+        "recipient": "a@example.test",
+        "run": "run-1"
+      },
+      "source": "sql",
+      "relation": "sql_terminal_state",
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ],
+      "args": [
+        "tenant-a",
+        "evt-1",
+        "a@example.test",
+        "run-1"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-1",
+        "event": "evt-1",
+        "attempt": "attempt-1",
+        "recipient": "a@example.test"
+      },
+      "provenance": {
+        "source": "sql",
+        "depends_on": [
+          "assumption-context-closed"
+        ]
+      }
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "assumption-context-closed",
+      "predicate": "context_domain_closed",
+      "arguments": {
+        "tenant": "tenant-a",
+        "run": "run-1"
+      },
+      "status": "accepted",
+      "relation": "context_domain_closed",
+      "arg_order": [
+        "tenant",
+        "run"
+      ],
+      "args": [
+        "tenant-a",
+        "run-1"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-1",
+        "event": "evt-1",
+        "attempt": "attempt-1",
+        "recipient": "a@example.test"
+      },
+      "provenance": {
+        "source": "reviewed-assumption",
+        "depends_on": []
+      }
+    }
+  ],
+  "expected": {
+    "claims": {
+      "claim-terminal-delivery": {
+        "semantic_verdict": "supported",
+        "operational_status": "complete",
+        "support_leaves": [
+          "fact-http-save",
+          "fact-issue-changed",
+          "fact-mail-250",
+          "fact-sql-terminal"
+        ],
+        "refutation_leaves": [],
+        "observed_leaves": [
+          "fact-http-save",
+          "fact-issue-changed",
+          "fact-mail-250",
+          "fact-sql-terminal"
+        ],
+        "forbidden_leaves": [],
+        "discrepancies": [],
+        "missing_premises": []
+      }
+    }
+  },
+  "schema_ref": "schema-v1",
+  "context_indices": [
+    "tenant",
+    "run",
+    "event",
+    "attempt",
+    "recipient"
+  ]
 }

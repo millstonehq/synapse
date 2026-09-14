@@ -2,16 +2,250 @@
   "schema_version": 1,
   "id": "14-bounded-no-resend",
   "title": "Bounded no-resend is not indefinite safety",
-  "provenance": {"kind": "synthetic", "source": "hand-authored semantic control", "seeded_fault": "finite-window-generalized-to-forever"},
-  "context": {"tenant": "tenant-a", "run": "run-14", "event": "evt-14", "attempt": "attempt-14", "window": "5m"},
+  "provenance": {
+    "kind": "synthetic",
+    "source": "hand-authored semantic control",
+    "seeded_fault": "finite-window-generalized-to-forever"
+  },
+  "context": {
+    "tenant": "tenant-a",
+    "run": "run-14",
+    "event": "evt-14",
+    "attempt": "attempt-14",
+    "window": "5m",
+    "interval": "interval-14"
+  },
   "claims": [
-    {"id": "claim-bounded", "predicate": "no_resend_during_window", "arguments": {"tenant": "tenant-a", "event": "evt-14", "run": "run-14", "window": "5m"}},
-    {"id": "claim-forever", "predicate": "no_resend_forever", "arguments": {"tenant": "tenant-a", "event": "evt-14", "run": "run-14"}}
+    {
+      "id": "claim-bounded",
+      "predicate": "no_resend_during_window",
+      "arguments": {
+        "tenant": "tenant-a",
+        "event": "evt-14",
+        "run": "run-14",
+        "window": "5m"
+      },
+      "relation": "no_resend_during_window",
+      "arg_order": [
+        "tenant",
+        "event",
+        "run",
+        "window"
+      ],
+      "args": [
+        "tenant-a",
+        "evt-14",
+        "run-14",
+        "5m"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-14",
+        "event": "evt-14",
+        "attempt": "attempt-14",
+        "window": "5m",
+        "interval": "interval-14"
+      },
+      "provenance": {
+        "source": "reviewed-claim",
+        "depends_on": []
+      }
+    },
+    {
+      "id": "claim-forever",
+      "predicate": "no_resend_forever",
+      "arguments": {
+        "tenant": "tenant-a",
+        "event": "evt-14",
+        "run": "run-14"
+      },
+      "relation": "no_resend_forever",
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "args": [
+        "tenant-a",
+        "evt-14",
+        "run-14"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-14",
+        "event": "evt-14",
+        "attempt": "attempt-14",
+        "window": "5m",
+        "interval": "interval-14"
+      },
+      "provenance": {
+        "source": "reviewed-claim",
+        "depends_on": []
+      }
+    }
   ],
   "facts": [
-    {"id": "fact-one-delivery", "predicate": "one_delivery", "arguments": {"tenant": "tenant-a", "event": "evt-14", "run": "run-14", "attempt": "attempt-14"}, "source": "runtime"},
-    {"id": "fact-no-resend-window", "predicate": "no_resend_observed", "arguments": {"tenant": "tenant-a", "event": "evt-14", "run": "run-14", "window": "5m"}, "source": "runtime"}
+    {
+      "id": "fact-one-delivery",
+      "predicate": "one_delivery",
+      "arguments": {
+        "tenant": "tenant-a",
+        "event": "evt-14",
+        "run": "run-14",
+        "attempt": "attempt-14",
+        "interval": "interval-14"
+      },
+      "source": "runtime",
+      "relation": "one_delivery",
+      "arg_order": [
+        "tenant",
+        "event",
+        "run",
+        "attempt"
+      ],
+      "args": [
+        "tenant-a",
+        "evt-14",
+        "run-14",
+        "attempt-14"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-14",
+        "event": "evt-14",
+        "attempt": "attempt-14",
+        "window": "5m",
+        "interval": "interval-14"
+      },
+      "provenance": {
+        "source": "runtime",
+        "depends_on": [
+          "assumption-window-closed"
+        ]
+      }
+    },
+    {
+      "id": "fact-no-resend-window",
+      "predicate": "no_resend_observed",
+      "arguments": {
+        "tenant": "tenant-a",
+        "event": "evt-14",
+        "run": "run-14",
+        "window": "5m",
+        "interval": "interval-14"
+      },
+      "source": "runtime",
+      "relation": "no_resend_observed",
+      "arg_order": [
+        "tenant",
+        "event",
+        "run",
+        "window",
+        "interval"
+      ],
+      "args": [
+        "tenant-a",
+        "evt-14",
+        "run-14",
+        "5m",
+        "interval-14"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-14",
+        "event": "evt-14",
+        "attempt": "attempt-14",
+        "window": "5m",
+        "interval": "interval-14"
+      },
+      "provenance": {
+        "source": "runtime",
+        "depends_on": [
+          "assumption-window-closed"
+        ]
+      }
+    }
   ],
-  "assumptions": [{"id": "assumption-window-closed", "predicate": "observation_window_closed", "arguments": {"window": "5m"}, "status": "accepted"}],
-  "expected": {"semantic_verdict": "unresolved", "operational_status": "complete", "required_leaves": ["fact-one-delivery", "fact-no-resend-window"], "forbidden_leaves": [], "discrepancies": [], "missing_premises": [{"predicate": "no_resend_forever", "reason": "bounded observation cannot establish indefinite safety"}]}
+  "assumptions": [
+    {
+      "id": "assumption-window-closed",
+      "predicate": "observation_window_closed",
+      "arguments": {
+        "window": "5m",
+        "interval": "interval-14"
+      },
+      "status": "accepted",
+      "relation": "observation_window_closed",
+      "arg_order": [
+        "window",
+        "interval"
+      ],
+      "args": [
+        "5m",
+        "interval-14"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-14",
+        "event": "evt-14",
+        "attempt": "attempt-14",
+        "window": "5m",
+        "interval": "interval-14"
+      },
+      "provenance": {
+        "source": "reviewed-assumption",
+        "depends_on": []
+      }
+    }
+  ],
+  "expected": {
+    "claims": {
+      "claim-bounded": {
+        "semantic_verdict": "supported",
+        "operational_status": "complete",
+        "support_leaves": [
+          "fact-one-delivery",
+          "fact-no-resend-window",
+          "assumption-window-closed"
+        ],
+        "refutation_leaves": [],
+        "observed_leaves": [
+          "fact-one-delivery",
+          "fact-no-resend-window",
+          "assumption-window-closed"
+        ],
+        "forbidden_leaves": [],
+        "discrepancies": [],
+        "missing_premises": []
+      },
+      "claim-forever": {
+        "semantic_verdict": "unresolved",
+        "operational_status": "incomplete",
+        "support_leaves": [],
+        "refutation_leaves": [],
+        "observed_leaves": [
+          "fact-one-delivery",
+          "fact-no-resend-window",
+          "assumption-window-closed"
+        ],
+        "forbidden_leaves": [],
+        "discrepancies": [],
+        "missing_premises": [
+          {
+            "predicate": "no_resend_forever",
+            "reason": "bounded observation cannot establish indefinite safety"
+          }
+        ]
+      }
+    }
+  },
+  "schema_ref": "schema-v1",
+  "context_indices": [
+    "tenant",
+    "run",
+    "event",
+    "attempt",
+    "window",
+    "interval"
+  ]
 }

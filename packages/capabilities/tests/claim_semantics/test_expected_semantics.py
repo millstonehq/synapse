@@ -32,13 +32,17 @@ class ExpectedSemanticsTests(unittest.TestCase):
 
     def test_each_case_names_a_discriminating_semantic_control(self) -> None:
         table = read(ROOT / "expected.json")["cases"]
-        self.assertEqual("supported", table["01-correlated-positive"]["semantic_verdict"])
-        self.assertEqual("unresolved", table["02-surface-mismatch"]["semantic_verdict"])
-        self.assertEqual("supported", table["03-post-without-creation"]["semantic_verdict"])
-        self.assertEqual("refuted", table["08-rejection-versus-missing"]["semantic_verdict"])
-        self.assertEqual("conflicting", table["09-support-and-refutation"]["semantic_verdict"])
-        self.assertEqual("inconsistent-premises", table["11-compatible-history-sets"]["operational_status"])
-        self.assertEqual("unresolved", table["14-bounded-no-resend"]["semantic_verdict"])
+        self.assertEqual("supported", table["01-correlated-positive"]["claims"]["claim-terminal-delivery"]["semantic_verdict"])
+        self.assertEqual("unresolved", table["02-surface-mismatch"]["claims"]["claim-effect"]["semantic_verdict"])
+        self.assertEqual("supported", table["03-post-without-creation"]["claims"]["claim-request"]["semantic_verdict"])
+        self.assertEqual("unresolved", table["03-post-without-creation"]["claims"]["claim-created"]["semantic_verdict"])
+        self.assertEqual("refuted", table["08-rejection-versus-missing"]["claims"]["claim-explicit-denial"]["semantic_verdict"])
+        self.assertEqual("conflicting", table["09-support-and-refutation"]["claims"]["claim-terminal"]["semantic_verdict"])
+        self.assertEqual("inconsistent-premises", table["11-compatible-history-sets"]["claims"]["claim-universal"]["operational_status"])
+        self.assertEqual("unresolved", table["11-compatible-history-sets"]["claims"]["claim-mixed"]["semantic_verdict"])
+        self.assertEqual("out-of-scope", table["12-unexpected-runtime-surface"]["claims"]["claim-model-complete"]["operational_status"])
+        self.assertEqual("supported", table["14-bounded-no-resend"]["claims"]["claim-bounded"]["semantic_verdict"])
+        self.assertEqual("unresolved", table["14-bounded-no-resend"]["claims"]["claim-forever"]["semantic_verdict"])
 
 
 if __name__ == "__main__":
