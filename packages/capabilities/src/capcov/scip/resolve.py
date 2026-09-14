@@ -29,17 +29,28 @@ Three properties are kept and none is free:
   which actually shells out to an indexer -- needs the tools, and it fails with a
   named, actionable error when they are absent rather than silently degrading.
 
-The translation is scip-python / scip-go shaped: a symbol carries its module
-backtick-quoted (``\\`shop.router\\`/make_job().``) and a descriptor tail whose
-type (``#``), term (``.``) and method (``().``) components dot-join into the same
-qualname the AST walker builds. A symbol this cannot parse (a parameter, a local,
-a scheme this does not know) yields ``None`` and its edge is simply not rooted --
-never a crash, and never a wrong node.
+The translation is **per-indexer**: each SCIP indexer emits its own
+namespace-descriptor convention, and one Python-shaped translator silently
+mistranslates the others (scip-php's bare ``App/Http/Controllers/`` descriptors
+map to ``None`` and every PHP edge is dropped; a whole-language failure reads as
+a green run). So the symbol->node translation is a per-language *normalizer*
+strategy (``normalizer(language)``) behind a stable interface, injected into the
+uniform orchestration. A normalizer consumes ALL leading namespace descriptors
+(bare *or* backtick-quoted) as the package and the type/term/method descriptors
+as the qualname; only the namespace separator differs per language (``.`` python,
+``/`` go import path, ``\\`` php namespace). The node string it produces is the
+fixpoint node key, co-designed to equal the per-language handler adapter's key;
+where that byte-equality is not mechanically reproducible, the (file,line)-join
+(``scip_defs_by_location`` + the deep ``hybrid_raw``) is the binding of record so
+a residual mismatch becomes a NAMED unresolved, never a silent drop. A symbol a
+normalizer cannot parse (a parameter, a local, a package with no member, a scheme
+it does not know) yields ``None`` and its edge is simply not rooted -- never a
+crash, and never a wrong node.
 """
 
 from __future__ import annotations
 
-import re
+import inspect
 import shutil
 from collections.abc import Callable
 from pathlib import Path
@@ -48,38 +59,79 @@ from . import blindspots
 from . import map as scip_map
 from . import runner
 
+
+def _blindspots_accept_language(func: Callable) -> bool:
+    """Whether a blindspots enumerator takes a ``language`` keyword.
+
+    The per-language enumerator (§5) is a sibling task's deliverable, delivered
+    ``language``-defaulted so this module integrates without an ordering
+    constraint. Until it lands the python-only signature is called unchanged, so
+    the shallow python path is byte-identical either way; a deep go/php index
+    passes its language through the moment the enumerator accepts it.
+    """
+    try:
+        return "language" in inspect.signature(func).parameters
+    except (TypeError, ValueError):
+        return False
+
+
+def _enumerate_call_sites(source_root: str | Path, language: str) -> list[dict]:
+    if _blindspots_accept_language(blindspots.enumerate_call_sites):
+        return blindspots.enumerate_call_sites(source_root, language=language)
+    return blindspots.enumerate_call_sites(source_root)
+
+
+def _enumerate_blind_spots(source_root: str | Path, language: str) -> list[dict]:
+    if _blindspots_accept_language(blindspots.enumerate_blind_spots):
+        return blindspots.enumerate_blind_spots(source_root, language=language)
+    return blindspots.enumerate_blind_spots(source_root)
+
 # SCIP occurrence lines are 0-based and delivered unmodified by the runner; the
 # AST pass (and every human-facing capcov line) is 1-based. The residue subtracts
 # SCIP-resolved sites from AST-seen sites by (file, line), so SCIP's line is
 # lifted into the AST's 1-based frame here -- a mismatch would make every site
-# look unresolved.
+# look unresolved. The (file,line)-join keys are in this same 1-based frame.
 _SCIP_LINE_IS_ZERO_BASED = 1
-
-# A SCIP symbol's module is the first backtick-quoted run; the descriptor tail is
-# everything after the ``/`` that follows it. Non-quoted module forms (scip's
-# ``shop/__init__:`` meta symbols, ``local 0`` locals) do not match and are not
-# nodes -- exactly what should be skipped.
-_MODULE_RE = re.compile(r"`([^`]+)`/(.*)$")
 
 # Characters that terminate a descriptor name in the SCIP symbol grammar.
 _NAME_STOP = set("#.(:[!/`")
 
 
-def _descriptor_names(descriptor: str) -> list[str] | None:
-    """The dot-joinable name path of a SCIP descriptor tail, or None.
+def _strip_scip_prefix(symbol: str | None) -> str | None:
+    """The descriptor tail of a SCIP symbol, or None for a non-node symbol.
 
-    Walks the SCIP descriptor grammar: a type (``Name#``), a term/field
-    (``name.``) and a method (``name().`` or ``name(disambiguator).``) each
-    contribute their leaf name. A parameter (``(name)``), a type parameter
-    (``[name]``), a meta (``name:``) or a macro (``name!``) means the symbol is
-    not a callable/type node in the fixpoint's sense, so the whole parse returns
-    None rather than a partial, wrong qualname.
+    A SCIP symbol is ``<scheme> <manager> <package-name> <version> <descriptor>+``
+    (four space-separated prefix fields, none of which contains an unescaped
+    space for any indexer capcov drives) or ``local <id>``. This returns
+    everything after the version -- the descriptor sequence -- and None for a
+    local or a string with fewer than four spaces (a scheme this does not know).
     """
-    names: list[str] = []
+    if not symbol or symbol.startswith("local "):
+        return None
+    parts = symbol.split(" ", 4)
+    if len(parts) < 5:
+        return None
+    return parts[4]
+
+
+def _parse_descriptor(descriptor: str) -> tuple[list[str], list[str]] | None:
+    """Split a descriptor tail into (namespace names, type/term/method names).
+
+    Walks the SCIP descriptor grammar once. A namespace (``name/``, bare or
+    backtick-quoted) contributes to the package; a type (``Name#``), a term/field
+    (``name.``) and a method (``name().``) contribute to the qualname. A parameter
+    (``(name)``), a type parameter (``[name]``), a meta (``name:``), a macro
+    (``name!``), or a namespace that follows a type/term/method mean the symbol is
+    not a callable/type node -- the whole parse returns None rather than a
+    partial, wrong node. A symbol with no member after its package (a bare
+    package) also returns None.
+    """
+    namespaces: list[str] = []
+    tail: list[str] = []
+    seen_member = False
     i, n = 0, len(descriptor)
     while i < n:
-        if descriptor[i] in "([":
-            # a leading '(' or '[' is a parameter / type parameter, not a node.
+        if descriptor[i] in "([":  # leading parameter / type parameter
             return None
         if descriptor[i] == "`":
             end = descriptor.find("`", i + 1)
@@ -95,11 +147,18 @@ def _descriptor_names(descriptor: str) -> list[str] | None:
         if i >= n:
             return None  # a bare trailing name with no terminator is malformed
         term = descriptor[i]
-        if term == "#":  # type
-            names.append(name)
+        if term == "/":  # namespace / package segment
+            if seen_member:
+                return None  # a namespace after a member is not a node path
+            namespaces.append(name)
+            i += 1
+        elif term == "#":  # type
+            seen_member = True
+            tail.append(name)
             i += 1
         elif term == ".":  # term / field
-            names.append(name)
+            seen_member = True
+            tail.append(name)
             i += 1
         elif term == "(":  # method: skip the balanced disambiguator, expect '.'
             depth = 0
@@ -113,53 +172,106 @@ def _descriptor_names(descriptor: str) -> list[str] | None:
                         break
                 i += 1
             if i < n and descriptor[i] == ".":
-                names.append(name)
+                seen_member = True
+                tail.append(name)
                 i += 1
             else:
                 return None
-        else:  # ':' meta, '!' macro, '/' nested package, stray backtick
+        else:  # ':' meta, '!' macro, stray backtick
             return None
-    return names or None
+    if not tail:
+        return None
+    return namespaces, tail
+
+
+class _Normalizer:
+    """A per-language SCIP symbol -> fixpoint node translator.
+
+    The parse (``_strip_scip_prefix`` + ``_parse_descriptor``) is shared; only
+    the namespace separator differs, because that is the sole per-language
+    variation in how a package path is spelled. The qualname is always
+    dot-joined, matching how the engine splits ``package:qualname`` and how the
+    native python adapter spells ``module.dotted:Class.method``.
+    """
+
+    def __init__(self, language: str, namespace_sep: str) -> None:
+        self.language = language
+        self.namespace_sep = namespace_sep
+
+    def symbol_to_node(self, symbol: str | None) -> str | None:
+        descriptor = _strip_scip_prefix(symbol)
+        if descriptor is None:
+            return None
+        parsed = _parse_descriptor(descriptor)
+        if parsed is None:
+            return None
+        namespaces, tail = parsed
+        if not namespaces:
+            return None  # no package -> not a rootable in-project node
+        package = self.namespace_sep.join(namespaces)
+        return f"{package}:{'.'.join(tail)}"
+
+
+# The node-id spelling per language (see the co-design contract): python joins a
+# dotted module (``shop.router:make_job``); go joins the import path with ``/``
+# (``github.com/org/app/internal/jobs:Repo.Get``); php joins the namespace with
+# ``\`` (``App\Http\Controllers:JobController.getJob``). The tree-sitter handler
+# adapter must mint the identical string, or rely on the (file,line)-join.
+_NORMALIZERS = {
+    "python": _Normalizer("python", "."),
+    "go": _Normalizer("go", "/"),
+    "php": _Normalizer("php", "\\"),
+}
+
+
+def normalizer(language: str) -> _Normalizer:
+    """The symbol->node normalizer for ``language``.
+
+    Raises ``ValueError`` for a language with no normalizer, the same way the
+    runner rejects an unknown indexer, so a caller cannot silently translate with
+    the wrong scheme.
+    """
+    try:
+        return _NORMALIZERS[language]
+    except KeyError:
+        raise ValueError(
+            f"no SCIP normalizer for language {language!r}; "
+            f"expected one of {sorted(_NORMALIZERS)}"
+        ) from None
 
 
 def scip_symbol_to_node(symbol: str | None) -> str | None:
-    """A SCIP callable/type symbol -> the AST adapter's ``module:qualname`` node.
+    """A SCIP callable/type symbol -> ``package:qualname``, python spelling.
 
-    ``\\`shop.router\\`/make_job().`` -> ``shop.router:make_job``;
-    ``\\`app.repo\\`/Repo#fetch().`` -> ``app.repo:Repo.fetch``;
-    ``\\`app.main\\`/create_app().healthz().`` -> ``app.main:create_app.healthz``.
-    Returns None for a symbol with no backtick-quoted module or whose descriptor
-    is not a node path (a parameter, a local, a meta symbol) -- so an edge is
-    dropped from the graph rather than pointed at a fabricated node.
+    Back-compatible shim over ``normalizer("python").symbol_to_node`` -- the
+    python normalizer is the one co-designed with the native AST adapter
+    (``\\`shop.router\\`/make_job().`` -> ``shop.router:make_job``). Prefer
+    ``normalizer(language)`` for a non-python index.
     """
-    if not symbol:
-        return None
-    match = _MODULE_RE.search(symbol)
-    if not match:
-        return None
-    names = _descriptor_names(match.group(2))
-    if not names:
-        return None
-    return f"{match.group(1)}:{'.'.join(names)}"
+    return normalizer("python").symbol_to_node(symbol)
 
 
 def calls_graph(
-    edges: list[dict], is_node: Callable[[str], bool] | None = None
+    edges: list[dict],
+    is_node: Callable[[str], bool] | None = None,
+    *,
+    language: str = "python",
 ) -> dict[str, set[str]]:
     """A fixpoint ``calls`` map (``{node: {node, ...}}``) from SCIP call edges.
 
-    Each edge's caller and callee SCIP symbols are translated to AST node
-    identities. An edge with no enclosing caller (a module-scope reference,
-    ``caller is None``) or whose endpoints do not translate is not rooted -- it
-    is still carried whole in the artifact's ``scip_resolved_edges``. When
-    ``is_node`` is given, both endpoints must satisfy it, which keeps the graph
-    inside the AST adapter's node namespace and drops edges into external
-    libraries the same way the AST pass does.
+    Each edge's caller and callee SCIP symbols are translated to node identities
+    by the ``language`` normalizer. An edge with no enclosing caller (a
+    module-scope reference, ``caller is None``) or whose endpoints do not
+    translate is not rooted -- it is still carried whole in the artifact's
+    ``scip_resolved_edges``. When ``is_node`` is given, both endpoints must
+    satisfy it, which keeps the graph inside the adapter's node namespace and
+    drops edges into external libraries the same way the AST pass does.
     """
+    to_node = normalizer(language).symbol_to_node
     calls: dict[str, set[str]] = {}
     for edge in edges:
-        caller = scip_symbol_to_node(edge.get("caller"))
-        callee = scip_symbol_to_node(edge.get("callee"))
+        caller = to_node(edge.get("caller"))
+        callee = to_node(edge.get("callee"))
         if caller is None or callee is None:
             continue
         if is_node is not None and not (is_node(caller) and is_node(callee)):
@@ -184,7 +296,41 @@ def resolved_sites(edges: list[dict]) -> list[dict]:
     return out
 
 
-def _residue(source_root: str | Path, edges: list[dict]) -> list[dict]:
+def scip_defs_by_location(
+    normalized: dict, *, language: str = "python"
+) -> dict[tuple[str, int], str]:
+    """``(file, 1-based line) -> node id`` for every SCIP DEFINITION.
+
+    The **binding of record** for the deep (file,line)-join: SCIP owns the node
+    spelling at each definition site, so the deep tree-sitter adapter never has
+    to reproduce the indexer's namespace convention byte-for-byte -- it tags each
+    handler / function / entity-touch node with the definition's ``(file, line)``
+    and this map canonicalizes it. A definition whose symbol does not translate
+    (a non-node) is skipped; the line is lifted to the AST's 1-based frame so it
+    joins against the adapter's 1-based node locations. Later documents do not
+    overwrite an earlier location (a symbol is defined once).
+    """
+    to_node = normalizer(language).symbol_to_node
+    out: dict[tuple[str, int], str] = {}
+    for document in normalized.get("documents", []) or []:
+        path = document.get("path")
+        for occ in document.get("occurrences", []) or []:
+            if not occ.get("is_definition"):
+                continue
+            node = to_node(occ.get("symbol"))
+            if node is None:
+                continue
+            line = occ.get("start_line")
+            if line is None:
+                continue
+            key = (path, line + _SCIP_LINE_IS_ZERO_BASED)
+            out.setdefault(key, node)
+    return out
+
+
+def _residue(
+    source_root: str | Path, edges: list[dict], language: str = "python"
+) -> list[dict]:
     """The enumerated residue: every call site the AST saw that SCIP left blind.
 
     Two silences are folded together, because both are things SCIP cannot resolve
@@ -202,10 +348,10 @@ def _residue(source_root: str | Path, edges: list[dict]) -> list[dict]:
       subtracting the sites SCIP resolved from the full call census -- the silent
       gap the map module's docstring names as the reason the AST differ exists.
     """
-    blind = blindspots.enumerate_blind_spots(source_root)
+    blind = _enumerate_blind_spots(source_root, language)
     blind_by_key = {(b["file"], b["line"]): b for b in blind}
     census = []
-    for site in blindspots.enumerate_call_sites(source_root):
+    for site in _enumerate_call_sites(source_root, language):
         spot = blind_by_key.get((site["file"], site["line"]))
         census.append({**site, "kind": spot["kind"], "reason": spot["reason"]} if spot else site)
     resolved = [
@@ -216,29 +362,57 @@ def _residue(source_root: str | Path, edges: list[dict]) -> list[dict]:
     return blindspots.blind_spot_residue(census, resolved)
 
 
-def hybrid_raw(ast_raw: dict, normalized: dict, source_root: str | Path) -> dict:
-    """Fold a normalized SCIP index into the AST adapter's raw discover output.
+def _scip_summary(
+    edges: list[dict], scip_calls: dict[str, set[str]], census: list, residue: list
+) -> dict:
+    return {
+        "scip_resolved_edges": len(edges),
+        "scip_rooted_edges": sum(len(v) for v in scip_calls.values()),
+        "ast_call_sites": len(census),
+        "unresolved_enumerated": len(residue),
+    }
+
+
+def hybrid_raw(
+    ast_raw: dict,
+    normalized: dict,
+    source_root: str | Path,
+    *,
+    language: str = "python",
+    deep: bool = False,
+) -> dict:
+    """Fold a normalized SCIP index into the adapter's raw discover output.
 
     Returns a copy of ``ast_raw`` with ``_calls`` replaced by the SCIP-resolved
-    graph (translated into the AST node namespace) and the SCIP evidence added:
-    the full resolved edge list, the SCIP-side type definitions, and the
-    enumerated residue -- the call sites the AST pass saw that SCIP left
-    unresolved. Everything else the AST adapter produced (entities, surfaces,
-    ``_direct``, ``_ops``, blind spots, AST residue) is preserved untouched.
+    graph (translated into the adapter's node namespace by the ``language``
+    normalizer) and the SCIP evidence added: the full resolved edge list, the
+    SCIP-side type definitions, and the enumerated residue -- the call sites the
+    AST pass saw that SCIP left unresolved. Everything else the adapter produced
+    (entities, surfaces, ``_direct``, ``_ops``, blind spots, AST residue) is
+    preserved untouched.
+
+    ``deep`` switches on the (file,line)-join (``_hybrid_deep``) for the deep
+    tree-sitter adapter, whose node keys are provisional and canonicalized
+    against SCIP's own definition set. The default (``deep=False``,
+    ``language="python"``) is the shallow path and is byte-identical to before:
+    ``node_keys`` come from the adapter's ``_direct`` / ``_calls`` / handlers.
 
     Pure over ``(ast_raw, normalized)`` plus one read of the source tree for the
     call-site census, so it is fully exercised by a checked-in fixture with no
     indexer installed.
     """
     edges = scip_map.call_edges(normalized)
+    if deep:
+        return _hybrid_deep(ast_raw, normalized, edges, source_root, language)
+
     node_keys = (
         set(ast_raw.get("_direct", {}))
         | set(ast_raw.get("_calls", {}))
         | {s["handler"] for s in ast_raw.get("surfaces", [])}
     )
-    scip_calls = calls_graph(edges, is_node=node_keys.__contains__)
-    census = blindspots.enumerate_call_sites(source_root)
-    residue = _residue(source_root, edges)
+    scip_calls = calls_graph(edges, is_node=node_keys.__contains__, language=language)
+    census = _enumerate_call_sites(source_root, language)
+    residue = _residue(source_root, edges, language)
 
     hybrid = dict(ast_raw)
     hybrid["_calls"] = scip_calls
@@ -246,12 +420,98 @@ def hybrid_raw(ast_raw: dict, normalized: dict, source_root: str | Path) -> dict
     hybrid["scip_resolved_edges"] = edges
     hybrid["scip_entities"] = scip_map.entities(normalized)
     hybrid["scip_residue"] = residue
-    hybrid["scip_residue_summary"] = {
-        "scip_resolved_edges": len(edges),
-        "scip_rooted_edges": sum(len(v) for v in scip_calls.values()),
-        "ast_call_sites": len(census),
-        "unresolved_enumerated": len(residue),
-    }
+    hybrid["scip_residue_summary"] = _scip_summary(edges, scip_calls, census, residue)
+    return hybrid
+
+
+def _rewrite_keys(mapping: dict, rename: dict) -> dict:
+    """A copy of ``mapping`` with node keys rewritten through ``rename``."""
+    return {rename.get(k, k): v for k, v in (mapping or {}).items()}
+
+
+def _hybrid_deep(
+    ast_raw: dict,
+    normalized: dict,
+    edges: list[dict],
+    source_root: str | Path,
+    language: str,
+) -> dict:
+    """The deep hybrid: canonicalize provisional node keys against SCIP defs.
+
+    The deep tree-sitter adapter (a sibling task) cannot always reproduce an
+    indexer's namespace convention byte-for-byte (a go import path is
+    build-derived; a php PSR-4 namespace can be remapped away from the
+    directory). So it keys its handler / ``_direct`` / ``_ops`` / ``_calls`` nodes
+    provisionally and hands over ``_node_locations`` -- ``{provisional node ->
+    [file, 1-based line]}`` for each node's DEFINITION site. This joins those
+    locations against ``scip_defs_by_location`` (the binding of record) and:
+
+    * rewrites every provisional key to the SCIP node the join names, so the
+      adapter's nodes and the SCIP call graph share one namespace;
+    * a provisional node whose location has no SCIP definition becomes a NAMED
+      ``deep-unresolved`` entry in ``unresolved`` -- never a silent dropped edge
+      and never a fabricated one;
+    * seeds ``node_keys`` from SCIP's own definition set (union the rewritten
+      adapter keys), so a mid-chain function SCIP resolved is a known node and
+      its edge survives ``is_node`` (the ``node_keys`` filter would otherwise
+      drop it).
+
+    Then ``_calls`` is replaced by the SCIP graph in that shared namespace and
+    the SCIP evidence + residue are attached, exactly as the shallow path does.
+    """
+    defs_by_loc = scip_defs_by_location(normalized, language=language)
+    node_locations = ast_raw.get("_node_locations", {}) or {}
+
+    rename: dict[str, str] = {}
+    deep_unresolved: list[dict] = []
+    for provisional, loc in node_locations.items():
+        key = (loc[0], loc[1])
+        canonical = defs_by_loc.get(key)
+        if canonical is not None:
+            rename[provisional] = canonical
+        else:
+            deep_unresolved.append(
+                {
+                    "kind": "deep-unresolved",
+                    "node": provisional,
+                    "file": loc[0],
+                    "line": loc[1],
+                    "reason": (
+                        "no SCIP definition at this location; the node could not "
+                        "be joined to the SCIP call graph and its edges are "
+                        "reported unresolved rather than dropped"
+                    ),
+                }
+            )
+
+    direct = _rewrite_keys(ast_raw.get("_direct", {}), rename)
+    ops = _rewrite_keys(ast_raw.get("_ops", {}), rename)
+    surfaces = [
+        {**s, "handler": rename.get(s["handler"], s["handler"])}
+        for s in ast_raw.get("surfaces", [])
+    ]
+    node_keys = (
+        set(defs_by_loc.values())
+        | set(direct)
+        | {rename.get(k, k) for k in ast_raw.get("_calls", {})}
+        | {s["handler"] for s in surfaces}
+    )
+    scip_calls = calls_graph(edges, is_node=node_keys.__contains__, language=language)
+    census = _enumerate_call_sites(source_root, language)
+    residue = _residue(source_root, edges, language)
+
+    hybrid = dict(ast_raw)
+    hybrid["_direct"] = direct
+    hybrid["_ops"] = ops
+    hybrid["surfaces"] = surfaces
+    hybrid["_calls"] = scip_calls
+    hybrid["resolver"] = "scip"
+    hybrid["deep"] = True
+    hybrid["scip_resolved_edges"] = edges
+    hybrid["scip_entities"] = scip_map.entities(normalized)
+    hybrid["scip_residue"] = residue
+    hybrid["scip_residue_summary"] = _scip_summary(edges, scip_calls, census, residue)
+    hybrid["unresolved"] = list(ast_raw.get("unresolved", []) or []) + deep_unresolved
     return hybrid
 
 
@@ -263,10 +523,15 @@ def tools_available(language: str) -> bool:
     """True when both the indexer for ``language`` and the ``scip`` CLI resolve.
 
     Use to gate the live path (a test decorator, a caller deciding whether to ask
-    for ``--resolver scip``). Never runs a tool.
+    for ``--resolver scip``). Never runs a tool. For php the ``php`` executable on
+    PATH is necessary but not sufficient -- the standalone scip-php script must
+    also be present -- so both are probed, per the per-language invocation
+    strategy (a plain ``which(exe)`` would report php available with no indexer).
     """
     executable = runner._INDEXERS.get(language, (None,))[0]
     if executable is None or shutil.which(executable) is None:
+        return False
+    if language == "php" and not Path(runner._scip_php_bin()).is_file():
         return False
     try:
         runner._locate_scip_cli()
@@ -280,6 +545,7 @@ def resolve(
     ast_raw: dict,
     *,
     language: str = "python",
+    deep: bool = False,
     timeout: int = 600,
 ) -> dict:
     """Index ``source_root`` with SCIP and return the hybrid raw discover output.
@@ -290,6 +556,7 @@ def resolve(
     for ``--resolver scip`` wants the SCIP graph or a clear reason it could not be
     built, not a quietly hand-rolled one wearing the SCIP label. The transient
     ``index.scip`` the indexer writes into the tree is removed before returning.
+    ``deep`` forwards to the (file,line)-join variant for the deep adapter.
     """
     if language not in runner._INDEXERS:
         raise ValueError(
@@ -302,6 +569,12 @@ def resolve(
             f"--resolver scip needs the {language} indexer {executable!r}, which "
             f"is not on PATH. Install it with: {install_hint}"
         )
+    if language == "php" and not Path(runner._scip_php_bin()).is_file():
+        raise ScipToolsUnavailable(
+            f"--resolver scip needs the scip-php script at "
+            f"{runner._scip_php_bin()!r} (set {runner._SCIP_PHP_BIN_ENV}). "
+            f"Install it with: {install_hint}"
+        )
     try:
         runner._locate_scip_cli()
     except runner.ScipCliNotFound as exc:
@@ -313,4 +586,4 @@ def resolve(
         normalized = runner.read_scip_index(index_path)
     finally:
         index_path.unlink(missing_ok=True)
-    return hybrid_raw(ast_raw, normalized, source_root)
+    return hybrid_raw(ast_raw, normalized, source_root, language=language, deep=deep)

@@ -41,12 +41,26 @@ Documentation = "https://github.com/millstonehq/synapse/tree/main/packages/capab
 # resolver's own tests skip cleanly wherever the tooling is not installed.
 
 [project.optional-dependencies]
+# The default `pytest` probe needs the TARGET's libraries -- sqlalchemy and a web
+# framework -- imported lazily inside the probe so `capcov gate` never pays for
+# them.
 probe-python = ["sqlalchemy>=2.0", "pytest>=8"]
 # One dependency buys a real parse tree for every language the pack ships. The
 # route opinion lives in a config-supplied query, so no per-language engine
 # code -- and core discovery stays stdlib-only, this extra is never imported by
 # `capcov gate`.
 treesitter = ["tree-sitter>=0.25,<0.27", "tree-sitter-language-pack>=0.7"]
+#
+# The other two probes (`capcov observe --probe browser|load`) declare no pip
+# extra, for the same reason the SCIP resolver below declares none: their real
+# dependencies are not Python packages this project can install. The `browser`
+# probe drives an EXTERNAL runner (a browser/DOM driver invoked after `--`, like
+# `flows run`), and the `load` probe ships as a stdlib-only contract stub whose
+# real ELT driver is out of scope for now. An empty `browser`/`load` marker would
+# only lie about what `pip install .[browser]` gives you, so there is none; when a
+# driver lands with genuine Python deps, its extra is added here. Neither probe is
+# ever imported by the stdlib-only discover/reconcile/gate path -- the registry
+# references them by dotted path and imports lazily.
 
 [project.scripts]
 capcov = "capcov.cli:main"

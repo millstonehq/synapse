@@ -97,6 +97,41 @@ class FourCellsTest(unittest.TestCase):
             [{"test": "tests/test_gone.py::test_it", "entity": "gone"}],
         )
 
+    def test_the_new_carriers_default_explicitly_on_the_python_path(self) -> None:
+        """A capabilities/observed pair that declares none of the honest-denominator
+        carriers (the python-fastapi-sqlalchemy path) still gets them, empty but
+        present -- absence would read as none, and the four cells are undisturbed."""
+        _, result = self.cells(["a"], [cap("a", "GET /a")], [obs("a", "GET /a")])
+        self.assertEqual(result["excluded_surfaces"], {"count": 0, "surfaces": []})
+        self.assertEqual(result["unresolved"], [])
+        self.assertEqual(result["residue"], [])
+        self.assertEqual(
+            result["residue_summary"],
+            {
+                "resolved_by_import": 0,
+                "resolved_by_name": 0,
+                "ambiguous": 0,
+                "external": 0,
+                "chained": 0,
+                "builtin_shadowed": 0,
+            },
+        )
+        self.assertEqual(result["summary"], {"both": 1, "static_only": 0,
+                                             "runtime_only": 0, "neither": 0})
+
+    def test_residue_is_forwarded_from_the_inventory_not_dropped(self) -> None:
+        """The leak repaired: residue + residue_summary the inventory built must
+        survive the reconcile boundary rather than dying before the gate."""
+        caps = capabilities(["a"], [cap("a", "GET /a")])
+        caps["residue"] = [{"file": "app.py", "line": 3, "callee": "x.y"}]
+        caps["residue_summary"] = {
+            "resolved_by_import": 4, "resolved_by_name": 1, "ambiguous": 1,
+            "external": 2, "chained": 0, "builtin_shadowed": 0,
+        }
+        result = reconcile(caps, observed([obs("a", "GET /a")]))
+        self.assertEqual(result["residue"], caps["residue"])
+        self.assertEqual(result["residue_summary"], caps["residue_summary"])
+
 
 class GateTest(unittest.TestCase):
     def setUp(self) -> None:

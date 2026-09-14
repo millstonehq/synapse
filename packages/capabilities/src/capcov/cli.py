@@ -13,31 +13,100 @@ import json
 import os
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 from . import artifacts
 from .adapters import load as load_adapter
+from .adapters import merge as merge_adapters
 from .core import fixpoint
 from .core import gate as gate_mod
 from .core import reconcile as reconcile_mod
+from .probes import probe_registry
 
 
-def _resolve(target: Path, source: str | None, adapter: str | None) -> tuple[Path, str]:
-    config = {}
+def _resolve(
+    target: Path, source: str | None, adapter: str | None
+) -> tuple[Path, list[tuple[str, dict | None]]]:
+    """Resolve the source root and the adapter specs to run.
+
+    An adapter spec is ``(name, config)``: ``config`` is the ``[[adapters]]`` entry
+    the promoted route/contract adapters read, or ``None`` when the adapter reads
+    its own ``capcov.toml`` (the stack adapter, and the ``--adapter`` override).
+
+    Resolution (design §1.1). ``adapter`` (a single string) and ``adapters`` (a
+    list) are XOR:
+
+    * ``--adapter X`` overrides everything -> one adapter X, self-reading its
+      config (``config=None``) -- today's override, unchanged.
+    * ``[capcov] adapter`` -> one adapter, self-reading -- byte-identical to the
+      single-adapter world: one adapter, one (merge-of-one) dict.
+    * ``[[adapters]]`` -> run each with its entry as config, and merge them.
+    * both ``[capcov] adapter`` and ``[[adapters]]`` set -> refused (XOR).
+    """
+    data: dict = {}
     config_path = target / "capcov.toml"
     if config_path.exists():
         import tomllib
 
-        config = tomllib.loads(config_path.read_text()).get("capcov", {})
-    source_dir = target / (source or config.get("source", "src"))
-    adapter_name = adapter or config.get("adapter")
-    if not adapter_name:
+        data = tomllib.loads(config_path.read_text())
+    capcov = data.get("capcov", {})
+    adapters_list = data.get("adapters", [])
+    source_dir = target / (source or capcov.get("source", "src"))
+
+    specs: list[tuple[str, dict | None]]
+    if adapter:
+        specs = [(adapter, None)]
+    elif capcov.get("adapter") and adapters_list:
         raise SystemExit(
-            f"no adapter: pass --adapter or set [capcov] adapter in {config_path}"
+            f"both [capcov] adapter and [[adapters]] are set in {config_path}; "
+            "use one -- a single adapter, or the adapters list (they are XOR)"
+        )
+    elif capcov.get("adapter"):
+        specs = [(capcov["adapter"], None)]
+    elif adapters_list:
+        specs = []
+        for entry in adapters_list:
+            name = entry.get("name")
+            if not name:
+                raise SystemExit(f"an [[adapters]] entry has no name in {config_path}")
+            specs.append((name, entry))
+    else:
+        raise SystemExit(
+            f"no adapter: pass --adapter or set [capcov] adapter or [[adapters]] "
+            f"in {config_path}"
         )
     if not source_dir.is_dir():
         raise SystemExit(f"source root {source_dir} does not exist")
-    return source_dir, adapter_name
+    return source_dir, specs
+
+
+def _capcov_block(target: Path) -> dict:
+    """The ``[capcov]`` config block, or ``{}`` when there is no capcov.toml."""
+    config_path = target / "capcov.toml"
+    if not config_path.exists():
+        return {}
+    import tomllib
+
+    return tomllib.loads(config_path.read_text()).get("capcov", {})
+
+
+def _run_adapter(
+    adapter, source_dir: Path, target: Path, name_match: bool, config: dict | None
+) -> dict:
+    """Run one adapter, forwarding a per-``[[adapters]]`` config when it takes one.
+
+    The stack adapter (``python-fastapi-sqlalchemy``) reads its own config from
+    capcov.toml and has no ``config`` parameter; the promoted route/contract
+    adapters accept the ``[[adapters]]`` entry directly. A lone ``adapter`` string
+    passes ``config=None``, so the stack-adapter call is byte-identical to today.
+    """
+    import inspect
+
+    params = inspect.signature(adapter.discover).parameters
+    if config is not None and "config" in params:
+        return adapter.discover(source_dir, target, name_match=name_match, config=config)
+    return adapter.discover(source_dir, target, name_match=name_match)
 
 
 def _emit(path: Path, doc: dict, check: bool) -> int:
@@ -78,22 +147,76 @@ def _diff(old: str, new: str, label: str) -> None:
 
 def cmd_discover(args: argparse.Namespace) -> int:
     target = Path(args.target).resolve()
-    source_dir, adapter_name = _resolve(target, args.source, args.adapter)
-    adapter = load_adapter(adapter_name)
+    source_dir, specs = _resolve(target, args.source, args.adapter)
+    adapters = [load_adapter(name) for name, _ in specs]
+    name_match = not args.no_name_match
 
-    raw = adapter.discover(source_dir, target, name_match=not args.no_name_match)
+    # Run every adapter and MERGE their core dicts (design §1.1/§1.2). A lone
+    # adapter merges to itself -- byte-identical to today. A duplicate obligation
+    # id across adapters is the collision the four-cell cannot represent, so the
+    # merge refuses it loudly rather than letting one silently clobber the other
+    # (R6); it never fires for a single-adapter list.
+    discoveries = [
+        _run_adapter(adapter, source_dir, target, name_match, config)
+        for adapter, (_, config) in zip(adapters, specs)
+    ]
+    try:
+        raw = merge_adapters(discoveries)
+    except ValueError as exc:
+        raise SystemExit(f"capcov discover: {exc}")
+
+    # A deep adapter block emits a node-keyed call-graph dict (carrying
+    # `_node_locations` for the (file,line)-join) that ONLY the SCIP resolver can
+    # bind; without --resolver scip its `_calls` are unresolved placeholders and
+    # the fixpoint would bind nothing. Deep is opt-in and the resolver stays an
+    # explicit flag, so a deep block reached here without it is a misconfiguration
+    # named loudly, not a silently empty capability set.
+    if getattr(args, "resolver", "ast") != "scip" and "_node_locations" in raw:
+        raise SystemExit(
+            "capcov discover: a deep adapter block emits a call graph only "
+            "--resolver scip can bind; re-run with --resolver scip"
+        )
+
     # Optional hybrid: rent SCIP as the resolver for the call graph, keep the AST
     # pass as everything else (entities, surfaces, the enumerated blind spots).
     # The AST adapter always runs first -- it is the fallback and the enumerator;
-    # SCIP only re-sources `_calls` and adds its resolved-edges + residue.
+    # SCIP only re-sources `_calls` and adds its resolved-edges + residue. It
+    # re-sources ONE adapter's graph, so it is undefined across an adapters merge.
     if getattr(args, "resolver", "ast") == "scip":
+        if len(adapters) != 1:
+            raise SystemExit(
+                "capcov discover --resolver scip: the SCIP resolver re-sources one "
+                "adapter's call graph; it is not defined across an [[adapters]] merge"
+            )
         from .scip import resolve as scip_resolve
 
-        language = getattr(adapter, "LANGUAGE", "python")
-        try:
-            raw = scip_resolve.resolve(source_dir, raw, language=language)
-        except scip_resolve.ScipToolsUnavailable as exc:
-            raise SystemExit(f"capcov discover --resolver scip: {exc}")
+        # The LANGUAGE seam (design §1.4): a promoted adapter's SCIP language is
+        # per-config (go/php/python vary per [[adapters]] entry), not a module
+        # constant, so read the entry's `scip_language` first (from the CLI's spec,
+        # or -- for a --adapter override with no spec config -- the deep dict the
+        # adapter tagged), then fall back to the adapter module's LANGUAGE.
+        spec_config = specs[0][1] or {}
+        language = (
+            spec_config.get("scip_language")
+            or raw.get("scip_language")
+            or getattr(adapters[0], "LANGUAGE", "python")
+        )
+        # `deep` is what the adapter actually emitted: a node-keyed dict carries
+        # `_node_locations`. A deep block whose SCIP tooling was absent degraded to
+        # the shallow dict inside the adapter and NAMED the reason
+        # (`deep-unavailable`); honor that by not shelling out to the very tool the
+        # adapter already reported missing.
+        deep = "_node_locations" in raw
+        degraded = any(
+            u.get("kind") == "deep-unavailable" for u in raw.get("unresolved", [])
+        )
+        if not degraded:
+            try:
+                raw = scip_resolve.resolve(
+                    source_dir, raw, language=language, deep=deep
+                )
+            except scip_resolve.ScipToolsUnavailable as exc:
+                raise SystemExit(f"capcov discover --resolver scip: {exc}")
     direct, calls, ops = raw["_direct"], raw["_calls"], raw["_ops"]
 
     roots = [s["handler"] for s in raw["surfaces"]]
@@ -126,11 +249,15 @@ def cmd_discover(args: argparse.Namespace) -> int:
 
     tree_hash, files = artifacts.tree_sha256(source_dir)
     blind = [b for b in raw["blind_spots"] if b["blind"]]
+    extractor = "capcov " + (
+        adapters[0].NAME
+        if len(adapters) == 1
+        else "+".join(a.NAME for a in adapters)
+    )
     doc = {
         "kind": "capabilities",
         "derived_from": artifacts.provenance(
-            str(source_dir.relative_to(target)), tree_hash,
-            f"capcov {adapter.NAME}", files,
+            str(source_dir.relative_to(target)), tree_hash, extractor, files,
         ),
         "entities": raw["entities"],
         "surfaces": raw["surfaces"],
@@ -154,6 +281,17 @@ def cmd_discover(args: argparse.Namespace) -> int:
         doc["scip_entities"] = raw["scip_entities"]
         doc["scip_residue"] = raw["scip_residue"]
         doc["scip_residue_summary"] = raw["scip_residue_summary"]
+    # Honest-denominator carriers (Property 3): the promoted route/contract
+    # adapters surface what static reading SAW-but-filtered (`excluded_surfaces`,
+    # verb-allowlist drops) and could-not-resolve (`unresolved`: dynamic paths,
+    # boundary limits, adapters that found nothing). Written conditionally --
+    # exactly the scip_* pattern -- so the python-fastapi-sqlalchemy path, which
+    # emits neither, is byte-identical to before (backward compatible), while a
+    # route/contract discovery never drops its narrowing or its limits silently.
+    if "excluded_surfaces" in raw:
+        doc["excluded_surfaces"] = raw["excluded_surfaces"]
+    if "unresolved" in raw:
+        doc["unresolved"] = raw["unresolved"]
     rc = _emit(Path(args.out), dict(doc), args.check)
     if not args.quiet:
         bound_entities = {c["entity"] for c in capabilities}
@@ -187,38 +325,77 @@ def cmd_discover(args: argparse.Namespace) -> int:
 
 
 def cmd_observe(args: argparse.Namespace) -> int:
-    """Run the target's own exercises with the probe installed.
+    """Run the target's exercises with the selected probe installed.
 
-    The probe writes observed.json itself, in-process. capcov does not talk to
-    the system under test; it sets three environment variables and runs the
-    command the target already runs.
+    The probe writes observed.json itself. capcov sets one unified env contract
+    (the ``CAPCOV_*`` variables of design §1.3, including a per-run
+    ``CAPCOV_NONCE``) and hands off. The default ``pytest`` probe is
+    command-driven -- capcov runs the command the target already runs and the
+    pytest11 plugin does the rest, byte-identical to the pre-consolidation
+    observe. The other probes (``browser``, ``load``) read the same env and drive
+    their own exercise in-process, writing observed.json under the strong
+    freshness guard.
     """
     target = Path(args.target).resolve()
     source_dir, _ = _resolve(target, args.source, args.adapter)
-    env = dict(os.environ)
-    env["CAPCOV_OBSERVE"] = "1"
-    env["CAPCOV_OUT"] = str(Path(args.out).resolve())
-    env["CAPCOV_SOURCE_ROOT"] = str(source_dir)
-    env["CAPCOV_TARGET"] = str(target)
-    if not args.command:
-        raise SystemExit("capcov observe: give the command after --, e.g. -- pytest -q")
-    print(f"capcov observe: {' '.join(args.command)}")
-    proc = subprocess.run(args.command, cwd=target, env=env)
-    if proc.returncode != 0:
+    probe_name = args.probe or _capcov_block(target).get("probe") or "pytest"
+    probe_registry.resolve(probe_name)  # validate the name; unknown probe raises.
+
+    out = Path(args.out)
+    observe_env = {
+        probe_registry.ENV_OBSERVE: "1",
+        probe_registry.ENV_OUT: str(out.resolve()),
+        probe_registry.ENV_SOURCE_ROOT: str(source_dir),
+        probe_registry.ENV_TARGET: str(target),
+        probe_registry.ENV_NONCE: uuid.uuid4().hex,
+    }
+    only = getattr(args, "only", None)
+    if only:
+        observe_env[probe_registry.ENV_ONLY] = only
+
+    if probe_name == "pytest":
+        if not args.command:
+            raise SystemExit("capcov observe: give the command after --, e.g. -- pytest -q")
+        env = {**os.environ, **observe_env}
+        print(f"capcov observe: {' '.join(args.command)}")
+        proc = subprocess.run(args.command, cwd=target, env=env)
+        if proc.returncode != 0:
+            print(
+                f"capcov observe: the exercise failed (exit {proc.returncode}). "
+                "Observation from a failing run is not evidence of anything; fix the "
+                "run first."
+            )
+            return proc.returncode
+        if not out.exists():
+            print(
+                f"capcov observe: the command succeeded and wrote no {args.out}. "
+                "The probe did not load -- check that capcov is installed in the "
+                "same environment as the exercise."
+            )
+            return 1
+        return 0
+
+    # In-process probes (browser, load). They read the unified env contract and
+    # drive their own exercise; the env is set for the duration of the call and
+    # restored after, so a probe run leaves the caller's environment untouched.
+    probe = probe_registry.load(probe_name)
+    saved = {key: os.environ.get(key) for key in observe_env}
+    try:
+        os.environ.update(observe_env)
+        rc = probe.main(list(args.command or []))
+    finally:
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+    if rc == 0 and not out.exists():
         print(
-            f"capcov observe: the exercise failed (exit {proc.returncode}). "
-            "Observation from a failing run is not evidence of anything; fix the "
-            "run first."
-        )
-        return proc.returncode
-    if not Path(args.out).exists():
-        print(
-            f"capcov observe: the command succeeded and wrote no {args.out}. "
-            "The probe did not load -- check that capcov is installed in the "
-            "same environment as the exercise."
+            f"capcov observe: the {probe_name} probe returned success but wrote no "
+            f"{args.out}."
         )
         return 1
-    return 0
+    return rc
 
 
 def cmd_reconcile(args: argparse.Namespace) -> int:
@@ -360,6 +537,17 @@ def main(argv: list[str] | None = None) -> int:
     o = sub.add_parser("observe", help="runtime: run the exercises with the probe")
     common(o)
     o.add_argument("--out", default="observed.json")
+    o.add_argument(
+        "--probe",
+        default=None,
+        help="runtime-evidence probe: 'pytest' (default, unchanged) | 'browser' | "
+        "'load'. Falls back to [capcov] probe, then pytest.",
+    )
+    o.add_argument(
+        "--only",
+        default=None,
+        help="optional inner-loop selector, passed to the probe as CAPCOV_ONLY",
+    )
     o.add_argument("command", nargs=argparse.REMAINDER)
     o.set_defaults(func=cmd_observe)
 

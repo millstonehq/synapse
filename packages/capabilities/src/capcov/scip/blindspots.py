@@ -19,8 +19,22 @@ them all. So the hybrid keeps two things SCIP does not give you.
   everything enumerated, minus everything resolved -- and marks each remainder
   unresolved rather than dropping it.
 
-Pure stdlib AST work: nothing here imports the node/go SCIP CLIs, so the module
-is always importable and the differ is testable with a resolver's output fed in
+The enumerator is per language. ``enumerate_call_sites``/``enumerate_blind_spots``
+take a ``language`` (defaulting to ``"python"`` so the resolver integrates with no
+ordering dependency): Python is a pure ``ast`` census + the dynamic-access builtin
+inventory; Go and PHP are a tree-sitter census + that language's
+reflection/dynamic-dispatch inventory (Go ``reflect`` and interface dispatch; PHP
+variable-variables, dynamic method names, and facade ``__call``/``__callStatic``
+magic -- the known no-larastan scip-php blind spot). A resolver that returned an
+empty census for Go/PHP would look byte-identical to a clean run, so a language
+with no strategy raises rather than returning ``[]``; that is the soundiness floor
+the hybrid exists to hold.
+
+The Python path is pure stdlib and always importable. The tree-sitter half is
+imported lazily, only when a Go/PHP enumeration is actually requested (exactly as
+``flows/discovery.py`` does), so ``blindspots`` stays dependency-free for the
+Python resolver and for ``capcov gate``, and ``blind_spot_residue`` -- the
+subtraction -- is language-agnostic and testable with a resolver's output fed in
 by hand, no indexer installed.
 """
 
@@ -124,20 +138,31 @@ def _render_callee(node: ast.Call) -> str:
     return ".".join(reversed(parts))
 
 
-def enumerate_call_sites(py_source_tree: str | Path) -> list[dict]:
-    """Every call site under ``py_source_tree``, as ``{file, line, callee}``.
+def enumerate_call_sites(
+    source_tree: str | Path, language: str = "python"
+) -> list[dict]:
+    """Every call site under ``source_tree``, as ``{file, line, callee}``.
 
     This is the left-hand side of the SCIP residue subtraction: the complete set
-    of call sites the AST pass SAW, so that ``blind_spot_residue`` can name the
+    of call sites the enumerator SAW, so that ``blind_spot_residue`` can name the
     ones SCIP stayed silent about. It deliberately includes ordinary calls, not
     just dynamic-access builtins -- because SCIP's most important silent gap is
     an ordinary method call on a receiver it could not type (``session.add(job)``
     on an untyped ``session`` emits no occurrence at all), and only a full call
     census surfaces it. ``file`` is POSIX and tree-relative; ``line`` is the
-    1-based ``ast`` line, matching ``enumerate_blind_spots``. Sorted by
+    1-based line, matching ``enumerate_blind_spots``. Sorted by
     (file, line, callee) for a stable diff.
+
+    ``language`` selects the strategy: ``"python"`` (the default) is the pure
+    ``ast`` census below; ``"go"``/``"php"`` are the tree-sitter census. An
+    unknown language raises rather than returning ``[]`` -- an empty census would
+    make an unsupported language look identical to a clean one.
     """
-    root = Path(py_source_tree)
+    if language != "python":
+        if language in _TS_EXTENSIONS:
+            return _ts_call_sites(source_tree, language)
+        raise ValueError(f"no call-site census strategy for language {language!r}")
+    root = Path(source_tree)
     out: list[dict] = []
     for path in _iter_py_files(root):
         rel = path.relative_to(root).as_posix()
@@ -152,16 +177,28 @@ def enumerate_call_sites(py_source_tree: str | Path) -> list[dict]:
     return out
 
 
-def enumerate_blind_spots(py_source_tree: str | Path) -> list[dict]:
-    """Every dynamic-access blind spot under ``py_source_tree``.
+def enumerate_blind_spots(
+    source_tree: str | Path, language: str = "python"
+) -> list[dict]:
+    """Every dynamic-dispatch blind spot under ``source_tree``.
 
     Returns ``{file, line, kind, reason}`` per site, ``file`` POSIX and relative
-    to the tree root, sorted by (file, line) so the list is stable to diff. Only
-    genuinely blind sites are returned: a ``getattr(o, "literal")`` is
-    statically resolvable and omitted, matching the adapter's own blind /
-    not-blind split.
+    to the tree root, sorted so the list is stable to diff. Only genuinely blind
+    sites are returned: a ``getattr(o, "literal")`` is statically resolvable and
+    omitted, matching the adapter's own blind / not-blind split.
+
+    ``language`` selects the inventory: ``"python"`` (the default) is the
+    dynamic-access builtin census below; ``"go"`` is ``reflect`` +
+    interface dispatch; ``"php"`` is variable-variables, dynamic method names,
+    and facade ``__call``/``__callStatic`` magic. Each returned site is keyed to
+    a call-site line so ``_residue`` keeps it unconditionally. An unknown
+    language raises rather than returning ``[]``.
     """
-    root = Path(py_source_tree)
+    if language != "python":
+        if language in _TS_BLIND:
+            return _TS_BLIND[language](source_tree)
+        raise ValueError(f"no blind-spot inventory for language {language!r}")
+    root = Path(source_tree)
     out: list[dict] = []
     for path in _iter_py_files(root):
         rel = path.relative_to(root).as_posix()
@@ -226,3 +263,354 @@ def blind_spot_residue(
         )
     residue.sort(key=_site_key)
     return residue
+
+
+# ---------------------------------------------------------------------------
+# Per-language tree-sitter enumerators (Go, PHP).
+#
+# Everything above this line is the Python strategy: pure ``ast``, no optional
+# dependency. Every other language needs a real parse tree, so this half lazily
+# imports the ``treesitter`` extra (tree-sitter + tree-sitter-language-pack) --
+# the same lazy import ``flows/discovery.py`` uses -- and stays out of the
+# default import path so ``blindspots`` remains stdlib-only for the Python
+# resolver and ``capcov gate``. The soundiness contract governs this half: a
+# census that silently returned [] for Go/PHP would be indistinguishable from a
+# fully resolved run, so a missing extra RAISES and a language with no strategy
+# RAISES; neither ever no-ops into a false-clean.
+# ---------------------------------------------------------------------------
+
+# Go reflection / dynamic dispatch. A ``reflect.*`` call builds its target from a
+# runtime value, and reflect.Value's ``MethodByName``/``FieldByName`` select a
+# method or field by a string no static resolver can follow. These two names are
+# distinctive enough to flag with a near-zero false-positive rate; the broader
+# reflect chain (``.Call``/``.Method`` on a Value) is caught on the same line via
+# the ``reflect.`` package call or the ``MethodByName`` that produced the Value.
+GO_REFLECT_PACKAGE = "reflect"
+GO_DYNAMIC_METHODS = {
+    "MethodByName": "dynamic_method",
+    "FieldByName": "dynamic_field",
+}
+
+# Laravel facades whose static calls route through ``__callStatic`` and whose
+# fluent builders route through ``__call``. Without larastan, scip-php cannot
+# type these chains, so a call rooted at one is the known, enumerable PHP blind
+# spot (design R4). This is the single source of truth -- the php_eloquent
+# recognizer (task T4) imports it back rather than keeping its own copy, the same
+# way the FastAPI adapter imports ``DYNAMIC_BLIND_CALLS``.
+PHP_MAGIC_FACADES = frozenset({
+    "DB", "Schema", "Cache", "Redis", "Storage", "Queue", "Route",
+    "Config", "Log", "Auth", "Session", "Gate", "Event", "Mail",
+    "Http", "Validator", "Cookie", "Crypt", "File", "Hash", "View",
+    "Notification", "Password", "Response", "URL", "Artisan", "Blade",
+})
+
+_GO_REASONS = {
+    "reflection": (
+        "call target built from a runtime value via reflect; no static target"
+    ),
+    "dynamic_method": (
+        "method selected by a runtime string via reflect; no static target"
+    ),
+    "dynamic_field": (
+        "field selected by a runtime string via reflect; no static target"
+    ),
+    "interface_dispatch": (
+        "call through an interface value; the concrete implementation that "
+        "actually touches data is not statically known"
+    ),
+}
+
+_PHP_REASONS = {
+    "variable_variable": (
+        "callee named by a variable variable ($$name); the target is not "
+        "statically knowable"
+    ),
+    "dynamic_dispatch": (
+        "method named by a runtime value ($obj->$m / Cls::$m); routes through "
+        "__call/__callStatic, invisible to scip-php"
+    ),
+    "facade_magic": (
+        "static call on a Laravel facade; routes through __callStatic and is "
+        "untyped without larastan, invisible to scip-php"
+    ),
+}
+
+_TS_EXTENSIONS = {"go": (".go",), "php": (".php", ".phtml", ".php3", ".php4", ".php5")}
+
+_TS_CALL_TYPES = {
+    "go": {"call_expression"},
+    "php": {
+        "function_call_expression",
+        "member_call_expression",
+        "nullsafe_member_call_expression",
+        "scoped_call_expression",
+    },
+}
+
+
+def _ts_language(language: str):
+    """The tree-sitter module + compiled grammar for ``language``, imported lazily.
+
+    Raises ``ValueError`` (never returns a no-op) when the optional extra is not
+    installed, so a Go/PHP enumeration cannot silently degrade to an empty census
+    and manufacture a false-clean denominator.
+    """
+    try:
+        import tree_sitter as ts
+        from tree_sitter_language_pack import get_language
+    except ImportError as exc:  # pragma: no cover - exercised only without the extra
+        raise ValueError(
+            f"blind-spot enumeration for {language!r} needs the 'treesitter' extra"
+        ) from exc
+    return ts, get_language(language)
+
+
+def _ts_files(root: str | Path, language: str):
+    """Every source file of ``language`` under ``root``, sorted, tree-relative.
+
+    Mirrors ``_iter_py_files``: a deterministic walk over the language's source
+    extensions, skipping the VCS directory. The census must be COMPLETE, so no
+    first-party/third-party filtering happens here -- scoping is the caller's job
+    (it chooses ``root``)."""
+    root = Path(root)
+    seen: set[Path] = set()
+    for ext in _TS_EXTENSIONS[language]:
+        for path in root.rglob(f"*{ext}"):
+            if path.is_file() and ".git" not in path.parts:
+                seen.add(path)
+    yield from sorted(seen)
+
+
+def _walk(node):
+    """Depth-first over every named node in the subtree (order-independent; the
+    callers sort their output)."""
+    stack = [node]
+    while stack:
+        current = stack.pop()
+        yield current
+        stack.extend(reversed(current.named_children))
+
+
+# --- Go -------------------------------------------------------------------
+
+def _go_expr_name(node) -> str:
+    """A readable dotted name for a Go call target. Best-effort, never raises --
+    the parallel of the Python ``_render_callee``."""
+    if node is None:
+        return "?"
+    if node.type in ("identifier", "field_identifier", "type_identifier",
+                     "package_identifier"):
+        return node.text.decode()
+    if node.type == "selector_expression":
+        operand = _go_expr_name(node.child_by_field_name("operand"))
+        field = node.child_by_field_name("field")
+        return f"{operand}.{field.text.decode()}" if field is not None else operand
+    if node.type == "call_expression":
+        return _go_expr_name(node.child_by_field_name("function"))
+    return node.type
+
+
+def _go_callee(node) -> str:
+    return _go_expr_name(node.child_by_field_name("function"))
+
+
+def _go_interface_types(root) -> set[str]:
+    """Names of interface types declared IN THIS FILE.
+
+    A within-file heuristic: interface types imported from elsewhere are not
+    resolved here, and the residue subtraction (census minus resolved) is the
+    backstop that keeps those from being dropped. This inventory is the
+    best-effort floor, not an exhaustive interface index."""
+    names: set[str] = set()
+    for node in _walk(root):
+        if node.type != "type_spec":
+            continue
+        ty = node.child_by_field_name("type")
+        name = node.child_by_field_name("name")
+        if ty is not None and ty.type == "interface_type" and name is not None:
+            names.add(name.text.decode())
+    return names
+
+
+def _go_interface_vars(root, interface_types: set[str]) -> set[str]:
+    """Identifiers bound to an in-file interface type (params, typed vars).
+
+    Any node carrying a ``type`` field that names an interface contributes its
+    ``identifier`` children -- this covers ``parameter_declaration`` (``f F``)
+    and typed ``var_spec`` (``var f F``) uniformly without hardcoding node
+    types."""
+    bound: set[str] = set()
+    if not interface_types:
+        return bound
+    for node in _walk(root):
+        ty = node.child_by_field_name("type")
+        if ty is None or ty.type != "type_identifier":
+            continue
+        if ty.text.decode() not in interface_types:
+            continue
+        for child in node.named_children:
+            if child.type == "identifier":
+                bound.add(child.text.decode())
+    return bound
+
+
+def _go_blind_kind(call_node, interface_vars: set[str]) -> str | None:
+    fn = call_node.child_by_field_name("function")
+    if fn is None or fn.type != "selector_expression":
+        return None
+    operand = fn.child_by_field_name("operand")
+    field = fn.child_by_field_name("field")
+    field_name = field.text.decode() if field is not None else ""
+    if (
+        operand is not None
+        and operand.type == "identifier"
+        and operand.text.decode() == GO_REFLECT_PACKAGE
+    ):
+        return "reflection"
+    if field_name in GO_DYNAMIC_METHODS:
+        return GO_DYNAMIC_METHODS[field_name]
+    if (
+        operand is not None
+        and operand.type == "identifier"
+        and operand.text.decode() in interface_vars
+    ):
+        return "interface_dispatch"
+    return None
+
+
+def _go_blind_spots(source_tree: str | Path) -> list[dict]:
+    ts, language = _ts_language("go")
+    parser = ts.Parser(language)
+    root = Path(source_tree)
+    out: list[dict] = []
+    for path in _ts_files(root, "go"):
+        rel = path.relative_to(root).as_posix()
+        tree = parser.parse(path.read_bytes())
+        interface_types = _go_interface_types(tree.root_node)
+        interface_vars = _go_interface_vars(tree.root_node, interface_types)
+        for node in _walk(tree.root_node):
+            if node.type != "call_expression":
+                continue
+            kind = _go_blind_kind(node, interface_vars)
+            if kind is None:
+                continue
+            out.append({
+                "file": rel,
+                "line": node.start_point[0] + 1,
+                "kind": kind,
+                "reason": _GO_REASONS[kind],
+            })
+    out.sort(key=lambda b: (b["file"], b["line"], b["kind"]))
+    return out
+
+
+# --- PHP ------------------------------------------------------------------
+
+def _php_name(node) -> str:
+    """A readable name for a PHP callee fragment. Best-effort, never raises."""
+    if node is None:
+        return "?"
+    if node.type in ("name", "variable_name", "dynamic_variable_name"):
+        return node.text.decode()
+    text = node.text.decode()
+    return text if "\n" not in text and len(text) <= 40 else node.type
+
+
+def _php_callee(node) -> str:
+    kind = node.type
+    if kind == "function_call_expression":
+        return _php_name(node.child_by_field_name("function"))
+    if kind in ("member_call_expression", "nullsafe_member_call_expression"):
+        obj = _php_name(node.child_by_field_name("object"))
+        sep = "?->" if kind.startswith("nullsafe") else "->"
+        return f"{obj}{sep}{_php_name(node.child_by_field_name('name'))}"
+    if kind == "scoped_call_expression":
+        scope = _php_name(node.child_by_field_name("scope"))
+        return f"{scope}::{_php_name(node.child_by_field_name('name'))}"
+    return kind
+
+
+def _php_blind_kind(node) -> str | None:
+    kind = node.type
+    if kind == "function_call_expression":
+        fn = node.child_by_field_name("function")
+        if fn is not None and fn.type == "dynamic_variable_name":
+            return "variable_variable"
+        return None
+    if kind in ("member_call_expression", "nullsafe_member_call_expression"):
+        name = node.child_by_field_name("name")
+        # A dynamic method name ($obj->$m() / $obj->{$e}()) is not a plain ``name``.
+        if name is not None and name.type != "name":
+            return "dynamic_dispatch"
+        return None
+    if kind == "scoped_call_expression":
+        name = node.child_by_field_name("name")
+        if name is not None and name.type != "name":
+            return "dynamic_dispatch"
+        scope = node.child_by_field_name("scope")
+        if (
+            scope is not None
+            and scope.type == "name"
+            and scope.text.decode() in PHP_MAGIC_FACADES
+        ):
+            return "facade_magic"
+        return None
+    return None
+
+
+def _php_blind_spots(source_tree: str | Path) -> list[dict]:
+    ts, language = _ts_language("php")
+    parser = ts.Parser(language)
+    root = Path(source_tree)
+    out: list[dict] = []
+    for path in _ts_files(root, "php"):
+        rel = path.relative_to(root).as_posix()
+        tree = parser.parse(path.read_bytes())
+        for node in _walk(tree.root_node):
+            kind = _php_blind_kind(node)
+            if kind is None:
+                continue
+            out.append({
+                "file": rel,
+                "line": node.start_point[0] + 1,
+                "kind": kind,
+                "reason": _PHP_REASONS[kind],
+            })
+    out.sort(key=lambda b: (b["file"], b["line"], b["kind"]))
+    return out
+
+
+# --- Generic tree-sitter census + strategy tables -------------------------
+
+_CALLEE_RENDERERS = {"go": _go_callee, "php": _php_callee}
+
+
+def _ts_call_sites(source_tree: str | Path, language: str) -> list[dict]:
+    """The full call-site census for a tree-sitter language.
+
+    Every node whose type is a call form for ``language`` becomes a
+    ``{file, line, callee}`` entry -- the same shape and sort key the Python
+    census emits, so ``blind_spot_residue`` diffs the two uniformly. Nested calls
+    in a fluent chain (``DB::table(x)->where(y)->first()``) each count as their
+    own site, matching the Python census's treatment of ``f()()``."""
+    ts, grammar = _ts_language(language)
+    parser = ts.Parser(grammar)
+    call_types = _TS_CALL_TYPES[language]
+    render = _CALLEE_RENDERERS[language]
+    root = Path(source_tree)
+    out: list[dict] = []
+    for path in _ts_files(root, language):
+        rel = path.relative_to(root).as_posix()
+        tree = parser.parse(path.read_bytes())
+        for node in _walk(tree.root_node):
+            if node.type in call_types:
+                out.append({
+                    "file": rel,
+                    "line": node.start_point[0] + 1,
+                    "callee": render(node),
+                })
+    out.sort(key=lambda c: (c["file"], c["line"], c["callee"]))
+    return out
+
+
+_TS_BLIND = {"go": _go_blind_spots, "php": _php_blind_spots}

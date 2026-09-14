@@ -207,6 +207,131 @@ class RunIndexTest(unittest.TestCase):
             self.assertIn("boom", str(ctx.exception))
 
 
+class PhpInvocationTest(unittest.TestCase):
+    """scip-php does not fit which(exe)+cwd+--output: it runs as
+    ``php <script> --memory-limit=2G`` from the project root. The argv and env are
+    asserted here WITHOUT the tool installed, and the two-part availability
+    (php on PATH AND the standalone script present) is enforced."""
+
+    def test_php_command_shape_is_php_script_memory_limit(self) -> None:
+        with patch.dict(os.environ, {"SCIP_PHP_BIN": "/opt/scip-php"}):
+            self.assertEqual(
+                runner._index_command("php", "index.scip"),
+                ["php", "/opt/scip-php", "--memory-limit=2G"],
+            )
+
+    def test_php_command_defaults_the_script_path(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(
+                runner._index_command("php", "index.scip"),
+                ["php", "/tmp/scip-tool/vendor/bin/scip-php", "--memory-limit=2G"],
+            )
+
+    def test_index_env_is_none_for_every_language(self) -> None:
+        # The invocation strategy is (argv, env); php needs no env override.
+        for language in ("python", "go", "php"):
+            self.assertIsNone(runner._index_env(language))
+
+    def test_missing_php_executable_names_the_tool_and_hint(self) -> None:
+        with patch("capcov.scip.runner.shutil.which", return_value=None):
+            with self.assertRaises(runner.IndexerNotFound) as ctx:
+                runner.run_scip_index("/some/dir", "php")
+        message = str(ctx.exception)
+        self.assertIn("php", message)
+        self.assertIn("scip-php", message)
+
+    def test_php_on_path_but_missing_script_names_scip_php(self) -> None:
+        with (
+            patch("capcov.scip.runner.shutil.which", return_value="/usr/bin/php"),
+            patch.dict(os.environ, {"SCIP_PHP_BIN": "/no/such/scip-php"}),
+        ):
+            with self.assertRaises(runner.IndexerNotFound) as ctx:
+                runner.run_scip_index("/some/dir", "php")
+        self.assertIn("scip-php", str(ctx.exception))
+        self.assertIn("/no/such/scip-php", str(ctx.exception))
+
+
+class NumericKindTest(unittest.TestCase):
+    """The real `scip print --json` emits kinds as numeric SymbolKind values;
+    the hand-authored fixture used name strings. A number must be mapped to its
+    name (or fall back to the suffix) -- otherwise map._category calls .strip()
+    on an int and the whole language crashes."""
+
+    def test_numeric_kinds_map_to_their_enum_names(self) -> None:
+        self.assertEqual(runner._coerce_kind(49, "pkg X#"), "Struct")
+        self.assertEqual(runner._coerce_kind(26, "pkg X#m()."), "Method")
+        self.assertEqual(runner._coerce_kind(17, "pkg f()."), "Function")
+        self.assertEqual(runner._coerce_kind(15, "pkg X#f."), "Field")
+
+    def test_unknown_number_falls_back_to_the_descriptor_suffix(self) -> None:
+        self.assertEqual(runner._coerce_kind(9999, "pkg Thing#"), "type")
+        self.assertIsNone(runner._coerce_kind(9999, "pkg param(x)"))
+
+    def test_string_kind_and_unset_are_unchanged(self) -> None:
+        self.assertEqual(runner._coerce_kind("Struct", "pkg X#"), "Struct")
+        self.assertEqual(runner._coerce_kind(None, "pkg X#"), "type")
+        self.assertEqual(runner._coerce_kind(0, "pkg X#m()."), "method")
+
+    def test_real_go_dump_normalizes_without_crashing(self) -> None:
+        raw = json.loads(
+            (Path(__file__).resolve().parent / "fixtures"
+             / "scip_go_nested_symbols.json").read_text()
+        )
+        out = runner.normalize_scip_json(raw)
+        kinds = {
+            s["kind"]
+            for doc in out["documents"]
+            for s in doc["symbols"]
+        }
+        # numeric kinds became names map._category understands.
+        self.assertIn("Struct", kinds)
+        self.assertIn("Method", kinds)
+        # and the downstream mapper runs (it .strip()s the kind).
+        from capcov.scip import map as scip_map
+
+        self.assertTrue(scip_map.call_edges(out), "go call edges must resolve")
+
+
+class PhpEnclosingSynthesisTest(unittest.TestCase):
+    """scip-php emits no enclosing range on any occurrence, so a caller cannot be
+    attributed and the whole PHP call graph is silently empty. The runner
+    synthesizes a span for each callable definition; a dialect that supplies
+    enclosing ranges is left untouched."""
+
+    def test_callable_defs_get_a_span_non_callables_do_not(self) -> None:
+        raw = json.loads(
+            (Path(__file__).resolve().parent / "fixtures"
+             / "scip_php_symbols.json").read_text()
+        )
+        out = runner.normalize_scip_json(raw)
+        occ_by = {}
+        for doc in out["documents"]:
+            for o in doc["occurrences"]:
+                occ_by.setdefault(o["symbol"], o)
+        get_job = occ_by[
+            "scip-php composer example/php-slice 1.0.0.0 "
+            "App/Http/Controllers/JobController#getJob()."
+        ]
+        self.assertIsNotNone(get_job["enclosing_start_line"])
+        self.assertIsNotNone(get_job["enclosing_end_line"])
+        self.assertEqual(get_job["enclosing_start_line"], get_job["start_line"])
+        # the class definition is not callable -> it must NOT be given a span, or
+        # it would swallow calls that belong to its methods.
+        klass = occ_by[
+            "scip-php composer example/php-slice 1.0.0.0 "
+            "App/Http/Controllers/JobController#"
+        ]
+        self.assertIsNone(klass["enclosing_start_line"])
+
+    def test_a_dialect_with_enclosing_ranges_is_untouched(self) -> None:
+        # The sample fixture (python+go) already carries enclosing ranges; the
+        # synthesis must not overwrite them.
+        out = runner.normalize_scip_json(json.loads(FIXTURE.read_text()))
+        job = out["documents"][0]["occurrences"][0]  # Job# definition
+        self.assertEqual(job["enclosing_start_line"], 10)
+        self.assertEqual(job["enclosing_end_line"], 40)
+
+
 class ReadIndexTest(unittest.TestCase):
     def test_scip_cli_not_located_raises_named_error(self) -> None:
         with (
