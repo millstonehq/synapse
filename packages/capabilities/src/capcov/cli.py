@@ -109,6 +109,16 @@ def _run_adapter(
     return adapter.discover(source_dir, target, name_match=name_match)
 
 
+def _source_patterns(specs: list[tuple[str, dict | None]]) -> tuple[str, ...]:
+    """Use the configured adapter inputs for source-bound artifact provenance."""
+    globs = [
+        pattern
+        for _, config in specs
+        for pattern in ((config or {}).get("globs") or [])
+    ]
+    return tuple(dict.fromkeys(globs)) if globs else ("**/*.py",)
+
+
 def _emit(path: Path, doc: dict, check: bool) -> int:
     """Write, or in --check mode re-render and diff against what is on disk."""
     if not check:
@@ -247,7 +257,7 @@ def cmd_discover(args: argparse.Namespace) -> int:
             )
     capabilities.sort(key=lambda c: (c["entity"], c["surface"]))
 
-    tree_hash, files = artifacts.tree_sha256(source_dir)
+    tree_hash, files = artifacts.tree_sha256(source_dir, _source_patterns(specs))
     blind = [b for b in raw["blind_spots"] if b["blind"]]
     extractor = "capcov " + (
         adapters[0].NAME

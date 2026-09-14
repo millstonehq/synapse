@@ -321,6 +321,22 @@ SQLite coverage or solve query/receiver analysis.
 
 ## Development and releases
 
+At the repository root, `direnv allow` enters the pinned `flake.nix` shell. It
+provides Python, uv, Go, jq, and git; uv still resolves capcov itself from the
+checked-in lockfile. To exercise capcov against a real non-Python process, run:
+
+```sh
+nix develop --command sh -c \
+  'cd packages/capabilities && uv run --frozen --extra treesitter sh scripts/check-real-go-flow.sh'
+```
+
+That check uses tree-sitter to discover two routes in a Go HTTP server, plans a
+save followed by its prerequisite-bound read, executes each scenario against a
+fresh server process, reconciles the observations, and gates the result. It then
+changes the server to acknowledge without retaining the write and requires the
+gate to name `required-flow-failed: read-saved-note`. The example exemptions
+record the static-analysis boundaries outside this bounded claim.
+
 The existing Synapse CI workflow tests this package, builds its wheel and source
 distribution, and verifies installation from the wheel. No npm workspace wrapper
 or Node installation is required to use the engine. Package versions are

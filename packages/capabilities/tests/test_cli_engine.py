@@ -419,5 +419,20 @@ class ObserveProbeSelectionTests(unittest.TestCase):
         self.assertEqual(dict(os.environ), before)
 
 
+class SourcePatternTests(unittest.TestCase):
+    def test_configured_adapter_globs_bind_discovery_to_non_python_source(self) -> None:
+        specs = [
+            ("treesitter-routes", {"globs": ["**/*.go", "routes/*.go"]}),
+            ("structured-spec", {"document": "openapi.json"}),
+        ]
+        self.assertEqual(cli._source_patterns(specs), ("**/*.go", "routes/*.go"))
+
+    def test_legacy_adapter_keeps_python_provenance_default(self) -> None:
+        self.assertEqual(
+            cli._source_patterns([("python-fastapi-sqlalchemy", None)]),
+            ("**/*.py",),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
