@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Iterable, Mapping
 
 from .ir import (Aggregation, Atom, Bundle, Claim, Comparison, Constant,
-                 RelationDecl, Rule, TypeName, Variable)
+                 RelationDecl, Rule, TypeName, Variable, Evidence, EvidenceMapping)
 
 
 @dataclass(frozen=True)
@@ -37,12 +37,41 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
     for i, fact in enumerate(bundle.facts):
         _validate_atom(fact, relations, issues, f"facts[{i}]", {}, fact_only=True)
         if isinstance(fact, Atom) and fact.negated: issues.append(ValidationIssue("negative-fact", "facts must be positive", f"facts[{i}]"))
+    evidence_ids = set()
+    for i, record in enumerate(bundle.evidence):
+        path = f"evidence[{i}]"
+        if not isinstance(record, Evidence):
+            issues.append(ValidationIssue("evidence-type", "expected Evidence", path)); continue
+        if record.id in evidence_ids: issues.append(ValidationIssue("duplicate-evidence-id", record.id, path))
+        evidence_ids.add(record.id)
+        _validate_atom(record.atom, relations, issues, path + ".atom", {}, fact_only=True)
+        if record.atom.negated: issues.append(ValidationIssue("negative-evidence", "evidence atoms must be positive", path))
+        declared = relations.get(record.atom.relation)
+        if declared and not set(record.context.as_dict()).issubset(set(declared.context_indices)):
+            issues.append(ValidationIssue("evidence-context", "evidence context contains unknown relation context indices", path))
+        if not record.source: issues.append(ValidationIssue("evidence-source", "evidence source must not be empty", path))
     for i, rule in enumerate(bundle.rules):
         if isinstance(rule, Rule): _validate_rule(rule, relations, issues, f"rules[{i}]")
         else: issues.append(ValidationIssue("rule-type", "expected Rule", f"rules[{i}]"))
     for i, claim in enumerate(bundle.claims):
         if isinstance(claim, Claim): _validate_claim(claim, relations, issues, f"claims[{i}]")
         else: issues.append(ValidationIssue("claim-type", "expected Claim", f"claims[{i}]"))
+    seen_claim_ids = set()
+    for i, claim in enumerate(bundle.claims):
+        if isinstance(claim, Claim) and claim.id:
+            if claim.id in seen_claim_ids: issues.append(ValidationIssue("duplicate-claim-id", claim.id, f"claims[{i}]"))
+            seen_claim_ids.add(claim.id)
+    for i, mapping in enumerate(bundle.mappings):
+        path = f"mappings[{i}]"
+        if not isinstance(mapping, EvidenceMapping):
+            issues.append(ValidationIssue("mapping-type", "expected EvidenceMapping", path)); continue
+        if mapping.claim_relation not in relations: issues.append(ValidationIssue("mapping-claim", mapping.claim_relation, path))
+        if mapping.evidence_relation not in relations: issues.append(ValidationIssue("mapping-evidence", mapping.evidence_relation, path))
+        for context_name in mapping.context_indices:
+            claim_decl = relations.get(mapping.claim_relation)
+            evidence_decl = relations.get(mapping.evidence_relation)
+            if not claim_decl or context_name not in claim_decl.context_indices: issues.append(ValidationIssue("mapping-context", context_name, path))
+            if not evidence_decl or context_name not in evidence_decl.context_indices: issues.append(ValidationIssue("mapping-context", context_name, path))
     _validate_recursion(bundle, relations, issues)
     return tuple(issues)
 
