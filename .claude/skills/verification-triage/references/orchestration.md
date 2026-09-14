@@ -161,6 +161,13 @@ this workflow does not require stacked PRs or introduce new approval gates.
 Use native spawn/message/follow-up/interrupt facilities to coordinate workers.
 Interrupt for an actual redirect, cancellation or unsafe overlap, not because an
 observation timed out. Preserve live process handles and perform required cleanup.
+
+For remote qualification (for example ECS Exec), a zero CLI exit is not proof that
+the remote command finished. Require a terminal application success marker and
+verify cleanup. If the session reports EOF during a longer command, provide a
+live PTY or supported noninteractive transport; do not accept a partial transcript
+or repeatedly interpret transport closure as an application/authentication failure.
+
 If subagents are unavailable, use the same explicit assignment/reassessment loop
 serially and disclose the weaker separation; do not build an agent framework as a
 prerequisite to implementing the system.
