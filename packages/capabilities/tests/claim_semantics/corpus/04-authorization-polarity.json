@@ -1,0 +1,244 @@
+{
+  "schema_version": 1,
+  "id": "04-authorization-polarity",
+  "title": "Allow and deny are separate polarity claims",
+  "provenance": {
+    "kind": "synthetic",
+    "source": "hand-authored semantic control",
+    "seeded_fault": "deny-path-ignored"
+  },
+  "context": {
+    "tenant": "tenant-a",
+    "run": "run-4",
+    "policy": "document-read",
+    "attempt": "attempt-04"
+  },
+  "claims": [
+    {
+      "id": "claim-allow",
+      "arguments": {
+        "tenant": "tenant-a",
+        "actor": "alice",
+        "operation": "read",
+        "decision": "allow",
+        "run": "run-4"
+      },
+      "relation": "authorized",
+      "args": [
+        "tenant-a",
+        "alice",
+        "read",
+        "allow",
+        "run-4"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-4",
+        "policy": "document-read",
+        "attempt": "attempt-04"
+      },
+      "provenance": {
+        "source": "reviewed-claim",
+        "depends_on": []
+      },
+      "arg_order": [
+        "tenant",
+        "actor",
+        "operation",
+        "decision",
+        "run"
+      ],
+      "quantifier": "exists",
+      "domain": null
+    },
+    {
+      "id": "claim-deny",
+      "arguments": {
+        "tenant": "tenant-a",
+        "actor": "bob",
+        "operation": "read",
+        "decision": "deny",
+        "run": "run-4"
+      },
+      "relation": "authorized",
+      "args": [
+        "tenant-a",
+        "bob",
+        "read",
+        "deny",
+        "run-4"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-4",
+        "policy": "document-read",
+        "attempt": "attempt-04"
+      },
+      "provenance": {
+        "source": "reviewed-claim",
+        "depends_on": []
+      },
+      "arg_order": [
+        "tenant",
+        "actor",
+        "operation",
+        "decision",
+        "run"
+      ],
+      "quantifier": "exists",
+      "domain": null
+    }
+  ],
+  "facts": [
+    {
+      "id": "fact-allow-200",
+      "arguments": {
+        "tenant": "tenant-a",
+        "actor": "alice",
+        "operation": "read",
+        "decision": "allow",
+        "status": 200,
+        "run": "run-4"
+      },
+      "source": "runtime",
+      "relation": "http_authorization",
+      "args": [
+        "tenant-a",
+        "alice",
+        "read",
+        "allow",
+        200,
+        "run-4"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-4",
+        "policy": "document-read",
+        "attempt": "attempt-04"
+      },
+      "provenance": {
+        "source": "runtime",
+        "depends_on": [
+          "assumption-policy-version"
+        ]
+      },
+      "arg_order": [
+        "tenant",
+        "actor",
+        "operation",
+        "decision",
+        "status",
+        "run"
+      ]
+    },
+    {
+      "id": "fact-deny-403",
+      "arguments": {
+        "tenant": "tenant-a",
+        "actor": "bob",
+        "operation": "read",
+        "decision": "deny",
+        "status": 403,
+        "run": "run-4"
+      },
+      "source": "runtime",
+      "relation": "http_authorization",
+      "args": [
+        "tenant-a",
+        "bob",
+        "read",
+        "deny",
+        403,
+        "run-4"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-4",
+        "policy": "document-read",
+        "attempt": "attempt-04"
+      },
+      "provenance": {
+        "source": "runtime",
+        "depends_on": [
+          "assumption-policy-version"
+        ]
+      },
+      "arg_order": [
+        "tenant",
+        "actor",
+        "operation",
+        "decision",
+        "status",
+        "run"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "assumption-policy-version",
+      "arguments": {
+        "policy": "document-read",
+        "version": "v1"
+      },
+      "relation": "policy_version__accepted",
+      "args": [
+        "document-read",
+        "v1"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-4",
+        "policy": "document-read",
+        "attempt": "attempt-04"
+      },
+      "provenance": {
+        "source": "reviewed-assumption",
+        "depends_on": []
+      },
+      "subject_relation": "policy_version",
+      "arg_order": [
+        "policy",
+        "version"
+      ]
+    }
+  ],
+  "expected": {
+    "claims": {
+      "claim-allow": {
+        "semantic_verdict": "supported",
+        "operational_status": "complete",
+        "support_leaves": [
+          "fact-allow-200"
+        ],
+        "refutation_leaves": [],
+        "observed_leaves": [
+          "fact-allow-200"
+        ],
+        "forbidden_leaves": [],
+        "discrepancies": [],
+        "missing_premises": []
+      },
+      "claim-deny": {
+        "semantic_verdict": "supported",
+        "operational_status": "complete",
+        "support_leaves": [
+          "fact-deny-403"
+        ],
+        "refutation_leaves": [],
+        "observed_leaves": [
+          "fact-deny-403"
+        ],
+        "forbidden_leaves": [],
+        "discrepancies": [],
+        "missing_premises": []
+      }
+    }
+  },
+  "schema_ref": "schema-v1",
+  "context_indices": [
+    "tenant",
+    "run",
+    "policy",
+    "attempt"
+  ]
+}

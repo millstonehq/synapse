@@ -1,0 +1,261 @@
+{
+  "schema_version": 1,
+  "id": "11-compatible-history-sets",
+  "title": "Empty compatible-history domain is inconsistent",
+  "provenance": {
+    "kind": "synthetic",
+    "source": "hand-authored semantic control",
+    "seeded_fault": "vacuous-universal-success"
+  },
+  "context": {
+    "tenant": "tenant-a",
+    "run": "run-11",
+    "claim_scope": "all-compatible-histories",
+    "attempt": "attempt-11"
+  },
+  "claims": [
+    {
+      "id": "claim-universal",
+      "arguments": {
+        "tenant": "tenant-a",
+        "capability": "notify",
+        "run": "run-11"
+      },
+      "relation": "capability_holds_in_all_compatible_histories",
+      "args": [
+        "tenant-a",
+        "notify",
+        "run-11"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-11",
+        "claim_scope": "all-compatible-histories",
+        "attempt": "attempt-11"
+      },
+      "provenance": {
+        "source": "reviewed-claim",
+        "depends_on": []
+      },
+      "arg_order": [
+        "tenant",
+        "capability",
+        "run"
+      ],
+      "quantifier": "forall",
+      "domain": "compatible_history"
+    },
+    {
+      "id": "claim-mixed",
+      "arguments": {
+        "tenant": "tenant-a",
+        "capability": "notify",
+        "run": "run-11-mixed"
+      },
+      "relation": "capability_holds_in_all_compatible_histories",
+      "args": [
+        "tenant-a",
+        "notify",
+        "run-11-mixed"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-11",
+        "claim_scope": "all-compatible-histories",
+        "attempt": "attempt-11"
+      },
+      "provenance": {
+        "source": "reviewed-claim",
+        "depends_on": []
+      },
+      "arg_order": [
+        "tenant",
+        "capability",
+        "run"
+      ],
+      "quantifier": "forall",
+      "domain": "compatible_history"
+    }
+  ],
+  "facts": [
+    {
+      "id": "fact-empty-history-success",
+      "arguments": {
+        "tenant": "tenant-a",
+        "run": "run-11"
+      },
+      "source": "model",
+      "relation": "compatible_history_domain_empty",
+      "args": [
+        "tenant-a",
+        "run-11"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-11",
+        "claim_scope": "all-compatible-histories",
+        "attempt": "attempt-11"
+      },
+      "provenance": {
+        "source": "model",
+        "depends_on": []
+      },
+      "arg_order": [
+        "tenant",
+        "run"
+      ]
+    },
+    {
+      "id": "fact-mixed-history-support",
+      "relation": "compatible_history",
+      "arguments": {
+        "tenant": "tenant-a",
+        "run": "run-11-mixed",
+        "history": "history-a",
+        "outcome": "support"
+      },
+      "source": "model",
+      "args": [
+        "tenant-a",
+        "run-11-mixed",
+        "history-a",
+        "support"
+      ],
+      "arg_order": [
+        "tenant",
+        "run",
+        "history",
+        "outcome"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-11",
+        "claim_scope": "all-compatible-histories",
+        "attempt": "attempt-11"
+      },
+      "provenance": {
+        "source": "model",
+        "depends_on": []
+      }
+    },
+    {
+      "id": "fact-mixed-history-refute",
+      "relation": "compatible_history",
+      "arguments": {
+        "tenant": "tenant-a",
+        "run": "run-11-mixed",
+        "history": "history-b",
+        "outcome": "refute"
+      },
+      "source": "model",
+      "args": [
+        "tenant-a",
+        "run-11-mixed",
+        "history-b",
+        "refute"
+      ],
+      "arg_order": [
+        "tenant",
+        "run",
+        "history",
+        "outcome"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-11",
+        "claim_scope": "all-compatible-histories",
+        "attempt": "attempt-11"
+      },
+      "provenance": {
+        "source": "model",
+        "depends_on": []
+      }
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "assumption-compatible-domain",
+      "arguments": {
+        "tenant": "tenant-a",
+        "run": "run-11",
+        "cardinality": 0
+      },
+      "relation": "compatible_history_domain__inconsistent",
+      "args": [
+        "tenant-a",
+        "run-11",
+        0
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-11",
+        "claim_scope": "all-compatible-histories",
+        "attempt": "attempt-11"
+      },
+      "provenance": {
+        "source": "reviewed-assumption",
+        "depends_on": []
+      },
+      "subject_relation": "compatible_history_domain",
+      "arg_order": [
+        "tenant",
+        "run",
+        "cardinality"
+      ]
+    }
+  ],
+  "expected": {
+    "claims": {
+      "claim-universal": {
+        "semantic_verdict": "unresolved",
+        "operational_status": "inconsistent-premises",
+        "support_leaves": [],
+        "refutation_leaves": [],
+        "observed_leaves": [],
+        "forbidden_leaves": [
+          "fact-empty-history-success"
+        ],
+        "discrepancies": [
+          {
+            "kind": "empty-compatible-history-domain"
+          }
+        ],
+        "missing_premises": [
+          {
+            "reason": "empty domain cannot establish universal claim",
+            "relation": "compatible_history"
+          }
+        ]
+      },
+      "claim-mixed": {
+        "semantic_verdict": "unresolved",
+        "operational_status": "complete",
+        "support_leaves": [],
+        "refutation_leaves": [],
+        "observed_leaves": [
+          "fact-mixed-history-support",
+          "fact-mixed-history-refute"
+        ],
+        "forbidden_leaves": [],
+        "discrepancies": [
+          {
+            "kind": "mixed-compatible-history-outcomes"
+          }
+        ],
+        "missing_premises": [
+          {
+            "reason": "compatible histories contain both support and refutation",
+            "relation": "all_compatible_histories_agree"
+          }
+        ]
+      }
+    }
+  },
+  "schema_ref": "schema-v1",
+  "context_indices": [
+    "tenant",
+    "run",
+    "claim_scope",
+    "attempt"
+  ]
+}
