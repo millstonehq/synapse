@@ -178,6 +178,10 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
         if output.kind == OutputKind.MISSING_PREMISE and not output.relation: issues.append(ValidationIssue("output-relation", "missing premise output needs a relation", path))
         if output.kind == OutputKind.MISSING_PREMISE and output.relation not in relations and output.relation not in DIAGNOSTIC_VOCABULARY:
             issues.append(ValidationIssue("output-relation", "unknown diagnostic vocabulary relation", path))
+        if output.causal_missing and output.kind != OutputKind.MISSING_PREMISE:
+            issues.append(ValidationIssue("output-missing", "causal_missing is only valid for missing premise outputs", path))
+        if output.causal_missing and output.when_claim != "underived":
+            issues.append(ValidationIssue("output-missing", "causal missing output must be underived", path))
         causal_relations = {mapping.evidence_relation for mapping in bundle.mappings if mapping.claim_id == output.claim_id}
         causal_relations.update(diagnostic.trigger_relation for diagnostic in bundle.diagnostics if diagnostic.claim_id == output.claim_id)
         claim = next((claim for claim in bundle.claims if claim.id == output.claim_id), None)
