@@ -165,6 +165,18 @@ def cmd_discover(args: argparse.Namespace) -> int:
     except ValueError as exc:
         raise SystemExit(f"capcov discover: {exc}")
 
+    # A deep adapter block emits a node-keyed call-graph dict (carrying
+    # `_node_locations` for the (file,line)-join) that ONLY the SCIP resolver can
+    # bind; without --resolver scip its `_calls` are unresolved placeholders and
+    # the fixpoint would bind nothing. Deep is opt-in and the resolver stays an
+    # explicit flag, so a deep block reached here without it is a misconfiguration
+    # named loudly, not a silently empty capability set.
+    if getattr(args, "resolver", "ast") != "scip" and "_node_locations" in raw:
+        raise SystemExit(
+            "capcov discover: a deep adapter block emits a call graph only "
+            "--resolver scip can bind; re-run with --resolver scip"
+        )
+
     # Optional hybrid: rent SCIP as the resolver for the call graph, keep the AST
     # pass as everything else (entities, surfaces, the enumerated blind spots).
     # The AST adapter always runs first -- it is the fallback and the enumerator;
@@ -178,11 +190,33 @@ def cmd_discover(args: argparse.Namespace) -> int:
             )
         from .scip import resolve as scip_resolve
 
-        language = getattr(adapters[0], "LANGUAGE", "python")
-        try:
-            raw = scip_resolve.resolve(source_dir, raw, language=language)
-        except scip_resolve.ScipToolsUnavailable as exc:
-            raise SystemExit(f"capcov discover --resolver scip: {exc}")
+        # The LANGUAGE seam (design §1.4): a promoted adapter's SCIP language is
+        # per-config (go/php/python vary per [[adapters]] entry), not a module
+        # constant, so read the entry's `scip_language` first (from the CLI's spec,
+        # or -- for a --adapter override with no spec config -- the deep dict the
+        # adapter tagged), then fall back to the adapter module's LANGUAGE.
+        spec_config = specs[0][1] or {}
+        language = (
+            spec_config.get("scip_language")
+            or raw.get("scip_language")
+            or getattr(adapters[0], "LANGUAGE", "python")
+        )
+        # `deep` is what the adapter actually emitted: a node-keyed dict carries
+        # `_node_locations`. A deep block whose SCIP tooling was absent degraded to
+        # the shallow dict inside the adapter and NAMED the reason
+        # (`deep-unavailable`); honor that by not shelling out to the very tool the
+        # adapter already reported missing.
+        deep = "_node_locations" in raw
+        degraded = any(
+            u.get("kind") == "deep-unavailable" for u in raw.get("unresolved", [])
+        )
+        if not degraded:
+            try:
+                raw = scip_resolve.resolve(
+                    source_dir, raw, language=language, deep=deep
+                )
+            except scip_resolve.ScipToolsUnavailable as exc:
+                raise SystemExit(f"capcov discover --resolver scip: {exc}")
     direct, calls, ops = raw["_direct"], raw["_calls"], raw["_ops"]
 
     roots = [s["handler"] for s in raw["surfaces"]]

@@ -65,6 +65,12 @@ def _adapter_config(target: Path, config: dict | None) -> dict:
     return data.get("capcov", {})
 
 
+# Deep-query keys copied through to the engine so it emits the extra capture
+# streams. Only present in a `deep` config block; absent -> the engine's inventory
+# is byte-identical and the shallow self-bound builder runs.
+_DEEP_ENGINE_KEYS = ("function_query", "entity_query", "op_query")
+
+
 def discover(
     source_root: Path, target: Path, name_match: bool = True, *, config: dict | None = None
 ) -> dict:
@@ -73,6 +79,20 @@ def discover(
         raise ValueError(
             "treesitter-routes needs 'language' and 'query' in its [[adapters]] entry"
         )
+    deep = config.get("deep")
+    # The deep decision is made BEFORE the engine runs: whether tooling is present
+    # settles whether the deep queries are even forwarded (state 3) or the run is
+    # the plain shallow one plus a named degrade (state 2). scip_resolve pulls in
+    # only stdlib (runner/map/blindspots), so importing it here keeps the module's
+    # import-time stdlib-only guarantee.
+    go_deep = False
+    scip_language = None
+    if deep:
+        from ..scip import resolve as scip_resolve
+
+        scip_language = config.get("scip_language") or config["language"]
+        go_deep = scip_resolve.tools_available(scip_language)
+
     entry: dict = {
         "kind": "treesitter-routes",
         "language": config["language"],
@@ -81,6 +101,13 @@ def discover(
     for key in _ENGINE_KEYS:
         if key in config:
             entry[key] = config[key]
+    if go_deep:
+        # Forward the deep tree-sitter queries so the engine also emits the
+        # function universe, entity declarations and data-access sites. Skipped on
+        # the degrade path -- a shallow run has no use for them.
+        for key in _DEEP_ENGINE_KEYS:
+            if key in deep:
+                entry[key] = deep[key]
     flows_cfg = {"scope": config.get("scope", NAME), "root": ".", "adapters": [entry]}
     inventory = flows_discovery._discover_from_config(
         flows_cfg, Path(source_root), "capcov.toml"
@@ -109,8 +136,79 @@ def discover(
                 "module": obligation["source"]["file"],
             }
         )
-    return build_core_dict(
-        records,
-        inventory["excluded_surfaces"],
-        project_flows_unresolved(inventory, NAME),
+    unresolved = project_flows_unresolved(inventory, NAME)
+
+    # Selection rule (design §1.1), three states in this order:
+    #
+    # 1. No deep block -> the shallow self-bound dict, byte-for-byte as before.
+    #    This keeps the 384-test baseline green (plain and --extra treesitter).
+    if not deep:
+        return build_core_dict(records, inventory["excluded_surfaces"], unresolved)
+
+    # 2. Deep requested but the SCIP tooling for the language is absent -> still
+    #    emit the shallow dict, and NAME the degrade in `unresolved`. Never crash,
+    #    never silently claim deep; cli.cmd_discover reads this reason and skips the
+    #    SCIP fold rather than shelling out to a tool that is not there.
+    if not go_deep:
+        degrade = {
+            "adapter": NAME,
+            "kind": "deep-unavailable",
+            "reason": (
+                f"deep requested but the SCIP tooling for {scip_language!r} is not "
+                "available (indexer or the scip CLI not on PATH); fell back to the "
+                "shallow self-bound path"
+            ),
+            "scip_language": scip_language,
+        }
+        return build_core_dict(
+            records, inventory["excluded_surfaces"], [*unresolved, degrade]
+        )
+
+    # 3. Deep and tooling present -> the node-keyed deep dict. cli's --resolver
+    #    scip hook then folds in the SCIP call graph and the (file,line)-join.
+    from . import deep_core
+
+    recognizer = deep_core.load_recognizer(
+        deep.get("recognizer")
+        or deep_core.DEFAULT_RECOGNIZER.get(scip_language)
+        or scip_language
     )
+    captures = inventory.get(
+        "deep_captures", {"functions": [], "entity_matches": [], "op_matches": []}
+    )
+    entities, symbol_index = recognizer.recognize_entities(captures["entity_matches"])
+    op_sites = recognizer.recognize_ops(captures["op_matches"], symbol_index)
+    return deep_core.build_deep_dict(
+        surface_records=records,
+        functions=captures["functions"],
+        entities=entities,
+        op_sites=op_sites,
+        excluded_surfaces=inventory["excluded_surfaces"],
+        unresolved=unresolved,
+        blind_spots=_deep_blind_spots(Path(source_root), scip_language),
+        scip_language=scip_language,
+    )
+
+
+def _deep_blind_spots(source_root: Path, language: str) -> list[dict]:
+    """The per-language blind-spot inventory, shaped for the capabilities artifact.
+
+    The AST/tree-sitter pass STAYS the enumerator even when SCIP resolves (§5,
+    ADR-0001): SCIP does not self-report its blind spots. The enumerator's entries
+    are `{file, line, kind, reason}`; `cli.cmd_discover` keys on `blind` and
+    `expr`, and every entry here is genuinely blind (dynamic dispatch / facade
+    magic / untyped access), so `blind` is True and `expr` carries the callee text
+    where the enumerator recorded one, else the kind.
+    """
+    from ..scip import blindspots
+
+    shaped: list[dict] = []
+    for spot in blindspots.enumerate_blind_spots(source_root, language):
+        shaped.append(
+            {
+                **spot,
+                "expr": spot.get("expr") or spot.get("reason") or spot.get("kind"),
+                "blind": True,
+            }
+        )
+    return shaped

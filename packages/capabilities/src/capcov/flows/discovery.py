@@ -160,6 +160,78 @@ def _descendants(node: object):
             stack.append(current.child(index))  # type: ignore[attr-defined]
 
 
+# --------------------------------------------------------------------------
+# Deep captures (opt-in): the extra capture streams the deep call-graph path
+# needs beyond routes -- the function universe, entity declarations and
+# data-access sites. Emitted ONLY when the adapter entry carries the deep queries,
+# so the shallow inventory is byte-identical (R7); the streams are transient
+# (consumed by the deep builder, never written to an artifact) and carry
+# identifier/type text and 1-based locations, never a stored source expression.
+
+
+def _deep_census(query: object, ts: object, tree: object, relative: str) -> list[dict]:
+    """The function-universe census for one file from a `function_query`.
+
+    Captures `@function` (the definition node -- its span attributes data-access
+    sites) and, when present, `@name` (the identifier -- its line matches SCIP's
+    definition occurrence, which is what the (file,line)-join keys on).
+    """
+    out: list[dict] = []
+    for _pattern, captures in ts.QueryCursor(query).matches(tree.root_node):  # type: ignore[attr-defined]
+        fns = captures.get("function")
+        if not fns:
+            continue
+        fn = fns[0]
+        names = captures.get("name")
+        if names:
+            qualname = names[0].text.decode()
+            line = names[0].start_point[0] + 1
+        else:
+            qualname = _handler_name(fn) or fn.type
+            line = fn.start_point[0] + 1
+        out.append(
+            {
+                "qualname": qualname,
+                "file": relative,
+                "line": line,
+                "start_line": fn.start_point[0] + 1,
+                "end_line": fn.end_point[0] + 1,
+            }
+        )
+    return out
+
+
+def _deep_matches(
+    query: object, predicates: list[dict], ts: object, tree: object, relative: str
+) -> list[dict]:
+    """Serialize a deep query's matches for a recognizer to consume.
+
+    Each match is `{capture_name: [occurrence, ...]}`, an occurrence
+    `{text, file, line, start_line, end_line, type}` (1-based). Predicates are
+    re-checked ourselves, exactly as the route query is, so `#eq?`/`#match?`
+    filtering is our guarantee.
+    """
+    out: list[dict] = []
+    for _pattern, captures in ts.QueryCursor(query).matches(tree.root_node):  # type: ignore[attr-defined]
+        if not _ts_satisfied(predicates, captures):
+            continue
+        match: dict[str, list[dict]] = {}
+        for name, nodes in captures.items():
+            match[name] = [
+                {
+                    "text": node.text.decode(errors="replace"),
+                    "file": relative,
+                    "line": node.start_point[0] + 1,
+                    "start_line": node.start_point[0] + 1,
+                    "end_line": node.end_point[0] + 1,
+                    "type": node.type,
+                }
+                for node in nodes
+            ]
+        out.append(match)
+    return out
+
+
 def discover(config_path: Path) -> dict:
     """Run the discovery engine on a config file on disk.
 
@@ -195,6 +267,15 @@ def _discover_from_config(config: dict, base: Path, config_name: str) -> dict:
     # silently narrowed N legible instead of implied by absence.
     excluded_surfaces: list[dict] = []
     unresolved_adapters: list[dict] = []
+    # Deep call-graph capture streams (see _deep_census/_deep_matches), populated
+    # only when an adapter entry carries deep queries. Absent from the return
+    # otherwise, so the shallow inventory is byte-identical.
+    deep_captures: dict[str, list[dict]] = {
+        "functions": [],
+        "entity_matches": [],
+        "op_matches": [],
+    }
+    deep_configured = False
 
     def source(relative: str) -> Path:
         path = (root / relative).resolve()
@@ -261,6 +342,19 @@ def _discover_from_config(config: dict, base: Path, config_name: str) -> dict:
             query = ts.Query(language, adapter["query"])
             predicates = _ts_predicates(adapter["query"])
             parser = ts.Parser(language)
+            # Deep queries (opt-in): the function universe, entity declarations and
+            # data-access sites. Compiled once here; run per file below. Present ->
+            # this run emits deep_captures.
+            fn_query_text = adapter.get("function_query")
+            entity_query_text = adapter.get("entity_query")
+            op_query_text = adapter.get("op_query")
+            fn_query = ts.Query(language, fn_query_text) if fn_query_text else None
+            entity_query = ts.Query(language, entity_query_text) if entity_query_text else None
+            op_query = ts.Query(language, op_query_text) if op_query_text else None
+            entity_predicates = _ts_predicates(entity_query_text) if entity_query_text else []
+            op_predicates = _ts_predicates(op_query_text) if op_query_text else []
+            if fn_query or entity_query or op_query:
+                deep_configured = True
             id_prefix = adapter.get("id_prefix", "http:")
             strip_suffixes = adapter.get("strip_suffixes", ["{$}"])
             branch_nodes = set(adapter.get("branch_nodes", _DEFAULT_BRANCH_NODES))
@@ -288,6 +382,18 @@ def _discover_from_config(config: dict, base: Path, config_name: str) -> dict:
             for relative in sorted(files):
                 tree = parser.parse(source(relative).read_bytes())
                 analysed_files.add(relative)
+                if fn_query is not None:
+                    deep_captures["functions"].extend(
+                        _deep_census(fn_query, ts, tree, relative)
+                    )
+                if entity_query is not None:
+                    deep_captures["entity_matches"].extend(
+                        _deep_matches(entity_query, entity_predicates, ts, tree, relative)
+                    )
+                if op_query is not None:
+                    deep_captures["op_matches"].extend(
+                        _deep_matches(op_query, op_predicates, ts, tree, relative)
+                    )
                 candidates = []
                 for _pattern, captures in ts.QueryCursor(query).matches(tree.root_node):
                     if "path" not in captures or not _ts_satisfied(predicates, captures):
@@ -423,7 +529,7 @@ def _discover_from_config(config: dict, base: Path, config_name: str) -> dict:
         raise ValueError("duplicate obligation IDs; qualify separate application surfaces")
     if not ids:
         raise ValueError("discovery produced no obligations")
-    return {
+    result = {
         "version": 1,
         "scope": config["scope"],
         "config_sha256": digest(config),
@@ -443,3 +549,9 @@ def _discover_from_config(config: dict, base: Path, config_name: str) -> dict:
             key=lambda u: (-1 if u["adapter"] is None else u["adapter"], u["kind"] or ""),
         ),
     }
+    # Additive and opt-in: only when a deep adapter entry ran its deep queries, so
+    # every existing caller (the flows CLI, the shallow core adapter) sees the
+    # exact same keys as before.
+    if deep_configured:
+        result["deep_captures"] = deep_captures
+    return result
