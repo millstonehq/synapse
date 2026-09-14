@@ -6,7 +6,7 @@ from pathlib import Path
 from .adapter import ROOT, bundle_payload, load_fixture
 from capcov.claims import (Bundle, Claim, Column, Constant, EvidenceEffect,
                            RelationDecl, assert_valid, bundle_from_json,
-                           canonical_json, schema_digest, render_outputs)
+                           canonical_json, schema_digest, render_outputs, VerifiedProofEvidence)
 
 
 class EvidencePolicyCompilationTests(unittest.TestCase):
@@ -126,14 +126,25 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
         weakened = bundle_from_json(mutated, validate=True)
         self.assertNotEqual(set(weakened.outputs[2].requires_all_evidence), set(discrepancy.requires_all_evidence))
         active = {"fact-route-a-static", "fact-route-b-runtime"}
-        self.assertTrue(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", active, active, "unresolved", {"same_surface"})))
-        self.assertFalse(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", {"fact-route-a-static"}, {"fact-route-a-static"}, "unresolved", {"same_surface"})))
-        self.assertFalse(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", active, active, "supported", {"same_surface"})))
+        self.assertTrue(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", active, VerifiedProofEvidence.from_bundle(bundle, "claim-effect", active), "unresolved", {"same_surface"})))
+        self.assertFalse(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", {"fact-route-a-static"}, VerifiedProofEvidence.from_bundle(bundle, "claim-effect", {"fact-route-a-static"}), "unresolved", {"same_surface"})))
+        self.assertFalse(any(item.get("fields", {}).get("surfaces") == ["route-a", "route-b"] for item in render_outputs(bundle, "claim-effect", active, VerifiedProofEvidence.from_bundle(bundle, "claim-effect", active), "supported", {"same_surface"})))
         wrong_context = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
         wrong_context["evidence"][0]["context"]["tenant"] = "other-tenant"
         wrong = bundle_from_json(wrong_context, validate=False)
-        output_ids = {item.get("evidence_id") for item in render_outputs(wrong, "claim-terminal-delivery", {"fact-http-save"}, {"fact-http-save"}, "supported", set())}
+        output_ids = {item.get("evidence_id") for item in render_outputs(wrong, "claim-terminal-delivery", {"fact-http-save"}, VerifiedProofEvidence.from_bundle(wrong, "claim-terminal-delivery", {"fact-http-save"}), "supported", set())}
         self.assertNotIn("fact-http-save", output_ids)
+
+    def test_proof_certificate_trust_boundary(self):
+        bundle = load_fixture(ROOT / "01-correlated-positive.json")
+        active = {record.id for record in bundle.evidence}
+        with self.assertRaises(TypeError):
+            render_outputs(bundle, "claim-terminal-delivery", active, active, "supported", set())
+        wrong_claim = VerifiedProofEvidence.from_bundle(bundle, "claim-terminal-delivery", {"fact-http-save"})
+        with self.assertRaises(ValueError):
+            render_outputs(bundle, "other-claim", active, wrong_claim, "supported", set())
+        with self.assertRaises(ValueError):
+            render_outputs(bundle, "claim-terminal-delivery", active, VerifiedProofEvidence("claim-terminal-delivery", frozenset({"unknown"})), "supported", set())
 
     def test_rendered_output_shapes_match_all_four_expected_payload_classes(self):
         expected = json.loads((ROOT / "expected.json").read_text())["cases"]
@@ -141,7 +152,7 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
             bundle = load_fixture(path)
             active = {record.id for record in bundle.evidence}
             for claim_id, table in expected[path.stem]["claims"].items():
-                rendered = render_outputs(bundle, claim_id, active, active, table["semantic_verdict"], {item["relation"] for item in table["missing_premises"]})
+                rendered = render_outputs(bundle, claim_id, active, VerifiedProofEvidence.from_bundle(bundle, claim_id, active), table["semantic_verdict"], {item["relation"] for item in table["missing_premises"]})
                 observed = {item["evidence_id"] for item in rendered if item["kind"] == "observed"}
                 forbidden = {item["evidence_id"] for item in rendered if item["kind"] == "forbidden"}
                 discrepancies = [item.get("fields", {}) for item in rendered if item["kind"] == "discrepancy"]
@@ -173,7 +184,7 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
         active_first = {record.id for record in first.evidence}
         active_second = {record.id for record in second.evidence}
         shape = lambda values: tuple((item["kind"], tuple(sorted(item.get("fields", {}).keys()))) for item in values)
-        self.assertEqual(shape(render_outputs(first, "claim-effect", active_first, active_first, "unresolved", {"same_surface"})), shape(render_outputs(second, "claim-renamed", active_second, active_second, "unresolved", {"same_surface"})))
+        self.assertEqual(shape(render_outputs(first, "claim-effect", active_first, VerifiedProofEvidence.from_bundle(first, "claim-effect", active_first), "unresolved", {"same_surface"})), shape(render_outputs(second, "claim-renamed", active_second, VerifiedProofEvidence.from_bundle(second, "claim-renamed", active_second), "unresolved", {"same_surface"})))
         payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
         payload["outputs"] = [{"kind": "missing_premise", "claim_id": "claim-terminal-delivery", "relation": "smtp_accepted", "fields": {"x": {"source": "constant", "type": "boolean", "value": "not-bool"}}}]
         with self.assertRaises(ValueError): bundle_from_json(payload, validate=True)
