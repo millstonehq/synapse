@@ -16,18 +16,12 @@
   "claims": [
     {
       "id": "claim-saved",
-      "predicate": "row_created",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-10",
         "run": "run-10"
       },
       "relation": "row_created",
-      "arg_order": [
-        "tenant",
-        "event",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "evt-10",
@@ -42,13 +36,19 @@
       "provenance": {
         "source": "reviewed-claim",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ],
+      "quantifier": "exists",
+      "domain": null
     }
   ],
   "facts": [
     {
       "id": "fact-independent-proof",
-      "predicate": "sql_row_exists",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-10",
@@ -57,12 +57,6 @@
       },
       "source": "sql",
       "relation": "sql_row_exists",
-      "arg_order": [
-        "tenant",
-        "event",
-        "run",
-        "commit"
-      ],
       "args": [
         "tenant-a",
         "evt-10",
@@ -80,21 +74,22 @@
         "depends_on": [
           "assumption-independent-source"
         ]
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "run",
+        "commit"
+      ]
     }
   ],
   "assumptions": [
     {
       "id": "assumption-revoked",
-      "predicate": "model_revision_current",
       "arguments": {
         "revision": "old"
       },
-      "status": "revoked",
-      "relation": "model_revision_current",
-      "arg_order": [
-        "revision"
-      ],
+      "relation": "model_revision_current__revoked",
       "args": [
         "old"
       ],
@@ -107,19 +102,18 @@
       "provenance": {
         "source": "reviewed-assumption",
         "depends_on": []
-      }
+      },
+      "subject_relation": "model_revision_current",
+      "arg_order": [
+        "revision"
+      ]
     },
     {
       "id": "assumption-independent-source",
-      "predicate": "sql_snapshot_current",
       "arguments": {
         "commit": "commit-10"
       },
-      "status": "accepted",
-      "relation": "sql_snapshot_current",
-      "arg_order": [
-        "commit"
-      ],
+      "relation": "sql_snapshot_current__accepted",
       "args": [
         "commit-10"
       ],
@@ -132,7 +126,11 @@
       "provenance": {
         "source": "reviewed-assumption",
         "depends_on": []
-      }
+      },
+      "subject_relation": "sql_snapshot_current",
+      "arg_order": [
+        "commit"
+      ]
     }
   ],
   "expected": {

@@ -11,31 +11,24 @@
     "tenant": "tenant-a",
     "run": "run-8",
     "event": "evt-8",
-    "attempt": "attempt-08"
+    "attempt": "attempt-08",
+    "operation": "read"
   },
   "claims": [
     {
       "id": "claim-explicit-denial",
-      "predicate": "authorized",
       "arguments": {
         "tenant": "tenant-a",
         "actor": "bob",
         "decision": "allow",
         "run": "run-8",
-        "operation": null
+        "operation": "read"
       },
       "relation": "authorized",
-      "arg_order": [
-        "tenant",
-        "actor",
-        "operation",
-        "decision",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "bob",
-        null,
+        "read",
         "allow",
         "run-8"
       ],
@@ -43,35 +36,37 @@
         "tenant": "tenant-a",
         "run": "run-8",
         "event": "evt-8",
-        "attempt": "attempt-08"
+        "attempt": "attempt-08",
+        "operation": "read"
       },
       "provenance": {
         "source": "reviewed-claim",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "actor",
+        "operation",
+        "decision",
+        "run"
+      ],
+      "quantifier": "exists",
+      "domain": null
     },
     {
       "id": "claim-missing-denial",
-      "predicate": "authorized",
       "arguments": {
         "tenant": "tenant-a",
         "actor": "carol",
         "decision": "allow",
         "run": "run-8",
-        "operation": null
+        "operation": "read"
       },
       "relation": "authorized",
-      "arg_order": [
-        "tenant",
-        "actor",
-        "operation",
-        "decision",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "carol",
-        null,
+        "read",
         "allow",
         "run-8"
       ],
@@ -79,18 +74,27 @@
         "tenant": "tenant-a",
         "run": "run-8",
         "event": "evt-8",
-        "attempt": "attempt-08"
+        "attempt": "attempt-08",
+        "operation": "read"
       },
       "provenance": {
         "source": "reviewed-claim",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "actor",
+        "operation",
+        "decision",
+        "run"
+      ],
+      "quantifier": "exists",
+      "domain": null
     }
   ],
   "facts": [
     {
       "id": "fact-explicit-rejection",
-      "predicate": "authorization_rejected",
       "arguments": {
         "tenant": "tenant-a",
         "actor": "bob",
@@ -100,32 +104,34 @@
       },
       "source": "runtime",
       "relation": "authorization_rejected",
-      "arg_order": [
-        "tenant",
-        "actor",
-        "decision",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "bob",
         "deny",
+        403,
         "run-8"
       ],
       "context": {
         "tenant": "tenant-a",
         "run": "run-8",
         "event": "evt-8",
-        "attempt": "attempt-08"
+        "attempt": "attempt-08",
+        "operation": "read"
       },
       "provenance": {
         "source": "runtime",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "actor",
+        "decision",
+        "status",
+        "run"
+      ]
     },
     {
       "id": "fact-missing",
-      "predicate": "authorization_observation",
       "arguments": {
         "tenant": "tenant-a",
         "actor": "carol",
@@ -133,11 +139,6 @@
       },
       "source": "runtime",
       "relation": "authorization_observation_missing",
-      "arg_order": [
-        "tenant",
-        "actor",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "carol",
@@ -147,28 +148,28 @@
         "tenant": "tenant-a",
         "run": "run-8",
         "event": "evt-8",
-        "attempt": "attempt-08"
+        "attempt": "attempt-08",
+        "operation": "read"
       },
       "provenance": {
         "source": "runtime",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "actor",
+        "run"
+      ]
     }
   ],
   "assumptions": [
     {
       "id": "assumption-closed-auth-log",
-      "predicate": "auth_log_complete",
       "arguments": {
         "tenant": "tenant-a",
         "run": "run-8"
       },
-      "status": "rejected",
-      "relation": "auth_log_complete",
-      "arg_order": [
-        "tenant",
-        "run"
-      ],
+      "relation": "auth_log_complete__rejected",
       "args": [
         "tenant-a",
         "run-8"
@@ -177,12 +178,18 @@
         "tenant": "tenant-a",
         "run": "run-8",
         "event": "evt-8",
-        "attempt": "attempt-08"
+        "attempt": "attempt-08",
+        "operation": "read"
       },
       "provenance": {
         "source": "reviewed-assumption",
         "depends_on": []
-      }
+      },
+      "subject_relation": "auth_log_complete",
+      "arg_order": [
+        "tenant",
+        "run"
+      ]
     }
   ],
   "expected": {
@@ -203,7 +210,7 @@
       },
       "claim-missing-denial": {
         "semantic_verdict": "unresolved",
-        "operational_status": "incomplete",
+        "operational_status": "complete",
         "support_leaves": [],
         "refutation_leaves": [],
         "observed_leaves": [

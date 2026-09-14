@@ -16,18 +16,12 @@
   "claims": [
     {
       "id": "claim-universal",
-      "predicate": "capability_holds_in_all_compatible_histories",
       "arguments": {
         "tenant": "tenant-a",
         "capability": "notify",
         "run": "run-11"
       },
       "relation": "capability_holds_in_all_compatible_histories",
-      "arg_order": [
-        "tenant",
-        "capability",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "notify",
@@ -42,22 +36,23 @@
       "provenance": {
         "source": "reviewed-claim",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "capability",
+        "run"
+      ],
+      "quantifier": "forall",
+      "domain": "compatible_history"
     },
     {
       "id": "claim-mixed",
-      "predicate": "capability_holds_in_all_compatible_histories",
       "arguments": {
         "tenant": "tenant-a",
         "capability": "notify",
         "run": "run-11-mixed"
       },
       "relation": "capability_holds_in_all_compatible_histories",
-      "arg_order": [
-        "tenant",
-        "capability",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "notify",
@@ -65,39 +60,72 @@
       ],
       "context": {
         "tenant": "tenant-a",
-        "run": "run-11-mixed",
+        "run": "run-11",
         "claim_scope": "all-compatible-histories",
         "attempt": "attempt-11"
       },
       "provenance": {
         "source": "reviewed-claim",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "capability",
+        "run"
+      ],
+      "quantifier": "forall",
+      "domain": "compatible_history"
     }
   ],
   "facts": [
     {
       "id": "fact-empty-history-success",
-      "predicate": "compatible_history_set",
       "arguments": {
         "tenant": "tenant-a",
-        "run": "run-11",
-        "cardinality": 0,
-        "outcomes": []
+        "run": "run-11"
       },
       "source": "model",
-      "relation": "compatible_history_set",
+      "relation": "compatible_history_domain_empty",
+      "args": [
+        "tenant-a",
+        "run-11"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-11",
+        "claim_scope": "all-compatible-histories",
+        "attempt": "attempt-11"
+      },
+      "provenance": {
+        "source": "model",
+        "depends_on": []
+      },
+      "arg_order": [
+        "tenant",
+        "run"
+      ]
+    },
+    {
+      "id": "fact-mixed-history-support",
+      "relation": "compatible_history",
+      "arguments": {
+        "tenant": "tenant-a",
+        "run": "run-11-mixed",
+        "history": "history-a",
+        "outcome": "support"
+      },
+      "source": "model",
+      "args": [
+        "tenant-a",
+        "run-11-mixed",
+        "history-a",
+        "support"
+      ],
       "arg_order": [
         "tenant",
         "run",
-        "cardinality",
-        "outcomes"
-      ],
-      "args": [
-        "tenant-a",
-        "run-11",
-        0,
-        []
+        "history",
+        "outcome"
       ],
       "context": {
         "tenant": "tenant-a",
@@ -111,31 +139,30 @@
       }
     },
     {
-      "id": "fact-mixed-history",
-      "predicate": "compatible_history_set",
+      "id": "fact-mixed-history-refute",
+      "relation": "compatible_history",
       "arguments": {
         "tenant": "tenant-a",
         "run": "run-11-mixed",
-        "cardinality": 2,
-        "outcomes": ["support", "refute"]
+        "history": "history-b",
+        "outcome": "refute"
       },
       "source": "model",
-      "relation": "compatible_history_set",
-      "arg_order": [
-        "tenant",
-        "run",
-        "cardinality",
-        "outcomes"
-      ],
       "args": [
         "tenant-a",
         "run-11-mixed",
-        2,
-        ["support", "refute"]
+        "history-b",
+        "refute"
+      ],
+      "arg_order": [
+        "tenant",
+        "run",
+        "history",
+        "outcome"
       ],
       "context": {
         "tenant": "tenant-a",
-        "run": "run-11-mixed",
+        "run": "run-11",
         "claim_scope": "all-compatible-histories",
         "attempt": "attempt-11"
       },
@@ -148,19 +175,12 @@
   "assumptions": [
     {
       "id": "assumption-compatible-domain",
-      "predicate": "compatible_history_domain",
       "arguments": {
         "tenant": "tenant-a",
         "run": "run-11",
         "cardinality": 0
       },
-      "status": "inconsistent",
-      "relation": "compatible_history_domain",
-      "arg_order": [
-        "tenant",
-        "run",
-        "cardinality"
-      ],
+      "relation": "compatible_history_domain__inconsistent",
       "args": [
         "tenant-a",
         "run-11",
@@ -175,7 +195,13 @@
       "provenance": {
         "source": "reviewed-assumption",
         "depends_on": []
-      }
+      },
+      "subject_relation": "compatible_history_domain",
+      "arg_order": [
+        "tenant",
+        "run",
+        "cardinality"
+      ]
     }
   ],
   "expected": {
@@ -196,8 +222,8 @@
         ],
         "missing_premises": [
           {
-            "predicate": "compatible_history",
-            "reason": "empty domain cannot establish universal claim"
+            "reason": "empty domain cannot establish universal claim",
+            "relation": "compatible_history"
           }
         ]
       },
@@ -207,7 +233,8 @@
         "support_leaves": [],
         "refutation_leaves": [],
         "observed_leaves": [
-          "fact-mixed-history"
+          "fact-mixed-history-support",
+          "fact-mixed-history-refute"
         ],
         "forbidden_leaves": [],
         "discrepancies": [
@@ -217,8 +244,8 @@
         ],
         "missing_premises": [
           {
-            "predicate": "all_compatible_histories_agree",
-            "reason": "compatible histories contain both support and refutation"
+            "reason": "compatible histories contain both support and refutation",
+            "relation": "all_compatible_histories_agree"
           }
         ]
       }

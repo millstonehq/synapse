@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Reviewable per-claim semantic expectations; no evaluator output is authoritative.",
+  "description": "Per-claim semantic expectations",
   "cases": {
     "01-correlated-positive": {
       "claims": {
@@ -30,7 +30,7 @@
       "claims": {
         "claim-effect": {
           "semantic_verdict": "unresolved",
-          "operational_status": "incomplete",
+          "operational_status": "complete",
           "support_leaves": [],
           "refutation_leaves": [],
           "observed_leaves": [
@@ -49,8 +49,8 @@
           ],
           "missing_premises": [
             {
-              "predicate": "same_surface",
-              "reason": "static and runtime observations name different routes"
+              "reason": "static and runtime observations name different routes",
+              "relation": "same_surface"
             }
           ]
         }
@@ -74,7 +74,7 @@
         },
         "claim-created": {
           "semantic_verdict": "unresolved",
-          "operational_status": "incomplete",
+          "operational_status": "complete",
           "support_leaves": [],
           "refutation_leaves": [],
           "observed_leaves": [
@@ -84,8 +84,8 @@
           "discrepancies": [],
           "missing_premises": [
             {
-              "predicate": "row_committed",
-              "reason": "POST response does not prove durable creation"
+              "reason": "POST response does not prove durable creation",
+              "relation": "row_committed"
             }
           ]
         }
@@ -127,7 +127,7 @@
       "claims": {
         "claim-target-mail": {
           "semantic_verdict": "unresolved",
-          "operational_status": "incomplete",
+          "operational_status": "complete",
           "support_leaves": [],
           "refutation_leaves": [],
           "observed_leaves": [
@@ -146,8 +146,8 @@
           ],
           "missing_premises": [
             {
-              "predicate": "mail_sent",
-              "reason": "no accepted message for target event"
+              "reason": "no accepted message for target event",
+              "relation": "mail_sent"
             }
           ]
         }
@@ -157,7 +157,7 @@
       "claims": {
         "claim-terminal": {
           "semantic_verdict": "unresolved",
-          "operational_status": "incomplete",
+          "operational_status": "complete",
           "support_leaves": [],
           "refutation_leaves": [],
           "observed_leaves": [
@@ -176,8 +176,8 @@
           ],
           "missing_premises": [
             {
-              "predicate": "same_context",
-              "reason": "evidence rows cannot be joined"
+              "reason": "evidence rows cannot be joined",
+              "relation": "same_context"
             }
           ]
         }
@@ -187,7 +187,7 @@
       "claims": {
         "claim-delivered": {
           "semantic_verdict": "unresolved",
-          "operational_status": "incomplete",
+          "operational_status": "complete",
           "support_leaves": [],
           "refutation_leaves": [],
           "observed_leaves": [
@@ -205,8 +205,8 @@
           ],
           "missing_premises": [
             {
-              "predicate": "independent_support",
-              "reason": "both producers depend on one false assumption"
+              "reason": "both producers depend on one false assumption",
+              "relation": "independent_support"
             }
           ]
         }
@@ -230,7 +230,7 @@
         },
         "claim-missing-denial": {
           "semantic_verdict": "unresolved",
-          "operational_status": "incomplete",
+          "operational_status": "complete",
           "support_leaves": [],
           "refutation_leaves": [],
           "observed_leaves": [
@@ -312,8 +312,8 @@
           ],
           "missing_premises": [
             {
-              "predicate": "compatible_history",
-              "reason": "empty domain cannot establish universal claim"
+              "reason": "empty domain cannot establish universal claim",
+              "relation": "compatible_history"
             }
           ]
         },
@@ -323,7 +323,8 @@
           "support_leaves": [],
           "refutation_leaves": [],
           "observed_leaves": [
-            "fact-mixed-history"
+            "fact-mixed-history-support",
+            "fact-mixed-history-refute"
           ],
           "forbidden_leaves": [],
           "discrepancies": [
@@ -333,8 +334,8 @@
           ],
           "missing_premises": [
             {
-              "predicate": "all_compatible_histories_agree",
-              "reason": "compatible histories contain both support and refutation"
+              "reason": "compatible histories contain both support and refutation",
+              "relation": "all_compatible_histories_agree"
             }
           ]
         }
@@ -360,8 +361,8 @@
           ],
           "missing_premises": [
             {
-              "predicate": "model_complete",
-              "reason": "runtime surface is outside the closed model"
+              "reason": "runtime surface is outside the closed model",
+              "relation": "model_complete"
             }
           ]
         }
@@ -385,7 +386,7 @@
         },
         "claim-terminal": {
           "semantic_verdict": "unresolved",
-          "operational_status": "incomplete",
+          "operational_status": "complete",
           "support_leaves": [],
           "refutation_leaves": [],
           "observed_leaves": [
@@ -402,8 +403,8 @@
           ],
           "missing_premises": [
             {
-              "predicate": "sql_terminal_ack",
-              "reason": "provider acceptance does not imply application acknowledgement"
+              "reason": "provider acceptance does not imply application acknowledgement",
+              "relation": "sql_terminal_ack"
             }
           ]
         }
@@ -414,16 +415,16 @@
         "claim-bounded": {
           "semantic_verdict": "supported",
           "operational_status": "complete",
-            "support_leaves": [
-              "fact-one-delivery",
-              "fact-no-resend-window",
-              "assumption-window-closed"
+          "support_leaves": [
+            "fact-one-delivery",
+            "fact-no-resend-window",
+            "assumption-window-closed"
           ],
           "refutation_leaves": [],
-            "observed_leaves": [
-              "fact-one-delivery",
-              "fact-no-resend-window",
-              "assumption-window-closed"
+          "observed_leaves": [
+            "fact-one-delivery",
+            "fact-no-resend-window",
+            "assumption-window-closed"
           ],
           "forbidden_leaves": [],
           "discrepancies": [],
@@ -431,20 +432,20 @@
         },
         "claim-forever": {
           "semantic_verdict": "unresolved",
-          "operational_status": "incomplete",
+          "operational_status": "complete",
           "support_leaves": [],
           "refutation_leaves": [],
-            "observed_leaves": [
-              "fact-one-delivery",
-              "fact-no-resend-window",
-              "assumption-window-closed"
+          "observed_leaves": [
+            "fact-one-delivery",
+            "fact-no-resend-window",
+            "assumption-window-closed"
           ],
           "forbidden_leaves": [],
           "discrepancies": [],
           "missing_premises": [
             {
-              "predicate": "no_resend_forever",
-              "reason": "bounded observation cannot establish indefinite safety"
+              "reason": "bounded observation cannot establish indefinite safety",
+              "relation": "no_resend_forever"
             }
           ]
         }

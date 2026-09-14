@@ -11,31 +11,24 @@
     "tenant": "tenant-a",
     "run": "run-6a",
     "event": "evt-6",
-    "attempt": "attempt-06"
+    "attempt": "attempt-06",
+    "recipient": "a@example.test"
   },
   "claims": [
     {
       "id": "claim-terminal",
-      "predicate": "notification_delivery_terminal",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-6",
         "run": "run-6a",
-        "recipient": null,
+        "recipient": "a@example.test",
         "attempt": "attempt-06"
       },
       "relation": "notification_delivery_terminal",
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run",
-        "attempt"
-      ],
       "args": [
         "tenant-a",
         "evt-6",
-        null,
+        "a@example.test",
         "run-6a",
         "attempt-06"
       ],
@@ -43,18 +36,27 @@
         "tenant": "tenant-a",
         "run": "run-6a",
         "event": "evt-6",
-        "attempt": "attempt-06"
+        "attempt": "attempt-06",
+        "recipient": "a@example.test"
       },
       "provenance": {
         "source": "reviewed-claim",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "quantifier": "exists",
+      "domain": null
     }
   ],
   "facts": [
     {
       "id": "fact-tenant-a",
-      "predicate": "http_save_succeeded",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-6",
@@ -62,11 +64,6 @@
       },
       "source": "http",
       "relation": "http_save_succeeded",
-      "arg_order": [
-        "tenant",
-        "event",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "evt-6",
@@ -76,62 +73,62 @@
         "tenant": "tenant-a",
         "run": "run-6a",
         "event": "evt-6",
-        "attempt": "attempt-06"
+        "attempt": "attempt-06",
+        "recipient": "a@example.test"
       },
       "provenance": {
         "source": "http",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "run"
+      ]
     },
     {
       "id": "fact-tenant-b",
-      "predicate": "sql_terminal_state",
       "arguments": {
         "tenant": "tenant-b",
         "event": "evt-6",
         "run": "run-6b",
-        "recipient": null
+        "recipient": "a@example.test"
       },
       "source": "sql",
       "relation": "sql_terminal_state",
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run"
-      ],
       "args": [
         "tenant-b",
         "evt-6",
-        null,
+        "a@example.test",
         "run-6b"
       ],
       "context": {
         "tenant": "tenant-a",
         "run": "run-6a",
         "event": "evt-6",
-        "attempt": "attempt-06"
+        "attempt": "attempt-06",
+        "recipient": "a@example.test"
       },
       "provenance": {
         "source": "sql",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ]
     }
   ],
   "assumptions": [
     {
       "id": "assumption-context-compatible",
-      "predicate": "same_context",
       "arguments": {
         "left": "tenant-a/run-6a",
         "right": "tenant-b/run-6b"
       },
-      "status": "rejected",
-      "relation": "same_context",
-      "arg_order": [
-        "left",
-        "right"
-      ],
+      "relation": "same_context__rejected",
       "args": [
         "tenant-a/run-6a",
         "tenant-b/run-6b"
@@ -140,19 +137,25 @@
         "tenant": "tenant-a",
         "run": "run-6a",
         "event": "evt-6",
-        "attempt": "attempt-06"
+        "attempt": "attempt-06",
+        "recipient": "a@example.test"
       },
       "provenance": {
         "source": "reviewed-assumption",
         "depends_on": []
-      }
+      },
+      "subject_relation": "same_context",
+      "arg_order": [
+        "left",
+        "right"
+      ]
     }
   ],
   "expected": {
     "claims": {
       "claim-terminal": {
         "semantic_verdict": "unresolved",
-        "operational_status": "incomplete",
+        "operational_status": "complete",
         "support_leaves": [],
         "refutation_leaves": [],
         "observed_leaves": [
@@ -171,8 +174,8 @@
         ],
         "missing_premises": [
           {
-            "predicate": "same_context",
-            "reason": "evidence rows cannot be joined"
+            "reason": "evidence rows cannot be joined",
+            "relation": "same_context"
           }
         ]
       }

@@ -17,7 +17,6 @@
   "claims": [
     {
       "id": "claim-target-mail",
-      "predicate": "smtp_accepted",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-target",
@@ -26,13 +25,6 @@
         "attempt": "attempt-05"
       },
       "relation": "smtp_accepted__claim",
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run",
-        "attempt"
-      ],
       "args": [
         "tenant-a",
         "evt-target",
@@ -50,13 +42,21 @@
       "provenance": {
         "source": "reviewed-claim",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ],
+      "quantifier": "exists",
+      "domain": null
     }
   ],
   "facts": [
     {
       "id": "fact-mail-other-event",
-      "predicate": "smtp_accepted",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-other",
@@ -66,13 +66,6 @@
       },
       "source": "smtp",
       "relation": "smtp_accepted",
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run",
-        "attempt"
-      ],
       "args": [
         "tenant-a",
         "evt-other",
@@ -90,11 +83,17 @@
       "provenance": {
         "source": "smtp",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run",
+        "attempt"
+      ]
     },
     {
       "id": "fact-mail-target",
-      "predicate": "smtp_accepted",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-target",
@@ -103,12 +102,6 @@
       },
       "source": "smtp",
       "relation": "smtp_acceptance_missing",
-      "arg_order": [
-        "tenant",
-        "event",
-        "recipient",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "evt-target",
@@ -125,23 +118,23 @@
       "provenance": {
         "source": "smtp",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "recipient",
+        "run"
+      ]
     }
   ],
   "assumptions": [
     {
       "id": "assumption-event-join",
-      "predicate": "same_event",
       "arguments": {
         "observed": "evt-other",
         "claimed": "evt-target"
       },
-      "status": "rejected",
-      "relation": "same_event",
-      "arg_order": [
-        "observed",
-        "claimed"
-      ],
+      "relation": "same_event__rejected",
       "args": [
         "evt-other",
         "evt-target"
@@ -156,14 +149,19 @@
       "provenance": {
         "source": "reviewed-assumption",
         "depends_on": []
-      }
+      },
+      "subject_relation": "same_event",
+      "arg_order": [
+        "observed",
+        "claimed"
+      ]
     }
   ],
   "expected": {
     "claims": {
       "claim-target-mail": {
         "semantic_verdict": "unresolved",
-        "operational_status": "incomplete",
+        "operational_status": "complete",
         "support_leaves": [],
         "refutation_leaves": [],
         "observed_leaves": [
@@ -182,8 +180,8 @@
         ],
         "missing_premises": [
           {
-            "predicate": "mail_sent",
-            "reason": "no accepted message for target event"
+            "reason": "no accepted message for target event",
+            "relation": "mail_sent"
           }
         ]
       }

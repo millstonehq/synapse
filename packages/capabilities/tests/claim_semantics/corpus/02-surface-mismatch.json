@@ -18,7 +18,6 @@
   "claims": [
     {
       "id": "claim-effect",
-      "predicate": "effect_reached",
       "arguments": {
         "tenant": "tenant-a",
         "event": "evt-2",
@@ -26,12 +25,6 @@
         "run": "run-2"
       },
       "relation": "effect_reached",
-      "arg_order": [
-        "tenant",
-        "event",
-        "surface",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "evt-2",
@@ -48,23 +41,26 @@
       "provenance": {
         "source": "reviewed-claim",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "surface",
+        "run"
+      ],
+      "quantifier": "exists",
+      "domain": null
     }
   ],
   "facts": [
     {
       "id": "fact-route-a-static",
-      "predicate": "static_route_exists",
       "arguments": {
         "tenant": "tenant-a",
         "surface": "route-a"
       },
       "source": "static",
       "relation": "static_route_exists",
-      "arg_order": [
-        "tenant",
-        "surface"
-      ],
       "args": [
         "tenant-a",
         "route-a"
@@ -79,11 +75,14 @@
       "provenance": {
         "source": "static",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "surface"
+      ]
     },
     {
       "id": "fact-route-b-runtime",
-      "predicate": "runtime_route_observed",
       "arguments": {
         "tenant": "tenant-a",
         "surface": "route-b",
@@ -92,12 +91,6 @@
       },
       "source": "runtime",
       "relation": "runtime_route_observed",
-      "arg_order": [
-        "tenant",
-        "surface",
-        "event",
-        "run"
-      ],
       "args": [
         "tenant-a",
         "route-b",
@@ -114,23 +107,23 @@
       "provenance": {
         "source": "runtime",
         "depends_on": []
-      }
+      },
+      "arg_order": [
+        "tenant",
+        "surface",
+        "event",
+        "run"
+      ]
     }
   ],
   "assumptions": [
     {
       "id": "assumption-surface-equality",
-      "predicate": "same_surface",
       "arguments": {
         "static": "route-a",
         "runtime": "route-b"
       },
-      "status": "rejected",
-      "relation": "same_surface",
-      "arg_order": [
-        "static",
-        "runtime"
-      ],
+      "relation": "same_surface__rejected",
       "args": [
         "route-a",
         "route-b"
@@ -145,14 +138,19 @@
       "provenance": {
         "source": "reviewed-assumption",
         "depends_on": []
-      }
+      },
+      "subject_relation": "same_surface",
+      "arg_order": [
+        "static",
+        "runtime"
+      ]
     }
   ],
   "expected": {
     "claims": {
       "claim-effect": {
         "semantic_verdict": "unresolved",
-        "operational_status": "incomplete",
+        "operational_status": "complete",
         "support_leaves": [],
         "refutation_leaves": [],
         "observed_leaves": [
@@ -171,8 +169,8 @@
         ],
         "missing_premises": [
           {
-            "predicate": "same_surface",
-            "reason": "static and runtime observations name different routes"
+            "reason": "static and runtime observations name different routes",
+            "relation": "same_surface"
           }
         ]
       }
