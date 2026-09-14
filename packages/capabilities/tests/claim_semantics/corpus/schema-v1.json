@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "program_schema_version": 1,
   "id": "claim-semantics-v1",
   "description": "Claims IR relation declarations",
   "context_indices": [
@@ -30,11 +31,13 @@
     "compatible_history": "symbol",
     "compatible_history_domain__inconsistent": "symbol",
     "compatible_history_domain_empty": "symbol",
+    "compatible_history_domain_closed": "symbol",
     "context_domain_closed__accepted": "symbol",
     "decision": "symbol",
     "effect_reached": "symbol",
     "event": "symbol",
     "history": "symbol",
+    "holds": "boolean",
     "http_authorization": "symbol",
     "http_post_accepted": "symbol",
     "http_save_succeeded": "symbol",
@@ -347,8 +350,18 @@
           "context": false
         },
         {
+          "name": "capability",
+          "type": "symbol",
+          "context": false
+        },
+        {
           "name": "outcome",
           "type": "symbol",
+          "context": false
+        },
+        {
+          "name": "holds",
+          "type": "boolean",
           "context": false
         }
       ],
@@ -356,7 +369,9 @@
         "tenant",
         "run",
         "history",
-        "outcome"
+        "capability",
+        "outcome",
+        "holds"
       ],
       "modality": "observation",
       "polarity": "positive",
@@ -433,6 +448,22 @@
         "tenant",
         "run"
       ],
+      "completes": "compatible_history",
+      "finite": false,
+      "nonempty": false
+    },
+    "compatible_history_domain_closed": {
+      "columns": [
+        {"name": "tenant", "type": "symbol", "context": true},
+        {"name": "run", "type": "symbol", "context": true}
+      ],
+      "arg_order": ["tenant", "run"],
+      "modality": "completeness",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": ["tenant", "run"],
       "completes": "compatible_history",
       "finite": false,
       "nonempty": false
@@ -1777,12 +1808,24 @@
     "sql_snapshot_current__accepted": {
       "columns": [
         {
+          "name": "tenant",
+          "type": "symbol",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        },
+        {
           "name": "commit",
           "type": "symbol",
           "context": false
         }
       ],
       "arg_order": [
+        "tenant",
+        "run",
         "commit"
       ],
       "modality": "assumption",
@@ -1790,7 +1833,7 @@
       "binding": "runtime",
       "primitive": true,
       "producer_classes": [],
-      "context_indices": [],
+      "context_indices": ["tenant", "run"],
       "completes": null,
       "finite": false,
       "nonempty": false

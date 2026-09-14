@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "program_schema_version": 1,
   "id": "07-shared-mistaken-assumption",
   "title": "Shared false assumption is not independent support",
   "provenance": {
@@ -14,6 +15,7 @@
     "attempt": "attempt-07",
     "recipient": "a@example.test"
   },
+  "rules": [{"name":"terminal_requires_correlated_path","claim_id":"claim-delivered","premises":[{"relation":"mail_path_declared","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]},{"relation":"mail_path_observed","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]}]}],
   "claims": [
     {
       "id": "claim-delivered",
@@ -51,7 +53,8 @@
         "attempt"
       ],
       "quantifier": "exists",
-      "domain": null
+      "domain": null,
+      "mappings": [{"evidence_relation":"mail_path_declared","effect":"support","context_indices":["tenant","event","run"],"bindings":[["tenant","tenant"],["event","event"],["run","run"]]},{"evidence_relation":"mail_path_observed","effect":"support","context_indices":["tenant","event","run"],"bindings":[["tenant","tenant"],["event","event"],["run","run"]]}], "diagnostics": [{"trigger_relation":"provider_is_real__rejected","effect":"forbidden","operational_status":"invalid-input","context_indices":[],"required":true},{"trigger_relation":"independent_support__rejected","effect":"forbidden","operational_status":"invalid-input","context_indices":[],"required":true}]
     }
   ],
   "facts": [
