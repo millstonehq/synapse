@@ -102,21 +102,32 @@ class SouffleBackendTests(unittest.TestCase):
 
     def test_forall_requires_every_finite_domain_member(self):
         domain = R("domain", ("x", TypeName.SYMBOL), finite=True, nonempty=True)
-        covered = R("covered", ("x", TypeName.SYMBOL))
+        covered = R("covered", ("value", TypeName.SYMBOL))
         claims = (Claim("covered", (Variable("x"),), quantifier="forall", domain="domain"),)
         bundle = Bundle((domain, covered), facts=(Atom("domain", (Constant("a"),)), Atom("domain", (Constant("b"),)), Atom("covered", (Constant("a"),))), claims=claims)
         result = run_bundle(bundle)
         self.assertEqual(result.claims[0].semantic.value, "unresolved")
 
-    def test_any_and_all_are_explicitly_rejected_until_boolean_contract_lands(self):
-        source = R("source", ("x", TypeName.BOOLEAN))
-        out = R("out", ("x", TypeName.BOOLEAN))
-        domain = R("domain", ("x", TypeName.BOOLEAN), finite=True, nonempty=True)
-        closed = R("closed", ("x", TypeName.BOOLEAN), modality=Modality.COMPLETENESS, completes="domain")
-        aggregation = Aggregation("any", "source", ("x",), "x", "any", "domain", "closed")
-        rule = Rule(Atom("out", (Variable("x"),)), (Atom("source", (Variable("x"),)), Atom("domain", (Variable("x"),)), Atom("closed", (Variable("x"),))), aggregation=aggregation)
-        with self.assertRaises(NotImplementedError):
-            translate_bundle(Bundle((source, out, domain, closed), rules=(rule,)))
+    def test_any_and_all_compile_to_boolean_rows(self):
+        source = R("source", ("tenant", TypeName.SYMBOL, True), ("value", TypeName.BOOLEAN), context_indices=("tenant",))
+        out = R("out", ("tenant", TypeName.SYMBOL, True), ("value", TypeName.BOOLEAN), context_indices=("tenant",))
+        domain = R("domain", ("tenant", TypeName.SYMBOL, True), finite=True, nonempty=True, context_indices=("tenant",))
+        closed = R("closed", ("tenant", TypeName.SYMBOL, True), modality=Modality.COMPLETENESS, completes="domain", context_indices=("tenant",))
+        aggregation = Aggregation("any", "source", ("tenant",), "value", "any", "domain", "closed")
+        rule = Rule(Atom("out", (Variable("tenant"), Variable("value"))), (Atom("source", (Variable("tenant"), Variable("value"))), Atom("domain", (Variable("tenant"),)), Atom("closed", (Variable("tenant"),))), aggregation=aggregation)
+        bundle = Bundle((source, out, domain, closed), facts=(Atom("source", (Constant("t"), Constant(True))), Atom("domain", (Constant("t"),)), Atom("closed", (Constant("t"),))), rules=(rule,))
+        self.assertFalse(validate_bundle(bundle))
+        self.assertEqual(run_bundle(bundle).relations["out"], (("t", True),))
+
+    def test_claim_context_filters_rows_and_negative_polarity_is_evidence(self):
+        rel = R("rejected", ("tenant", TypeName.SYMBOL, True), ("actor", TypeName.SYMBOL), polarity="negative", context_indices=("tenant",))
+        claim = Claim("rejected", (Variable("tenant"), Constant("actor")), Context.from_mapping({"tenant": "t1"}))
+        bundle = Bundle((rel,), facts=(Atom("rejected", (Constant("t1"), Constant("actor"))), Atom("rejected", (Constant("t2"), Constant("actor")))), claims=(claim,))
+        result = run_bundle(bundle)
+        self.assertEqual(result.claims[0].semantic.value, "supported")
+        wrong_context = Claim("rejected", (Variable("tenant"), Constant("actor")), Context.from_mapping({"tenant": "missing"}))
+        result = run_bundle(Bundle((rel,), facts=bundle.facts, claims=(wrong_context,)))
+        self.assertEqual(result.claims[0].semantic.value, "unresolved")
 
 
 if __name__ == "__main__":
