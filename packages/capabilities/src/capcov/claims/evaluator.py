@@ -22,8 +22,6 @@ from .verdicts import (EvaluationBasis, EvaluationResult, OperationalStatus,
 
 Row = tuple[Any, ...]
 Environment = dict[str, Any]
-_MAX_PROOFS_PER_ROW = 32
-_MAX_CHILD_PROOFS_PER_MATCH = 4
 
 
 @dataclass(frozen=True)
@@ -63,6 +61,21 @@ class Derivation:
         for child in self.children:
             values.update(child.leaves)
         return tuple(sorted(values))
+
+    @property
+    def depth(self) -> int:
+        return 0 if not self.children else 1 + max(child.depth for child in self.children)
+
+    def contains(self, relation: str, row: Row) -> bool:
+        """Return whether this proof already depends on the same ground tuple."""
+        return (self.relation == relation and self.row == tuple(row)) or any(
+            child.contains(relation, row) for child in self.children
+        )
+
+    def signature(self) -> tuple[Any, ...]:
+        """Compact structural identity used instead of serialising proof trees."""
+        return (self.relation, self.row, self.rule, self.kind, self.leaf_id,
+                tuple(child.signature() for child in self.children))
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -151,9 +164,15 @@ class _Engine:
         self.check_limits()
         row = tuple(row)
         if row in self.rows[relation]:
-            # Keep the first canonical ground proof for each tuple.  Retaining
-            # every recursive alternative would recursively duplicate proof
-            # trees and make a finite closure exceed its resource budget.
+            paths = self.proofs[relation].setdefault(row, [])
+            if self.limits.max_provenance is None or self.provenance_count < self.limits.max_provenance:
+                if any(child.contains(relation, row) for child in proof.children):
+                    return False
+                signature = proof.signature()
+                if all(existing.signature() != signature for existing in paths):
+                    paths.append(proof)
+                    paths.sort(key=repr)
+                    self.provenance_count += 1
             return False
         self.rows[relation].add(row)
         self.proofs[relation][row] = [proof]
@@ -289,7 +308,7 @@ class _Engine:
             for env, children in self._match_body(rule.body, {}, overrides):
                 row = tuple(_ground_term(t, env) for t in rule.head.terms)
                 proof = Derivation(rule.head.relation, row, rule.name or "rule", tuple(children))
-                key = canonical_json((row, proof.as_dict()))
+                key = repr((row, proof.signature()))
                 if key not in seen:
                     seen.add(key)
                     yield row, proof
@@ -336,7 +355,11 @@ class _Engine:
                     break
             if ok:
                 proofs = self.proofs[decl.name].get(row, ())
-                yield next_env, list(proofs[:_MAX_CHILD_PROOFS_PER_MATCH])
+                if self.limits.max_provenance is None:
+                    selected = proofs
+                else:
+                    selected = proofs[:max(1, self.limits.max_provenance - self.provenance_count)]
+                yield next_env, list(selected)
 
     def evaluate_claim(self, index: int, claim: Claim) -> ClaimResult:
         decl = self.relations[claim.relation]
