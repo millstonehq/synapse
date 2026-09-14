@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Mapping
 
-from .ir import (Aggregation, Atom, Bundle, Comparison, Constant, RelationDecl,
-                 Rule, TypeName, Variable)
+from .ir import (Aggregation, Atom, Bundle, Claim, Comparison, Constant,
+                 RelationDecl, Rule, TypeName, Variable)
 
 
 @dataclass(frozen=True)
@@ -28,15 +28,21 @@ def _atom_vars(atom): return set().union(*(_variables(t) for t in atom.terms)) i
 
 def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
     issues: list[ValidationIssue] = []
-    relations = {r.name: r for r in bundle.relations}
+    relations = {r.name: r for r in bundle.relations if isinstance(r, RelationDecl)}
     if len(relations) != len(bundle.relations):
         issues.append(ValidationIssue("duplicate-relation", "relation names must be unique", "relations"))
-    for relation in bundle.relations: _validate_relation(relation, relations, issues)
+    for relation in bundle.relations:
+        if isinstance(relation, RelationDecl): _validate_relation(relation, relations, issues)
+        else: issues.append(ValidationIssue("relation-type", "expected RelationDecl", "relations"))
     for i, fact in enumerate(bundle.facts):
         _validate_atom(fact, relations, issues, f"facts[{i}]", {}, fact_only=True)
-        if fact.negated: issues.append(ValidationIssue("negative-fact", "facts must be positive", f"facts[{i}]"))
-    for i, rule in enumerate(bundle.rules): _validate_rule(rule, relations, issues, f"rules[{i}]")
-    for i, claim in enumerate(bundle.claims): _validate_claim(claim, relations, issues, f"claims[{i}]")
+        if isinstance(fact, Atom) and fact.negated: issues.append(ValidationIssue("negative-fact", "facts must be positive", f"facts[{i}]"))
+    for i, rule in enumerate(bundle.rules):
+        if isinstance(rule, Rule): _validate_rule(rule, relations, issues, f"rules[{i}]")
+        else: issues.append(ValidationIssue("rule-type", "expected Rule", f"rules[{i}]"))
+    for i, claim in enumerate(bundle.claims):
+        if isinstance(claim, Claim): _validate_claim(claim, relations, issues, f"claims[{i}]")
+        else: issues.append(ValidationIssue("claim-type", "expected Claim", f"claims[{i}]"))
     _validate_recursion(bundle, relations, issues)
     return tuple(issues)
 
@@ -53,8 +59,11 @@ def validate(bundle: Bundle): return validate_bundle(bundle)
 def _validate_relation(r, relations, issues):
     if not r.name or not r.name.replace("_", "a").isalnum() or r.name[0].isdigit():
         issues.append(ValidationIssue("name", "relation name must be an identifier", f"relations.{r.name}"))
+    if not all(hasattr(c, "name") and hasattr(c, "type") and hasattr(c, "context") for c in r.columns):
+        issues.append(ValidationIssue("column-type", "columns must be Column values", f"relations.{r.name}")); return
     names = [c.name for c in r.columns]
     if len(names) != len(set(names)): issues.append(ValidationIssue("duplicate-column", "column names must be unique", f"relations.{r.name}"))
+    if len(r.context_indices) != len(set(r.context_indices)): issues.append(ValidationIssue("duplicate-context", "context positions must be unique", f"relations.{r.name}"))
     for index in r.context_indices:
         if index not in names: issues.append(ValidationIssue("context-index", f"unknown context column {index!r}", f"relations.{r.name}"))
         elif not r.columns[names.index(index)].context: issues.append(ValidationIssue("context-index", f"column {index!r} is not marked context", f"relations.{r.name}"))
@@ -62,14 +71,23 @@ def _validate_relation(r, relations, issues):
         if not r.completes: issues.append(ValidationIssue("completeness-target", "completeness relation must name its target relation", f"relations.{r.name}"))
         elif r.completes not in relations: issues.append(ValidationIssue("completeness-target", f"unknown target {r.completes!r}", f"relations.{r.name}"))
     elif r.completes is not None: issues.append(ValidationIssue("completeness-target", "only completeness relations may name a target", f"relations.{r.name}"))
+    if r.modality.value == "compatibility":
+        if len(r.compatibility_targets) < 2: issues.append(ValidationIssue("compatibility-target", "compatibility relation must name at least two target relations", f"relations.{r.name}"))
+        for target in r.compatibility_targets:
+            if target not in relations: issues.append(ValidationIssue("compatibility-target", f"unknown target {target!r}", f"relations.{r.name}"))
+        for index in r.compatibility_context_indices:
+            if index not in r.context_indices: issues.append(ValidationIssue("compatibility-context", f"context position {index!r} is not declared", f"relations.{r.name}"))
+        if len(r.compatibility_targets) != len(set(r.compatibility_targets)): issues.append(ValidationIssue("compatibility-target", "compatibility targets must be unique", f"relations.{r.name}"))
+    elif r.compatibility_targets or r.compatibility_context_indices:
+        issues.append(ValidationIssue("compatibility-target", "only compatibility relations may declare targets/positions", f"relations.{r.name}"))
 
 
 def _python_type(value):
     if isinstance(value, bool): return TypeName.BOOLEAN
     if isinstance(value, int): return TypeName.INTEGER
-    if isinstance(value, float): return TypeName.DECIMAL
-    if isinstance(value, str): return TypeName.STRING
-    if isinstance(value, (tuple, list, dict)): return TypeName.JSON
+    if isinstance(value, float): return None
+    if isinstance(value, str): return TypeName.SYMBOL
+    if isinstance(value, (tuple, list, Mapping)): return TypeName.JSON
     return None
 
 
@@ -81,8 +99,13 @@ def _validate_term(term, expected, env, issues, path, fact_only=False):
         return
     if not isinstance(term, Constant):
         issues.append(ValidationIssue("term-type", "term must be Variable or Constant", path)); return
-    actual = term.type or _python_type(term.value)
-    if actual is None or (expected != TypeName.JSON and actual != expected and not (expected == TypeName.IDENTIFIER and actual == TypeName.STRING) and not (expected == TypeName.TIMESTAMP and actual == TypeName.STRING)):
+    inferred = _python_type(term.value)
+    declared = term.type
+    actual = declared or inferred
+    declared_ok = declared is None or inferred == declared or (declared == TypeName.TIMESTAMP and inferred == TypeName.INTEGER and isinstance(term.value, int) and term.value >= 0) or (declared == TypeName.DIGEST and inferred == TypeName.SYMBOL) or (declared == TypeName.JSON_METADATA_ONLY and inferred == TypeName.JSON_METADATA_ONLY)
+    if expected == TypeName.UNSIGNED and isinstance(term.value, int) and term.value < 0: declared_ok = False
+    compatible = actual == expected or (expected == TypeName.TIMESTAMP and inferred == TypeName.INTEGER and isinstance(term.value, int) and term.value >= 0) or (expected == TypeName.DIGEST and inferred == TypeName.SYMBOL)
+    if actual is None or not declared_ok or not compatible:
         issues.append(ValidationIssue("type-mismatch", f"expected {expected.value}, got {getattr(actual, 'value', actual)}", path))
 
 
@@ -105,6 +128,9 @@ def _validate_rule(rule, relations, issues, path):
             if left_type is None or right_type is None: issues.append(ValidationIssue("unsafe-comparison", "comparison variables must be positively bound", f"{path}.body[{j}]"))
             elif left_type != right_type: issues.append(ValidationIssue("type-mismatch", "comparison operands must have equal types", f"{path}.body[{j}]"))
             continue
+        if not isinstance(atom, Atom):
+            _validate_atom(atom, relations, issues, f"{path}.body[{j}]", env)
+            continue
         before = set(env)
         target_env = dict(env) if atom.negated else env
         _validate_atom(atom, relations, issues, f"{path}.body[{j}]", target_env)
@@ -116,7 +142,9 @@ def _validate_rule(rule, relations, issues, path):
         issues.append(ValidationIssue("unsafe-variable", "head variables must be positively bound", path))
     _validate_context_joins(rule, relations, issues, path)
     for neg in (a for a in rule.body if isinstance(a, Atom) and a.negated): _validate_completeness(neg, rule, relations, issues, path)
-    if rule.aggregation: _validate_aggregation(rule.aggregation, rule, relations, issues, path)
+    if rule.aggregation:
+        if isinstance(rule.aggregation, Aggregation): _validate_aggregation(rule.aggregation, rule, relations, issues, path)
+        else: issues.append(ValidationIssue("aggregation-type", "expected Aggregation", path))
 
 
 def _validate_completeness(negated, rule, relations, issues, path):
@@ -136,7 +164,7 @@ def _validate_completeness(negated, rule, relations, issues, path):
 
 def _validate_context_joins(rule, relations, issues, path):
     atoms = [a for a in rule.body if isinstance(a, Atom) and not a.negated and a.relation in relations]
-    compatibility = [a for a in atoms if relations[a.relation].modality.value == "compatibility"]
+    compatibility = [(a, relations[a.relation]) for a in atoms if relations[a.relation].modality.value == "compatibility"]
     context_bindings = []
     for atom in atoms:
         decl = relations[atom.relation]; names = [c.name for c in decl.columns]
@@ -144,7 +172,10 @@ def _validate_context_joins(rule, relations, issues, path):
     for i, (_, left) in enumerate(context_bindings):
         for _, right in context_bindings[i + 1:]:
             differing = {k for k in left.keys() & right.keys() if repr(left[k]) != repr(right[k])}
-            if differing and not any(differing.issubset(_atom_vars(a)) for a in compatibility):
+            left_rel = next((a.relation for a, b in context_bindings if b is left), None)
+            right_rel = next((a.relation for a, b in context_bindings if b is right), None)
+            witnessed = any({left_rel, right_rel}.issubset(set(decl.compatibility_targets)) and differing.issubset(_atom_vars(atom)) for atom, decl in compatibility)
+            if differing and not witnessed:
                 issues.append(ValidationIssue("missing-compatibility", "cross-context joins require an explicit compatibility witness", path)); return
 
 
@@ -157,10 +188,23 @@ def _validate_aggregation(a, rule, relations, issues, path):
         for g in a.group_by:
             if g not in names: issues.append(ValidationIssue("aggregation-group", f"unknown group column {g!r}", path))
         if a.value_variable not in names: issues.append(ValidationIssue("aggregation-value", f"unknown value column {a.value_variable!r}", path))
+        if a.operator in {"sum", "min", "max"} and a.value_variable in names and names[a.value_variable] not in {TypeName.INTEGER, TypeName.DECIMAL}:
+            issues.append(ValidationIssue("aggregation-value", "numeric aggregation requires an integer or decimal value", path))
+        source_atoms = [x for x in rule.body if isinstance(x, Atom) and not x.negated and x.relation == a.relation]
+        if not source_atoms: issues.append(ValidationIssue("aggregation-source", "aggregation source must be a positive body atom", path))
+        else:
+            source_atom = source_atoms[0]; source_names = [c.name for c in source.columns]
+            head_decl = relations.get(rule.head.relation)
+            for group in a.group_by:
+                if group in source_names and head_decl and group in [c.name for c in head_decl.columns]:
+                    si = source_names.index(group); hi = [c.name for c in head_decl.columns].index(group)
+                    if repr(source_atom.terms[si]) != repr(rule.head.terms[hi]):
+                        issues.append(ValidationIssue("aggregation-head", f"head does not preserve group column {group!r}", path))
     if domain is None: issues.append(ValidationIssue("aggregation-domain", "aggregation requires a named domain", path))
     elif not domain.finite: issues.append(ValidationIssue("aggregation-domain", "aggregation domain must be finite", path))
     if closure is None: issues.append(ValidationIssue("aggregation-closure", "aggregation requires a closure witness", path))
     elif closure.modality.value != "completeness" or closure.completes != a.domain: issues.append(ValidationIssue("aggregation-closure", "closure witness must complete the named domain", path))
+    elif domain and closure.context_indices != domain.context_indices: issues.append(ValidationIssue("aggregation-closure", "closure witness context positions must match its finite domain", path))
     if source and rule.head.relation == source.name: issues.append(ValidationIssue("recursive-aggregation", "aggregation source cannot be the rule head relation", path))
 
 
@@ -171,7 +215,14 @@ def _validate_claim(claim, relations, issues, path):
     env = {}
     for i, (term, col) in enumerate(zip(claim.terms, relation.columns)): _validate_term(term, col.type, env, issues, f"{path}.terms[{i}]")
     known_context = set(relation.context_indices)
-    if set(claim.context.as_dict()) != known_context: issues.append(ValidationIssue("claim-context", "claim context must exactly match relation context indices", path))
+    if not hasattr(claim.context, "as_dict"):
+        issues.append(ValidationIssue("claim-context", "claim context must be a Context", path)); context = {}
+    else: context = claim.context.as_dict()
+    if set(context) != known_context: issues.append(ValidationIssue("claim-context", "claim context must exactly match relation context indices", path))
+    for name in known_context:
+        if name in context:
+            column = relation.columns[[c.name for c in relation.columns].index(name)]
+            _validate_term(Constant(context[name]), column.type, {}, issues, f"{path}.context.{name}")
     if claim.quantifier.value == "forall":
         domain = relations.get(claim.domain) if claim.domain else None
         if domain is None or not domain.finite: issues.append(ValidationIssue("forall-domain", "FORALL requires a named finite domain", path))
@@ -181,9 +232,10 @@ def _validate_claim(claim, relations, issues, path):
 def _validate_recursion(bundle, relations, issues):
     edges = {r.name: [] for r in bundle.relations}
     for rule in bundle.rules:
+        if not isinstance(rule, Rule) or not isinstance(rule.head, Atom) or rule.head.relation not in edges: continue
         for atom in rule.body:
             if isinstance(atom, Atom) and atom.relation in edges: edges[rule.head.relation].append((atom.relation, atom.negated))
-        if rule.aggregation: edges[rule.head.relation].append((rule.aggregation.relation, False))
+        if isinstance(rule.aggregation, Aggregation) and rule.aggregation.relation in edges: edges[rule.head.relation].append((rule.aggregation.relation, False))
     for start in edges:
         for dst, negative in edges[start]:
             if negative and start in _reachable(edges, dst): issues.append(ValidationIssue("recursive-negation", f"negative cycle involving {start} and {dst}", "rules"))
