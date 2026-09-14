@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "program_schema_version": 1,
   "id": "02-surface-mismatch",
   "title": "Static and runtime routes are different surfaces",
   "provenance": {
@@ -15,6 +16,7 @@
     "surface": "route-b",
     "attempt": "attempt-02"
   },
+  "rules": [{"name":"effect_requires_static_and_runtime_route","claim_id":"claim-effect","premises":[{"relation":"static_route_exists","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"surface","evidence_column":"surface","type":"symbol"}]},{"relation":"runtime_route_observed","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"surface","evidence_column":"surface","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]}]}],
   "claims": [
     {
       "id": "claim-effect",
@@ -49,7 +51,9 @@
         "run"
       ],
       "quantifier": "exists",
-      "domain": null
+      "domain": null,
+      "mappings": [{"evidence_relation":"static_route_exists","effect":"support","context_indices":["tenant","surface"],"bindings":[["tenant","tenant"],["surface","surface"]]},{"evidence_relation":"runtime_route_observed","effect":"support","context_indices":["tenant","surface","event","run"],"bindings":[["tenant","tenant"],["surface","surface"],["event","event"],["run","run"]]}],
+      "diagnostics": []
     }
   ],
   "facts": [

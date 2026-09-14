@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Iterable, Mapping
 
 from .ir import (Aggregation, Atom, Bundle, Claim, Comparison, Constant,
-                 RelationDecl, Rule, TypeName, Variable, Evidence, EvidenceMapping, DiagnosticRule)
+                 RelationDecl, Rule, TypeName, Variable, Evidence, EvidenceMapping, DiagnosticRule, EvidenceEffect)
 
 
 @dataclass(frozen=True)
@@ -48,8 +48,8 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
         _validate_atom(record.atom, relations, issues, path + ".atom", {}, fact_only=True)
         if record.atom.negated: issues.append(ValidationIssue("negative-evidence", "evidence atoms must be positive", path))
         declared = relations.get(record.atom.relation)
-        if declared and not set(record.context.as_dict()).issubset(set(declared.context_indices)):
-            issues.append(ValidationIssue("evidence-context", "evidence context contains unknown relation context indices", path))
+        if declared and set(record.context.as_dict()) != set(declared.context_indices):
+            issues.append(ValidationIssue("evidence-context", "evidence context must exactly match relation context indices", path))
         if not isinstance(record.source, str) or not record.source: issues.append(ValidationIssue("evidence-source", "evidence source must be a non-empty string", path))
         if not isinstance(record.kind, str) or not record.kind: issues.append(ValidationIssue("evidence-kind", "evidence kind must be a non-empty string", path))
         if declared:
@@ -72,10 +72,18 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
         if isinstance(claim, Claim) and claim.id:
             if claim.id in seen_claim_ids: issues.append(ValidationIssue("duplicate-claim-id", claim.id, f"claims[{i}]"))
             seen_claim_ids.add(claim.id)
+    if any(isinstance(c, Claim) and c.id for c in bundle.claims):
+        for i, mapping in enumerate(bundle.mappings):
+            if not mapping.claim_id or mapping.claim_id not in seen_claim_ids:
+                issues.append(ValidationIssue("mapping-claim-id", "mapping must name an existing claim id", f"mappings[{i}]"))
+        for i, diagnostic in enumerate(bundle.diagnostics):
+            if not diagnostic.claim_id or diagnostic.claim_id not in seen_claim_ids:
+                issues.append(ValidationIssue("diagnostic-claim-id", "diagnostic must name an existing claim id", f"diagnostics[{i}]"))
     for i, mapping in enumerate(bundle.mappings):
         path = f"mappings[{i}]"
         if not isinstance(mapping, EvidenceMapping):
             issues.append(ValidationIssue("mapping-type", "expected EvidenceMapping", path)); continue
+        if not isinstance(mapping.effect, EvidenceEffect): issues.append(ValidationIssue("mapping-effect", "unsupported evidence effect", path))
         if mapping.claim_relation not in relations: issues.append(ValidationIssue("mapping-claim", mapping.claim_relation, path))
         if mapping.evidence_relation not in relations: issues.append(ValidationIssue("mapping-evidence", mapping.evidence_relation, path))
         for context_name in mapping.context_indices:
@@ -96,6 +104,7 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
     for i, diagnostic in enumerate(bundle.diagnostics):
         path = f"diagnostics[{i}]"
         if not isinstance(diagnostic, DiagnosticRule): issues.append(ValidationIssue("diagnostic-type", "expected DiagnosticRule", path)); continue
+        if not isinstance(diagnostic.effect, EvidenceEffect): issues.append(ValidationIssue("diagnostic-effect", "unsupported diagnostic effect", path))
         if diagnostic.trigger_relation not in relations: issues.append(ValidationIssue("diagnostic-trigger", diagnostic.trigger_relation, path))
         if diagnostic.operational_status not in allowed_status: issues.append(ValidationIssue("diagnostic-status", diagnostic.operational_status, path))
         relation = relations.get(diagnostic.trigger_relation)

@@ -171,9 +171,12 @@ class EvidenceMapping:
     bindings: tuple[tuple[str, str], ...] = ()
     required: bool = False
     allow_out_of_scope: bool = False
+    claim_id: str = ""
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "effect", EvidenceEffect(self.effect))
+        try: effect = EvidenceEffect(self.effect)
+        except (TypeError, ValueError): effect = self.effect
+        object.__setattr__(self, "effect", effect)
         object.__setattr__(self, "context_indices", tuple(sorted(set(self.context_indices))))
         object.__setattr__(self, "bindings", tuple(sorted(self.bindings)))
 
@@ -188,9 +191,12 @@ class DiagnosticRule:
     when_missing: bool = False
     required: bool = False
     message: str = ""
+    claim_id: str = ""
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "effect", EvidenceEffect(self.effect))
+        try: effect = EvidenceEffect(self.effect)
+        except (TypeError, ValueError): effect = self.effect
+        object.__setattr__(self, "effect", effect)
         object.__setattr__(self, "context_indices", tuple(sorted(set(self.context_indices))))
 
 
@@ -414,11 +420,11 @@ def bundle_from_json(source: str | bytes | Mapping[str, Any], *, validate: bool 
             context_raw = dict(context_raw["values"])
         return Evidence(x["id"], atom(raw_atom), Context.from_mapping(context_raw), x.get("source", ""), tuple(x.get("depends_on", ())), x.get("kind", "fact"))
     def mapping(x):
-        x = _strict_object(x, {"claim_relation", "evidence_relation", "effect", "context_indices", "bindings", "required", "allow_out_of_scope"}, "mapping")
-        return EvidenceMapping(x["claim_relation"], x["evidence_relation"], x["effect"], tuple(x.get("context_indices", ())), tuple(tuple(pair) for pair in x.get("bindings", ())), x.get("required", False), x.get("allow_out_of_scope", False))
+        x = _strict_object(x, {"claim_id", "claim_relation", "evidence_relation", "effect", "context_indices", "bindings", "required", "allow_out_of_scope"}, "mapping")
+        return EvidenceMapping(x["claim_relation"], x["evidence_relation"], x["effect"], tuple(x.get("context_indices", ())), tuple(tuple(pair) for pair in x.get("bindings", ())), x.get("required", False), x.get("allow_out_of_scope", False), x.get("claim_id", ""))
     def diagnostic(x):
-        x = _strict_object(x, {"trigger_relation", "effect", "operational_status", "context_indices", "when_missing", "required", "message"}, "diagnostic")
-        return DiagnosticRule(x["trigger_relation"], x["effect"], x.get("operational_status", "complete"), tuple(x.get("context_indices", ())), x.get("when_missing", False), x.get("required", False), x.get("message", ""))
+        x = _strict_object(x, {"claim_id", "trigger_relation", "effect", "operational_status", "context_indices", "when_missing", "required", "message"}, "diagnostic")
+        return DiagnosticRule(x["trigger_relation"], x["effect"], x.get("operational_status", "complete"), tuple(x.get("context_indices", ())), x.get("when_missing", False), x.get("required", False), x.get("message", ""), x.get("claim_id", ""))
     policy_raw = raw.get("diagnostic_policy") or {}
     _strict_object(policy_raw, {"missing_premises", "inconsistent_premises", "out_of_scope", "forbidden_evidence", "revocation", "completeness"}, "diagnostic_policy")
     policy = DiagnosticPolicy(**policy_raw)

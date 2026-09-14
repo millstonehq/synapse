@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "program_schema_version": 1,
   "id": "05-wrong-event-email",
   "title": "Accepted email for another event is not target delivery",
   "provenance": {
@@ -14,6 +15,7 @@
     "recipient": "a@example.test",
     "attempt": "attempt-05"
   },
+  "rules": [{"name":"target_mail_requires_event_match","claim_id":"claim-target-mail","premises":[{"relation":"smtp_accepted","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"recipient","evidence_column":"recipient","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"},{"claim_column":"attempt","evidence_column":"attempt","type":"symbol"}]}]}],
   "claims": [
     {
       "id": "claim-target-mail",
@@ -51,7 +53,8 @@
         "attempt"
       ],
       "quantifier": "exists",
-      "domain": null
+      "domain": null,
+      "mappings": [{"evidence_relation":"smtp_accepted","effect":"support","context_indices":["tenant","event","recipient","run","attempt"],"bindings":[["tenant","tenant"],["event","event"],["recipient","recipient"],["run","run"],["attempt","attempt"]]}], "diagnostics": []
     }
   ],
   "facts": [

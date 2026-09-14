@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "program_schema_version": 1,
   "id": "14-bounded-no-resend",
   "title": "Bounded no-resend is not indefinite safety",
   "provenance": {
@@ -15,6 +16,7 @@
     "window": "5m",
     "interval": "interval-14"
   },
+  "rules": [{"name":"bounded_no_resend_requires_closed_window","claim_id":"claim-bounded","premises":[{"relation":"one_delivery","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]},{"relation":"no_resend_observed","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"},{"claim_column":"window","evidence_column":"window","type":"symbol"}]},{"relation":"observation_window_closed__accepted","bindings":[{"claim_column":"window","evidence_column":"window","type":"symbol"}]}]}],
   "claims": [
     {
       "id": "claim-bounded",
@@ -50,7 +52,8 @@
         "window"
       ],
       "quantifier": "exists",
-      "domain": null
+      "domain": null,
+      "mappings": [{"evidence_relation":"one_delivery","effect":"support","context_indices":["tenant","event","run"],"bindings":[["tenant","tenant"],["event","event"],["run","run"]]},{"evidence_relation":"no_resend_observed","effect":"support","context_indices":["tenant","event","run","window"],"bindings":[["tenant","tenant"],["event","event"],["run","run"],["window","window"]]}], "diagnostics": []
     },
     {
       "id": "claim-forever",
@@ -83,7 +86,8 @@
         "run"
       ],
       "quantifier": "exists",
-      "domain": null
+      "domain": null,
+      "mappings": [], "diagnostics": [{"trigger_relation":"observation_window_closed__accepted","effect":"observation","operational_status":"complete","context_indices":["window","interval"],"required":true}]
     }
   ],
   "facts": [

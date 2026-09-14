@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "program_schema_version": 1,
   "id": "13-acceptance-sql-ack-failure",
   "title": "Provider acceptance and SQL acknowledgement are distinct claims",
   "provenance": {
@@ -14,6 +15,7 @@
     "recipient": "a@example.test",
     "attempt": "attempt-13"
   },
+  "rules": [{"name":"provider_from_smtp_acceptance","claim_id":"claim-provider","premises":[{"relation":"smtp_accepted","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"recipient","evidence_column":"recipient","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]}]}],
   "claims": [
     {
       "id": "claim-provider",
@@ -48,7 +50,8 @@
         "run"
       ],
       "quantifier": "exists",
-      "domain": null
+      "domain": null,
+      "mappings": [{"evidence_relation":"smtp_accepted","effect":"support","context_indices":["tenant","event","recipient","run"],"bindings":[["tenant","tenant"],["event","event"],["recipient","recipient"],["run","run"]]}], "diagnostics": []
     },
     {
       "id": "claim-terminal",
@@ -86,7 +89,8 @@
         "attempt"
       ],
       "quantifier": "exists",
-      "domain": null
+      "domain": null,
+      "mappings": [{"evidence_relation":"sql_ack_failed","effect":"observation","context_indices":["tenant","event","recipient","run"],"bindings":[["tenant","tenant"],["event","event"],["recipient","recipient"],["run","run"]]}], "diagnostics": [{"trigger_relation":"provider_acceptance_implies_terminal__rejected","effect":"forbidden","operational_status":"invalid-input","context_indices":[],"required":true}]
     }
   ],
   "facts": [

@@ -29,6 +29,7 @@ class CorpusSchemaTests(unittest.TestCase):
     def test_schema_has_canonical_columns_types_context_modality_and_polarity(self) -> None:
         schema = load(CORPUS / "schema-v1.json")
         self.assertEqual(1, schema["schema_version"])
+        self.assertEqual(1, schema["program_schema_version"])
         self.assertTrue(schema["context_indices"])
         self.assertTrue(schema["types"])
         for name, relation in schema["relations"].items():
@@ -45,6 +46,8 @@ class CorpusSchemaTests(unittest.TestCase):
             fixture = load(path)
             with self.subTest(path=path.name):
                 self.assertEqual("schema-v1", fixture["schema_ref"])
+                self.assertEqual(1, fixture["program_schema_version"])
+                self.assertIn("rules", fixture)
                 for section in ("claims", "facts", "assumptions"):
                     ids = set()
                     for entry in fixture[section]:
@@ -62,6 +65,9 @@ class CorpusSchemaTests(unittest.TestCase):
                             self.assertNotIn("status", entry)
                         else:
                             self.assertEqual(section == "claims", declaration["modality"] == "claim")
+                        if section == "claims":
+                            self.assertIn("mappings", entry)
+                            self.assertIn("diagnostics", entry)
 
     def test_each_claim_is_explicitly_quantified_and_expectations_are_polarity_complete(self) -> None:
         for path in FIXTURES:

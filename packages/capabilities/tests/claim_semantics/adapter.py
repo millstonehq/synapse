@@ -23,6 +23,8 @@ def _term(value: Any, type_name: str) -> dict[str, Any]:
 
 def bundle_payload(fixture: dict[str, Any]) -> dict[str, Any]:
     schema = json.loads((ROOT / "schema-v1.json").read_text(encoding="utf-8"))
+    if schema.get("program_schema_version") != 1 or fixture.get("program_schema_version") != 1 or "rules" not in fixture:
+        raise ValueError("fixture lacks required schema-v1 semantic program declarations")
     relations = []
     for name, declaration in schema["relations"].items():
         relations.append({"name": name, **{k: v for k, v in declaration.items() if k != "arg_order"}})
@@ -34,7 +36,7 @@ def bundle_payload(fixture: dict[str, Any]) -> dict[str, Any]:
     all_entries = [*fixture["facts"], *fixture["assumptions"]]
     facts = [{"relation": entry["relation"], "terms": terms(entry)} for entry in all_entries]
     evidence = [{"id": entry["id"], "relation": entry["relation"], "terms": terms(entry),
-                 "context": {k: dict(zip(entry["arg_order"], entry["args"]))[k] for k in schema["relations"][entry["relation"]]["context_indices"] if k in entry["context"]},
+                 "context": {k: dict(zip(entry["arg_order"], entry["args"]))[k] for k in schema["relations"][entry["relation"]]["context_indices"]},
                  "source": entry.get("source", entry.get("provenance", {}).get("source", "fixture")),
                  "depends_on": entry.get("provenance", {}).get("depends_on", []),
                  "kind": "assumption" if entry in fixture["assumptions"] else "fact"} for entry in all_entries]
@@ -43,77 +45,38 @@ def bundle_payload(fixture: dict[str, Any]) -> dict[str, Any]:
         declaration = schema["relations"][entry["relation"]]
         context = {key: entry["context"][key] for key in declaration["context_indices"]}
         claims.append({"id": entry["id"], "relation": entry["relation"], "terms": terms(entry), "context": context, "quantifier": entry["quantifier"], "domain": entry["domain"]})
-    # Versioned domain rule library.  It is keyed by semantic relation shape,
-    # never by fixture id or expected verdicts.  A rule only fires after every
-    # listed premise is present in the same projected claim context.
-    RULE_LIBRARY = {
-        "notification_delivery_terminal": (("http_save_succeeded", "issue_changed_observed", "smtp_accepted", "sql_terminal_state"),),
-        "effect_reached": (("static_route_exists", "runtime_route_observed"),),
-        "post_request_succeeded": (("http_post_accepted",),),
-        "row_created": (("sql_row_exists", "sql_snapshot_current__accepted"),),
-        "authorized": (("http_authorization",),),
-        "smtp_accepted__claim": (("smtp_accepted",),),
-        "provider_accepted": (("smtp_accepted",),),
-        "capability_holds_in_all_compatible_histories": (("compatible_history",),),
-        "no_resend_during_window": (("one_delivery", "no_resend_observed", "observation_window_closed__accepted"),),
-    }
+    # Compile only declarations supplied by the fixture input.  No expected
+    # verdicts, fixture IDs, or relation-name heuristics participate here.
     rules, mappings, diagnostics = [], [], []
+    declarations = fixture.get("rules", ())
+    claim_by_id = {entry["id"]: entry for entry in fixture["claims"]}
+    for declaration in declarations:
+        claim_entry = claim_by_id[declaration["claim_id"]]
+        cdecl = schema["relations"][claim_entry["relation"]]
+        claim_values = dict(zip((c["name"] for c in cdecl["columns"]), claim_entry["args"]))
+        body = []
+        for premise in declaration["premises"]:
+            sdecl = schema["relations"][premise["relation"]]
+            bindings = {binding["evidence_column"]: binding for binding in premise["bindings"]}
+            claim_columns = {column["name"]: column for column in cdecl["columns"]}
+            source_terms = []
+            for col in sdecl["columns"]:
+                binding = bindings.get(col["name"])
+                if binding:
+                    if binding["claim_column"] not in claim_columns or binding["type"] != col["type"] or binding["type"] != claim_columns[binding["claim_column"]]["type"]:
+                        raise ValueError("typed rule binding does not match claim/evidence columns")
+                    source_terms.append(_term(claim_values[binding["claim_column"]], binding["type"]))
+                else: source_terms.append({"variable": f"_{col['name']}"})
+            body.append({"relation": premise["relation"], "terms": source_terms})
+        rules.append({"name": declaration["name"], "head": {"relation": claim_entry["relation"], "terms": [_term(v, c["type"]) for v, c in zip(claim_entry["args"], cdecl["columns"])]}, "body": body})
     for claim_entry in fixture["claims"]:
         cdecl = schema["relations"][claim_entry["relation"]]
-        c_names = [c["name"] for c in cdecl["columns"]]
-        claim_values = dict(zip(c_names, claim_entry["args"]))
-        for wave, premises in enumerate(RULE_LIBRARY.get(claim_entry["relation"], ())):
-            body = []
-            bindings = []
-            for source_name in premises:
-                sdecl = schema["relations"][source_name]; s_names = [c["name"] for c in sdecl["columns"]]
-                source_terms = []
-                source_bindings = []
-                for col in sdecl["columns"]:
-                    if col["name"] in claim_values:
-                        source_terms.append(_term(claim_values[col["name"]], col["type"]))
-                        source_bindings.append((col["name"], col["name"]))
-                    else: source_terms.append({"variable": f"_{col['name']}"})
-                body.append({"relation": source_name, "terms": source_terms})
-                mappings.append({"claim_relation": claim_entry["relation"], "evidence_relation": source_name,
-                                 "effect": "support" if sdecl["polarity"] == "positive" else "refutation",
-                                 "context_indices": sorted(set(cdecl["context_indices"]) & set(sdecl["context_indices"])),
-                                 "bindings": sorted(set(source_bindings)), "required": True})
-            rules.append({"name": f"domain_v1_{claim_entry['relation']}_{wave}", "head": {"relation": claim_entry["relation"], "terms": [_term(v, c["type"]) for v, c in zip(claim_entry["args"], cdecl["columns"])]}, "body": body})
-        # Negative observed relations are explicit refutation evidence; rejected
-        # or revoked assumptions become typed diagnostic triggers instead.
-        for entry in fixture["facts"]:
-            sdecl = schema["relations"][entry["relation"]]
-            if sdecl["polarity"] == "negative":
-                bindings = [(n, n) for n in c_names if n in [c["name"] for c in sdecl["columns"]]]
-                mappings.append({"claim_relation": claim_entry["relation"], "evidence_relation": entry["relation"], "effect": "refutation", "context_indices": sorted(set(cdecl["context_indices"]) & set(sdecl["context_indices"])), "bindings": bindings})
-    for entry in fixture["assumptions"]:
-        relation = entry["relation"]
-        if relation.endswith("__revoked"): effect, status = "refutation", "stale"
-        elif relation.endswith("__rejected"): effect, status = "forbidden", "invalid-input"
-        else: effect, status = "observation", "complete"
-        diagnostics.append({"trigger_relation": relation, "effect": effect, "operational_status": status,
-                            "context_indices": schema["relations"][relation]["context_indices"],
-                            "required": True, "message": f"policy trigger: {relation}"})
-    # Scope-only claims still compile a rule into a non-claim candidate
-    # relation.  This preserves a tangible rule for the evaluator while
-    # preventing an unexpected runtime surface from becoming support.
-    if not rules:
-        claim_entry = fixture["claims"][0]
-        cdecl = schema["relations"][claim_entry["relation"]]
-        candidate = f"{claim_entry['relation']}_scope_candidate"
-        relations.append({"name": candidate, "columns": cdecl["columns"],
-                          "modality": "derived", "polarity": "positive", "binding": "runtime", "primitive": False,
-                          "producer_classes": [], "context_indices": cdecl["context_indices"], "completes": None,
-                          "finite": False, "nonempty": False, "compatibility_targets": [], "compatibility_context_indices": []})
-        source = next((x for x in schema["relations"] if x == "runtime_surface_observed"), None)
-        if source:
-            sdecl = schema["relations"][source]; snames = [c["name"] for c in sdecl["columns"]]
-            rules.append({"name": f"scope_v1_{candidate}", "head": {"relation": candidate, "terms": [_term(v, c["type"]) for v, c in zip(claim_entry["args"], cdecl["columns"])]},
-                          "body": [{"relation": source, "terms": [{"variable": f"_{n}"} for n in snames]}]})
-            mappings.append({"claim_relation": claim_entry["relation"], "evidence_relation": source,
-                             "effect": "observation", "context_indices": sorted(set(cdecl["context_indices"]) & set(sdecl["context_indices"])),
-                             "bindings": [(n, n) for n in cdecl["context_indices"] if n in snames]})
+        for mapping in claim_entry.get("mappings", ()):
+            mapping = dict(mapping); mapping["claim_relation"] = claim_entry["relation"]; mapping["claim_id"] = claim_entry["id"]
+            mappings.append(mapping)
+        for diagnostic in claim_entry.get("diagnostics", ()):
+            diagnostic = dict(diagnostic); diagnostic["claim_id"] = claim_entry["id"]
+            diagnostics.append(diagnostic)
     semantic_inputs = {
         "fixture_id": fixture["id"],
         "context": fixture["context"],
