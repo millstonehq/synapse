@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "program_schema_version": 1,
   "id": "claim-semantics-v1",
   "description": "Claims IR relation declarations",
   "context_indices": [

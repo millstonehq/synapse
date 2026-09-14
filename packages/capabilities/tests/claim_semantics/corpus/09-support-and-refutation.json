@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "program_schema_version": 1,
   "id": "09-support-and-refutation",
   "title": "One scoped attempt can contain support and refutation",
   "provenance": {
@@ -14,6 +15,7 @@
     "attempt": "attempt-9",
     "recipient": "a@example.test"
   },
+  "rules": [],
   "claims": [
     {
       "id": "claim-terminal",
@@ -51,7 +53,8 @@
         "attempt"
       ],
       "quantifier": "exists",
-      "domain": null
+      "domain": null,
+      "mappings": [{"evidence_relation":"smtp_accepted","effect":"support","context_indices":["tenant","event","recipient","run","attempt"],"bindings":[["tenant","tenant"],["event","event"],["recipient","recipient"],["run","run"],["attempt","attempt"]]},{"evidence_relation":"smtp_rejected","effect":"refutation","context_indices":["tenant","event","recipient","run","attempt"],"bindings":[["tenant","tenant"],["event","event"],["recipient","recipient"],["run","run"],["attempt","attempt"]]}], "diagnostics": []
     }
   ],
   "facts": [

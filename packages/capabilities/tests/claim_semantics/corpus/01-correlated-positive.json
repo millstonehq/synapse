@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "program_schema_version": 1,
   "id": "01-correlated-positive",
   "title": "Correlated notification execution supports terminal delivery",
   "provenance": {
@@ -14,6 +15,12 @@
     "attempt": "attempt-1",
     "recipient": "a@example.test"
   },
+  "rules": [{"name":"terminal_requires_correlated_path","claim_id":"claim-terminal-delivery","premises":[
+    {"relation":"http_save_succeeded","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]},
+    {"relation":"issue_changed_observed","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]},
+    {"relation":"smtp_accepted","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"recipient","evidence_column":"recipient","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"},{"claim_column":"attempt","evidence_column":"attempt","type":"symbol"}]},
+    {"relation":"sql_terminal_state","bindings":[{"claim_column":"tenant","evidence_column":"tenant","type":"symbol"},{"claim_column":"event","evidence_column":"event","type":"symbol"},{"claim_column":"recipient","evidence_column":"recipient","type":"symbol"},{"claim_column":"run","evidence_column":"run","type":"symbol"}]}
+  ]}],
   "claims": [
     {
       "id": "claim-terminal-delivery",
@@ -51,7 +58,14 @@
         "attempt"
       ],
       "quantifier": "exists",
-      "domain": null
+      "domain": null,
+      "mappings": [
+        {"evidence_relation":"http_save_succeeded","effect":"support","context_indices":["tenant","event","run"],"bindings":[["tenant","tenant"],["event","event"],["run","run"]]},
+        {"evidence_relation":"issue_changed_observed","effect":"support","context_indices":["tenant","event","run"],"bindings":[["tenant","tenant"],["event","event"],["run","run"]]},
+        {"evidence_relation":"smtp_accepted","effect":"support","context_indices":["tenant","event","recipient","run","attempt"],"bindings":[["tenant","tenant"],["event","event"],["recipient","recipient"],["run","run"],["attempt","attempt"]]},
+        {"evidence_relation":"sql_terminal_state","effect":"support","context_indices":["tenant","event","recipient","run"],"bindings":[["tenant","tenant"],["event","event"],["recipient","recipient"],["run","run"]]}
+      ],
+      "diagnostics": [{"trigger_relation":"context_domain_closed__accepted","effect":"observation","operational_status":"complete","context_indices":["tenant","run"],"required":true}]
     }
   ],
   "facts": [
