@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from capcov.claims import (Atom, Bundle, Claim, Column, Constant, Context, DiagnosticRule,
                            Evidence, EvidenceMapping, RelationDecl, Rule, Variable,
-                           bundle_from_json, digest, validate_bundle)
+                           bundle_from_json, canonical_json, digest, validate_bundle)
 from capcov.claims.differential import (COMPARABLE_CLAIM_FIELDS, DifferentialMismatch,
                                        KernelClaim, KernelReport, _missing, compare,
                                        reports_match, run_python, run_souffle)
@@ -197,7 +197,12 @@ class DifferentialBoundaryTests(unittest.TestCase):
 @unittest.skipUnless(shutil.which("souffle"), "souffle runtime is unavailable")
 class DifferentialCorpusTests(unittest.TestCase):
     def test_every_relation_and_claim_agrees_for_every_fixture(self):
-        for path in sorted(ROOT.glob("[0-9][0-9]-*.json")):
+        expected_document = json.loads(
+            (ROOT / "expected.json").read_text(encoding="utf-8"))
+        expected = expected_document["cases"]
+        paths = sorted(ROOT.glob("[0-9][0-9]-*.json"))
+        self.assertEqual(len(paths), 14)
+        for path in paths:
             with self.subTest(case=path.stem):
                 bundle = load_fixture(path)
                 result = compare(bundle)
@@ -205,7 +210,32 @@ class DifferentialCorpusTests(unittest.TestCase):
                 expected_names = tuple(decl.name for decl in bundle.relations)
                 self.assertEqual(tuple(name for name, _ in result.python.relations), expected_names)
                 self.assertEqual(tuple(name for name, _ in result.souffle.relations), expected_names)
+                self.assertEqual(result.python.relations, result.souffle.relations)
                 self.assertEqual(result.python.canonical_digest, result.souffle.canonical_digest)
+                self.assertEqual(len(result.python.claims), len(bundle.claims))
+                self.assertEqual(len(result.souffle.claims), len(bundle.claims))
+                for declared, left, right in zip(
+                        bundle.claims, result.python.claims,
+                        result.souffle.claims):
+                    self.assertEqual((left.key, left.index),
+                                     (right.key, right.index))
+                    for field in COMPARABLE_CLAIM_FIELDS:
+                        self.assertEqual(
+                            getattr(left, field), getattr(right, field),
+                            (path.stem, declared.id, field))
+                    oracle = expected[path.stem]["claims"][declared.id]
+                    self.assertEqual(left.semantic,
+                                     oracle["semantic_verdict"])
+                    self.assertEqual(left.operational,
+                                     oracle["operational_status"])
+                    self.assertEqual(
+                        left.basis,
+                        expected_document["evaluation_basis_by_quantifier"][
+                            declared.quantifier.value])
+                    self.assertEqual(
+                        left.missing_premises,
+                        tuple(sorted(canonical_json(item) for item in
+                                     oracle["missing_premises"])))
 
     def test_all_four_verdict_states_agree(self):
         positive_source = R("positive_source", ("x", "symbol"))

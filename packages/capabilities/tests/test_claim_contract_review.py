@@ -118,8 +118,13 @@ class ContractReviewTests(unittest.TestCase):
 
     def test_validation_is_total_for_malformed_rule_parts(self):
         rel = R("a", (("x", TypeName.SYMBOL, False),))
-        malformed = Rule(object(), (object(),), aggregation=object())
-        codes = {i.code for i in validate_bundle(Bundle((rel,), rules=(malformed,)))}
+        atom = Atom("a", (Variable("x"),))
+        malformed = Rule(atom, (atom,))
+        bundle = Bundle((rel,), rules=(malformed,))
+        object.__setattr__(malformed, "head", object())
+        object.__setattr__(malformed, "body", (object(),))
+        object.__setattr__(malformed, "aggregation", object())
+        codes = {i.code for i in validate_bundle(bundle)}
         self.assertTrue({"atom-type", "aggregation-type"}.issubset(codes))
 
     def test_declared_constant_type_is_checked_against_value(self):

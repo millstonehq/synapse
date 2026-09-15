@@ -214,6 +214,10 @@ class EvidenceMapping:
     claim_id: str = ""
 
     def __post_init__(self) -> None:
+        if not isinstance(self.required, bool):
+            raise TypeError("mapping required must be boolean")
+        if not isinstance(self.allow_out_of_scope, bool):
+            raise TypeError("mapping allow_out_of_scope must be boolean")
         try: effect = EvidenceEffect(self.effect)
         except (TypeError, ValueError): effect = self.effect
         object.__setattr__(self, "effect", effect)
@@ -235,11 +239,25 @@ class DiagnosticRule:
     predicate: tuple[tuple[str, Any], ...] = ()
 
     def __post_init__(self) -> None:
+        if not isinstance(self.when_missing, bool):
+            raise TypeError("diagnostic when_missing must be boolean")
+        if not isinstance(self.required, bool):
+            raise TypeError("diagnostic required must be boolean")
+        if not isinstance(self.message, str):
+            raise TypeError("diagnostic message must be a string")
+        predicate = tuple(self.predicate)
+        if any(not isinstance(pair, (tuple, list)) or len(pair) != 2
+               or not isinstance(pair[0], str) for pair in predicate):
+            raise TypeError("diagnostic predicate must contain string-keyed pairs")
+        keys = [pair[0] for pair in predicate]
+        if len(keys) != len(set(keys)):
+            raise ValueError("duplicate diagnostic predicate key")
         try: effect = EvidenceEffect(self.effect)
         except (TypeError, ValueError): effect = self.effect
         object.__setattr__(self, "effect", effect)
         object.__setattr__(self, "context_indices", tuple(sorted(set(self.context_indices))))
-        object.__setattr__(self, "predicate", tuple(sorted(self.predicate)))
+        object.__setattr__(self, "predicate", tuple(sorted(
+            (key, _freeze_value(value)) for key, value in predicate)))
 
 
 @dataclass(frozen=True)
@@ -298,6 +316,204 @@ class Claim:
         object.__setattr__(self, "quantifier", Quantifier(self.quantifier))
 
 
+def _assert_bundle_ir_shape(value: Any, path: str) -> None:
+    """Reject malformed nested Python graphs before Bundle canonical sorting.
+
+    Semantic-invalid schema-v1 values remain constructible so the differential
+    can persist and replay them.  This boundary only rejects objects that are
+    not an instance of the declared recursive IR shape and therefore cannot
+    have authoritative canonical bytes.
+    """
+    def require(condition: bool, message: str) -> None:
+        if not condition:
+            raise TypeError(f"{path}: {message}")
+
+    def term(item: Any, item_path: str) -> None:
+        if isinstance(item, Variable):
+            require(isinstance(item.name, str),
+                    f"{item_path} variable name must be a string")
+            return
+        if isinstance(item, Constant):
+            require(item.type is None or isinstance(item.type, TypeName),
+                    f"{item_path} constant type must be a TypeName")
+            _freeze_value(item.value)
+            return
+        require(False, f"{item_path} must be Variable or Constant")
+
+    def atom(item: Any, item_path: str) -> None:
+        require(isinstance(item, Atom), f"{item_path} must be an Atom")
+        require(isinstance(item.relation, str),
+                f"{item_path}.relation must be a string")
+        require(isinstance(item.terms, tuple),
+                f"{item_path}.terms must be a tuple")
+        require(isinstance(item.negated, bool),
+                f"{item_path}.negated must be boolean")
+        for index, item_term in enumerate(item.terms):
+            term(item_term, f"{item_path}.terms[{index}]")
+
+    if isinstance(value, RelationDecl):
+        require(isinstance(value.name, str), "relation name must be a string")
+        require(isinstance(value.columns, tuple), "relation columns must be a tuple")
+        for index, column in enumerate(value.columns):
+            require(isinstance(column, Column),
+                    f"columns[{index}] must be a Column")
+            require(isinstance(column.name, str),
+                    f"columns[{index}].name must be a string")
+            require(isinstance(column.type, TypeName),
+                    f"columns[{index}].type must be a TypeName")
+            require(isinstance(column.context, bool),
+                    f"columns[{index}].context must be boolean")
+        require(isinstance(value.modality, Modality),
+                "relation modality must be a Modality")
+        require(isinstance(value.polarity, Polarity),
+                "relation polarity must be a Polarity")
+        require(isinstance(value.binding, BindingTime),
+                "relation binding must be a BindingTime")
+        require(all(isinstance(flag, bool) for flag in
+                    (value.primitive, value.finite, value.nonempty)),
+                "relation primitive/finite/nonempty fields must be boolean")
+        require(value.completes is None or isinstance(value.completes, str),
+                "relation completes must be a string or null")
+        for name in ("producer_classes", "context_indices",
+                     "compatibility_targets", "compatibility_context_indices"):
+            items = getattr(value, name)
+            require(isinstance(items, tuple)
+                    and all(isinstance(item, str) for item in items),
+                    f"relation {name} must be a tuple of strings")
+        return
+    if isinstance(value, Atom):
+        atom(value, path)
+        return
+    if isinstance(value, Evidence):
+        require(all(isinstance(item, str) for item in
+                    (value.id, value.source, value.kind)),
+                "evidence id/source/kind must be strings")
+        require(isinstance(value.context, Context),
+                "evidence context must be a Context")
+        require(isinstance(value.depends_on, tuple)
+                and all(isinstance(item, str) for item in value.depends_on),
+                "evidence dependencies must be a tuple of strings")
+        atom(value.atom, f"{path}.atom")
+        return
+    if isinstance(value, Rule):
+        atom(value.head, f"{path}.head")
+        require(isinstance(value.body, tuple), "rule body must be a tuple")
+        for index, body_item in enumerate(value.body):
+            item_path = f"{path}.body[{index}]"
+            if isinstance(body_item, Atom):
+                atom(body_item, item_path)
+            elif isinstance(body_item, Comparison):
+                term(body_item.left, f"{item_path}.left")
+                term(body_item.right, f"{item_path}.right")
+                require(isinstance(body_item.operator, str),
+                        f"{item_path}.operator must be a string")
+            else:
+                require(False, f"{item_path} must be an Atom or Comparison")
+        require(isinstance(value.name, str), "rule name must be a string")
+        if value.aggregation is not None:
+            aggregation = value.aggregation
+            require(isinstance(aggregation, Aggregation),
+                    "rule aggregation must be an Aggregation or null")
+            require(all(isinstance(item, str) for item in
+                        (aggregation.name, aggregation.relation,
+                         aggregation.value_variable, aggregation.operator)),
+                    "aggregation scalar fields must be strings")
+            require(isinstance(aggregation.group_by, tuple)
+                    and all(isinstance(item, str)
+                            for item in aggregation.group_by),
+                    "aggregation group_by must be a tuple of strings")
+            require(all(item is None or isinstance(item, str) for item in
+                        (aggregation.domain, aggregation.closure_witness)),
+                    "aggregation domain/closure must be strings or null")
+        return
+    if isinstance(value, Claim):
+        require(isinstance(value.relation, str),
+                "claim relation must be a string")
+        require(isinstance(value.terms, tuple), "claim terms must be a tuple")
+        for index, item_term in enumerate(value.terms):
+            term(item_term, f"{path}.terms[{index}]")
+        require(isinstance(value.context, Context),
+                "claim context must be a Context")
+        require(isinstance(value.quantifier, Quantifier),
+                "claim quantifier must be a Quantifier")
+        require(value.domain is None or isinstance(value.domain, str),
+                "claim domain must be a string or null")
+        require(isinstance(value.id, str), "claim id must be a string")
+        return
+    if isinstance(value, EvidenceMapping):
+        require(all(isinstance(item, str) for item in
+                    (value.claim_relation, value.evidence_relation,
+                     value.claim_id)),
+                "mapping relation/id fields must be strings")
+        require(isinstance(value.effect, (EvidenceEffect, str)),
+                "mapping effect must be a string")
+        require(isinstance(value.context_indices, tuple)
+                and all(isinstance(item, str)
+                        for item in value.context_indices),
+                "mapping context indices must be a tuple of strings")
+        require(isinstance(value.bindings, tuple)
+                and all(isinstance(pair, tuple) and len(pair) == 2
+                        and all(isinstance(item, str) for item in pair)
+                        for pair in value.bindings),
+                "mapping bindings must be string pairs")
+        require(isinstance(value.required, bool)
+                and isinstance(value.allow_out_of_scope, bool),
+                "mapping options must be boolean")
+        return
+    if isinstance(value, DiagnosticRule):
+        require(all(isinstance(item, str) for item in
+                    (value.trigger_relation, value.operational_status,
+                     value.message, value.claim_id)),
+                "diagnostic scalar fields must be strings")
+        require(isinstance(value.effect, (EvidenceEffect, str)),
+                "diagnostic effect must be a string")
+        require(isinstance(value.when_missing, bool)
+                and isinstance(value.required, bool),
+                "diagnostic options must be boolean")
+        require(isinstance(value.context_indices, tuple)
+                and all(isinstance(item, str)
+                        for item in value.context_indices),
+                "diagnostic context indices must be a tuple of strings")
+        require(isinstance(value.predicate, tuple),
+                "diagnostic predicate must be a tuple")
+        for index, pair in enumerate(value.predicate):
+            require(isinstance(pair, tuple) and len(pair) == 2
+                    and isinstance(pair[0], str),
+                    f"diagnostic predicate[{index}] must be a string-keyed pair")
+            _freeze_value(pair[1])
+        return
+    if isinstance(value, OutputTemplate):
+        require(isinstance(value.kind, OutputKind),
+                "output kind must be an OutputKind")
+        require(isinstance(value.claim_id, str),
+                "output claim id must be a string")
+        require(all(item is None or isinstance(item, str) for item in
+                    (value.evidence_id, value.relation, value.when_claim)),
+                "output scalar fields must be strings or null")
+        require(isinstance(value.fields, tuple), "output fields must be a tuple")
+        for index, pair in enumerate(value.fields):
+            require(isinstance(pair, tuple) and len(pair) == 2
+                    and isinstance(pair[0], str)
+                    and isinstance(pair[1], TemplateValue),
+                    f"output field[{index}] must be a name/TemplateValue pair")
+            template = pair[1]
+            require(isinstance(template.source, str)
+                    and isinstance(template.column, str)
+                    and isinstance(template.type, TypeName)
+                    and (template.evidence_id is None
+                         or isinstance(template.evidence_id, str)),
+                    f"output field[{index}] is malformed")
+            _freeze_value(template.value)
+        for name in ("requires_all_evidence", "requires_any_evidence",
+                     "excludes_evidence"):
+            items = getattr(value, name)
+            require(isinstance(items, tuple)
+                    and all(isinstance(item, str) for item in items),
+                    f"output {name} must be a tuple of strings")
+        return
+    require(False, "unsupported IR member")
+
+
 @dataclass(frozen=True)
 class Bundle:
     relations: tuple[RelationDecl, ...]
@@ -335,6 +551,8 @@ class Bundle:
                 raise TypeError(f"Bundle.{name} must be an iterable of {expected.__name__} values") from exc
             if any(not isinstance(value, expected) for value in values):
                 raise TypeError(f"Bundle.{name} must contain only {expected.__name__} values")
+            for index, value in enumerate(values):
+                _assert_bundle_ir_shape(value, f"Bundle.{name}[{index}]")
             normalized[name] = tuple(sorted(values, key=_sort_key))
         if not isinstance(self.diagnostic_policy, DiagnosticPolicy):
             raise TypeError("Bundle.diagnostic_policy must be a DiagnosticPolicy")
@@ -554,7 +772,7 @@ def bundle_from_json(source: str | bytes | Mapping[str, Any], *,
         return _bundle_from_json(source, validate=validate)
     except BundleIngestionError:
         raise
-    except (KeyError, TypeError, ValueError, UnicodeError) as exc:
+    except (KeyError, TypeError, ValueError, UnicodeError, RecursionError) as exc:
         raise BundleIngestionError(str(exc)) from exc
 
 
