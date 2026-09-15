@@ -119,11 +119,12 @@ what it cannot read: `dynamic-route`, `dynamic-prefix`, `dynamic-parameters`,
 `unmounted-file`, `no-surfaces` unresolved entries and duplicate declarations
 under `excluded_surfaces`. Requires the `treesitter` extra.
 
-Each per-site unresolved entry carries `id = "laravel-routes:<file>:<line>:<kind>"`
-(the file-level `unmounted-file` entry carries
-`"laravel-routes:<file>:unmounted-file"`) so the gate can exempt ONE obligation
-at a time; the reader emits at most one entry per node+kind, never two
-obligations under a single id.
+Each per-site unresolved entry carries
+`id = "laravel-routes:<file>:<line>:<column>:<kind>"` (the file-level
+`unmounted-file` entry carries `"laravel-routes:<file>:unmounted-file"`) so the
+gate can exempt ONE obligation at a time; the reader emits at most one entry per
+node+kind, and the column keeps two declarations on ONE line from sharing an id,
+as `flows.discovery` does.
 
 **Duplicates.** A second declaration of the same METHOD+path is reported under
 `excluded_surfaces`, and the FIRST declaration is the surface kept. Laravel's

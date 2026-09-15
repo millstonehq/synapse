@@ -28,7 +28,10 @@ What it refuses to do, in the package's usual style:
   the receiver, and its body is not walked -- but ONLY when the call also has a
   route declaration's argument shape, so ordinary PHP in a route file
   (`$config->get('a')`, `config()->get('x')`) is not turned into a fabricated
-  limit;
+  limit. A two-argument call ending in a closure, or one whose second argument
+  is handler-shaped, IS that shape however its first argument reads, so
+  `$router->group($attrs, fn)` and `$router->get($path, 'C@i')` stay named
+  rather than slipping through the gate;
 * a nested resource name (`photos.comments`) is a `dynamic-route` entry;
 * a second declaration of the same METHOD+path is reported under
   `excluded_surfaces` with reason "duplicate ..." -- visible, not a silent dedupe.
@@ -41,11 +44,13 @@ What it refuses to do, in the package's usual style:
   and stays silent);
 * no route file at all is a `no-surfaces` unresolved entry, never an empty green.
 
-Every per-site unresolved entry carries `id = "laravel-routes:<file>:<line>:<kind>"`
-(the file-level `unmounted-file` entry carries `"laravel-routes:<file>:unmounted-file"`)
-so the gate keys each limit separately and can exempt ONE of them at a time (the
-`flows.discovery` convention). At most one entry per node and kind: two
-obligations under a single id would be one the gate could not address alone.
+Every per-site unresolved entry carries
+`id = "laravel-routes:<file>:<line>:<column>:<kind>"` (the file-level
+`unmounted-file` entry carries `"laravel-routes:<file>:unmounted-file"`) so the
+gate keys each limit separately and can exempt ONE of them at a time. The column
+is part of it for the same reason `flows.discovery` keys by column: two
+declarations on ONE line are two obligations, and an id per node+kind is only
+addressable if it is also an id per node.
 
 Handler styles read: `[Controller::class, 'method']`, `'Controller@method'`,
 `['uses' => 'Controller@method']`, an invokable `Controller::class`
@@ -285,6 +290,33 @@ class _Reader:
                     return f"{cls}@{method}"
         return "unresolved:" + self.text(node)
 
+    def handler_shaped(self, node) -> bool:
+        """Does this argument look like a route HANDLER rather than a value?
+
+        The second argument is what separates `$router->get($path, 'C@i')` --
+        a route declaration on a router the reader cannot bind, which must be
+        named -- from `$cache->get($key, $fallback)`, which is ordinary PHP.
+        """
+        if node is None:
+            return False
+        if node.type in CLOSURE_TYPES:
+            return True
+        literal = self.string_literal(node)
+        if literal is not None:
+            return "@" in literal
+        if self.class_short_name(node) is not None:
+            return True
+        if node.type == ARRAY_TYPE:
+            elements = self.children(node, ARRAY_ELEMENT_TYPE)
+            for element in elements:
+                kids = element.named_children
+                if len(kids) == 2 and self.string_literal(kids[0]) == "uses":
+                    return True
+            if len(elements) == 2:
+                return (self.class_short_name(elements[0].named_children[-1]) is not None
+                        and self.string_literal(elements[1].named_children[-1]) is not None)
+        return False
+
     # -- emission -----------------------------------------------------------
     def emit(self, verb: str, path: str, handler: str, node) -> None:
         sid = f"http:{verb} {path}"
@@ -309,11 +341,11 @@ class _Reader:
         })
 
     def unresolved_entry(self, kind: str, reason: str, node) -> None:
-        line = self.line(node)
+        line, column = self.line(node), node.start_point[1]
         self.unresolved.append({
             "adapter": NAME, "kind": kind, "reason": reason,
-            "id": f"{NAME}:{self.relative}:{line}:{kind}",
-            "file": self.relative, "line": line,
+            "id": f"{NAME}:{self.relative}:{line}:{column}:{kind}",
+            "file": self.relative, "line": line, "column": column,
         })
 
     # -- walking ------------------------------------------------------------
@@ -409,22 +441,35 @@ class _Reader:
         `$config->get('a')`, `$request->get('k')`, `config()->get('x')` --
         becomes a manufactured gate blocker, and a fabricated limit is as
         dishonest as a silent drop. A declaration is `group(array|closure, ...)`,
-        `match(array, path, ...)`, or `verb(string-literal, handler)`; anything
-        else is not reported and the walk continues into the node.
+        `group(anything, closure)`, `match(array, path, ...)`, or
+        `verb(path, handler)` where the path is a string literal OR the handler
+        is handler-shaped; anything else is not reported and the walk continues
+        into the node.
 
-        The shape is necessary, not sufficient: a two-argument
-        `$request->get('key', $default)` still reads as route-shaped and is
-        named. That residual over-report is VISIBLE in the entry (it names the
-        receiver), where a shape test loose enough to exclude it would start
-        dropping real `$router->get(...)` declarations instead.
+        The first argument alone decides neither way, so the LAST/second one
+        settles the hard cases. A two-argument call ending in a closure is a
+        group declaration whatever its attributes read as, which keeps
+        `$router->group($attrs, fn)` named instead of letting the walk descend
+        into a body whose prefix the reader never saw. A handler-shaped second
+        argument keeps `$router->get($path, 'C@i')` named, exactly as the facade
+        twin `Route::get($path, ...)` is, while `$cache->get($key, $fallback)`
+        stays out.
+
+        One residual over-report remains, and it is VISIBLE (the entry names the
+        receiver): a two-argument `$request->get('key', 'default')` reads as
+        route-shaped. A test loose enough to exclude it would start dropping
+        real `$router->get(...)` declarations instead.
         """
         if not args:
             return False
         if method == "group":
-            return args[0].type == ARRAY_TYPE or args[0].type in CLOSURE_TYPES
+            return (args[0].type == ARRAY_TYPE or args[0].type in CLOSURE_TYPES
+                    or (len(args) >= 2 and args[-1].type in CLOSURE_TYPES))
         if method == "match":
             return len(args) >= 2 and args[0].type == ARRAY_TYPE
-        return len(args) >= 2 and self.string_literal(args[0]) is not None
+        if len(args) < 2:
+            return False
+        return self.string_literal(args[0]) is not None or self.handler_shaped(args[1])
 
     def declaration(self, method: str, args: list, node, prefix: str, dynamic: bool) -> bool:
         if method == "group":
