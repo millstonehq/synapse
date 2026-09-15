@@ -50,6 +50,16 @@ because "no rows" and "no rows exist" are different statements.  Every key of
 default to empty.  ``replay_run`` has no file: its one row is the receipt
 header.
 
+One observation per write and per post-state (``UNIQUE_KEYS``): two
+``php_effect`` / ``go_effect`` / ``model_effect`` rows sharing
+``(run, [model,] req, table, kind, pk)`` with different ``cols_digest``, or
+two ``php_post_state`` / ``go_post_state`` rows for one ``(run, req)`` with
+different ``state_digest``, are contradictory reports of the same event and
+make the export ``invalid-input`` naming the key -- the judge never carries
+both as facts and lets a rule pick.  A row repeated verbatim is one fact.
+``model_admissible`` is a set of admissible states per request and is not
+constrained.
+
 IDENTITY
 --------
 The bundle's identity (metadata ``replay_digest``, kind
@@ -155,6 +165,17 @@ OBSERVATION_FILES = (
     "replay_request", "php_post_state", "go_post_state", "php_effect", "go_effect",
     "model_effect", "model_admissible", "model_writes", "mutant", "mutant_killed",
 )
+
+# Relations that admit one observation per key (module docstring, RECEIPT
+# DIRECTORY CONTRACT): relation -> the columns that identify the event; the
+# remaining column is the observed value and may not differ between rows.
+UNIQUE_KEYS = {
+    "php_effect": ("run", "req", "table", "kind", "pk"),
+    "go_effect": ("run", "req", "table", "kind", "pk"),
+    "model_effect": ("run", "model", "req", "table", "kind", "pk"),
+    "php_post_state": ("run", "req"),
+    "go_post_state": ("run", "req"),
+}
 
 # The witnesses' predicate versions. Each Evidence.source names one of these so
 # a reviewer knows which emission contract was checked.
@@ -529,6 +550,18 @@ def _read_rows(receipt_dir: Path, relation: RelationDecl, header: Mapping[str, s
         if missing:
             raise ExportInputError(f"{path.name}: rows[{index}] lacks columns {missing}")
         rows.append(row)
+    key_columns = UNIQUE_KEYS.get(relation.name)
+    if key_columns:
+        seen: dict[tuple, tuple[int, dict[str, Any]]] = {}
+        value_columns = [name for name in names if name not in key_columns]
+        for index, row in enumerate(rows):
+            key = tuple(canonical_json(row[name]) for name in key_columns)
+            previous = seen.setdefault(key, (index, row))
+            if previous[1] != row:
+                raise ExportInputError(
+                    f"{path.name}: rows[{previous[0]}] and rows[{index}] report the same "
+                    f"{dict(zip(key_columns, (row[name] for name in key_columns)))} with different "
+                    f"{value_columns}: one observation per {relation.name} key")
     return producer, rows
 
 
@@ -705,7 +738,7 @@ def bundle_digest(bundle: Bundle) -> str:
 __all__ = [
     "EXPORT_VERSION", "EXPORTER", "PRODUCER", "REPLAY_IDENTITY", "RECEIPT_VERSION",
     "RECEIPT_FILE", "RECEIPT_METADATA_KEYS", "EVIDENCE_PREFIXES", "OBSERVATION_FILES",
-    "STATUS_COMPLETE", "STATUS_RESOURCE_EXHAUSTED", "STATUS_INVALID_INPUT", "STATUS_STALE",
+    "STATUS_COMPLETE", "STATUS_RESOURCE_EXHAUSTED", "STATUS_INVALID_INPUT", "STATUS_STALE", "UNIQUE_KEYS",
     "ExportLimits", "ExportResult", "ExportInputError", "StaleReceiptError",
     "evidence_id", "evidence_prefix", "row_digest", "replay_relations_identity",
     "replay_relations", "primitive_relations", "STUB_RELATIONS", "default_source",
