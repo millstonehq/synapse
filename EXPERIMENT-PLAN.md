@@ -2471,6 +2471,35 @@ Owned by `differential-closure` (write set: `claims/{differential,shrinker}.py` 
 
 Everything listed under "Scope boundary and deferred findings" stays deferred.
 
+### Ownership of deferred items and the checkpoint-hash rule (2026-09-15)
+
+The first `kernel-closure-integrate` review round refused the task for two plan-level reasons
+the human owns: the acceptance text asked section 27 to record "the closure commit", which the
+driver creates only after review, so no implementer can satisfy it; and one deferred item (the
+experimental CLI) was left without an owning task. Rules from here on: an implementer records
+the integration parent commit, patch digests, gate commands and outputs, and tool store paths;
+the driver alone records the checkpoint hash in `task-completed`. Owners of deferred items:
+
+| deferred item | owning task |
+|---|---|
+| Soufflé-side provenance / engine-independent certificates | `scip-datalog-differential` (extractor), `datalog-certificates` (checker) |
+| producer-class authority; causal-identity projection in generic rules | `datalog-certificates` |
+| unconditional replay minimality | not required (bounded shrinking with `shrink_truncated`) |
+| installed-wheel inclusion of `claims/static/schema_static_v1.json` | `scip-datalog-differential` (owns `pyproject.toml`, `MANIFEST.in`) |
+| experimental `capcov experiment claims validate/evaluate` CLI | `datalog-evaluation` (owns `capcov/cli.py`, `claims/cli.py`) |
+| Linux execution of the claim kernels | `datalog-evaluation` via the nix `test-nix` CI check, else UNKNOWN |
+| section 22 performance, memory, artifact size, recommendation | `datalog-evaluation` |
+
+The `datalog-kernel-closure` fan-out itself succeeded on the first attempt of each worker
+(`differential-closure` 10 minutes, `kernel-closure` 12 minutes; both gates green in their
+worktrees; patches 16 KB and 28 KB applied cleanly in manifest order). The reducer's remaining
+code findings are: a `forall` variable occupying a context column may ground to a domain value
+that contradicts the claim's declared context (both kernels), and the late-shorter-proof
+adversarial bundle is exercised through the Python kernel only. A driver defect was observed:
+two concurrent fan-out `task-attempt` events received the same `seq` (97); `appendEvent` is
+not serialized under `Promise.all`. It does not affect completion derivation and is left as a
+recorded harness limit.
+
 ## 28. Stage 0 addendum — SCIP toolchain
 
 Owner: `scip-toolchain` (single-task wave). Write set: `flake.nix`, `flake.lock`,

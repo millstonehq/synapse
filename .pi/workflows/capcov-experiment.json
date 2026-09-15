@@ -184,8 +184,9 @@
       ],
       "acceptance": [
         "Both parallel patches apply cleanly in manifest order and every gate of the retired datalog-differential task passes on the integrated tree.",
-        "Both engines agree on relational closure and on every claim's semantic verdict, operational status, basis, and missing premises for all 14 corpus cases and the adversarial kernel tests.",
-        "EXPERIMENT-PLAN.md section 27 records the closure evidence (commit, gate outputs, Souffle store path) and the remaining deferred items with their owning tasks."
+        "Both engines agree on relational closure and on every claim's semantic verdict, operational status, basis, and missing premises for all 14 corpus cases and for every adversarial kernel bundle, each exercised through both kernels.",
+        "EXPERIMENT-PLAN.md section 27 records the integration parent commit, the applied patch digests, the exact gate commands and outputs, and the Souffle store path; the driver appends the checkpoint commit hash in its task-completed event after review, so the implementer never records or promises that hash.",
+        "Every deferred item in section 27 names its owning task (the experimental CLI and Linux execution belong to datalog-evaluation; installed-wheel inclusion of the static schema belongs to scip-datalog-differential); nothing is left unowned."
       ],
       "gates": [
         {"name": "differential-tests", "failureKind": "differential-mismatch", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_differential*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_shrinker*.py' -t ."]},
@@ -282,18 +283,21 @@
       "wave": "scip-datalog",
       "role": "reducer",
       "writeSet": [
+        "EXPERIMENT-PLAN.md",
+        "packages/capabilities/MANIFEST.in",
+        "packages/capabilities/experiments/claim-semantics/**",
+        "packages/capabilities/pyproject.toml",
+        "packages/capabilities/src/capcov/artifacts.py",
         "packages/capabilities/src/capcov/claims/**",
         "packages/capabilities/src/capcov/scip/**",
-        "packages/capabilities/src/capcov/artifacts.py",
-        "packages/capabilities/tests/**",
-        "packages/capabilities/experiments/claim-semantics/**",
-        "EXPERIMENT-PLAN.md"
+        "packages/capabilities/tests/**"
       ],
       "acceptance": [
         "On the committed go_app golden index the exported bundle plus rule pack yields identical relations and claim verdicts in Python and Souffle, stable under shuffled input, with every proof leaf an exported Evidence id.",
         "claims/static/certificate.py re-derives bounded ground certificates (shortest witness path, at most 64 hops) from either engine's relations without engine provenance.",
         "static_capability_op rows equal the fixpoint resolver's capabilities on go_app modulo an enumerated set of legitimate differences; anything else is a differential mismatch.",
-        "Every adversarial static case yields its reviewed verdict in both engines, and a static observation joined with a runtime observation through index_describes_run flows through the evidence policy and output rendering."
+        "Every adversarial static case yields its reviewed verdict in both engines, and a static observation joined with a runtime observation through index_describes_run flows through the evidence policy and output rendering.",
+        "claims/static/schema_static_v1.json is included in the built wheel (package data) and loads from an installed distribution."
       ],
       "gates": [
         {"name": "scip-differential", "failureKind": "differential-mismatch", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_differential_static*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]},
@@ -379,11 +383,15 @@
       "wave": "datalog-evaluation",
       "role": "reducer",
       "writeSet": [
-        "packages/capabilities/tests/**",
-        "EXPERIMENT-PLAN.md"
+        ".github/workflows/ci.yml",
+        "EXPERIMENT-PLAN.md",
+        "packages/capabilities/src/capcov/claims/cli.py",
+        "packages/capabilities/src/capcov/cli.py",
+        "packages/capabilities/tests/**"
       ],
       "acceptance": [
-        "Correctness, mismatch, explanation, runtime, startup, memory, closure, and maintenance evidence produce a bounded recommendation."
+        "Correctness, mismatch, explanation, runtime, startup, memory, closure, and maintenance evidence produce a bounded recommendation.",
+        "The experimental `capcov experiment claims validate|evaluate` commands exist behind the experiment namespace with production commands unchanged, and Linux execution of the claim kernels is demonstrated through the nix CI check or recorded as UNKNOWN."
       ],
       "gates": [
         {"name": "datalog-evaluation-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_benchmark*.py' -t ."]}
