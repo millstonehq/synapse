@@ -41,6 +41,7 @@ REGISTRY = {
     "pytest": "capcov.probes.pytest_probe",
     "browser": "capcov.probes.browser_probe",
     "load": "capcov.probes.load_probe",
+    "har": "capcov.probes.har_probe",
 }
 
 # The unified observe env contract (design §1.3). `cmd_observe` sets these; every
