@@ -42,6 +42,7 @@
     "http_post_accepted": "symbol",
     "http_save_succeeded": "symbol",
     "independent_support__rejected": "symbol",
+    "index": "digest",
     "interval": "symbol",
     "issue_changed_observed": "symbol",
     "left": "symbol",
@@ -703,6 +704,46 @@
       "finite": false,
       "nonempty": false
     },
+    "index_describes_run": {
+      "columns": [
+        {
+          "name": "index",
+          "type": "digest",
+          "context": true
+        },
+        {
+          "name": "run",
+          "type": "symbol",
+          "context": true
+        }
+      ],
+      "arg_order": [
+        "index",
+        "run"
+      ],
+      "modality": "compatibility",
+      "polarity": "positive",
+      "binding": "runtime",
+      "primitive": true,
+      "producer_classes": [],
+      "context_indices": [
+        "index",
+        "run"
+      ],
+      "completes": null,
+      "finite": false,
+      "nonempty": false,
+      "compatibility_targets": [
+        "mail_path_declared",
+        "mail_path_observed",
+        "runtime_route_observed",
+        "static_route_exists"
+      ],
+      "compatibility_context_indices": [
+        "index",
+        "run"
+      ]
+    },
     "issue_changed_observed": {
       "columns": [
         {
@@ -743,22 +784,28 @@
     "mail_path_declared": {
       "columns": [
         {
+          "name": "index",
+          "type": "digest",
+          "context": true
+        },
+        {
           "name": "tenant",
           "type": "symbol",
-          "context": true
+          "context": false
         },
         {
           "name": "event",
           "type": "symbol",
-          "context": true
+          "context": false
         },
         {
           "name": "run",
           "type": "symbol",
-          "context": true
+          "context": false
         }
       ],
       "arg_order": [
+        "index",
         "tenant",
         "event",
         "run"
@@ -769,9 +816,7 @@
       "primitive": true,
       "producer_classes": [],
       "context_indices": [
-        "tenant",
-        "event",
-        "run"
+        "index"
       ],
       "completes": null,
       "finite": false,
@@ -1885,17 +1930,23 @@
     "static_route_exists": {
       "columns": [
         {
+          "name": "index",
+          "type": "digest",
+          "context": true
+        },
+        {
           "name": "tenant",
           "type": "symbol",
-          "context": true
+          "context": false
         },
         {
           "name": "surface",
           "type": "symbol",
-          "context": true
+          "context": false
         }
       ],
       "arg_order": [
+        "index",
         "tenant",
         "surface"
       ],
@@ -1905,8 +1956,7 @@
       "primitive": true,
       "producer_classes": [],
       "context_indices": [
-        "tenant",
-        "surface"
+        "index"
       ],
       "completes": null,
       "finite": false,

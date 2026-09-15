@@ -3,7 +3,9 @@ from __future__ import annotations
 import unittest
 
 from capcov.claims.evaluator import ResourceLimits, evaluate
-from capcov.claims.ir import Aggregation, Atom, Bundle, Claim, Column, Comparison, Constant, RelationDecl, Rule, Variable
+from capcov.claims.ir import (Aggregation, Atom, Bundle, Claim, Column, Comparison,
+                              Constant, Evidence, EvidenceMapping, OutputTemplate,
+                              RelationDecl, Rule, TemplateValue, Variable)
 from capcov.claims.verdicts import OperationalStatus, SemanticVerdict
 
 
@@ -36,7 +38,7 @@ class PythonEvaluatorTests(unittest.TestCase):
         self.assertIn("fact:edge", report.claims[0].result.support[0])
         self.assertEqual(report.as_dict(), evaluate(bundle).as_dict())
 
-    def test_independent_alternative_derivations_retain_both_support_leaves(self) -> None:
+    def test_independent_alternative_derivations_report_one_canonical_support_path(self) -> None:
         bundle = Bundle(
             relations=(rel("a", ("x", "symbol")), rel("b", ("x", "symbol")), rel("c", ("x", "symbol"))),
             facts=(fact("a", "v"), fact("b", "v")),
@@ -45,7 +47,7 @@ class PythonEvaluatorTests(unittest.TestCase):
             claims=(Claim("c", (Constant("v"),)),),
         )
         result = evaluate(bundle).claims[0].result
-        self.assertEqual(set(result.support), {"fact:a:[\"v\"]", "fact:b:[\"v\"]"})
+        self.assertEqual(result.support, ("fact:a:[\"v\"]",))
 
     def test_provenance_cap_is_complete_at_boundary_and_exhausted_one_over(self) -> None:
         bundle = Bundle(
@@ -140,8 +142,10 @@ class PythonEvaluatorTests(unittest.TestCase):
     def test_forall_is_a_typed_conjunction_over_the_domain(self) -> None:
         bundle = Bundle(
             relations=(rel("domain", ("name", "symbol"), finite=True, nonempty=True),
+                       rel("domain_closed", modality="completeness", completes="domain"),
                        rel("item", ("name", "symbol"), ("ok", "boolean"))),
-            facts=(fact("domain", "a"), fact("domain", "b"), fact("item", "a", True), fact("item", "b", False)),
+            facts=(fact("domain", "a"), fact("domain", "b"), fact("domain_closed"),
+                   fact("item", "a", True), fact("item", "b", False)),
             claims=(Claim("item", (Variable("name"), Constant(True)), quantifier="forall", domain="domain"),),
         )
         result = evaluate(bundle).claims[0]
@@ -174,6 +178,53 @@ class PythonEvaluatorTests(unittest.TestCase):
         self.assertEqual(report.relation_rows("any_ok"), (("a", True), ("b", False)))
         self.assertEqual(report.relation_rows("all_ok"), (("a", False), ("b", False)))
         self.assertEqual(report.claims[0].semantic, SemanticVerdict.SUPPORTED)
+
+    def test_missing_premise_outputs_honor_every_trigger_and_keep_fallback(self) -> None:
+        observed = rel("observed", ("x", "symbol"))
+        claimed = rel("claimed", ("x", "symbol"), modality="claim")
+        match = fact("observed", "v")
+        other = fact("observed", "other")
+        evidence = (Evidence("match", match, source="test"),
+                    Evidence("other", other, source="test"))
+        claim = Claim("claimed", (Constant("v"),), id="claim")
+        mapping = EvidenceMapping("claimed", "observed", "observation",
+                                  bindings=(("x", "x"),), claim_id="claim")
+        base = Bundle((observed, claimed), facts=(match, other),
+                      evidence=evidence, claims=(claim,), mappings=(mapping,))
+        fallback = ('claim:claimed:{}',)
+
+        unrelated = OutputTemplate("observed", "claim", evidence_id="match")
+        self.assertEqual(evaluate(Bundle(base.relations, base.facts,
+                                         claims=base.claims, evidence=base.evidence,
+                                         mappings=base.mappings,
+                                         outputs=(unrelated,))).claims[0].result.missing_premises,
+                         fallback)
+
+        reason = (("reason", TemplateValue(value="reviewed missing premise")),)
+        cases = (
+            ({"requires_all_evidence": ("match",)}, True),
+            ({"requires_all_evidence": ("other",)}, False),
+            ({"requires_any_evidence": ("other", "match")}, True),
+            ({"requires_any_evidence": ("other",)}, False),
+            ({"excludes_evidence": ("match",)}, False),
+            ({"excludes_evidence": ("other",)}, True),
+            ({"when_claim": "refuted"}, False),
+            ({"when_claim": "unresolved"}, True),
+            ({"when_claim": "derived"}, False),
+            ({"when_claim": "underived"}, True),
+        )
+        expected = ({"relation": "observed",
+                     "reason": "reviewed missing premise"},)
+        for conditions, active in cases:
+            output = OutputTemplate("missing_premise", "claim",
+                                    relation="observed", fields=reason,
+                                    **conditions)
+            bundle = Bundle(base.relations, base.facts, claims=base.claims,
+                            evidence=base.evidence, mappings=base.mappings,
+                            outputs=(output,))
+            with self.subTest(conditions=conditions):
+                actual = evaluate(bundle).claims[0].result.missing_premises
+                self.assertEqual(actual, expected if active else fallback)
 
     def test_multiple_recursive_body_atoms_each_use_delta_pivots(self) -> None:
         relations = (

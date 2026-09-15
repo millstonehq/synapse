@@ -18,6 +18,9 @@ class ExpectedSemanticsTests(unittest.TestCase):
     def test_expected_table_matches_each_fixture_byte_for_byte_as_data(self) -> None:
         table = read(ROOT / "expected.json")
         self.assertEqual(1, table["schema_version"])
+        self.assertEqual({"exists": "derivational",
+                          "forall": "bounded-history-model"},
+                         table["evaluation_basis_by_quantifier"])
         self.assertEqual(14, len(table["cases"]))
         for fixture_path in sorted(ROOT.glob("[0-9][0-9]-*.json")):
             fixture = read(fixture_path)
@@ -37,6 +40,10 @@ class ExpectedSemanticsTests(unittest.TestCase):
         self.assertEqual("supported", table["03-post-without-creation"]["claims"]["claim-request"]["semantic_verdict"])
         self.assertEqual("unresolved", table["03-post-without-creation"]["claims"]["claim-created"]["semantic_verdict"])
         self.assertEqual("refuted", table["08-rejection-versus-missing"]["claims"]["claim-explicit-denial"]["semantic_verdict"])
+        self.assertEqual(
+            [{"relation": "authorization_rejected",
+              "reason": "no explicit rejection for the claimed actor"}],
+            table["08-rejection-versus-missing"]["claims"]["claim-missing-denial"]["missing_premises"])
         self.assertEqual("conflicting", table["09-support-and-refutation"]["claims"]["claim-terminal"]["semantic_verdict"])
         self.assertEqual("inconsistent-premises", table["11-compatible-history-sets"]["claims"]["claim-universal"]["operational_status"])
         self.assertEqual("unresolved", table["11-compatible-history-sets"]["claims"]["claim-mixed"]["semantic_verdict"])

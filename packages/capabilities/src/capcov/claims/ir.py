@@ -382,6 +382,7 @@ class _FrozenMap(Mapping[str, Any]):
     def __iter__(self): return (k for k, _ in self._items)
     def __len__(self): return len(self._items)
     def items(self): return self._items
+    def __hash__(self): return hash(self._items)
 
 
 def _freeze_value(value: Any) -> Any:

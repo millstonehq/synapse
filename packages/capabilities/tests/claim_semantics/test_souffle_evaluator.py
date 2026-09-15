@@ -1,10 +1,22 @@
 """Evaluator-facing smoke for the real pinned Souffle runtime."""
+import shutil
 import unittest
+from unittest.mock import patch
 
-from capcov.claims.souffle import run_bundle
+from capcov.claims import Bundle, Column, RelationDecl
+from capcov.claims.souffle import SouffleUnavailable, run_bundle
 from .adapter import load_fixture
 
 
+class SouffleUnavailableTests(unittest.TestCase):
+    def test_missing_binary_is_named(self):
+        bundle = Bundle((RelationDecl("seen", (Column("x", "symbol"),)),))
+        with patch("capcov.claims.souffle.shutil.which", return_value=None):
+            with self.assertRaises(SouffleUnavailable):
+                run_bundle(bundle)
+
+
+@unittest.skipUnless(shutil.which("souffle"), "souffle runtime is unavailable")
 class SouffleCorpusSmokeTests(unittest.TestCase):
     def test_fixture_adapter_is_consumable_without_expected_values(self):
         # The current adapter intentionally contains primitive observations only;

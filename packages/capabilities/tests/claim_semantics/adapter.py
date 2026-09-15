@@ -37,7 +37,14 @@ def bundle_payload(fixture: dict[str, Any]) -> dict[str, Any]:
 
     def terms(entry: dict[str, Any]) -> list[dict[str, Any]]:
         declaration = schema["relations"][entry["relation"]]
-        return [_term(value, column["type"]) for value, column in zip(entry["args"], declaration["columns"])]
+        columns = declaration["columns"]
+        expected_order = [column["name"] for column in columns]
+        if entry.get("arg_order") != expected_order:
+            raise ValueError(f"{entry.get('id', entry['relation'])} arg_order does not match its relation")
+        if len(entry.get("args", ())) != len(columns):
+            raise ValueError(f"{entry.get('id', entry['relation'])} arity does not match its relation")
+        return [_term(entry["args"][index], column["type"])
+                for index, column in enumerate(columns)]
 
     all_entries = [*fixture["facts"], *fixture["assumptions"]]
     facts = [{"relation": entry["relation"], "terms": terms(entry)} for entry in all_entries]

@@ -36,7 +36,10 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
         self.assertIn("assumption-false", records["fact-static"].depends_on)
         self.assertIn("assumption-false", records["fact-runtime"].depends_on)
         self.assertEqual(records["fact-static"].source, "static")
-        self.assertEqual(records["fact-static"].context.as_dict()["tenant"], fixture["context"]["tenant"])
+        self.assertEqual(records["fact-static"].context.as_dict(),
+                         {"index": "index-07"})
+        self.assertEqual(records["fact-runtime"].context.as_dict()["tenant"],
+                         fixture["context"]["tenant"])
 
     def test_round_trip_is_canonical_and_expected_table_is_not_ingested(self):
         path = ROOT / "09-support-and-refutation.json"
@@ -170,7 +173,6 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
             "claim-effect": "claim-renamed",
             "fact-route-a-static": "proof-alpha",
             "fact-route-b-runtime": "proof-beta",
-            "static_route_observed": "renamed_static_route",
             "static_route_exists": "renamed_static_route",
             "runtime_route_observed": "renamed_runtime_route",
         }

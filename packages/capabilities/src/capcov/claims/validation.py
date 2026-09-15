@@ -5,9 +5,32 @@ from dataclasses import dataclass
 from typing import Iterable, Mapping
 
 from .ir import (Aggregation, Atom, Bundle, Claim, Comparison, Constant,
-                 RelationDecl, Rule, TypeName, Variable, Evidence, EvidenceMapping, DiagnosticRule, EvidenceEffect, OutputTemplate, OutputKind)
+                 RelationDecl, Rule, TypeName, Variable, Evidence, EvidenceMapping, DiagnosticRule, EvidenceEffect, OutputTemplate, OutputKind, canonical_json)
 
 DIAGNOSTIC_VOCABULARY = frozenset({"same_surface", "row_committed", "mail_sent", "same_context", "independent_support", "all_compatible_histories_agree", "model_complete", "sql_terminal_ack", "no_resend_forever"})
+
+# These names are identity/correlation dimensions in the frozen Stage B
+# contract.  A support/refutation mapping is not aggregation authority and may
+# not silently project them away when both relations carry them.
+_CAUSAL_IDENTITY_COLUMNS = frozenset({
+    "tenant", "actor", "run", "request", "event", "notification",
+    "recipient", "message", "attempt", "interval", "environment",
+    "configuration", "candidate_build", "reference_build", "source_digest",
+    "model_digest",
+})
+
+# The reviewed bounded-history domain carries an explanatory outcome label in
+# addition to its ``history`` member key. It is payload, not another identity
+# that the Boolean aggregate source must duplicate.
+_AGGREGATE_DOMAIN_PAYLOAD_COLUMNS = frozenset({("compatible_history", "outcome")})
+
+# Static identity omission is an exact schema fingerprint, never a naming
+# convention.  Section 29 declares only source_tree_observed as genuinely
+# context-free; tenant/event/surface keyed legacy observations still need an
+# index because those payloads do not identify the source snapshot.
+_CONTEXT_FREE_STATIC_DECLARATIONS = frozenset({
+    ("source_tree_observed", (("tree_digest", TypeName.DIGEST, False),), ()),
+})
 
 
 @dataclass(frozen=True)
@@ -26,6 +49,9 @@ class ValidationError(ValueError):
 
 def _variables(term): return {term.name} if isinstance(term, Variable) else set()
 def _atom_vars(atom): return set().union(*(_variables(t) for t in atom.terms)) if atom.terms else set()
+def _ground_atom_key(atom):
+    values = tuple(term.value if isinstance(term, Constant) else None for term in atom.terms)
+    return atom.relation, canonical_json(values)
 
 
 def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
@@ -74,6 +100,15 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
                     index = names.index(name)
                     if not isinstance(record.atom.terms[index], Constant) or record.atom.terms[index].value != value:
                         issues.append(ValidationIssue("evidence-context", f"context value does not equal atom column {name!r}", path))
+    fact_keys = {_ground_atom_key(fact) for fact in bundle.facts if isinstance(fact, Atom)}
+    evidence_keys = {_ground_atom_key(record.atom) for record in bundle.evidence if isinstance(record, Evidence)}
+    for i, record in enumerate(bundle.evidence):
+        if isinstance(record, Evidence) and _ground_atom_key(record.atom) not in fact_keys:
+            issues.append(ValidationIssue("evidence-without-fact", record.id, f"evidence[{i}]"))
+    if bundle.evidence:
+        for i, fact in enumerate(bundle.facts):
+            if isinstance(fact, Atom) and _ground_atom_key(fact) not in evidence_keys:
+                issues.append(ValidationIssue("fact-without-evidence", "evidence-bearing bundles require attribution", f"facts[{i}]"))
     for i, rule in enumerate(bundle.rules):
         if isinstance(rule, Rule): _validate_rule(rule, relations, issues, f"rules[{i}]")
         else: issues.append(ValidationIssue("rule-type", "expected Rule", f"rules[{i}]"))
@@ -88,13 +123,16 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
         if isinstance(claim, Claim) and claim.id:
             if claim.id in seen_claim_ids: issues.append(ValidationIssue("duplicate-claim-id", claim.id, f"claims[{i}]"))
             seen_claim_ids.add(claim.id)
-    if any(isinstance(c, Claim) and c.id for c in bundle.claims):
+    claim_by_id = {claim.id: claim for claim in bundle.claims
+                   if isinstance(claim, Claim) and claim.id}
+    if claim_by_id:
         for i, mapping in enumerate(bundle.mappings):
             if not mapping.claim_id or mapping.claim_id not in seen_claim_ids:
                 issues.append(ValidationIssue("mapping-claim-id", "mapping must name an existing claim id", f"mappings[{i}]"))
         for i, diagnostic in enumerate(bundle.diagnostics):
             if not diagnostic.claim_id or diagnostic.claim_id not in seen_claim_ids:
                 issues.append(ValidationIssue("diagnostic-claim-id", "diagnostic must name an existing claim id", f"diagnostics[{i}]"))
+    join_eligible_mappings = []
     for i, mapping in enumerate(bundle.mappings):
         path = f"mappings[{i}]"
         if not isinstance(mapping, EvidenceMapping):
@@ -102,6 +140,16 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
         if not isinstance(mapping.effect, EvidenceEffect): issues.append(ValidationIssue("mapping-effect", "unsupported evidence effect", path))
         if mapping.claim_relation not in relations: issues.append(ValidationIssue("mapping-claim", mapping.claim_relation, path))
         if mapping.evidence_relation not in relations: issues.append(ValidationIssue("mapping-evidence", mapping.evidence_relation, path))
+        named_claim = claim_by_id.get(mapping.claim_id)
+        if named_claim is not None and mapping.claim_relation != named_claim.relation:
+            issues.append(ValidationIssue(
+                "mapping-claim-relation",
+                f"mapping relation {mapping.claim_relation!r} does not match claim {mapping.claim_id!r} relation {named_claim.relation!r}",
+                path))
+            # Never use a decoy declaration to authorize projection coverage or
+            # mixed-binding compatibility for the claim selected by id.
+            continue
+        join_eligible_mappings.append(mapping)
         for context_name in mapping.context_indices:
             claim_decl = relations.get(mapping.claim_relation)
             evidence_decl = relations.get(mapping.evidence_relation)
@@ -110,14 +158,31 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
         claim_decl = relations.get(mapping.claim_relation); evidence_decl = relations.get(mapping.evidence_relation)
         if claim_decl and evidence_decl:
             c_names = {c.name for c in claim_decl.columns}; e_names = {c.name for c in evidence_decl.columns}
+            c_types = {c.name: c.type for c in claim_decl.columns}
+            e_types = {c.name: c.type for c in evidence_decl.columns}
             for left, right in mapping.bindings:
                 if left not in c_names or right not in e_names:
                     issues.append(ValidationIssue("mapping-binding", f"unknown projection {left!r}->{right!r}", path))
+                elif c_types[left] != e_types[right]:
+                    issues.append(ValidationIssue("mapping-binding", f"projection {left!r}->{right!r} changes type", path))
             if len({left for left, _ in mapping.bindings}) != len(mapping.bindings) or len({right for _, right in mapping.bindings}) != len(mapping.bindings):
                 issues.append(ValidationIssue("mapping-binding", "duplicate projection binding", path))
             covered = {left for left, _ in mapping.bindings}
             if not set(mapping.context_indices).issubset(covered):
                 issues.append(ValidationIssue("mapping-coverage", "context mapping is not covered by bindings", path))
+            if mapping.required or mapping.allow_out_of_scope:
+                issues.append(ValidationIssue(
+                    "mapping-option",
+                    "required/allow_out_of_scope mappings are reserved until their semantics are implemented",
+                    path))
+            if isinstance(mapping.effect, EvidenceEffect) and mapping.effect.value in {"support", "refutation"}:
+                omitted = (c_names & e_names & _CAUSAL_IDENTITY_COLUMNS) - covered
+                if omitted:
+                    issues.append(ValidationIssue(
+                        "mapping-coverage",
+                        "support/refutation mapping omits causal identities without aggregation authority: "
+                        + ", ".join(sorted(omitted)), path))
+    _validate_mapping_context_joins(join_eligible_mappings, relations, issues)
     allowed_status = {"complete", "invalid-input", "inconsistent-premises", "resource-exhausted", "unsupported-construct", "stale", "out-of-scope"}
     for i, diagnostic in enumerate(bundle.diagnostics):
         path = f"diagnostics[{i}]"
@@ -234,16 +299,45 @@ def _validate_relation(r, relations, issues):
     for index in r.context_indices:
         if index not in names: issues.append(ValidationIssue("context-index", f"unknown context column {index!r}", f"relations.{r.name}"))
         elif not r.columns[names.index(index)].context: issues.append(ValidationIssue("context-index", f"column {index!r} is not marked context", f"relations.{r.name}"))
+    marked_context = {column.name for column in r.columns if column.context}
+    if (r.context_indices or r.binding.value == "static") and marked_context != set(r.context_indices):
+        # Runtime declarations predating explicit context_indices retain their
+        # legacy column flags.  New scoped declarations and all static inputs
+        # must make the two representations agree exactly.
+        issues.append(ValidationIssue("context-index", "context flags must exactly equal declared context indices", f"relations.{r.name}"))
+    if r.binding.value == "static" and r.modality.value in {"observation", "assumption", "completeness"}:
+        index_column = next((column for column in r.columns if column.name == "index"), None)
+        fingerprint = (r.name, tuple((column.name, column.type, column.context)
+                                     for column in r.columns), r.context_indices)
+        explicitly_context_free = fingerprint in _CONTEXT_FREE_STATIC_DECLARATIONS
+        if index_column is None and not explicitly_context_free:
+            issues.append(ValidationIssue(
+                "static-context",
+                "static observations require an index digest unless they match a frozen context-free declaration",
+                f"relations.{r.name}",
+            ))
+        elif index_column is not None and (r.context_indices != ("index",)
+                                           or index_column.type != TypeName.DIGEST
+                                           or not index_column.context):
+            issues.append(ValidationIssue("static-context", "indexed static observations use one digest context column named 'index'", f"relations.{r.name}"))
     if r.modality.value == "completeness":
         if not r.completes: issues.append(ValidationIssue("completeness-target", "completeness relation must name its target relation", f"relations.{r.name}"))
         elif r.completes not in relations: issues.append(ValidationIssue("completeness-target", f"unknown target {r.completes!r}", f"relations.{r.name}"))
+        elif r.binding != relations[r.completes].binding:
+            issues.append(ValidationIssue(
+                "completeness-binding",
+                "completeness relation binding must match its target relation",
+                f"relations.{r.name}"))
     elif r.completes is not None: issues.append(ValidationIssue("completeness-target", "only completeness relations may name a target", f"relations.{r.name}"))
     if r.modality.value == "compatibility":
         if len(r.compatibility_targets) < 2: issues.append(ValidationIssue("compatibility-target", "compatibility relation must name at least two target relations", f"relations.{r.name}"))
         for target in r.compatibility_targets:
             if target not in relations: issues.append(ValidationIssue("compatibility-target", f"unknown target {target!r}", f"relations.{r.name}"))
         for index in r.compatibility_context_indices:
-            if index not in r.context_indices: issues.append(ValidationIssue("compatibility-context", f"context position {index!r} is not declared", f"relations.{r.name}"))
+            if index not in names:
+                issues.append(ValidationIssue("compatibility-context", f"payload position {index!r} is not a declared column", f"relations.{r.name}"))
+        if len(r.compatibility_context_indices) != len(set(r.compatibility_context_indices)):
+            issues.append(ValidationIssue("compatibility-context", "compatibility payload positions must be unique", f"relations.{r.name}"))
         if len(r.compatibility_targets) != len(set(r.compatibility_targets)): issues.append(ValidationIssue("compatibility-target", "compatibility targets must be unique", f"relations.{r.name}"))
     elif r.compatibility_targets or r.compatibility_context_indices:
         issues.append(ValidationIssue("compatibility-target", "only compatibility relations may declare targets/positions", f"relations.{r.name}"))
@@ -280,6 +374,13 @@ def _validate_atom(atom, relations, issues, path, env, fact_only=False):
     if not isinstance(atom, Atom): issues.append(ValidationIssue("atom-type", "expected atom", path)); return
     relation = relations.get(atom.relation)
     if relation is None: issues.append(ValidationIssue("unknown-relation", atom.relation, path)); return
+    if fact_only and not relation.primitive:
+        issues.append(ValidationIssue("nonprimitive-fact", "facts and evidence may target only primitive relations", path))
+    if fact_only and relation.modality.value == "claim":
+        issues.append(ValidationIssue(
+            "producer-authored-claim",
+            "facts and evidence report premises; claim relations require a reviewed rule or mapping",
+            path))
     if len(atom.terms) != relation.arity: issues.append(ValidationIssue("arity", f"expected {relation.arity}, got {len(atom.terms)}", path)); return
     for i, (term, column) in enumerate(zip(atom.terms, relation.columns)):
         _validate_term(term, column.type, env, issues, f"{path}.terms[{i}]", fact_only)
@@ -287,6 +388,11 @@ def _validate_atom(atom, relations, issues, path, env, fact_only=False):
 
 def _validate_rule(rule, relations, issues, path):
     env = {}
+    if not any(isinstance(item, Atom) and not item.negated for item in rule.body):
+        issues.append(ValidationIssue(
+            "evidence-free-rule",
+            "rules require at least one positive relational premise",
+            path))
     for j, atom in enumerate(rule.body):
         if isinstance(atom, Comparison):
             if atom.operator not in {"=", "!=", "<", "<=", ">", ">="}: issues.append(ValidationIssue("operator", atom.operator, f"{path}.body[{j}]"))
@@ -323,17 +429,147 @@ def _validate_completeness(negated, rule, relations, issues, path):
         if target_decl and witness_decl.context_indices != target_decl.context_indices:
             continue
         ok = True
-        for name in target_decl.context_indices if target_decl else ():
-            if name not in witness_decl.context_indices: ok = False; break
-            ti = [c.name for c in target_decl.columns].index(name); wi = [c.name for c in witness_decl.columns].index(name)
+        target_names = [c.name for c in target_decl.columns] if target_decl else []
+        witness_names = [c.name for c in witness_decl.columns]
+        # Every shared scope column (not only context columns) must be bound to
+        # the same term.  A path witness for one document cannot close another.
+        for name in set(target_names) & set(witness_names):
+            ti = target_names.index(name); wi = witness_names.index(name)
             if repr(negated.terms[ti]) != repr(witness.terms[wi]): ok = False
         if ok: return
     issues.append(ValidationIssue("missing-completeness", f"negation of {target!r} needs an exact scoped completeness witness", path))
 
 
+def _validate_mapping_context_joins(mappings, relations, issues):
+    """Require an index/run witness inside each mixed support conjunction.
+
+    Support mappings for one claim are AND premises in both kernels.  Checking
+    each projection independently would let static and runtime observations
+    manufacture a claim without proving that the index describes that run.
+    Observation-only mappings deliberately do not authorize the conjunction.
+    """
+    grouped = {}
+    for index, mapping in enumerate(mappings):
+        if (not isinstance(mapping, EvidenceMapping)
+                or not isinstance(mapping.effect, EvidenceEffect)
+                or mapping.effect.value != "support"):
+            continue
+        declaration = relations.get(mapping.evidence_relation)
+        if declaration is not None:
+            grouped.setdefault(mapping.claim_id, []).append((index, mapping, declaration))
+
+    for claim_id, entries in grouped.items():
+        ordinary = [entry for entry in entries
+                    if entry[2].modality.value != "compatibility"]
+        static_entries = [entry for entry in ordinary
+                          if entry[2].binding.value == "static"]
+        runtime_entries = [entry for entry in ordinary
+                           if entry[2].binding.value == "runtime"]
+        witnesses = [entry for entry in entries
+                     if entry[2].modality.value == "compatibility"]
+        for static_index, static_mapping, static_decl in static_entries:
+            static_columns = {column.name: column for column in static_decl.columns}
+            static_claim_index = next(
+                (left for left, right in static_mapping.bindings if right == "index"), None)
+            for runtime_index, runtime_mapping, runtime_decl in runtime_entries:
+                runtime_columns = {column.name: column for column in runtime_decl.columns}
+                runtime_claim_run = next(
+                    (left for left, right in runtime_mapping.bindings if right == "run"), None)
+                path = f"mappings[{static_index}],mappings[{runtime_index}]"
+                if ("index" not in static_columns
+                        or static_columns["index"].type != TypeName.DIGEST
+                        or static_claim_index is None):
+                    issues.append(ValidationIssue(
+                        "mixed-binding-join",
+                        "mixed support mappings require a static digest index bound through the claim",
+                        path))
+                    continue
+                if "run" not in runtime_columns or runtime_claim_run is None:
+                    issues.append(ValidationIssue(
+                        "mixed-binding-join",
+                        "mixed support mappings require a runtime run bound through the claim",
+                        path))
+                    continue
+
+                found = False
+                for _, witness_mapping, witness_decl in witnesses:
+                    if not {static_decl.name, runtime_decl.name}.issubset(
+                            set(witness_decl.compatibility_targets)):
+                        continue
+                    witness_names = {column.name for column in witness_decl.columns}
+                    if (not {"index", "run"}.issubset(witness_names)
+                            or not {"index", "run"}.issubset(
+                                set(witness_decl.compatibility_context_indices))):
+                        continue
+                    witness_bindings = {right: left
+                                        for left, right in witness_mapping.bindings}
+                    if (witness_bindings.get("index") == static_claim_index
+                            and witness_bindings.get("run") == runtime_claim_run):
+                        found = True
+                        break
+                if not found:
+                    issues.append(ValidationIssue(
+                        "mixed-binding-join",
+                        f"claim {claim_id!r} mixed support mappings require an exact index/run compatibility support premise",
+                        path))
+
+
 def _validate_context_joins(rule, relations, issues, path):
-    atoms = [a for a in rule.body if isinstance(a, Atom) and not a.negated and a.relation in relations]
-    compatibility = [(a, relations[a.relation]) for a in atoms if relations[a.relation].modality.value == "compatibility"]
+    # Negation reads a relation just as surely as a positive atom does.  Keep
+    # compatibility witnesses positive, but include negated ordinary inputs in
+    # the mixed-binding trust boundary.  A completeness atom inherits the
+    # binding and compatibility identity of the relation it closes; a producer
+    # cannot relabel static closure as runtime to evade the check.
+    atoms = [a for a in rule.body
+             if isinstance(a, Atom) and a.relation in relations]
+    compatibility = [(a, relations[a.relation]) for a in atoms
+                     if not a.negated
+                     and relations[a.relation].modality.value == "compatibility"]
+    ordinary = []
+    for atom in atoms:
+        declaration = relations[atom.relation]
+        if declaration.modality.value == "compatibility":
+            continue
+        effective = (relations.get(declaration.completes)
+                     if declaration.modality.value == "completeness"
+                     else declaration)
+        effective = effective or declaration
+        ordinary.append((atom, declaration, effective))
+    static_atoms = [entry for entry in ordinary
+                    if entry[2].binding.value == "static"]
+    runtime_atoms = [entry for entry in ordinary
+                     if entry[2].binding.value == "runtime"]
+    for static_atom, static_decl, static_effective in static_atoms:
+        static_names = [c.name for c in static_decl.columns]
+        if "index" not in static_names:
+            issues.append(ValidationIssue(
+                "mixed-binding-join",
+                "context-free static relations cannot join runtime evidence without an index/run witness",
+                path))
+            return
+        index_term = static_atom.terms[static_names.index("index")]
+        for runtime_atom, runtime_decl, runtime_effective in runtime_atoms:
+            runtime_names = [c.name for c in runtime_decl.columns]
+            if "run" not in runtime_names:
+                issues.append(ValidationIssue("mixed-binding-join", "indexed static/runtime joins require a runtime run column", path))
+                return
+            run_term = runtime_atom.terms[runtime_names.index("run")]
+            found = False
+            for witness, witness_decl in compatibility:
+                if not {static_effective.name, runtime_effective.name}.issubset(
+                        witness_decl.compatibility_targets):
+                    continue
+                witness_names = [c.name for c in witness_decl.columns]
+                if ("index" not in witness_names or "run" not in witness_names
+                        or not {"index", "run"}.issubset(
+                            set(witness_decl.compatibility_context_indices))):
+                    continue
+                if (repr(witness.terms[witness_names.index("index")]) == repr(index_term)
+                        and repr(witness.terms[witness_names.index("run")]) == repr(run_term)):
+                    found = True; break
+            if not found:
+                issues.append(ValidationIssue("mixed-binding-join", "static/runtime joins require an exact index/run compatibility witness", path))
+                return
     context_bindings = []
     for atom in atoms:
         decl = relations[atom.relation]; names = [c.name for c in decl.columns]
@@ -376,9 +612,39 @@ def _validate_aggregation(a, rule, relations, issues, path):
             if not closure_atoms: issues.append(ValidationIssue("aggregation-closure", "aggregation closure witness must be a positive body atom", path))
             if domain_atoms and domain:
                 domain_atom = domain_atoms[0]; domain_names = [c.name for c in domain.columns]
-                for context_name in source.context_indices:
-                    if context_name not in domain_names or repr(source_atom.terms[source_names.index(context_name)]) != repr(domain_atom.terms[domain_names.index(context_name)]):
-                        issues.append(ValidationIssue("aggregation-domain", f"domain binding does not match source context {context_name!r}", path))
+                scope_names = set((*source.context_indices, *a.group_by))
+                for scope_name in scope_names:
+                    if (scope_name not in domain_names
+                            or repr(source_atom.terms[source_names.index(scope_name)])
+                            != repr(domain_atom.terms[domain_names.index(scope_name)])):
+                        issues.append(ValidationIssue("aggregation-domain", f"domain binding does not match source group/context {scope_name!r}", path))
+                if a.operator == "all":
+                    source_types = {column.name: column.type for column in source.columns}
+                    # Domain member identity must be present in the source;
+                    # otherwise projection can collapse distinct members to the
+                    # group/context and manufacture universal success. The one
+                    # reviewed ``outcome`` label is explicit non-key payload.
+                    member_names = [name for name in domain_names
+                                    if name not in scope_names
+                                    and name != a.value_variable
+                                    and (domain.name, name)
+                                    not in _AGGREGATE_DOMAIN_PAYLOAD_COLUMNS]
+                    for member_name in member_names:
+                        if member_name not in source_types:
+                            issues.append(ValidationIssue(
+                                "aggregation-domain",
+                                f"all source omits domain member identity {member_name!r}", path))
+                            continue
+                        domain_column = domain.columns[domain_names.index(member_name)]
+                        if source_types[member_name] != domain_column.type:
+                            issues.append(ValidationIssue(
+                                "aggregation-domain",
+                                f"all source/domain member {member_name!r} has incompatible types", path))
+                        elif repr(source_atom.terms[source_names.index(member_name)]) != repr(
+                                domain_atom.terms[domain_names.index(member_name)]):
+                            issues.append(ValidationIssue(
+                                "aggregation-domain",
+                                f"all source/domain member {member_name!r} is not identically bound", path))
             if closure_atoms and domain:
                 closure_atom = closure_atoms[0]; closure_names = [c.name for c in closure.columns]
                 for context_name in domain.context_indices:
@@ -413,14 +679,51 @@ def _validate_claim(claim, relations, issues, path):
         issues.append(ValidationIssue("claim-context", "claim context must be a Context", path)); context = {}
     else: context = claim.context.as_dict()
     if set(context) != known_context: issues.append(ValidationIssue("claim-context", "claim context must exactly match relation context indices", path))
+    relation_names = [column.name for column in relation.columns]
     for name in known_context:
         if name in context:
-            column = relation.columns[[c.name for c in relation.columns].index(name)]
+            position = relation_names.index(name)
+            column = relation.columns[position]
             _validate_term(Constant(context[name]), column.type, {}, issues, f"{path}.context.{name}")
+            term = claim.terms[position]
+            if isinstance(term, Constant) and term.value != context[name]:
+                issues.append(ValidationIssue(
+                    "claim-context",
+                    f"context value does not equal claim term for column {name!r}", path))
     if claim.quantifier.value == "forall":
         domain = relations.get(claim.domain) if claim.domain else None
-        if domain is None or not domain.finite: issues.append(ValidationIssue("forall-domain", "FORALL requires a named finite domain", path))
-        elif not domain.nonempty: issues.append(ValidationIssue("forall-domain", "FORALL domain must be explicitly non-empty", path))
+        if domain is None or not domain.finite:
+            issues.append(ValidationIssue("forall-domain", "FORALL requires a named finite domain", path))
+        else:
+            if not domain.nonempty:
+                issues.append(ValidationIssue("forall-domain", "FORALL domain must be explicitly non-empty", path))
+            claim_values = {column.name for column, term in zip(relation.columns, claim.terms)
+                            if isinstance(term, Constant)} | set(context)
+            unbound_domain_context = set(domain.context_indices) - claim_values
+            if unbound_domain_context:
+                issues.append(ValidationIssue(
+                    "forall-context",
+                    "FORALL claim must ground every domain context position: "
+                    + ", ".join(sorted(unbound_domain_context)), path))
+            closure_decls = [decl for decl in relations.values()
+                             if decl.modality.value == "completeness"
+                             and decl.completes == domain.name
+                             and decl.context_indices == domain.context_indices
+                             and tuple(column.name for column in decl.columns)
+                             == domain.context_indices]
+            if not closure_decls:
+                issues.append(ValidationIssue(
+                    "forall-closure",
+                    "FORALL requires a whole-domain completeness relation over exactly the domain context",
+                    path))
+            domain_types = {column.name: column.type for column in domain.columns}
+            for position, term in enumerate(claim.terms):
+                if not isinstance(term, Variable):
+                    continue
+                if term.name not in domain_types:
+                    issues.append(ValidationIssue("forall-binding", f"variable {term.name!r} is absent from the domain", path))
+                elif domain_types[term.name] != relation.columns[position].type:
+                    issues.append(ValidationIssue("forall-binding", f"variable {term.name!r} has an incompatible domain type", path))
 
 
 def _validate_recursion(bundle, relations, issues):
