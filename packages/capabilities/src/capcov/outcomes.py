@@ -16,14 +16,17 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from .artifacts import tree_sha256
+from .artifacts import source_patterns_of, tree_sha256
 from .flows.model import digest
 
 STATUSES = ("demonstrated", "failed", "missing", "unresolved", "inconclusive")
 
 
 def read(path: str | Path) -> dict:
-    return json.loads(Path(path).read_text())
+    document = json.loads(Path(path).read_text())
+    if not isinstance(document, dict):
+        raise ValueError(f"expected an outcome JSON object: {path}")
+    return document
 
 
 def write(path: str | Path, value: dict) -> None:
@@ -77,7 +80,13 @@ def validate(mapping: dict, inventory: dict) -> None:
 def provenance(root: Path, mapping: dict, inventory: dict) -> dict:
     validate(mapping, inventory)
     source = local_path(root, inventory["derived_from"]["artifact"])
-    if tree_sha256(source)[0] != inventory["derived_from"]["artifact_sha256"]:
+    # Recompute the inventory's hash over the SAME globs discover used. Reading
+    # the tree as `**/*.py` against an inventory taken over `*.go` is not a
+    # staleness finding, it is two different questions -- and it made every
+    # `capcov outcomes` command unusable on the non-Python targets discover now
+    # supports.
+    patterns = source_patterns_of(inventory["derived_from"])
+    if tree_sha256(source, patterns)[0] != inventory["derived_from"]["artifact_sha256"]:
         raise ValueError("source inventory is stale; re-discover")
     paths = {}
     inputs = [local_path(root, name) for name in mapping["inputs"]]
@@ -111,11 +120,18 @@ def provenance(root: Path, mapping: dict, inventory: dict) -> dict:
 
 def reconcile(mapping: dict, inventory: dict, run: dict, current: dict) -> dict:
     validate(mapping, inventory)
+    if not isinstance(run, dict):
+        raise ValueError("outcome evidence must be an object")
     if run.get("version") != 1 or run.get("provenance") != current:
         raise ValueError(
             "evidence does not match the current map, inventory, or inputs"
         )
     tests = run.get("tests", {})
+    if not isinstance(tests, dict):
+        raise ValueError("outcome tests must map exact node IDs to results")
+    errors = run.get("errors", [])
+    if not isinstance(errors, list) or any(not isinstance(e, str) for e in errors):
+        raise ValueError("outcome errors must be a list of diagnostics")
     rows = []
     for row in mapping["outcomes"]:
         expected = row.get("tests", [])
@@ -138,7 +154,7 @@ def reconcile(mapping: dict, inventory: dict, run: dict, current: dict) -> dict:
                 "test_results": {t: tests.get(t, "missing") for t in expected},
             }
         )
-    errors = list(run.get("errors", []))
+    errors = list(errors)
     if (
         run.get("finished") is not True
         or type(run.get("exit_code")) is not int
@@ -169,6 +185,8 @@ def execute(
     selection: list[str],
     timeout: int,
 ) -> dict:
+    if timeout <= 0:
+        raise ValueError("timeout must be positive")
     before = provenance(root, mapping, inventory)
     expected = sorted({t for row in mapping["outcomes"] for t in row.get("tests", [])})
     if not expected and not selection:
@@ -228,12 +246,12 @@ def execute(
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="capcov outcomes")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("run", "coverage", "gate"):
+    for name in ("run", "check", "coverage", "gate"):
         p = sub.add_parser(name)
         p.add_argument("mapping")
         p.add_argument("--inventory", required=True)
         p.add_argument("--target", default=".")
-        if name == "run":
+        if name in ("run", "check"):
             p.add_argument(
                 "--python", default=sys.executable, help="target pytest interpreter"
             )
@@ -266,7 +284,7 @@ def main(argv: list[str]) -> int:
                 out == p or (p.is_dir() and out.is_relative_to(p)) for p in protected
             ):
                 raise ValueError("output must not overwrite evidence inputs")
-        if args.command == "run":
+        if args.command in ("run", "check"):
             out.unlink(missing_ok=True)
             run = execute(
                 root, mapping, inventory, args.python, selection, args.timeout
@@ -274,17 +292,26 @@ def main(argv: list[str]) -> int:
             if read(args.mapping) != mapping or read(args.inventory) != inventory:
                 raise ValueError("map or inventory changed during execution")
             write(out, run)
-            return (
-                0
-                if run["finished"] and run["exit_code"] == 0 and not run["errors"]
-                else 1
-            )
-        current = provenance(root, mapping, inventory)
-        report = reconcile(mapping, inventory, read(args.run), current)
+            if args.command == "run":
+                return (
+                    0
+                    if run["finished"] and run["exit_code"] == 0 and not run["errors"]
+                    else 1
+                )
+            # One host-callable acceptance operation: execute the whole map and
+            # decide against the required set, never accept a supplied receipt.
+            report = reconcile(mapping, inventory, run, provenance(root, mapping, inventory))
+        else:
+            current = provenance(root, mapping, inventory)
+            report = reconcile(mapping, inventory, read(args.run), current)
         if args.command == "coverage":
             write(args.out, report)
         for row in report["rows"]:
             print(f"{row['status']:13} {row['id']}: {row['description']}")
+            if row["status"] != "demonstrated":
+                print(f"  expected all mapped tests passed; observed {row['test_results']}")
+        for error in report["run_errors"]:
+            print(f"  run error: {error}")
         print(f"Scoped outcomes: {report['summary']}; complete={report['complete']}")
         return 0 if args.command == "coverage" or report["complete"] else 1
     except (ValueError, KeyError, TypeError, OSError) as error:

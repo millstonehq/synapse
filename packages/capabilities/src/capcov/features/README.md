@@ -210,3 +210,66 @@ binary view — whether a configuration's coverage rolls up whole. `coverage` re
 `feature-obligations.json` (a map `id -> {covered, total}`) and prints the numeric
 completeness vector from `coverage.py::rollup`; omit `--selected` to assess the
 mandatory skeleton alone, leaving every optional and group choice *unassessed*.
+
+## Deriving the obligations map: `capcov features map`
+
+`features coverage` consumes `{feature_id: {covered, total}}`. `features map`
+derives it from discovery instead of a hand-written file:
+
+    capcov features map model.json mapping.json capabilities.json \
+        [--coverage coverage.json] --out obligations.json [--report report.json]
+
+`mapping.json` says which surfaces each feature claims, by id glob, by tag, or by
+the file that declares the surface:
+
+    {"version": 1, "features": {
+       "contacts": {"surfaces": ["http:* /contacts", "http:* /contacts/*"]},
+       "billing":  {"tags": ["Billing"]},
+       "invoicing": {"files": ["app/Http/Controllers/Invoicing/*.php"]}}}
+
+A rule needs at least one of `surfaces`, `tags`, `files`; any other key is
+refused. `files` globs match against the surface's declaring file with
+`fnmatch.fnmatchcase`, the same as `surfaces` matches the id -- a `*` crosses
+`/` freely (it is a shell-style glob, not a path-segment matcher), and matching
+is case-sensitive on every platform, including a case-insensitive filesystem.
+
+`total` is the number of discovered surfaces a feature claims. `covered` is how
+many of those a reconciliation saw reached at runtime, and `exercised` (in the
+CLI summary and the `--report` file) is how many *inventory* surfaces that
+covers; **without `--coverage` every `covered` is zero, `exercised` is zero, and
+the report says `assurance: static-only`** -- a declared route is not an
+exercised one. Passing a `--coverage` file with no `rows` list (a
+capabilities.json where a reconcile output belongs, say) is refused rather than
+silently read as zero rows.
+
+The report also lists: `unassigned` surfaces (no feature claims them: assign or
+name why not); `contested` surfaces (several features claim them: resolve the
+overlap); `unmapped_features` (declared in the model but given no rule at all);
+`empty_rules` (a feature's rule matched no surface -- a typo'd glob reads as
+zero, not silence); and forwards discovery's `excluded_surfaces` and
+`unresolved` counts so the denominator is never read narrower than it is.
+### Evidence-derived acceptance
+
+An outcome map's existing `capability` field may name a feature id:
+
+```sh
+capcov features reconcile model.json --outcomes-map capcov.outcomes.json \
+  --inventory capabilities.json --run outcome-run.json --target . \
+  --selected root,feature --out feature-evidence.json
+```
+
+The report carries exact `own_outcome_ids` and `demonstrated_outcome_ids`, an
+acceptance status for every rolled subtree, and current model, map, inventory,
+engine, and input fingerprints. `behavioral_complete` and
+`discovery_accounted` remain separate; unknown or unresolved discovery prevents
+the combined verdict from becoming green. A selected effective leaf with no
+owned outcomes is an explicit gap.
+
+A test-free required outcome can declare exact browser evidence as
+`"flow_bindings": [{"transition": "save", "assertion": "receipt"}]`. Every
+binding must be attested. `capcov flows run` accepts `--outcomes-map`,
+`--capability-inventory`, and `--evidence-target`, fingerprints those inputs
+before and after the runner, and embeds the fingerprint. Feature reconciliation
+then consumes the raw flow model, plan, inventory, and run together. A unified
+capability inventory can serve directly as the flow inventory; its current
+source-tree digest is checked without a parallel discovery configuration.

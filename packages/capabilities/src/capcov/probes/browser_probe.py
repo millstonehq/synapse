@@ -9,8 +9,8 @@ then PROJECTS the surface-only browser world onto the entity-centric four-cell
 Three moving parts:
 
 1. **The planner, internalized.** ``flows.model.plan`` (EFSM/STRIPS BFS, one
-   shortest-prerequisite scenario per transition -- the Chow all-transitions
-   criterion) is called IN-PROCESS, read-only. It stops being a public pipeline
+   shortest-prerequisite scenario per reachable transition, within the state
+   budget; not Chow's conformance method) is called IN-PROCESS, read-only. It stops being a public pipeline
    stage; ``blocked`` / ``states_explored`` become internal reachability
    accounting carried as provenance.
 
@@ -50,7 +50,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from .. import artifacts
+from .. import adapters, artifacts
 from ..flows.model import digest, plan
 from .probe_registry import (
     ENV_NONCE,
@@ -110,6 +110,20 @@ def _required_assertions(plan_scenario: dict) -> list[str]:
     ]
 
 
+def _scenario_index(scenarios: list[dict]) -> dict[str, dict]:
+    index = {}
+    if not isinstance(scenarios, list):
+        raise ValueError("browser scenarios must be a list")
+    for scenario in scenarios:
+        if not isinstance(scenario, dict) or not isinstance(scenario.get("id"), str):
+            raise ValueError("browser scenario requires a string id")
+        identity = scenario["id"]
+        if not identity or identity in index:
+            raise ValueError(f"empty or duplicate browser scenario id: {identity!r}")
+        index[identity] = scenario
+    return index
+
+
 def project(execution_plan: dict, run: dict, *, only: str | None = None) -> dict:
     """Project a plan + its browser run evidence onto the ``observed`` body.
 
@@ -126,18 +140,42 @@ def project(execution_plan: dict, run: dict, *, only: str | None = None) -> dict
     * a diagnostic-scope run credits nothing; every surface it touched goes to
       ``excluded_surfaces`` (seen, out of scope, visible);
     * a scenario that did not pass its planned assertions is named in
-      ``unresolved`` (``gating: False`` -- reported-only, the route already fails
-      as ``static_only`` and must not be double-counted at the gate).
+      ``unresolved`` for diagnostics and in ``flows_failures`` for gating. A
+      different passing scenario on the same route cannot discharge this failure.
 
     ``only`` scopes the fold to a single scenario id (the inner loop), matching
     ``CAPCOV_FLOW_ONLY`` / ``flows.model.reconcile``'s ``only``: other scenarios
     contribute no bindings and are left silent (they are in scope, just not run).
     """
-    plan_scenarios = {s["id"]: s for s in execution_plan.get("scenarios", [])}
-    run_scenarios = {s["id"]: s for s in run.get("scenarios", [])}
+    plan_scenarios = _scenario_index(execution_plan.get("scenarios", []))
+    run_scenarios = _scenario_index(run.get("scenarios", []))
+    for result in run_scenarios.values():
+        assertions = result.get("assertions", [])
+        requests = result.get("observed_requests", [])
+        if not isinstance(assertions, list) or any(not isinstance(a, str) for a in assertions):
+            raise ValueError("browser assertions must be a list of assertion ids")
+        if not isinstance(requests, list) or any(not isinstance(r, dict) for r in requests):
+            raise ValueError("browser observed_requests must be a list of requests")
+    if only is not None and only not in plan_scenarios:
+        raise ValueError(f"unknown browser scenario selection: {only}")
+    unexpected = set(run_scenarios) - set(plan_scenarios)
+    if unexpected:
+        raise ValueError(f"unplanned browser scenarios: {sorted(unexpected)}")
     run_passed = run.get("status") == "passed"
     execution_scope = run.get("execution_scope", "full")
     diagnostic = execution_scope == "diagnostic"
+
+    # Behavioral failures must survive entity aggregation: another scenario may
+    # pass on the SAME route. These cannot be waived by structural exemptions.
+    failures = []
+    if not plan_scenarios:
+        failures.append({"id": "plan", "reason": "no planned scenarios"})
+    if not run_passed:
+        failures.append({"id": "run", "reason": "browser run did not pass"})
+    if execution_scope != "full" or only is not None:
+        failures.append({"id": "scope", "reason": "partial/diagnostic execution cannot qualify the full plan"})
+    for blocked in execution_plan.get("blocked", []):
+        failures.append({"id": blocked["transition"], "reason": blocked["reason"]})
 
     binding_index: dict[tuple[str, str], dict[str, set[str]]] = {}
     excluded_surfaces: list[dict] = []
@@ -155,6 +193,7 @@ def project(execution_plan: dict, run: dict, *, only: str | None = None) -> dict
             run_passed
             and result is not None
             and result.get("status") == "passed"
+            and bool(required)
             and result.get("assertions") == required
         )
         emitted = bool(scenario_passed and not diagnostic)
@@ -176,6 +215,14 @@ def project(execution_plan: dict, run: dict, *, only: str | None = None) -> dict
             detail["mutations"] = mutations
         scenario_detail.append(detail)
 
+        if not scenario_passed:
+            failures.append({
+                "id": scenario_id,
+                "reason": f"required assertions {required!r}; observed status "
+                          f"{(result or {}).get('status')!r}, assertions "
+                          f"{(result or {}).get('assertions')!r}",
+            })
+
         if diagnostic:
             # Seen-but-out-of-scope at runtime: the scenarios ran, but a
             # diagnostic run cannot qualify coverage (mirrors flows'
@@ -192,9 +239,8 @@ def project(execution_plan: dict, run: dict, *, only: str | None = None) -> dict
             continue
 
         if not scenario_passed:
-            # The assertion evidence says the exercise did not pass. Omit the
-            # binding (the route reads as static_only), but never drop it
-            # silently: name it, reported-only so the gate is not double-charged.
+            # Keep the diagnostic carrier; flows_failures independently gates
+            # this scenario even if another exercise covers the same route.
             unresolved.append(
                 {
                     "adapter": "browser",
@@ -259,6 +305,7 @@ def project(execution_plan: dict, run: dict, *, only: str | None = None) -> dict
 
     body: dict = {
         "bindings": bindings,
+        "flows_failures": failures,
         "exercises": len(
             [d for d in scenario_detail if d["emitted"]]
         ),
@@ -328,9 +375,12 @@ def observe(
             "CAPCOV_FLOW_OUT": str(run_out),
             "CAPCOV_FLOW_NONCE": run_nonce,
         }
+        env.pop("CAPCOV_FLOW_ONLY", None)
         if only is not None:
             env["CAPCOV_FLOW_ONLY"] = only
-        subprocess.run(runner, env=env, timeout=timeout, check=False)
+        proc = subprocess.run(runner, env=env, timeout=timeout, check=False)
+        if proc.returncode != 0:
+            raise ValueError(f"browser runner failed (exit {proc.returncode})")
         # verify_output: fresh evidence exists, its nonce matches this run, and
         # the source tree is unchanged since begin(). A successful command cannot
         # reuse yesterday's run.
@@ -347,7 +397,11 @@ def observe(
         out_path,
         "observed",
         artifacts.provenance(
-            os.path.basename(str(source)), tree_hash, "capcov browser-probe", files
+            os.path.basename(str(source)),
+            tree_hash,
+            "capcov browser-probe",
+            files,
+            source_patterns,
         ),
         body,
     )
@@ -359,9 +413,13 @@ def _load_model(target_dir: Path) -> tuple[dict, str, tuple[str, ...]]:
 
     ``[capcov] flows_model`` names the referenced EFSM (a large graph kept as a
     referenced artifact, not inlined TOML -- design 1.1); ``flows_target``
-    defaults to ``"browser"``; ``globs`` (when present, from a route adapter
-    entry) tightens the freshness guard's source patterns beyond the Python
-    default so a non-Python target's mid-run change is still caught.
+    defaults to ``"browser"``; the source patterns come from the adapter specs so
+    a non-Python target's mid-run change is still caught.
+
+    The pattern set is resolved by `capcov.adapters.source_patterns`, the same
+    call `discover` makes. It has to be: `reconcile` refuses a static artifact and
+    a runtime artifact whose `artifact_sha256` disagree, so two hand-rolled copies
+    of this rule would drift into a pipeline that always refuses itself.
     """
     import tomllib
 
@@ -378,11 +436,11 @@ def _load_model(target_dir: Path) -> tuple[dict, str, tuple[str, ...]]:
     model_path = (target_dir / model_ref).resolve()
     model = json.loads(model_path.read_text())
     plan_target = capcov.get("flows_target", DEFAULT_TARGET)
-    globs: list[str] = []
-    for entry in data.get("adapters", []):
-        globs.extend(entry.get("globs", []))
-    patterns = tuple(globs) if globs else ("**/*.py",)
-    return model, plan_target, patterns
+    if capcov.get("adapter"):
+        specs = [(capcov["adapter"], None)]
+    else:
+        specs = [(entry.get("name"), entry) for entry in data.get("adapters", [])]
+    return model, plan_target, adapters.source_patterns(specs)
 
 
 def main(argv: list[str] | None = None) -> int:

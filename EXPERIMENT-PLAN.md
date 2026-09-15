@@ -3625,3 +3625,16 @@ pinned binary; the differential shrinker's 200-execution bound is unchanged. Not
 review's list: incremental file-manifest caching for `tree_sha256`, copy-on-write snapshot
 materialization for the Go consumer (lives in target-synapse), and threading one provenance object
 through a qualification.
+
+### 2026-09-15 base refresh: merge of upstream `main` (`bdb67b8`)
+
+Upstream `millstonehq/synapse` main advanced from the recorded integration base `d1550e4` to
+`bdb67b8` (PR #47 plugin-adapter seam; PR #48 feature map: `capcov features map|report|reconcile`
+with Harvey glyphs, feature outcome evidence reconciliation, the HAR probe, the Laravel route
+reader with service-provider mounts, OpenAPI collision boundaries, mount keys). This branch
+merges it in full. The only conflicts were `flake.nix` and `flake.lock`: upstream added a minimal
+flake (`go jq python312 uv git`, nixpkgs `ef34387d`, unstable); the experiment's Stage 0 flake
+is a superset (same tools plus hyperfine, souffle, shen-go, the sandboxed checks, and the
+`bash -lc` PATH wrapper) pinned at nixpkgs `34ab9907`, to which every recorded Stage 0 result
+binds. The experiment flake is kept; upstream's `.envrc` (`use flake`) therefore loads it.
+Full regression on the merged tree is recorded below when it completes.

@@ -1,29 +1,18 @@
-"""The four-way diff. This is the product.
+"""Compare static and runtime accounts without equating agreement with proof.
 
-Static analysis enumerates paths that never run and loses the thread at dynamic
-dispatch. Runtime observation follows dynamic dispatch exactly and only sees
-what ran. They fail independently, so where they disagree is information rather
-than noise:
+The comparison adapts Software Reflexion Models (Murphy, Notkin & Sullivan
+1995; ADR-0001), whose original subject is architectural relationships versus
+extracted source. Capcov's entity-level four-cell comparison is not an exact
+implementation of that model:
 
-    both          a capability
-    static_only   a path no exercise reached -- a coverage gap
-    runtime_only  the extractor missed it -- fix the adapter, or say why
-    neither       declared and never touched -- dead
+    both          static and runtime support at the recorded granularity
+    static_only   static support without observation in this execution scope
+    runtime_only  observation without corresponding static support
+    neither       declared but unsupported by either account
 
-This is a Software Reflexion Model (Murphy, Notkin & Sullivan 1995; see
-ADR-0001): the declared inventory is the high-level model, runtime observation is
-the reality, and the cells are its three labels --
-
-    both          convergence  (declared AND present)
-    runtime_only  divergence   (present, NOT declared)
-    neither       absence      (declared, NOT present) -- dead
-
-static_only is the coverage gap the three labels do not name directly: the
-declaration and the static extraction converge, but the testing evidence is still
-missing.
-
-Three of those four are failures until someone names a reason. That is the
-whole mechanism; everything else here is bookkeeping.
+Neither account is complete by construction. `neither` does not establish dead
+code, and `both` does not establish correct effects or matching route evidence.
+Behavioral outcomes require their own assertions and execution provenance.
 """
 
 from __future__ import annotations
@@ -155,6 +144,17 @@ def reconcile(capabilities: dict, observed: dict) -> dict:
             for test in sorted(row["tests"]):
                 orphan_tests.append({"test": test, "entity": entity})
 
+    flow_evidence = {}
+    if (
+        "flows_failures" in observed
+        or "flows_execution_scope" in observed
+        or observed.get("derived_from", {}).get("extractor") == "capcov browser-probe"
+    ):
+        flow_evidence["flows_failures"] = observed.get("flows_failures", [{
+            "id": "evidence",
+            "reason": "browser evidence has no required-flow results; re-run observe",
+        }])
+
     return {
         "rows": rows,
         "summary": {cell: sum(1 for r in rows if r["cell"] == cell) for cell in CELLS},
@@ -185,6 +185,8 @@ def reconcile(capabilities: dict, observed: dict) -> dict:
         # while a promoted route/spec adapter's narrowing survives to the gate.
         "excluded_surfaces": _merge_excluded_surfaces(capabilities, observed),
         "unresolved": _merge_unresolved(capabilities, observed),
+        # A passing route must not erase a failed required scenario on that route.
+        **flow_evidence,
         # Repair the reconcile->coverage leak: residue and its summary were built
         # by discover and written to capabilities.json, then dropped here, so the
         # enumerated-but-unresolved call sites never reached the gate or the report.

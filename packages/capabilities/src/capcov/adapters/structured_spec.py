@@ -81,6 +81,8 @@ def discover(
                 "file": obligation["source"]["file"],
                 "line": obligation["source"].get("line", 1),
                 "module": obligation.get("declaration", profile),
+                "tags": obligation.get("tags"),
+                "summary": obligation.get("summary"),
             }
         )
     return build_core_dict(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib.util
 import json
 import tempfile
@@ -125,6 +126,31 @@ class StateBudgetTests(unittest.TestCase):
 
 
 class FlowTests(unittest.TestCase):
+    def test_run_gives_runner_the_exact_canonical_plan_bytes(self) -> None:
+        inventory, model = fixture()
+        execution_plan = plan(model, "browser")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            plan_path, inventory_path, out = root / "plan.json", root / "inventory.json", root / "run.json"
+            plan_path.write_text(json.dumps(execution_plan, indent=2))
+            inventory_path.write_text(json.dumps(inventory))
+
+            def runner(_command, *, env, **_kwargs):
+                raw = Path(env["CAPCOV_FLOW_PLAN"]).read_bytes()
+                self.assertEqual(hashlib.sha256(raw).hexdigest(), digest(execution_plan))
+                Path(env["CAPCOV_FLOW_OUT"]).write_text(json.dumps({
+                    **evidence(inventory, execution_plan), "nonce": env["CAPCOV_FLOW_NONCE"]
+                }))
+                return type("Result", (), {"returncode": 0})()
+
+            with patch("capcov.flows.cli.discover", return_value=inventory), patch(
+                "capcov.flows.cli.subprocess.run", side_effect=runner
+            ):
+                self.assertEqual(main([
+                    "run", str(plan_path), "--inventory", str(inventory_path),
+                    "--config", "unused.json", "--out", str(out), "--", "runner",
+                ]), 0)
+
     def test_diagnostic_execution_never_qualifies_even_when_all_scenarios_pass(self) -> None:
         inventory, model = fixture()
         generated = plan(model, "browser")
