@@ -167,10 +167,12 @@ def main(argv: list[str]) -> int:
                     return
                 if raw_inventory.get("kind") != "capabilities":
                     raise ValueError("a legacy flow inventory requires --config")
-                from ..artifacts import tree_sha256
+                from ..artifacts import source_patterns_of, tree_sha256
                 derived = raw_inventory.get("derived_from", {})
                 artifact = Path(args.evidence_target).resolve() / derived.get("artifact", "")
-                if not artifact.is_dir() or tree_sha256(artifact)[0] != derived.get("artifact_sha256"):
+                if (not artifact.is_dir()
+                        or tree_sha256(artifact, source_patterns_of(derived))[0]
+                        != derived.get("artifact_sha256")):
                     raise ValueError("unified capability inventory is stale; re-discover and review")
             verify_inventory()
             # Private fresh path + nonce: a successful command cannot reuse yesterday's run.

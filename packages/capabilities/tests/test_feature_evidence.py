@@ -125,9 +125,25 @@ class FeatureEvidenceTests(unittest.TestCase):
         self.assertTrue(report["behavioral_complete"])
         self.assertEqual(report["evidence_rows"][0]["evidence_sources"], ["browser-flow"])
 
+        flow_run["scenarios"][0]["assertions"] = []
+        report = reconcile(
+            self.model, self.mapping, self.inventory, None, self.root,
+            {"mail", "save"},
+            flow_inputs=(flow_model, execution_plan, flow_inventory, flow_run),
+        )
+        self.assertFalse(report["behavioral_complete"])
+        self.assertEqual(report["evidence_rows"][0]["status"], "missing")
+        flow_run["scenarios"][0]["assertions"] = ["0:save:saved"]
+
         self.mapping["outcomes"][0]["flow_bindings"] = [
             {"transition": "save", "assertion": "wrong"}
         ]
+        with self.assertRaisesRegex(ValueError, "does not attest current"):
+            reconcile(
+                self.model, self.mapping, self.inventory, None, self.root,
+                {"mail", "save"},
+                flow_inputs=(flow_model, execution_plan, flow_inventory, flow_run),
+            )
         flow_run["outcome_input_provenance"] = provenance(
             self.root, self.mapping, self.inventory
         )
@@ -137,14 +153,37 @@ class FeatureEvidenceTests(unittest.TestCase):
                 {"mail", "save"},
                 flow_inputs=(flow_model, execution_plan, flow_inventory, flow_run),
             )
-
-        flow_run["plan_sha256"] = "claimed"
-        with self.assertRaisesRegex(ValueError, "different plan"):
+        flow_model["evidence_context"]["environment"] = "production"
+        with self.assertRaisesRegex(ValueError, "context does not match"):
             reconcile(
                 self.model, self.mapping, self.inventory, None, self.root,
                 {"mail", "save"},
                 flow_inputs=(flow_model, execution_plan, flow_inventory, flow_run),
             )
+
+    def test_unresolved_flow_only_outcome_stays_unresolved(self):
+        self.mapping["outcomes"][0].update(
+            tests=[], policy="unresolved", reason="decision required"
+        )
+        report = reconcile(
+            self.model, self.mapping, self.inventory, None, self.root,
+            {"mail", "save"},
+        )
+        self.assertEqual(report["evidence_rows"][0]["status"], "unresolved")
+        self.assertFalse(report["behavioral_complete"])
+
+    def test_frontier_rejects_overlap_and_reports_missing_selected_branch(self):
+        with self.assertRaisesRegex(ValueError, "overlap ancestor"):
+            reconcile(
+                self.model, self.mapping, self.inventory, self.run, self.root,
+                {"mail", "save"}, report_features={"mail", "save"},
+            )
+        report = reconcile(
+            self.model, self.mapping, self.inventory, self.run, self.root,
+            {"mail", "save"}, report_features={"mail"},
+        )
+        self.assertEqual(report["report_frontier"], ["mail"])
+        self.assertEqual(report["capability_summary"]["demonstrated"], 1)
 
     def test_cli_reconciles_in_a_real_subprocess(self):
         self.inventory["surfaces"] = [{"id": "POST /save"}]

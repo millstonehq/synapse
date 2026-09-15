@@ -114,10 +114,9 @@ def reconcile(
                         passed_flow_bindings.add((step["transition"], command["id"]))
     evidence_rows = []
     known_bindings = {
-        (step["transition"], command["id"])
-        for scenario in (plan.get("scenarios", []) if flow_inputs is not None else [])
-        for step in scenario["steps"]
-        for command in step["commands"]
+        (transition["id"], command["id"])
+        for transition in (fm.get("transitions", []) if flow_inputs is not None else [])
+        for command in transition.get("bindings", {}).get(plan.get("target"), {}).get("commands", [])
         if command.get("op") == "assert"
     }
     owned: dict[str, list[str]] = {fid: [] for fid in feature_ids}
@@ -216,7 +215,13 @@ def reconcile(
                 raise ValueError(f"report features overlap ancestor and descendant: {parent}, {fid}")
             parent = idx[parent].get("parent")
     covered_by_frontier: set[str] = set()
+    def cover_descendants(fid: str) -> None:
+        covered_by_frontier.add(fid)
+        for child in model_children.get(fid, []):
+            if child in selected:
+                cover_descendants(child)
     for fid in frontier:
+        cover_descendants(fid)
         cur = fid
         while cur is not None:
             covered_by_frontier.add(cur)
