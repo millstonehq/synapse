@@ -19,7 +19,6 @@ from pathlib import Path
 
 from capcov.features.cli import main
 from capcov.features.mapping import project, validate_mapping
-from capcov.features.model import example
 
 
 def _surface(sid: str, **extra: object) -> dict:
@@ -122,6 +121,58 @@ class ProjectTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_mapping(bad, MODEL)
 
+    def test_wrong_shape_coverage_is_refused(self) -> None:
+        # CAPS is a capabilities.json shape (discovery), not a reconciliation: it
+        # has no 'rows'. Passing it as coverage must refuse, not read as zero rows.
+        with self.assertRaises(ValueError):
+            project(MODEL, MAPPING, CAPS, CAPS)
+
+    def test_exercised_is_reported_in_the_result(self) -> None:
+        result = project(MODEL, MAPPING, CAPS)
+        self.assertEqual(result["exercised"], 0)
+        result = project(MODEL, MAPPING, CAPS, COVERAGE)
+        self.assertEqual(result["exercised"], 2)
+
+    def test_runtime_surface_absent_from_inventory_is_not_covered(self) -> None:
+        coverage = {"rows": [{"entity": "http:GET /ghost", "cell": "both",
+                               "runtime_surfaces": ["http:GET /ghost"]}]}
+        result = project(MODEL, MAPPING, CAPS, coverage)
+        self.assertEqual(result["exercised"], 0)
+        self.assertTrue(all(v["covered"] == 0 for v in result["obligations"].values()))
+
+    def test_unmapped_features_are_named(self) -> None:
+        result = project(MODEL, MAPPING, CAPS)
+        self.assertEqual(result["unmapped_features"], ["crm"])
+
+    def test_empty_rules_are_named_not_silently_zero(self) -> None:
+        mapping = {"version": 1, "features": {
+            "contacts": {"surfaces": ["http:* /contacts"]},
+            "billing": {"surfaces": ["http:GET /nonexistent"]},
+        }}
+        result = project(MODEL, mapping, CAPS)
+        self.assertEqual(result["empty_rules"], ["billing"])
+
+    def test_files_rule_claims_surfaces_by_declaring_file(self) -> None:
+        mapping = {"version": 1, "features": {"contacts": {"files": ["routes.php"]}}}
+        result = project(MODEL, mapping, CAPS)
+        # every CAPS surface declares file "routes.php"
+        self.assertEqual(result["obligations"]["contacts"]["total"], 5)
+
+    def test_unknown_rule_key_is_refused(self) -> None:
+        bad = {"version": 1, "features": {"contacts": {"bogus": ["x"]}}}
+        with self.assertRaises(ValueError):
+            validate_mapping(bad, MODEL)
+
+    def test_excluded_surfaces_wrong_type_is_refused(self) -> None:
+        caps = dict(CAPS, excluded_surfaces=["not", "a", "dict"])
+        with self.assertRaises(ValueError):
+            project(MODEL, MAPPING, caps)
+
+    def test_duplicate_surface_ids_are_refused(self) -> None:
+        caps = {"surfaces": CAPS["surfaces"] + [CAPS["surfaces"][0]]}
+        with self.assertRaises(ValueError):
+            project(MODEL, MAPPING, caps)
+
 
 class MapVerbTests(unittest.TestCase):
     def _run(self, argv: list[str]) -> tuple[int, str]:
@@ -145,12 +196,16 @@ class MapVerbTests(unittest.TestCase):
             self.assertEqual(code, 0, out)
             self.assertIn("5 surfaces", out)
             self.assertIn("1 unassigned", out)
-            self.assertIn("static+runtime", out)
+            self.assertIn("static+runtime, 2 exercised", out)
+            self.assertIn("1 unmapped features, 0 empty rules", out)
             obligations = json.loads((d / "obligations.json").read_text())
             self.assertEqual(obligations, {"contacts": {"covered": 1, "total": 3},
                                            "billing": {"covered": 1, "total": 1}})
             report = json.loads((d / "report.json").read_text())
             self.assertEqual(report["unassigned"], ["http:GET /health"])
+            self.assertEqual(report["exercised"], 2)
+            self.assertEqual(report["unmapped_features"], ["crm"])
+            self.assertEqual(report["empty_rules"], [])
             code, out = self._run(["coverage", str(d / "model.json"), str(d / "obligations.json")])
             self.assertEqual(code, 0, out)
             self.assertIn("mandatory 1/3", out)

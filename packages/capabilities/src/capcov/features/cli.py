@@ -190,7 +190,10 @@ def main(argv: list[str]) -> int:
                 "capcov features map: "
                 f"{result['surfaces_total']} surfaces, {result['assigned']} assigned to "
                 f"{len(result['obligations'])} features, {len(result['unassigned'])} unassigned, "
-                f"{len(result['contested'])} contested; assurance {result['assurance']}; "
+                f"{len(result['contested'])} contested; assurance {result['assurance']}, "
+                f"{result['exercised']} exercised; "
+                f"{len(result['unmapped_features'])} unmapped features, "
+                f"{len(result['empty_rules'])} empty rules; "
                 f"discovery excluded {result['excluded_surfaces']}, unresolved {result['unresolved']}"
             )
             return 0
