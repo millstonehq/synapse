@@ -87,9 +87,12 @@ def main(argv: list[str]) -> int:
     r = sub.add_parser("run")
     r.add_argument("plan")
     r.add_argument("--inventory", required=True)
-    r.add_argument("--config", required=True, help="re-discover to reject stale source evidence")
+    r.add_argument("--config", help="legacy flow discovery config; omit for a unified capability inventory")
     r.add_argument("--out", required=True)
     r.add_argument("--timeout", type=int, default=180)
+    r.add_argument("--outcomes-map", help="bind this run to outcome evidence inputs")
+    r.add_argument("--capability-inventory", help="inventory used by --outcomes-map")
+    r.add_argument("--evidence-target", default=".", help="root for outcome input provenance")
     r.add_argument(
         "--only",
         metavar="TRANSITION_OR_SCENARIO_ID",
@@ -139,19 +142,50 @@ def main(argv: list[str]) -> int:
             if not runner:
                 raise ValueError("run requires a runner command after --")
             output_path = Path(args.out).resolve()
-            if output_path in {Path(p).resolve() for p in (args.plan, args.inventory, args.config)}:
+            if output_path in {Path(p).resolve() for p in (args.plan, args.inventory, args.config) if p}:
                 raise ValueError("run output must not overwrite its inputs")
             output_path.unlink(missing_ok=True)
-            execution_plan, inventory = read(args.plan), read(args.inventory)
-            if discover(Path(args.config).resolve()) != inventory:
-                raise ValueError("source inventory is stale; re-discover and review")
+            execution_plan, raw_inventory = read(args.plan), read(args.inventory)
+            from ..features.evidence import flow_inventory
+            inventory = flow_inventory(raw_inventory)
+            if bool(args.outcomes_map) != bool(args.capability_inventory):
+                raise ValueError("outcome map and capability inventory must be supplied together")
+            input_provenance = None
+            if args.outcomes_map:
+                from .. import outcomes
+                evidence_root = Path(args.evidence_target).resolve()
+                outcome_map = read(args.outcomes_map)
+                capability_inventory = read(args.capability_inventory)
+                input_provenance = outcomes.provenance(
+                    evidence_root, outcome_map, capability_inventory
+                )
+            def verify_inventory() -> None:
+                if args.config:
+                    discovered = flow_inventory(discover(Path(args.config).resolve()))
+                    if discovered != inventory:
+                        raise ValueError("source inventory is stale; re-discover and review")
+                    return
+                if raw_inventory.get("kind") != "capabilities":
+                    raise ValueError("a legacy flow inventory requires --config")
+                from ..artifacts import source_patterns_of, tree_sha256
+                derived = raw_inventory.get("derived_from", {})
+                artifact = Path(args.evidence_target).resolve() / derived.get("artifact", "")
+                if (not artifact.is_dir()
+                        or tree_sha256(artifact, source_patterns_of(derived))[0]
+                        != derived.get("artifact_sha256")):
+                    raise ValueError("unified capability inventory is stale; re-discover and review")
+            verify_inventory()
             # Private fresh path + nonce: a successful command cannot reuse yesterday's run.
             with tempfile.TemporaryDirectory(prefix="capcov-flow-") as directory:
                 output = Path(directory) / "run.json"
+                canonical_plan = Path(directory) / "plan.json"
+                canonical_plan.write_text(
+                    json.dumps(execution_plan, sort_keys=True, ensure_ascii=False)
+                )
                 nonce = uuid.uuid4().hex
                 env = {
                     **os.environ,
-                    "CAPCOV_FLOW_PLAN": str(Path(args.plan).resolve()),
+                    "CAPCOV_FLOW_PLAN": str(canonical_plan),
                     "CAPCOV_FLOW_OUT": str(output),
                     "CAPCOV_FLOW_NONCE": nonce,
                 }
@@ -165,9 +199,14 @@ def main(argv: list[str]) -> int:
                     raise ValueError("runner nonce does not match this execution")
                 if result.get("plan_sha256") != digest(execution_plan):
                     raise ValueError("runner did not attest the exact plan")
-                if discover(Path(args.config).resolve()) != inventory:
-                    raise ValueError("sources changed during execution")
+                verify_inventory()
+                if input_provenance is not None and outcomes.provenance(
+                    evidence_root, outcome_map, capability_inventory
+                ) != input_provenance:
+                    raise ValueError("outcome evidence inputs changed during flow execution")
                 result["inventory_sha256"] = digest(inventory)
+                if input_provenance is not None:
+                    result["outcome_input_provenance"] = input_provenance
                 if proc.returncode != 0 or result.get("status") != "passed":
                     result["status"] = "failed"
                     emit(args.out, result)

@@ -31,7 +31,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from capcov import cli
+from capcov import artifacts, cli
 
 from .support import APP, Project
 
@@ -56,8 +56,10 @@ _OPENAPI = json.dumps({"openapi": "3.1.0", "paths": {"/items": {"get": {}, "post
 
 
 def _origin_main_cli_source() -> str:
-    """origin/main's cli.py, from git. The byte-identical baseline is that code."""
-    for ref in ("origin/main", "7801732"):
+    """The pre-unification main CLI. A moving ref cannot be a stable baseline:
+    after merge, origin/main itself generates a nonce and equality is impossible.
+    """
+    for ref in ("780173269246f02a7c219b6bd086d1dd93948783",):
         try:
             done = subprocess.run(
                 ["git", "-C", str(_REPO), "show",
@@ -67,7 +69,7 @@ def _origin_main_cli_source() -> str:
             return done.stdout
         except (subprocess.CalledProcessError, FileNotFoundError):
             continue
-    raise unittest.SkipTest("origin/main baseline cli.py is not reachable via git")
+    raise unittest.SkipTest("pre-unification baseline cli.py is not reachable via git")
 
 
 def _shadow_src_with_baseline_cli(tmp: Path) -> Path:
@@ -420,6 +422,70 @@ class ObserveProbeSelectionTests(unittest.TestCase):
         cli.main(["observe", "--target", str(root), "--out", str(out), "--probe", "load"])
         # The in-process probe path sets and RESTORES the env contract.
         self.assertEqual(dict(os.environ), before)
+
+
+class SourcePatternTests(unittest.TestCase):
+    def test_configured_adapter_globs_bind_discovery_to_non_python_source(self) -> None:
+        specs = [
+            ("treesitter-routes", {"globs": ["**/*.go", "routes/*.go"]}),
+            ("structured-spec", {"document": "openapi.json"}),
+        ]
+        self.assertEqual(
+            cli._source_patterns(specs),
+            ("**/*.go", "routes/*.go", "openapi.json"),
+        )
+
+    def test_legacy_adapter_keeps_python_provenance_default(self) -> None:
+        self.assertEqual(
+            cli._source_patterns([("python-fastapi-sqlalchemy", None)]),
+            ("**/*.py",),
+        )
+
+    def test_mixed_config_hashes_both_trees(self) -> None:
+        # `globs` is a route-adapter key; the stack adapter never declares one. A
+        # union of only the DECLARED globs therefore dropped `**/*.py` outright
+        # the moment a Go route adapter appeared beside it, and a Python source
+        # edit stopped invalidating capabilities.json.
+        self.assertEqual(
+            cli._source_patterns(
+                [
+                    ("python-fastapi-sqlalchemy", {}),
+                    ("treesitter-routes", {"globs": ["*.go"]}),
+                ]
+            ),
+            ("**/*.py", "*.go"),
+        )
+
+    def test_unknown_adapter_never_shrinks_the_tree_to_nothing(self) -> None:
+        self.assertEqual(
+            cli._source_patterns([("some-future-adapter", {})]), ("**/*.py",)
+        )
+
+    def test_route_files_and_structured_document_are_hashed(self) -> None:
+        self.assertEqual(
+            cli._source_patterns(
+                [
+                    ("treesitter-routes", {"files": ["routes.go"]}),
+                    ("structured-spec", {"document": "openapi.json"}),
+                ]
+            ),
+            ("routes.go", "openapi.json"),
+        )
+
+    def test_discover_records_the_patterns_its_hash_was_taken_over(self) -> None:
+        # The hash is only interpretable together with its glob set; `outcomes`
+        # recomputes from this field.
+        self.assertEqual(
+            artifacts.source_patterns_of(
+                artifacts.provenance("src", "sha", "x", 1, ("*.go",))
+            ),
+            ("*.go",),
+        )
+        self.assertEqual(
+            artifacts.source_patterns_of(artifacts.provenance("src", "sha", "x", 1)),
+            ("**/*.py",),
+        )
+        self.assertEqual(artifacts.source_patterns_of({}), ("**/*.py",))
 
 
 if __name__ == "__main__":

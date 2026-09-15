@@ -5,7 +5,8 @@ adds/removes effects: an EFSM with STRIPS-style operators. plan() emits one
 shortest-prerequisite scenario per transition -- "all-transitions" test
 generation, meaningful only over the reachable transitions (Chow 1978; Utting &
 Legeard 2007; Lee & Yannakakis 1996 -- see ADR-0001), which is why the blocked
-list and the max_states budget are reported rather than hidden.
+list and the max_states budget are reported rather than hidden. This is not
+Chow's W-method and carries no general conformance or all-traces guarantee.
 """
 
 from __future__ import annotations

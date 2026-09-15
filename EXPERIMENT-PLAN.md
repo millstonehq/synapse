@@ -3764,3 +3764,55 @@ writer as with Pi). The exhausted `kernel-closure-integrate` is retired and repl
 `kernel-closure-finalize`, whose acceptance adds the four findings left open, so the comparison
 is: same tree, same gates, same reviewer lenses, different agent runtime. Codex results are
 labelled `backend=codex` on every `agent-start` line in `driver.log`.
+
+## 31. Performance: evaluator access paths and artifact caching
+
+Two independent efforts on 2026-09-15, stacked on branch `codex/capcov-performance-cas` (`0d7d514`):
+
+- `0d7d514` (Codex, isolated worktree): per-column value indexes in the Python evaluator with a
+  full-scan fallback and parity tests; a filesystem content-addressed store (`capcov/cas.py`:
+  SHA-256 objects, integrity checks, atomic publication, canonical parent-linked snapshots,
+  staged materialization); an opt-in Soufflé translation/facts cache keyed by bundle digest,
+  requested outputs, executable identity, and limits. Result caching stays disabled because
+  runtime inputs are not fully identifiable by content. Validated with 49 selected tests; real
+  Soufflé was unavailable in that environment.
+- `perf/claims-evaluator-fixpoint` (this checkpoint): memoised proof-tree keys on `Derivation`
+  (`leaves`, `depth`, `signature`, `choice_key`, `path_key`), a per-relation cached canonical
+  row order, a signature fast path in `_Engine.add`, and a semi-naive fixed point driven by
+  rows whose retained proofs or candidate set changed (not only new rows). A derivation is a
+  pure function of its children's retained proofs and candidate counts, so re-deriving from
+  unchanged inputs cannot change the outcome; the fixed point therefore reaches the same result
+  as the previous full-pass loop while doing work proportional to what changed. Two counter
+  assertions in `test_evaluator_index.py` were updated because non-recursive rules now match in
+  one complete pass instead of two.
+
+Host Python 3.14 measurements (`packages/capabilities/benchmarks/claims_evaluator_bench.py`,
+tracemalloc off for the before/after pairs; before = `9c603a0`):
+
+| case | size | before | after |
+|---|---|---|---|
+| one-hop projection | 5,000 facts | 3.8 s | 0.31 s |
+| equijoin | 1,000 rows/side | 85 s | 0.13 s |
+| chain closure | 50 nodes (1,325 rows) | 116 s | 0.04 s |
+| chain closure | 200 nodes (20,300 rows) | 226 s (indexed only) | 0.72 s |
+
+A 400-node chain reports `resource-exhausted` (proof depth 400 exceeds the recursion guard);
+section 29 bounds static witnesses at 64 hops, so this is outside the intended envelope and is a
+named result, not a crash. Soufflé wrapper performance remains UNKNOWN until measured with the
+pinned binary; the differential shrinker's 200-execution bound is unchanged. Not done from the
+review's list: incremental file-manifest caching for `tree_sha256`, copy-on-write snapshot
+materialization for the Go consumer (lives in target-synapse), and threading one provenance object
+through a qualification.
+
+### 2026-09-15 base refresh: merge of upstream `main` (`bdb67b8`)
+
+Upstream `millstonehq/synapse` main advanced from the recorded integration base `d1550e4` to
+`bdb67b8` (PR #47 plugin-adapter seam; PR #48 feature map: `capcov features map|report|reconcile`
+with Harvey glyphs, feature outcome evidence reconciliation, the HAR probe, the Laravel route
+reader with service-provider mounts, OpenAPI collision boundaries, mount keys). This branch
+merges it in full. The only conflicts were `flake.nix` and `flake.lock`: upstream added a minimal
+flake (`go jq python312 uv git`, nixpkgs `ef34387d`, unstable); the experiment's Stage 0 flake
+is a superset (same tools plus hyperfine, souffle, shen-go, the sandboxed checks, and the
+`bash -lc` PATH wrapper) pinned at nixpkgs `34ab9907`, to which every recorded Stage 0 result
+binds. The experiment flake is kept; upstream's `.envrc` (`use flake`) therefore loads it.
+Full regression on the merged tree is recorded below when it completes.
