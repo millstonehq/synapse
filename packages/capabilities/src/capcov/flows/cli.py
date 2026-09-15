@@ -178,10 +178,14 @@ def main(argv: list[str]) -> int:
             # Private fresh path + nonce: a successful command cannot reuse yesterday's run.
             with tempfile.TemporaryDirectory(prefix="capcov-flow-") as directory:
                 output = Path(directory) / "run.json"
+                canonical_plan = Path(directory) / "plan.json"
+                canonical_plan.write_text(
+                    json.dumps(execution_plan, sort_keys=True, ensure_ascii=False)
+                )
                 nonce = uuid.uuid4().hex
                 env = {
                     **os.environ,
-                    "CAPCOV_FLOW_PLAN": str(Path(args.plan).resolve()),
+                    "CAPCOV_FLOW_PLAN": str(canonical_plan),
                     "CAPCOV_FLOW_OUT": str(output),
                     "CAPCOV_FLOW_NONCE": nonce,
                 }
