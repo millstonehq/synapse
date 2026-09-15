@@ -4978,4 +4978,4 @@ Integrator's runs on `e80003f`: exporter 48, static differential 18, static corp
 `test_cli_engine` + `test_snapshot_performance` 43 (1 skip), full regression `Ran 1053 tests`,
 `OK (skipped=135)`. The target-go pilot gate on this tree is recorded below when it completes; one
 attempt was killed by host memory pressure from an unrelated qualification job.
-
+target-go pilot gate on `e80003f`/`7c781e4` (integrator's rerun, PR #49 artifacts in place): `Ran 9 tests in 221.1s`, `OK`, not skipped; identity `0759ccef…` unchanged.
