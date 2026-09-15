@@ -178,6 +178,7 @@ __pycache__/
 venv/
 env/
 .venv/
+.direnv/
 
 # ========================================
 # Project-specific

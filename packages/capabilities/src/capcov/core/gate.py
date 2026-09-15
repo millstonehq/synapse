@@ -114,6 +114,17 @@ def load_exemptions(path: Path | None) -> tuple[dict[str, dict], list[Failure]]:
 
 def gate(coverage: dict, exemptions_path: Path | None) -> list[Failure]:
     exemptions, failures = load_exemptions(exemptions_path)
+    # Runtime assertion failures are not structural coverage gaps. Exempting a
+    # route cannot waive its required behavioral checks.
+    flow_failures = coverage.get("flows_failures", [])
+    if not isinstance(flow_failures, list):
+        failures.append(Failure("invalid-flow-evidence", "browser", "flows_failures must be a list"))
+    else:
+        for entry in flow_failures:
+            if not isinstance(entry, dict) or not entry.get("id") or not entry.get("reason"):
+                failures.append(Failure("invalid-flow-evidence", "browser", "malformed flow failure"))
+            else:
+                failures.append(Failure("required-flow-failed", entry["id"], entry["reason"]))
     used: set[str] = set()
     explained_runtime_only: set[str] = set()
 
@@ -232,11 +243,7 @@ def gate(coverage: dict, exemptions_path: Path | None) -> list[Failure]:
 
 
 def _explain(row: dict) -> str:
-    # The three failing cells are the Software Reflexion Model's labels (Murphy,
-    # Notkin & Sullivan 1995; see reconcile.py and ADR-0001): static_only is the
-    # coverage gap (structure converges, evidence missing), runtime_only is a
-    # divergence (present, not declared), neither is an absence (declared, not
-    # present) -- dead.
+    # Reflexion-inspired structural categories, not behavioral or dead-code proof.
     if row["cell"] == "static_only":
         return (
             f"reachable from {', '.join(row['static_surfaces'][:3])}"
@@ -250,6 +257,6 @@ def _explain(row: dict) -> str:
             "or the access is dynamic -- check the blind-spot list."
         )
     return (
-        "declared in the schema and neither reachable nor observed. Dead. "
-        "Remove it, or say what still needs it."
+        "declared in the schema but neither statically reached nor observed in this scope. "
+        "Investigate discovery or execution gaps, or record a justified disposition."
     )

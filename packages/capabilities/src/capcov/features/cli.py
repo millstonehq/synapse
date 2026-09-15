@@ -32,6 +32,7 @@ from pathlib import Path
 from . import coverage as coverage_mod
 from . import mapping as mapping_mod
 from . import model as model_mod
+from . import evidence as evidence_mod
 from . import report as report_mod
 
 
@@ -156,6 +157,19 @@ def main(argv: list[str]) -> int:
     )
     rp.add_argument("--format", default="md", choices=["md", "csv"])
     rp.add_argument("--out", default=None)
+    rec = sub.add_parser("reconcile", help="derive feature coverage from native outcome evidence")
+    rec.add_argument("model")
+    rec.add_argument("--outcomes-map", required=True)
+    rec.add_argument("--inventory", required=True)
+    rec.add_argument("--run")
+    rec.add_argument("--target", default=".")
+    rec.add_argument("--selected", required=True)
+    rec.add_argument("--out", required=True)
+    rec.add_argument("--report-features", help="comma-separated non-overlapping selected frontier")
+    rec.add_argument("--flow-model")
+    rec.add_argument("--flow-plan")
+    rec.add_argument("--flow-inventory")
+    rec.add_argument("--flow-run")
 
     args = parser.parse_args(argv)
     try:
@@ -169,6 +183,23 @@ def main(argv: list[str]) -> int:
             return 0
 
         model = json.loads(Path(args.model).read_text())
+
+        if args.command == "reconcile":
+            flow_paths = [args.flow_model, args.flow_plan, args.flow_inventory, args.flow_run]
+            if any(flow_paths) and not all(flow_paths):
+                raise ValueError("flow evidence requires model, plan, inventory, and run together")
+            if not args.run and not all(flow_paths):
+                raise ValueError("provide a native pytest run, a raw flow chain, or both")
+            load = lambda path: json.loads(Path(path).read_text())
+            result = evidence_mod.reconcile(
+                model, load(args.outcomes_map), load(args.inventory), load(args.run) if args.run else None,
+                Path(args.target).resolve(), _ids(args.selected),
+                flow_inputs=tuple(load(p) for p in flow_paths) if all(flow_paths) else None,
+                report_features=_ids(args.report_features) if args.report_features else None,
+            )
+            Path(args.out).write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+            print(f"capcov features: complete={result['complete']}; wrote {args.out}")
+            return 0 if result["complete"] else 1
 
         if args.command == "validate":
             model_mod.validate(model)
