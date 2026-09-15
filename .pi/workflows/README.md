@@ -28,6 +28,15 @@ harness, not part of capcov's production engine.
    /capcov-workflow retry <task-id>
    ```
 
+The agent runtime is selectable: `CAPCOV_AGENT_BACKEND=pi` (default; `pi --mode json -p`)
+or `CAPCOV_AGENT_BACKEND=codex` (`codex exec --ephemeral --json -o …`, prompt on stdin,
+model from `CAPCOV_CODEX_MODEL` else the Pi session model's id else `gpt-5.6-sol`,
+reasoning effort from `CAPCOV_CODEX_REASONING` else `high`). Scouts and reviewers run in
+Codex's read-only sandbox; the writer runs unsandboxed, as the Pi writer's bash tool
+does, because the driver enforces write sets, HEAD stability, gates, and review and the
+worker worktree isolates parallel tasks. The backend is logged on every `agent-start`
+line so journal evidence names the runtime that produced it.
+
 Pin the devShell closure with a GC root before any long run. `nix develop` creates no
 root, so a garbage collection during a gate deletes Soufflé, Python, or Go mid-run
 and every external-binary gate fails for infrastructure reasons:
