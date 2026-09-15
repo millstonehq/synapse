@@ -159,9 +159,27 @@ class LaravelMountTests(unittest.TestCase):
         self.assertIn("http:GET /api/v2/projects", _ids(core))
         self.assertEqual(core["excluded_surfaces"]["count"], 0)
 
-    def test_file_matching_no_mount_seeds_with_an_empty_prefix(self) -> None:
+    def test_file_matching_no_mount_seeds_with_an_empty_prefix_and_is_named(self) -> None:
         core = _core_from(self.FILES, {"globs": ["app/**/Routes/**/*.php", "routes/*.php"], "mounts": self.MOUNTS})
         self.assertIn("http:GET /login", _ids(core))
+        # mounts ARE configured here, so a routed file matching none of them is a
+        # LIMIT of this config, not a silent "": it is named for the gate.
+        unmounted = [u for u in core["unresolved"] if u["kind"] == "unmounted-file"]
+        self.assertEqual([u["file"] for u in unmounted], ["routes/web.php"])
+        self.assertEqual(unmounted[0]["id"], "laravel-routes:routes/web.php:unmounted-file")
+
+    def test_without_mounts_the_empty_prefix_is_the_contract_and_stays_silent(self) -> None:
+        core = _core_from(self.FILES, {"globs": ["app/**/Routes/**/*.php", "routes/*.php"]})
+        self.assertIn("http:GET /login", _ids(core))
+        self.assertEqual([u for u in core["unresolved"] if u["kind"] == "unmounted-file"], [])
+
+    def test_mount_glob_matching_no_file_is_refused_not_silently_accepted(self) -> None:
+        # One mis-cased entry leaves a whole directory unmounted while the run
+        # still reports zero unresolved -- the bug mounts were added to fix.
+        mounts = [{"glob": "app/Rest/v1/Routes/**/*.php", "prefix": "/api/v1"}]
+        with self.assertRaises(ValueError) as caught:
+            _core_from(self.FILES, {"globs": ["app/**/Routes/**/*.php"], "mounts": mounts})
+        self.assertIn("app/Rest/v1/Routes/**/*.php", str(caught.exception))
 
     def test_first_matching_mount_wins(self) -> None:
         mounts = [{"glob": "app/**/*.php", "prefix": "/first"}] + self.MOUNTS
@@ -215,6 +233,41 @@ class LaravelFluentAndReceiverTests(unittest.TestCase):
         entry = next(u for u in core["unresolved"] if u["kind"] == "dynamic-route")
         self.assertIn("$router", entry["reason"])
 
+    def test_dynamic_fluent_prefix_on_a_verb_is_one_entry_not_two(self) -> None:
+        # Per-site ids exist so the gate can exempt ONE obligation at a time; two
+        # entries at one node carrying one id collapse that.
+        source = "<?php\nRoute::get('ok', 'C@ok');\nRoute::prefix($tenant)->get('users', 'C@i');\n"
+        core = _core_from({"routes/api.php": source}, {"globs": ["routes/*.php"]})
+        self.assertEqual(_ids(core), {"http:GET /ok"})
+        self.assertEqual(len(core["unresolved"]), 1, core["unresolved"])
+        self.assertEqual(core["unresolved"][0]["kind"], "dynamic-prefix")
+
+    def test_dynamic_fluent_prefix_on_a_group_is_still_named_at_the_group(self) -> None:
+        source = "<?php\nRoute::prefix($tenant)->group(function () {\n    Route::get('x', 'C@x');\n});\n"
+        core = _core_from({"routes/api.php": source}, {"globs": ["routes/*.php"]})
+        self.assertEqual(_ids(core), set())
+        lines = sorted(u["line"] for u in core["unresolved"] if u["kind"] == "dynamic-prefix")
+        self.assertEqual(lines, [2, 3])  # the group call, and the route beneath it
+        self.assertEqual(len({u["id"] for u in core["unresolved"] if "id" in u}), 2)
+
+    def test_ordinary_php_get_on_a_collection_is_not_a_fabricated_limit(self) -> None:
+        # `$config->get('a')` is not a route declaration. A manufactured gate
+        # blocker is as dishonest as a silent drop.
+        source = (
+            "<?php\n$config = collect(['a' => 1]);\n$base = $config->get('a');\n"
+            "Route::get('real', 'C@real');\n"
+        )
+        core = _core_from({"routes/api.php": source}, {"globs": ["routes/*.php"]})
+        self.assertEqual(_ids(core), {"http:GET /real"})
+        self.assertEqual(core["unresolved"], [])
+
+    def test_route_shaped_call_on_a_router_variable_is_still_reported(self) -> None:
+        source = "<?php\n$router->get('/x', 'C@i');\n"
+        core = _core_from({"routes/api.php": source}, {"globs": ["routes/*.php"]})
+        self.assertEqual(_ids(core), set())
+        entry = next(u for u in core["unresolved"] if u["kind"] == "dynamic-route")
+        self.assertIn("$router", entry["reason"])
+
     def test_non_facade_router_group_is_unresolved_and_its_body_is_not_guessed(self) -> None:
         source = (
             "<?php\n$router->group(['prefix' => 'pp'], function () use ($router) {\n"
@@ -253,6 +306,50 @@ class LaravelResourceTests(unittest.TestCase):
         self.assertIn("http:GET /boxes/{box}", ids)
         self.assertIn("http:GET /statuses/{status}", ids)
 
+    def test_resource_wildcard_replaces_dashes_as_laravel_does(self) -> None:
+        # ResourceRegistrar::getResourceWildcard ends in an unconditional
+        # str_replace('-', '_'), so {work-order} is an id no probe can match.
+        source = "<?php\nRoute::apiResource('work-orders', WorkOrderController::class);\n"
+        ids = _ids(_core_from({"routes/api.php": source}, {"globs": ["routes/*.php"]}))
+        self.assertIn("http:GET /work-orders/{work_order}", ids)
+        self.assertNotIn("http:GET /work-orders/{work-order}", ids)
+
+    def test_parameters_override_beats_the_singularisation_heuristic(self) -> None:
+        source = (
+            "<?php\nRoute::resource('work-orders', WorkOrderController::class)"
+            "->parameters(['work-orders' => 'order']);\n"
+        )
+        ids = _ids(_core_from({"routes/api.php": source}, {"globs": ["routes/*.php"]}))
+        self.assertIn("http:GET /work-orders/{order}", ids)
+        self.assertNotIn("http:GET /work-orders/{work_order}", ids)
+
+    def test_parameters_override_still_gets_laravels_dash_replacement(self) -> None:
+        source = (
+            "<?php\nRoute::apiResource('warehouses', WarehouseController::class)"
+            "->parameters(['warehouses' => 'ware-house']);\n"
+        )
+        ids = _ids(_core_from({"routes/api.php": source}, {"globs": ["routes/*.php"]}))
+        self.assertIn("http:GET /warehouses/{ware_house}", ids)
+
+    def test_documented_singular_misfires_stay_visible(self) -> None:
+        # English gives no structural rule separating `statuses` from `houses`,
+        # so these two classes stay wrong and stay DOCUMENTED; Laravel's own
+        # escape hatch, ->parameters([...]), is the fix.
+        source = (
+            "<?php\nRoute::apiResource('warehouses', WarehouseController::class);\n"
+            "Route::apiResource('movies', MovieController::class);\n"
+        )
+        ids = _ids(_core_from({"routes/api.php": source}, {"globs": ["routes/*.php"]}))
+        self.assertIn("http:GET /warehouses/{warehous}", ids)
+        self.assertIn("http:GET /movies/{movy}", ids)
+
+    def test_unreadable_parameters_map_is_named_not_silently_heuristic(self) -> None:
+        source = "<?php\nRoute::apiResource('photos', PhotoController::class)->parameters($map);\n"
+        core = _core_from({"routes/api.php": source}, {"globs": ["routes/*.php"]})
+        self.assertIn("http:GET /photos/{photo}", _ids(core))
+        entry = next(u for u in core["unresolved"] if u["kind"] == "dynamic-parameters")
+        self.assertIn("parameters", entry["reason"])
+
     def test_nested_resource_name_is_unresolved_not_a_wrong_path(self) -> None:
         source = "<?php\nRoute::resource('photos.comments', CommentController::class);\n"
         core = _core_from({"routes/api.php": source}, {"globs": ["routes/*.php"]})
@@ -290,6 +387,22 @@ class LaravelFanOutAndDuplicateTests(unittest.TestCase):
         ids = _ids(_core_from({"routes/api.php": source}, {"globs": ["routes/*.php"]}))
         self.assertEqual(ids, {"http:GET /m", "http:POST /m", "http:GET /a", "http:POST /a",
                                "http:PUT /a", "http:PATCH /a", "http:DELETE /a"})
+
+    def test_any_omits_options_and_head_and_the_module_says_so(self) -> None:
+        import capcov_contrib.laravel_routes as reader
+
+        self.assertIn("OPTIONS", reader.__doc__)
+        self.assertIn("HEAD", reader.__doc__)
+
+    def test_duplicate_reason_says_the_runtime_serves_the_later_declaration(self) -> None:
+        files = {
+            "routes/a.php": "<?php\nRoute::get('dup', 'C@first');\n",
+            "routes/b.php": "<?php\nRoute::get('dup', 'C@last');\n",
+        }
+        core = _core_from(files, {"globs": ["routes/*.php"]})
+        reason = core["excluded_surfaces"]["surfaces"][0]["reason"]
+        self.assertIn("overwrites", reason)
+        self.assertIn("shadowed handler", reason)
 
     def test_cross_file_duplicate_names_the_first_file(self) -> None:
         files = {

@@ -114,19 +114,52 @@ prefixes (array and fluent forms, including a fluent verb such as
 `Route::middleware(...)->prefix(...)->get(...)`) into each route's path, reads
 `[C::class, 'm']`, `'C@m'`, `['uses' => 'C@m']`, an invokable `C::class`
 (`C@__invoke`) and closures, expands `resource`/`apiResource` (honouring
-`only`/`except` in array or variadic form), and names what it cannot read:
-`dynamic-route`, `dynamic-prefix`, `no-surfaces` unresolved entries and
-duplicate declarations under `excluded_surfaces`. Requires the `treesitter`
-extra.
+`only`/`except` in array or variadic form and `->parameters([...])`), and names
+what it cannot read: `dynamic-route`, `dynamic-prefix`, `dynamic-parameters`,
+`unmounted-file`, `no-surfaces` unresolved entries and duplicate declarations
+under `excluded_surfaces`. Requires the `treesitter` extra.
+
+Each per-site unresolved entry carries `id = "laravel-routes:<file>:<line>:<kind>"`
+(the file-level `unmounted-file` entry carries
+`"laravel-routes:<file>:unmounted-file"`) so the gate can exempt ONE obligation
+at a time; the reader emits at most one entry per node+kind, never two
+obligations under a single id.
+
+**Duplicates.** A second declaration of the same METHOD+path is reported under
+`excluded_surfaces`, and the FIRST declaration is the surface kept. Laravel's
+route collection overwrites on method+URI, so the runtime serves the LAST one:
+the retained surface generally carries the shadowed handler and line. Treat a
+duplicate exclusion as "check which handler actually serves this", not as noise.
+
+**`Route::any`** emits the five recognised verbs and NOT `OPTIONS` or `HEAD`,
+which Laravel registers too. Laravel also registers `HEAD` alongside every
+`GET`, so emitting the pair for `any` alone would be arbitrary and would inflate
+the inventory with surfaces no probe exercises.
 
 **Mounts.** The outermost prefix is usually declared OUTSIDE the route file. Stock
 Laravel mounts `routes/api.php` under `/api` (`RouteServiceProvider` up to
 Laravel 10; `apiPrefix` in `bootstrap/app.php` from Laravel 11), and a versioned
 API typically mounts each directory under `/api/<version>` from a provider. The
 reader cannot see those, so declare them in `mounts`: for each file, the FIRST
-matching mount's `prefix` (which must start with `/`) seeds the path; a file
-matching no mount starts from `""`. Without mounts, two versions declaring the
-same relative path collide and the second is reported as a duplicate.
+matching mount's `prefix` (which must start with `/`) seeds the path. Without
+mounts, two versions declaring the same relative path collide and the second is
+reported as a duplicate.
+
+A glob that resolves to NO file raises `ValueError` naming it. One mis-cased
+entry (`app/Rest/v1/...`) would otherwise leave a whole directory unmounted
+while the run still reported zero unresolved -- silently reinstating the bug
+mounts exist to fix. Once `mounts` is configured, a routed file matching none of
+them is an `unmounted-file` unresolved entry rather than a silent `""` seed;
+with no `mounts` at all the empty prefix IS the declared contract and stays
+silent.
+
+**A `mounts` list is unconditional; an app may register a route type
+conditionally.** the target system's `config/rest.php:40` gates `RestType::TEST` on
+`APP_DEBUG`, so its eleven `/api/test` surfaces are declared by the mount but
+are NOT served by a production runtime -- they will read `static_only` in the
+four-cell diff. That is guidance for whoever reads the report, not a defect in
+the reader: the static inventory is of what the source declares, and the gap is
+the environment gate. Say so in the report rather than exempting the surfaces.
 
 **Not read** (each is named, never guessed): `Route::view`, `Route::redirect`
 and `Route::fallback` declarations; a verb or `group` call on a receiver other
@@ -134,7 +167,24 @@ than the `Route` facade (`$router->get(...)`) -- a `dynamic-route` entry naming
 the receiver, its body not walked; a group whose body is a file include
 (`Route::group([...], base_path('routes/x.php'))`) -- a `dynamic-prefix` entry,
 the included file is read without that prefix only if a glob covers it; a
-nested resource name (`photos.comments`) -- a `dynamic-route` entry. The
-resource route parameter (`{photo}`) is a singularisation heuristic (`ies` ->
-`y`, `es` stripped only after `ss`/`us`/`x`/`ch`/`sh`, else one `s`; `movies` ->
-`movy` is a known miss) and `->parameters([...])` is not read.
+nested resource name (`photos.comments`) -- a `dynamic-route` entry; a
+`->parameters(...)` argument that is not a literal map -- a `dynamic-parameters`
+entry naming the fallback.
+
+**The resource wildcard.** It follows `ResourceRegistrar::getResourceWildcard`:
+an explicit `->parameters(['work-orders' => 'order'])` wins, otherwise a
+singularisation heuristic (`ies` -> `y`; `es` stripped only after
+`ss`/`us`/`x`/`ch`/`sh`; else one `s`), and either way the registrar's
+unconditional `str_replace('-', '_')` applies, so `work-orders` yields
+`{work_order}`. Two classes of name still come out wrong without an explicit
+`->parameters([...])`:
+
+* `ies` where the stem is not a `y` word: `movies` -> `movy` (also `series`,
+  `species`);
+* `-uses`/`-ouses`/`-auses` names, which lose the trailing `e` to the rule that
+  fixes `statuses`: `houses` -> `hous`, `warehouses` -> `warehous`, `causes` ->
+  `caus`.
+
+English gives no structural way to separate those from `statuses`, so the reader
+does NOT trade one mis-fire for another: it keeps the rule, documents the miss,
+and reads Laravel's own override when the app declares one.

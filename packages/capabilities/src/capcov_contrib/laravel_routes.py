@@ -11,7 +11,8 @@ The outermost prefix is usually declared OUTSIDE the route file: a service
 provider mounts `routes/api.php` under `api` (Laravel 11: `apiPrefix` in
 `bootstrap/app.php`) and a versioned API mounts each directory under
 `api/<version>`. The reader cannot see that, so `mounts` in the adapter config
-names it per file glob; a file matching no mount seeds with the empty prefix.
+names it per file glob; a file matching no mount seeds with the empty prefix and
+-- when mounts ARE configured -- is named as a limit rather than left silent.
 
 What it refuses to do, in the package's usual style:
 
@@ -24,24 +25,44 @@ What it refuses to do, in the package's usual style:
   this group's prefix;
 * a verb or group call on a receiver that is not the Route facade
   (`$router->get(...)`, `$router->group(...)`) is a `dynamic-route` entry naming
-  the receiver, and its body is not walked;
+  the receiver, and its body is not walked -- but ONLY when the call also has a
+  route declaration's argument shape, so ordinary PHP in a route file
+  (`$config->get('a')`, `config()->get('x')`) is not turned into a fabricated
+  limit;
 * a nested resource name (`photos.comments`) is a `dynamic-route` entry;
 * a second declaration of the same METHOD+path is reported under
-  `excluded_surfaces` with reason "duplicate ..." -- visible, not a silent dedupe;
+  `excluded_surfaces` with reason "duplicate ..." -- visible, not a silent dedupe.
+  Laravel's route collection overwrites on method+URI, so the RETAINED surface
+  generally carries the shadowed handler and line; the exclusion says so;
+* a `mounts` glob that resolves to no file is a ValueError, not a silent no-op
+  that leaves a whole directory unprefixed while the run still reads green;
+* a routed file matching none of the configured mounts is an `unmounted-file`
+  unresolved entry (with no mounts configured the empty prefix IS the contract,
+  and stays silent);
 * no route file at all is a `no-surfaces` unresolved entry, never an empty green.
 
 Every per-site unresolved entry carries `id = "laravel-routes:<file>:<line>:<kind>"`
-so the gate keys each limit separately (the `flows.discovery` convention).
+(the file-level `unmounted-file` entry carries `"laravel-routes:<file>:unmounted-file"`)
+so the gate keys each limit separately and can exempt ONE of them at a time (the
+`flows.discovery` convention). At most one entry per node and kind: two
+obligations under a single id would be one the gate could not address alone.
 
 Handler styles read: `[Controller::class, 'method']`, `'Controller@method'`,
 `['uses' => 'Controller@method']`, an invokable `Controller::class`
 ("Controller@__invoke"), closures ("closure"). Anything else is carried in
 full as "unresolved:<source text>". `resource` / `apiResource` expand to
 Laravel's canonical action set, honouring `->only(...)` and `->except(...)` in
-array or variadic form; the route parameter is a singularisation HEURISTIC and
-`->parameters([...])` is not read. `match([...], path, h)` emits one surface
-per verb; `any(path, h)` emits the five recognised verbs. `Route::view`,
-`Route::redirect` and `Route::fallback` are not read.
+array or variadic form. The route parameter follows
+`ResourceRegistrar::getResourceWildcard`: an explicit `->parameters([...])` map
+wins, otherwise a singularisation HEURISTIC, and either way the registrar's
+unconditional `str_replace('-', '_')` applies (`work-orders` ->
+`{work_order}`). A `->parameters(...)` argument that is not a literal map is a
+`dynamic-parameters` entry naming the fallback. `match([...], path, h)` emits
+one surface per verb; `any(path, h)` emits the five recognised verbs and NOT
+`OPTIONS` or `HEAD`, which Laravel also registers -- Laravel registers `HEAD`
+alongside every `GET` too, so emitting the pair for `any` alone would be
+arbitrary, and the probe exercises the five. `Route::view`, `Route::redirect`
+and `Route::fallback` are not read.
 
 Plugin contract (CORE path, see capcov/PLUGINS.md):
     discover(source_root, target, config) -> core dict
@@ -84,6 +105,9 @@ RESOURCE_ACTIONS = [
 ]
 API_RESOURCE_OMITS = {"create", "edit"}
 
+# A chained option whose argument the reader cannot read as a literal.
+UNREADABLE = object()
+
 
 def _join(prefix: str, path: str) -> str:
     parts = [p for p in (prefix.strip("/") + "/" + path.strip("/")).split("/") if p]
@@ -96,7 +120,11 @@ def _singular(name: str) -> str:
     `ies` -> `y` (companies -> company; movies -> movy is the accepted miss);
     `es` is stripped only after a sibilant (boxes, statuses, classes, batches,
     dishes); otherwise a single trailing `s` goes (cases -> case, licenses ->
-    license). `->parameters([...])` overrides are not read.
+    license). The `uses` rule that fixes `statuses` breaks `houses`,
+    `warehouses` and `causes` (each loses its trailing `e`), and English gives
+    no structural way to tell those apart -- so the miss stays DOCUMENTED rather
+    than traded for another, and Laravel's own escape hatch,
+    `->parameters([...])`, overrides it (`_wildcard`).
     """
     last = name.strip("/").split("/")[-1]
     if last.endswith("ies"):
@@ -108,6 +136,19 @@ def _singular(name: str) -> str:
     return last
 
 
+def _wildcard(name: str, parameters: dict | None = None) -> str:
+    """Laravel's `ResourceRegistrar::getResourceWildcard` for a resource name.
+
+    The registrar consults its `->parameters([...])` map FIRST, falls back to
+    `Str::singular`, and ends in an UNCONDITIONAL `str_replace('-', '_')` -- so
+    `Route::apiResource('work-orders', ...)` serves `/work-orders/{work_order}`
+    and `{work-order}` would be an id no runtime probe can match.
+    """
+    last = name.strip("/").split("/")[-1]
+    value = (parameters or {}).get(last) or _singular(last)
+    return value.replace("-", "_")
+
+
 def _mount_table(root: Path, mounts: list[dict]) -> list[tuple[set[Path], str]]:
     """Resolve each mount's glob to a file set, in declaration order."""
     table: list[tuple[set[Path], str]] = []
@@ -117,7 +158,14 @@ def _mount_table(root: Path, mounts: list[dict]) -> list[tuple[set[Path], str]]:
         prefix = mount["prefix"]
         if not isinstance(prefix, str) or not prefix.startswith("/"):
             raise ValueError(f"mounts[{index}].prefix {prefix!r} must start with '/'")
-        table.append(({p for p in root.glob(mount["glob"]) if p.is_file()}, prefix))
+        files = {p for p in root.glob(mount["glob"]) if p.is_file()}
+        if not files:
+            raise ValueError(
+                f"mounts[{index}].glob {mount['glob']!r} matched no file under {root}; "
+                "a mount resolving to nothing leaves its routes silently unprefixed "
+                "while the run still reports zero unresolved"
+            )
+        table.append((files, prefix))
     return table
 
 
@@ -160,6 +208,21 @@ class _Reader:
             literal = self.string_literal(leaf)
             if literal is not None:
                 out.add(literal)
+        return out
+
+    def string_map(self, node) -> dict[str, str] | None:
+        """`['a' => 'b', ...]` as a dict of literals; None when not a literal map."""
+        if node is None or node.type != ARRAY_TYPE:
+            return None
+        out: dict[str, str] = {}
+        for element in self.children(node, ARRAY_ELEMENT_TYPE):
+            kids = element.named_children
+            if len(kids) != 2:
+                return None
+            key, value = self.string_literal(kids[0]), self.string_literal(kids[1])
+            if key is None or value is None:
+                return None
+            out[key] = value
         return out
 
     def call_parts(self, node):
@@ -231,7 +294,12 @@ class _Reader:
             self.excluded.append({
                 "file": self.relative, "line": line, "method": verb, "path": path,
                 "handler": handler,
-                "reason": f"duplicate declaration of {sid}; first at {first_file}:{first_line}",
+                "reason": (
+                    f"duplicate declaration of {sid}; first at {first_file}:{first_line} "
+                    "is the surface kept, but Laravel's route collection overwrites on "
+                    "method+URI, so the runtime serves this later declaration -- the "
+                    "retained surface generally carries the shadowed handler and line"
+                ),
             })
             return
         self.seen[sid] = (self.relative, line)
@@ -310,6 +378,8 @@ class _Reader:
             receiver = node.child_by_field_name("object")
             root = self.chain_root(receiver)
             if not self.is_facade_call(root):
+                if not self.route_shaped(method, self.arguments(args_node)):
+                    return False  # ordinary PHP, not a route declaration: keep walking
                 # `$router->get(...)`, `$this->router->group(...)`: a router the
                 # reader cannot bind to the facade; named, and its body not walked.
                 shown = self.text(root) if root is not None else "?"
@@ -320,13 +390,41 @@ class _Reader:
                 )
                 return True
             chain_prefix, chain_dynamic = self.prefix_from_chain(receiver)
-            if chain_dynamic:
+            if chain_dynamic and method == "group":
+                # ONLY the group form names the limit here: a verb or resource
+                # call names its own non-literal prefix at this same node (and
+                # the id is per node+kind, so emitting both would give one gate
+                # id to two obligations and the gate could exempt neither alone).
                 self.unresolved_entry(
                     "dynamic-prefix", "fluent prefix(...) is not a literal; routes beneath it are not emitted", node,
                 )
             new_prefix = _join(prefix, chain_prefix) if chain_prefix else prefix
             return self.declaration(method, self.arguments(args_node), node, new_prefix, dynamic or chain_dynamic)
         return False
+
+    def route_shaped(self, method: str, args: list) -> bool:
+        """Does a non-facade call carry a route declaration's ARGUMENT shape?
+
+        Keyed on the method NAME alone, ordinary PHP in a route file --
+        `$config->get('a')`, `$request->get('k')`, `config()->get('x')` --
+        becomes a manufactured gate blocker, and a fabricated limit is as
+        dishonest as a silent drop. A declaration is `group(array|closure, ...)`,
+        `match(array, path, ...)`, or `verb(string-literal, handler)`; anything
+        else is not reported and the walk continues into the node.
+
+        The shape is necessary, not sufficient: a two-argument
+        `$request->get('key', $default)` still reads as route-shaped and is
+        named. That residual over-report is VISIBLE in the entry (it names the
+        receiver), where a shape test loose enough to exclude it would start
+        dropping real `$router->get(...)` declarations instead.
+        """
+        if not args:
+            return False
+        if method == "group":
+            return args[0].type == ARRAY_TYPE or args[0].type in CLOSURE_TYPES
+        if method == "match":
+            return len(args) >= 2 and args[0].type == ARRAY_TYPE
+        return len(args) >= 2 and self.string_literal(args[0]) is not None
 
     def declaration(self, method: str, args: list, node, prefix: str, dynamic: bool) -> bool:
         if method == "group":
@@ -401,9 +499,17 @@ class _Reader:
         if len(args) > 1:
             controller = self.class_short_name(args[1]) or self.string_literal(args[1]) \
                 or "unresolved:" + self.text(args[1])
-        only, except_ = self.resource_filters(node)
+        only, except_, parameters = self.resource_options(node)
+        if parameters is UNREADABLE:
+            self.unresolved_entry(
+                "dynamic-parameters",
+                f"Route::{method} ->parameters(...) is not a literal map; the wildcard "
+                f"for {literal!r} falls back to the singularisation heuristic",
+                node,
+            )
+            parameters = None
         base = _join(prefix, literal)
-        param = _singular(literal)
+        param = _wildcard(literal, parameters)
         for action, verb, suffix in RESOURCE_ACTIONS:
             if method == "apiResource" and action in API_RESOURCE_OMITS:
                 continue
@@ -414,25 +520,38 @@ class _Reader:
             self.emit(verb, base + suffix.replace("{param}", "{" + param + "}"),
                       f"{controller}@{action}", node)
 
-    def resource_filters(self, node):
-        """->only(...) / ->except(...) chained onto a resource call, array or variadic."""
+    def resource_options(self, node):
+        """->only(...) / ->except(...) / ->parameters([...]) chained onto a resource.
+
+        `only`/`except` are read in array or variadic form. `parameters` is
+        Laravel's OWN override for the route wildcard
+        (`->parameters(['work-orders' => 'order'])`), so it outranks this
+        reader's singularisation heuristic; an argument that is not a literal
+        map comes back as UNREADABLE for the caller to name.
+        """
         only = except_ = None
+        parameters = None  # a literal map, None, or the UNREADABLE sentinel
         parent = node.parent
         while parent is not None and parent.type == MEMBER_CALL:
             name = parent.child_by_field_name("name")
             args_node = parent.child_by_field_name("arguments")
-            if name is not None and args_node is not None and self.text(name) in ("only", "except"):
+            called = self.text(name) if name is not None else None
+            if args_node is not None and called in ("only", "except"):
                 args = self.arguments(args_node)
                 if len(args) == 1 and args[0].type == ARRAY_TYPE:
                     names = self.string_list(self.children(args[0], ARRAY_ELEMENT_TYPE))
                 else:
                     names = self.string_list(args)
-                if self.text(name) == "only":
+                if called == "only":
                     only = names
                 else:
                     except_ = names
+            elif args_node is not None and called == "parameters":
+                args = self.arguments(args_node)
+                read = self.string_map(args[0]) if args else None
+                parameters = read if read is not None else UNREADABLE
             parent = parent.parent
-        return only, except_
+        return only, except_, parameters
 
 
 def discover(source_root, target, config: dict | None = None) -> dict:
@@ -447,7 +566,8 @@ def discover(source_root, target, config: dict | None = None) -> dict:
     root = Path(source_root)
     config = config or {}
     globs = list(config.get("globs") or DEFAULT_GLOBS)
-    mounts = _mount_table(root, list(config.get("mounts") or []))
+    declared_mounts = list(config.get("mounts") or [])
+    mounts = _mount_table(root, declared_mounts)
     parser = ts.Parser(get_language(LANGUAGE))
     records: list[dict] = []
     excluded: list[dict] = []
@@ -463,6 +583,21 @@ def discover(source_root, target, config: dict | None = None) -> dict:
         records.extend(reader.records)
         excluded.extend(reader.excluded)
         unresolved.extend(reader.unresolved)
+        if declared_mounts and not mount and reader.records:
+            # With mounts configured, an unmounted routed file is a LIMIT of this
+            # config -- the provider prefix it may carry is missing from every
+            # path in it. With no mounts at all, the empty prefix IS the
+            # contract, so that case stays silent.
+            unresolved.append({
+                "adapter": NAME, "kind": "unmounted-file",
+                "reason": (
+                    f"{reader.relative} declares routes but matches no entry in `mounts`; "
+                    "its paths are composed from the empty prefix, so any prefix a service "
+                    "provider adds outside the file is missing from them"
+                ),
+                "id": f"{NAME}:{reader.relative}:unmounted-file",
+                "file": reader.relative,
+            })
     if not records:
         unresolved.append({
             "adapter": NAME, "kind": "no-surfaces",
