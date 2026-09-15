@@ -164,6 +164,27 @@ class Section27ValidationTests(unittest.TestCase):
                       Context.from_mapping({"tenant": "context-tenant"}))
         self.assertIn("claim-context", codes(Bundle((claimed,), claims=(claim,))))
 
+    def test_forall_context_column_cannot_be_a_domain_bound_variable(self):
+        claimed = RelationDecl(
+            "run_member_claim",
+            (Column("run", "symbol", True), Column("member", "symbol")),
+            modality="claim", context_indices=("run",))
+        domain = RelationDecl(
+            "run_member_domain",
+            (Column("run", "symbol", True), Column("member", "symbol")),
+            finite=True, nonempty=True, context_indices=("run",))
+        closed = RelationDecl(
+            "run_member_domain_closed", (Column("run", "symbol", True),),
+            modality="completeness", completes="run_member_domain",
+            context_indices=("run",))
+        claim = Claim(
+            "run_member_claim", (Variable("run"), Variable("member")),
+            Context.from_mapping({"run": "run-a"}), "forall",
+            "run_member_domain")
+        self.assertIn(
+            "claim-context",
+            codes(Bundle((claimed, domain, closed), claims=(claim,))))
+
     def test_forall_requires_a_whole_domain_completeness_declaration(self):
         claim_rel = RelationDecl("closed_claim", (Column("tenant", "symbol", True),
                                                    Column("member", "symbol")),

@@ -6,8 +6,9 @@ import shutil
 import tempfile
 import unittest
 
-from capcov.claims import (Atom, Bundle, Claim, Column, Constant, Evidence,
-                           RelationDecl, Rule, Variable, bundle_from_json, digest)
+from capcov.claims import (Atom, Bundle, Claim, Column, Constant, DiagnosticRule,
+                           Evidence, EvidenceMapping, OutputTemplate, RelationDecl,
+                           Rule, Variable, bundle_from_json, canonical_json, digest)
 from capcov.claims.differential import DifferentialMismatch, KernelReport, compare, reports_match, run_python, run_souffle
 from capcov.claims.shrinker import ReplayPersistenceError, _difference_shape
 
@@ -50,6 +51,51 @@ class ShrinkerTests(unittest.TestCase):
             self.assertTrue(result.replay_reproduced)
             self.assertFalse(reports_match(run_python(minimized), defective_souffle(minimized)))
 
+    def test_every_candidate_changes_only_facts_and_matching_evidence(self):
+        original = self.bundle()
+        # This reviewed output references noise evidence.  The reducer may no
+        # longer delete the template to make removal of that evidence valid.
+        original = replace(
+            original,
+            metadata=(("reviewed", "unchanged"),),
+            mappings=(EvidenceMapping("result", "trigger", "observation",
+                                      bindings=(("x", "x"),), claim_id="claim"),),
+            diagnostics=(DiagnosticRule("noise", "observation", claim_id="claim"),),
+            outputs=(OutputTemplate("observed", "claim", evidence_id="e1"),))
+        invariant = canonical_json(replace(original, facts=(), evidence=()))
+        candidates = []
+
+        def assert_invariant(candidate):
+            self.assertEqual(
+                canonical_json(replace(candidate, facts=(), evidence=())),
+                invariant,
+            )
+            candidates.append(digest(candidate))
+
+        def checked_python(candidate):
+            assert_invariant(candidate)
+            return run_python(candidate)
+
+        def checked_defective(candidate):
+            assert_invariant(candidate)
+            return defective_souffle(candidate)
+
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(DifferentialMismatch) as caught:
+                compare(original, python_runner=checked_python,
+                        souffle_runner=checked_defective,
+                        replay_root=directory, max_steps=200)
+            replay = bundle_from_json(
+                Path(caught.exception.result.replay_path).read_text(), validate=True)
+            # The wrappers assert the complete invariant for both runners on
+            # the initial input, strict reloads, every ddmin candidate, and the
+            # final replay—not merely on the persisted result.
+            self.assertGreater(len(set(candidates)), 2)
+            self.assertEqual(canonical_json(replace(replay, facts=(), evidence=())),
+                             invariant)
+            self.assertEqual(replay.outputs, original.outputs)
+            self.assertIn("e1", {record.id for record in replay.evidence})
+
     def test_individual_duplicate_evidence_producers_are_one_minimized(self):
         original = self.bundle()
         trigger = next(fact for fact in original.facts if fact.relation == "trigger")
@@ -66,11 +112,42 @@ class ShrinkerTests(unittest.TestCase):
             self.assertEqual(len(replay.evidence), 1)
             self.assertEqual(Path(result.replay_path).name, f"{digest(replay)}.json")
 
-    def test_right_only_relation_is_part_of_mismatch_shape(self):
+    def test_right_only_relation_is_part_of_mismatch_shape_with_exact_values(self):
         left = KernelReport("python", (), ())
         right = KernelReport("souffle", (("right_only", (("v",),)),), ())
-        self.assertEqual(_difference_shape(left, right),
-                         ("semantic", ("right_only",), ()))
+        self.assertEqual(
+            _difference_shape(left, right),
+            ("semantic", (("right_only", ("absent",),
+                            ("present", (("v",),))),), ()))
+
+    def test_minimized_replay_preserves_exact_left_and_right_missing_premise_values(self):
+        original = self.bundle()
+        base_claim = replace(run_python(original).claims[0], semantic="unresolved")
+
+        def left_runner(candidate):
+            missing = ("left-original",) if len(candidate.facts) == len(original.facts) else ("left-new",)
+            return KernelReport("python", (),
+                                (replace(base_claim, missing_premises=missing),))
+
+        def right_runner(candidate):
+            return KernelReport("souffle", (),
+                                (replace(base_claim, missing_premises=("right-original",)),))
+
+        initial_left = left_runner(original)
+        initial_right = right_runner(original)
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(DifferentialMismatch) as caught:
+                compare(original, python_runner=left_runner, souffle_runner=right_runner,
+                        replay_root=directory, max_steps=200)
+            replay = bundle_from_json(
+                Path(caught.exception.result.replay_path).read_text(), validate=True)
+            self.assertEqual(len(replay.facts), len(original.facts))
+            self.assertEqual(_difference_shape(left_runner(replay), right_runner(replay)),
+                             _difference_shape(initial_left, initial_right))
+            self.assertEqual(left_runner(replay).claims[0].missing_premises,
+                             ("left-original",))
+            self.assertEqual(right_runner(replay).claims[0].missing_premises,
+                             ("right-original",))
 
     def test_unwritable_replay_root_is_a_named_blocking_failure(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -152,6 +229,35 @@ class ShrinkerTests(unittest.TestCase):
             self.assertEqual(digest(replay), digest(original))
             self.assertFalse(result.replay_reproduced)
             self.assertTrue(result.shrink_truncated)
+            self.assertEqual(result.shrink_steps, 1)
+            # One initial comparison plus the shrinker's strict baseline
+            # rerun.  The disappeared mismatch is persisted, not raised by
+            # shrink_mismatch or replaced with a different disagreement.
+            self.assertEqual(calls, 2)
+
+    def test_two_hundred_step_bound_is_reported_as_truncated(self):
+        relation = RelationDecl("many", (Column("x", "symbol"),))
+        facts = tuple(Atom("many", (Constant(f"v{i}"),)) for i in range(240))
+        evidence = tuple(Evidence(f"many-{i}", fact, source="fixture")
+                         for i, fact in enumerate(facts))
+        original = Bundle((relation,), facts=facts, evidence=evidence)
+
+        def left_runner(candidate):
+            return KernelReport("python", (), ())
+
+        def right_runner(candidate):
+            if len(candidate.facts) == len(original.facts):
+                return KernelReport("souffle", (("only_right", (("bug",),)),), ())
+            return KernelReport("souffle", (), ())
+
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(DifferentialMismatch) as caught:
+                compare(original, python_runner=left_runner, souffle_runner=right_runner,
+                        replay_root=directory, max_steps=200)
+            result = caught.exception.result
+            self.assertEqual(result.shrink_steps, 200)
+            self.assertTrue(result.shrink_truncated)
+            self.assertTrue(result.replay_reproduced)
 
     def test_hard_two_hundred_step_ceiling_rejects_larger_configuration(self):
         with self.assertRaisesRegex(ValueError, "between 1 and 200"):

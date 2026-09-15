@@ -4,10 +4,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, Mapping
 
-from .ir import (Aggregation, Atom, Bundle, Claim, Comparison, Constant,
-                 RelationDecl, Rule, TypeName, Variable, Evidence, EvidenceMapping, DiagnosticRule, EvidenceEffect, OutputTemplate, OutputKind, canonical_json)
+from .ir import (Aggregation, Atom, BindingTime, Bundle, Claim, Column,
+                 Comparison, Constant, Context, DiagnosticRule, Evidence,
+                 EvidenceEffect, EvidenceMapping, Modality, OutputKind,
+                 OutputTemplate, Polarity, Quantifier, RelationDecl, Rule,
+                 TemplateValue, TypeName, Variable, canonical_json)
 
 DIAGNOSTIC_VOCABULARY = frozenset({"same_surface", "row_committed", "mail_sent", "same_context", "independent_support", "all_compatible_histories_agree", "model_complete", "sql_terminal_ack", "no_resend_forever"})
+
+# Validation is part of both untrusted kernel boundaries.  Keep dependency
+# traversal below the interpreter recursion limit and report deeper producer
+# graphs as resource exhaustion rather than leaking RecursionError.
+MAX_RULE_DEPENDENCY_DEPTH = 256
 
 # These names are identity/correlation dimensions in the frozen Stage B
 # contract.  A support/refutation mapping is not aggregation authority and may
@@ -47,11 +55,312 @@ class ValidationError(ValueError):
         super().__init__("; ".join(map(str, self.issues)))
 
 
+class ValidationResourceError(OverflowError):
+    """Validation exceeded a deterministic structural resource bound."""
+
+
 def _variables(term): return {term.name} if isinstance(term, Variable) else set()
-def _atom_vars(atom): return set().union(*(_variables(t) for t in atom.terms)) if atom.terms else set()
+def _atom_vars(atom):
+    if not isinstance(atom, Atom) or not isinstance(atom.terms, tuple):
+        return set()
+    return set().union(*(_variables(term) for term in atom.terms)) if atom.terms else set()
+
+
 def _ground_atom_key(atom):
-    values = tuple(term.value if isinstance(term, Constant) else None for term in atom.terms)
-    return atom.relation, canonical_json(values)
+    if (not isinstance(atom, Atom) or not isinstance(atom.relation, str)
+            or not isinstance(atom.terms, tuple)):
+        return None
+    values = tuple(term.value if isinstance(term, Constant) else None
+                   for term in atom.terms)
+    return canonical_json((atom.relation, values))
+
+
+def _canonical_value(value):
+    try:
+        canonical_json(value)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def _context_values(context):
+    """Return a checked Context mapping without trusting mutated internals."""
+    if (not isinstance(context, Context)
+            or not isinstance(context.values, tuple)
+            or any(not isinstance(pair, tuple) or len(pair) != 2
+                   or not isinstance(pair[0], str)
+                   or not _canonical_value(pair[1])
+                   for pair in context.values)):
+        return None
+    return dict(context.values)
+
+
+def _typed_compatibility_binding(left, right, expected):
+    """Require exact identity without inferring a witness literal's type."""
+    if isinstance(left, Variable) and isinstance(right, Variable):
+        return left.name == right.name
+    if isinstance(left, Constant) and isinstance(right, Constant):
+        return (left.value == right.value
+                and left.type == expected and right.type == expected)
+    return False
+
+
+def _structural_issues(bundle: Bundle) -> tuple[ValidationIssue, ...]:
+    """Check nested dataclass shapes before semantic passes dereference them."""
+    issues = []
+
+    def atom(value, path):
+        if not isinstance(value, Atom):
+            issues.append(ValidationIssue("atom-type", "expected atom", path))
+            return
+        if not isinstance(value.relation, str):
+            issues.append(ValidationIssue(
+                "atom-type", "atom relation must be a string", path))
+        if not isinstance(value.negated, bool):
+            issues.append(ValidationIssue(
+                "atom-type", "atom negation flag must be boolean", path))
+        if not isinstance(value.terms, tuple):
+            issues.append(ValidationIssue(
+                "atom-type", "atom terms must be a tuple", path))
+        else:
+            for index, term in enumerate(value.terms):
+                if not isinstance(term, (Variable, Constant)):
+                    issues.append(ValidationIssue(
+                        "term-type", "term must be Variable or Constant",
+                        f"{path}.terms[{index}]"))
+                elif isinstance(term, Variable) and not isinstance(term.name, str):
+                    issues.append(ValidationIssue(
+                        "term-type", "variable name must be a string",
+                        f"{path}.terms[{index}]"))
+                elif (isinstance(term, Constant)
+                      and (not _canonical_value(term.value)
+                           or (term.type is not None
+                               and not isinstance(term.type, TypeName)))):
+                    issues.append(ValidationIssue(
+                        "term-type", "constant value/type is malformed",
+                        f"{path}.terms[{index}]"))
+
+    collections = (
+        ("relations", bundle.relations, RelationDecl, "relation-type"),
+        ("facts", bundle.facts, Atom, "atom-type"),
+        ("rules", bundle.rules, Rule, "rule-type"),
+        ("claims", bundle.claims, Claim, "claim-type"),
+        ("evidence", bundle.evidence, Evidence, "evidence-type"),
+        ("mappings", bundle.mappings, EvidenceMapping, "mapping-type"),
+        ("diagnostics", bundle.diagnostics, DiagnosticRule, "diagnostic-type"),
+        ("outputs", bundle.outputs, OutputTemplate, "output-type"),
+    )
+    for name, values, expected, code in collections:
+        if not isinstance(values, tuple):
+            issues.append(ValidationIssue(
+                code, f"{name} must be a tuple", name))
+            continue
+        for index, value in enumerate(values):
+            if not isinstance(value, expected):
+                issues.append(ValidationIssue(
+                    code, f"expected {expected.__name__}", f"{name}[{index}]"))
+
+    if (not isinstance(bundle.metadata, tuple)
+            or any(not isinstance(pair, tuple) or len(pair) != 2
+                   or not isinstance(pair[0], str)
+                   or not _canonical_value(pair[1])
+                   for pair in bundle.metadata)):
+        issues.append(ValidationIssue(
+            "metadata-type", "metadata must contain canonical string-keyed pairs",
+            "metadata"))
+    if not isinstance(bundle.schema_version, int) or isinstance(bundle.schema_version, bool):
+        issues.append(ValidationIssue(
+            "schema-version", "schema version must be an integer",
+            "schema_version"))
+
+    for index, relation in enumerate(bundle.relations if isinstance(bundle.relations, tuple) else ()):
+        if not isinstance(relation, RelationDecl):
+            continue
+        path = f"relations[{index}]"
+        if (not isinstance(relation.columns, tuple)
+                or not all(isinstance(column, Column)
+                           and isinstance(column.name, str)
+                           and isinstance(column.type, TypeName)
+                           and isinstance(column.context, bool)
+                           for column in relation.columns)):
+            issues.append(ValidationIssue(
+                "column-type", "columns must be well-formed Column values", path))
+        if (not isinstance(relation.name, str)
+                or not isinstance(relation.modality, Modality)
+                or not isinstance(relation.polarity, Polarity)
+                or not isinstance(relation.binding, BindingTime)
+                or not isinstance(relation.primitive, bool)
+                or not isinstance(relation.finite, bool)
+                or not isinstance(relation.nonempty, bool)
+                or (relation.completes is not None
+                    and not isinstance(relation.completes, str))):
+            issues.append(ValidationIssue(
+                "relation-type", "relation scalar fields are malformed", path))
+        for field_name in ("producer_classes", "context_indices",
+                           "compatibility_targets",
+                           "compatibility_context_indices"):
+            values = getattr(relation, field_name)
+            if (not isinstance(values, tuple)
+                    or not all(isinstance(item, str) for item in values)):
+                issues.append(ValidationIssue(
+                    "relation-type", f"{field_name} must be a tuple of strings",
+                    path))
+    for index, fact in enumerate(bundle.facts if isinstance(bundle.facts, tuple) else ()):
+        atom(fact, f"facts[{index}]")
+    for index, record in enumerate(bundle.evidence if isinstance(bundle.evidence, tuple) else ()):
+        if not isinstance(record, Evidence):
+            continue
+        atom(record.atom, f"evidence[{index}].atom")
+        if _context_values(record.context) is None:
+            issues.append(ValidationIssue(
+                "evidence-context", "evidence context must be a well-formed Context",
+                f"evidence[{index}]"))
+        if (not isinstance(record.id, str)
+                or not isinstance(record.source, str)
+                or not isinstance(record.kind, str)):
+            issues.append(ValidationIssue(
+                "evidence-type", "evidence scalar fields must be strings",
+                f"evidence[{index}]"))
+        if (not isinstance(record.depends_on, tuple)
+                or not all(isinstance(item, str) for item in record.depends_on)):
+            issues.append(ValidationIssue(
+                "evidence-dependency", "dependencies must be a tuple of strings",
+                f"evidence[{index}]"))
+    for index, rule in enumerate(bundle.rules if isinstance(bundle.rules, tuple) else ()):
+        if not isinstance(rule, Rule):
+            continue
+        atom(rule.head, f"rules[{index}].head")
+        if not isinstance(rule.body, tuple):
+            issues.append(ValidationIssue(
+                "rule-body", "rule body must be a tuple", f"rules[{index}]"))
+        else:
+            for body_index, item in enumerate(rule.body):
+                path = f"rules[{index}].body[{body_index}]"
+                if isinstance(item, Atom):
+                    atom(item, path)
+                elif isinstance(item, Comparison):
+                    if not isinstance(item.left, (Variable, Constant)):
+                        issues.append(ValidationIssue(
+                            "term-type", "comparison left must be a term", path))
+                    if not isinstance(item.right, (Variable, Constant)):
+                        issues.append(ValidationIssue(
+                            "term-type", "comparison right must be a term", path))
+                    if not isinstance(item.operator, str):
+                        issues.append(ValidationIssue(
+                            "operator", "comparison operator must be a string", path))
+                else:
+                    issues.append(ValidationIssue(
+                        "atom-type", "expected atom or comparison", path))
+        if rule.aggregation is not None and not isinstance(rule.aggregation, Aggregation):
+            issues.append(ValidationIssue(
+                "aggregation-type", "expected Aggregation", f"rules[{index}]"))
+        elif isinstance(rule.aggregation, Aggregation):
+            aggregation = rule.aggregation
+            if (not isinstance(aggregation.group_by, tuple)
+                    or not all(isinstance(item, str)
+                               for item in aggregation.group_by)
+                    or not all(value is None or isinstance(value, str)
+                               for value in (
+                                   aggregation.name, aggregation.relation,
+                                   aggregation.value_variable,
+                                   aggregation.operator, aggregation.domain,
+                                   aggregation.closure_witness))):
+                issues.append(ValidationIssue(
+                    "aggregation-type", "malformed Aggregation", f"rules[{index}]"))
+    for index, claim in enumerate(bundle.claims if isinstance(bundle.claims, tuple) else ()):
+        if not isinstance(claim, Claim):
+            continue
+        path = f"claims[{index}]"
+        if not isinstance(claim.relation, str):
+            issues.append(ValidationIssue(
+                "claim-type", "claim relation must be a string", path))
+        if not isinstance(claim.terms, tuple):
+            issues.append(ValidationIssue(
+                "claim-type", "claim terms must be a tuple", path))
+        else:
+            for term_index, term in enumerate(claim.terms):
+                if not isinstance(term, (Variable, Constant)):
+                    issues.append(ValidationIssue(
+                        "term-type", "term must be Variable or Constant",
+                        f"{path}.terms[{term_index}]"))
+        if _context_values(claim.context) is None:
+            issues.append(ValidationIssue(
+                "claim-context", "claim context must be a well-formed Context",
+                f"claims[{index}]"))
+        if (not isinstance(claim.id, str)
+                or not isinstance(claim.quantifier, Quantifier)
+                or (claim.domain is not None
+                    and not isinstance(claim.domain, str))):
+            issues.append(ValidationIssue(
+                "claim-type", "claim id/quantifier/domain is malformed", path))
+    for index, mapping in enumerate(bundle.mappings if isinstance(bundle.mappings, tuple) else ()):
+        if not isinstance(mapping, EvidenceMapping):
+            continue
+        path = f"mappings[{index}]"
+        if not all(isinstance(value, str) for value in (
+                mapping.claim_relation, mapping.evidence_relation,
+                mapping.claim_id)):
+            issues.append(ValidationIssue(
+                "mapping-type", "mapping relation/id fields must be strings", path))
+        if (not isinstance(mapping.context_indices, tuple)
+                or not all(isinstance(item, str)
+                           for item in mapping.context_indices)
+                or not isinstance(mapping.bindings, tuple)
+                or any(not isinstance(pair, tuple) or len(pair) != 2
+                       or not all(isinstance(item, str) for item in pair)
+                       for pair in mapping.bindings)):
+            issues.append(ValidationIssue(
+                "mapping-type", "mapping indices/bindings are malformed", path))
+    for index, diagnostic in enumerate(bundle.diagnostics if isinstance(bundle.diagnostics, tuple) else ()):
+        if not isinstance(diagnostic, DiagnosticRule):
+            continue
+        if (not all(isinstance(value, str) for value in (
+                diagnostic.trigger_relation, diagnostic.operational_status,
+                diagnostic.claim_id))
+                or not isinstance(diagnostic.context_indices, tuple)
+                or not all(isinstance(item, str)
+                           for item in diagnostic.context_indices)):
+            issues.append(ValidationIssue(
+                "diagnostic-type", "diagnostic scalar/scope fields are malformed",
+                f"diagnostics[{index}]"))
+        pairs = diagnostic.predicate
+        if (not isinstance(pairs, tuple)
+                or any(not isinstance(pair, tuple) or len(pair) != 2
+                       or not isinstance(pair[0], str)
+                       or not _canonical_value(pair[1]) for pair in pairs)):
+            issues.append(ValidationIssue(
+                "diagnostic-predicate", "predicate must contain string-keyed pairs",
+                f"diagnostics[{index}]"))
+    for index, output in enumerate(bundle.outputs if isinstance(bundle.outputs, tuple) else ()):
+        if not isinstance(output, OutputTemplate):
+            continue
+        path = f"outputs[{index}]"
+        if (not isinstance(output.fields, tuple)
+                or any(not isinstance(pair, tuple) or len(pair) != 2
+                       or not isinstance(pair[0], str)
+                       or not isinstance(pair[1], TemplateValue)
+                       or not isinstance(pair[1].source, str)
+                       or not isinstance(pair[1].column, str)
+                       or not isinstance(pair[1].type, TypeName)
+                       or not _canonical_value(pair[1].value)
+                       or (pair[1].evidence_id is not None
+                           and not isinstance(pair[1].evidence_id, str))
+                       for pair in output.fields)):
+            issues.append(ValidationIssue(
+                "output-field", "fields must contain name/TemplateValue pairs", path))
+        if (not isinstance(output.claim_id, str)
+                or not all(value is None or isinstance(value, str)
+                           for value in (output.evidence_id, output.relation,
+                                         output.when_claim))
+                or any(not isinstance(values, tuple)
+                       or not all(isinstance(item, str) for item in values)
+                       for values in (output.requires_all_evidence,
+                                      output.requires_any_evidence,
+                                      output.excludes_evidence))):
+            issues.append(ValidationIssue(
+                "output-type", "output scalar/trigger fields are malformed", path))
+
+    return tuple(issues)
 
 
 def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
@@ -69,12 +378,36 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
         value = getattr(policy, field_name, None)
         if not isinstance(value, str) or value not in allowed:
             issues.append(ValidationIssue("diagnostic-policy", f"invalid {field_name} policy value", f"diagnostic_policy.{field_name}"))
-    relations = {r.name: r for r in bundle.relations if isinstance(r, RelationDecl)}
-    if len(relations) != len(bundle.relations):
-        issues.append(ValidationIssue("duplicate-relation", "relation names must be unique", "relations"))
+    structural = _structural_issues(bundle)
+    if structural:
+        return tuple((*issues, *structural))
+    # Bundle construction enforces these top-level member types.  Keep the
+    # filters here as defense in depth for callers that deliberately mutate a
+    # frozen instance with ``object.__setattr__`` while testing the untrusted
+    # validation boundary.  No second pass below may dereference an entry that
+    # failed its structural type check.
+    relation_records = tuple(
+        relation for relation in bundle.relations
+        if isinstance(relation, RelationDecl))
+    relation_names = tuple(
+        relation.name for relation in relation_records
+        if isinstance(relation.name, str))
+    if len(relation_names) != len(set(relation_names)):
+        issues.append(ValidationIssue(
+            "duplicate-relation", "relation names must be unique", "relations"))
+    structurally_typed_relations = tuple(
+        relation for relation in relation_records
+        if isinstance(relation.name, str)
+        and isinstance(relation.columns, tuple)
+        and all(isinstance(column, Column) for column in relation.columns))
+    relations = {relation.name: relation
+                 for relation in structurally_typed_relations}
     for relation in bundle.relations:
-        if isinstance(relation, RelationDecl): _validate_relation(relation, relations, issues)
-        else: issues.append(ValidationIssue("relation-type", "expected RelationDecl", "relations"))
+        if isinstance(relation, RelationDecl):
+            _validate_relation(relation, relations, issues)
+        else:
+            issues.append(ValidationIssue(
+                "relation-type", "expected RelationDecl", "relations"))
     for i, fact in enumerate(bundle.facts):
         _validate_atom(fact, relations, issues, f"facts[{i}]", {}, fact_only=True)
         if isinstance(fact, Atom) and fact.negated: issues.append(ValidationIssue("negative-fact", "facts must be positive", f"facts[{i}]"))
@@ -83,31 +416,55 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
         path = f"evidence[{i}]"
         if not isinstance(record, Evidence):
             issues.append(ValidationIssue("evidence-type", "expected Evidence", path)); continue
-        if not isinstance(record.id, str) or not record.id: issues.append(ValidationIssue("evidence-id", "evidence id must be a non-empty string", path))
-        if record.id in evidence_ids: issues.append(ValidationIssue("duplicate-evidence-id", record.id, path))
-        evidence_ids.add(record.id)
+        if not isinstance(record.id, str) or not record.id:
+            issues.append(ValidationIssue(
+                "evidence-id", "evidence id must be a non-empty string", path))
+        else:
+            if record.id in evidence_ids:
+                issues.append(ValidationIssue(
+                    "duplicate-evidence-id", record.id, path))
+            evidence_ids.add(record.id)
         _validate_atom(record.atom, relations, issues, path + ".atom", {}, fact_only=True)
+        if (not isinstance(record.atom, Atom)
+                or not isinstance(record.atom.relation, str)
+                or not isinstance(record.atom.terms, tuple)):
+            continue
         if record.atom.negated: issues.append(ValidationIssue("negative-evidence", "evidence atoms must be positive", path))
-        declared = relations.get(record.atom.relation)
-        if declared and set(record.context.as_dict()) != set(declared.context_indices):
+        declared = (relations.get(record.atom.relation)
+                    if isinstance(record.atom.relation, str) else None)
+        context = _context_values(record.context)
+        if context is None:
+            issues.append(ValidationIssue(
+                "evidence-context", "evidence context must be a well-formed Context", path))
+            context = {}
+        if declared and set(context) != set(declared.context_indices):
             issues.append(ValidationIssue("evidence-context", "evidence context must exactly match relation context indices", path))
         if not isinstance(record.source, str) or not record.source: issues.append(ValidationIssue("evidence-source", "evidence source must be a non-empty string", path))
         if not isinstance(record.kind, str) or not record.kind: issues.append(ValidationIssue("evidence-kind", "evidence kind must be a non-empty string", path))
         if declared:
             names = [c.name for c in declared.columns]
-            for name, value in record.context.values:
+            for name, value in context.items():
                 if name in names:
                     index = names.index(name)
-                    if not isinstance(record.atom.terms[index], Constant) or record.atom.terms[index].value != value:
+                    if (index >= len(record.atom.terms)
+                            or not isinstance(record.atom.terms[index], Constant)
+                            or record.atom.terms[index].value != value):
                         issues.append(ValidationIssue("evidence-context", f"context value does not equal atom column {name!r}", path))
-    fact_keys = {_ground_atom_key(fact) for fact in bundle.facts if isinstance(fact, Atom)}
-    evidence_keys = {_ground_atom_key(record.atom) for record in bundle.evidence if isinstance(record, Evidence)}
+    fact_keys = {key for fact in bundle.facts
+                 if (key := _ground_atom_key(fact)) is not None}
+    evidence_keys = {key for record in bundle.evidence
+                     if isinstance(record, Evidence)
+                     and (key := _ground_atom_key(record.atom)) is not None}
     for i, record in enumerate(bundle.evidence):
-        if isinstance(record, Evidence) and _ground_atom_key(record.atom) not in fact_keys:
-            issues.append(ValidationIssue("evidence-without-fact", record.id, f"evidence[{i}]"))
+        key = (_ground_atom_key(record.atom)
+               if isinstance(record, Evidence) else None)
+        if key is not None and key not in fact_keys:
+            issues.append(ValidationIssue(
+                "evidence-without-fact", str(record.id), f"evidence[{i}]"))
     if bundle.evidence:
         for i, fact in enumerate(bundle.facts):
-            if isinstance(fact, Atom) and _ground_atom_key(fact) not in evidence_keys:
+            key = _ground_atom_key(fact)
+            if key is not None and key not in evidence_keys:
                 issues.append(ValidationIssue("fact-without-evidence", "evidence-bearing bundles require attribution", f"facts[{i}]"))
     for i, rule in enumerate(bundle.rules):
         if isinstance(rule, Rule): _validate_rule(rule, relations, issues, f"rules[{i}]")
@@ -127,10 +484,14 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
                    if isinstance(claim, Claim) and claim.id}
     if claim_by_id:
         for i, mapping in enumerate(bundle.mappings):
-            if not mapping.claim_id or mapping.claim_id not in seen_claim_ids:
+            if (isinstance(mapping, EvidenceMapping)
+                    and (not mapping.claim_id
+                         or mapping.claim_id not in seen_claim_ids)):
                 issues.append(ValidationIssue("mapping-claim-id", "mapping must name an existing claim id", f"mappings[{i}]"))
         for i, diagnostic in enumerate(bundle.diagnostics):
-            if not diagnostic.claim_id or diagnostic.claim_id not in seen_claim_ids:
+            if (isinstance(diagnostic, DiagnosticRule)
+                    and (not diagnostic.claim_id
+                         or diagnostic.claim_id not in seen_claim_ids)):
                 issues.append(ValidationIssue("diagnostic-claim-id", "diagnostic must name an existing claim id", f"diagnostics[{i}]"))
     join_eligible_mappings = []
     for i, mapping in enumerate(bundle.mappings):
@@ -188,7 +549,17 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
         path = f"diagnostics[{i}]"
         if not isinstance(diagnostic, DiagnosticRule): issues.append(ValidationIssue("diagnostic-type", "expected DiagnosticRule", path)); continue
         if not isinstance(diagnostic.effect, EvidenceEffect): issues.append(ValidationIssue("diagnostic-effect", "unsupported diagnostic effect", path))
-        predicate = dict(diagnostic.predicate)
+        predicate_pairs = diagnostic.predicate
+        if (not isinstance(predicate_pairs, tuple)
+                or any(not isinstance(pair, tuple) or len(pair) != 2
+                       or not isinstance(pair[0], str)
+                       for pair in predicate_pairs)):
+            issues.append(ValidationIssue(
+                "diagnostic-predicate",
+                "predicate must contain string-keyed pairs", path))
+            predicate = {}
+        else:
+            predicate = dict(predicate_pairs)
         if predicate:
             operator = predicate.get("operator")
             relation = relations.get(diagnostic.trigger_relation)
@@ -210,6 +581,8 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
             issues.append(ValidationIssue("diagnostic-context", "diagnostic context is not declared by trigger relation", path))
     known_ids = set(evidence_ids)
     for i, record in enumerate(bundle.evidence):
+        if not isinstance(record, Evidence):
+            continue
         for dependency in record.depends_on:
             if not isinstance(dependency, str) or not dependency: issues.append(ValidationIssue("evidence-dependency", "dependency ids must be non-empty strings", f"evidence[{i}]"))
             elif dependency not in known_ids and not dependency.startswith("external:"):
@@ -243,16 +616,35 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
         if output.kind == OutputKind.MISSING_PREMISE and not output.relation: issues.append(ValidationIssue("output-relation", "missing premise output needs a relation", path))
         if output.kind == OutputKind.MISSING_PREMISE and output.relation not in relations and output.relation not in DIAGNOSTIC_VOCABULARY:
             issues.append(ValidationIssue("output-relation", "unknown diagnostic vocabulary relation", path))
-        causal_relations = {mapping.evidence_relation for mapping in bundle.mappings if mapping.claim_id == output.claim_id}
-        causal_relations.update(diagnostic.trigger_relation for diagnostic in bundle.diagnostics if diagnostic.claim_id == output.claim_id)
-        claim = next((claim for claim in bundle.claims if claim.id == output.claim_id), None)
+        causal_relations = {
+            mapping.evidence_relation for mapping in bundle.mappings
+            if isinstance(mapping, EvidenceMapping)
+            and mapping.claim_id == output.claim_id}
+        causal_relations.update(
+            diagnostic.trigger_relation for diagnostic in bundle.diagnostics
+            if isinstance(diagnostic, DiagnosticRule)
+            and diagnostic.claim_id == output.claim_id)
+        claim = next((claim for claim in bundle.claims
+                      if isinstance(claim, Claim)
+                      and claim.id == output.claim_id), None)
         if claim:
-            causal_relations.update(atom.relation for rule in bundle.rules if rule.head.relation == claim.relation for atom in rule.body)
+            causal_relations.update(
+                atom.relation for rule in bundle.rules
+                if isinstance(rule, Rule) and isinstance(rule.head, Atom)
+                and rule.head.relation == claim.relation
+                and isinstance(rule.body, tuple)
+                for atom in rule.body if isinstance(atom, Atom))
         for evidence_id in explicit_triggers:
             evidence = evidence_by_id.get(evidence_id)
             if evidence and evidence.atom.relation not in causal_relations:
                 issues.append(ValidationIssue("output-trigger", "trigger evidence is not causally connected to claim", path))
-        for name, value in output.fields:
+        for field in output.fields:
+            if (not isinstance(field, tuple) or len(field) != 2
+                    or not isinstance(field[1], TemplateValue)):
+                issues.append(ValidationIssue(
+                    "output-field", "fields must contain name/TemplateValue pairs", path))
+                continue
+            name, value = field
             if not isinstance(name, str) or not name: issues.append(ValidationIssue("output-field", "field names must be non-empty strings", path))
             if value.source not in {"constant", "claim", "evidence"}: issues.append(ValidationIssue("output-source", "unknown template value source", path)); continue
             if value.source == "constant":
@@ -272,6 +664,8 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
                 elif value.type != next(column.type for column in relation.columns if column.name == value.column): issues.append(ValidationIssue("output-type", "template reference type mismatch", path))
     output_keys = []
     for output in bundle.outputs:
+        if not isinstance(output, OutputTemplate):
+            continue
         output_keys.append(repr((output.kind, output.claim_id, output.evidence_id, output.relation, output.fields, output.requires_all_evidence, output.requires_any_evidence, output.excludes_evidence, output.when_claim)))
     if len(output_keys) != len(set(output_keys)):
         issues.append(ValidationIssue("output-duplicate", "duplicate canonical output template", "outputs"))
@@ -289,9 +683,12 @@ def validate(bundle: Bundle): return validate_bundle(bundle)
 
 
 def _validate_relation(r, relations, issues):
-    if not r.name or not r.name.replace("_", "a").isalnum() or r.name[0].isdigit():
+    if (not isinstance(r.name, str) or not r.name
+            or not r.name.replace("_", "a").isalnum()
+            or r.name[0].isdigit()):
         issues.append(ValidationIssue("name", "relation name must be an identifier", f"relations.{r.name}"))
-    if not all(hasattr(c, "name") and hasattr(c, "type") and hasattr(c, "context") for c in r.columns):
+    if (not isinstance(r.columns, tuple)
+            or not all(isinstance(c, Column) for c in r.columns)):
         issues.append(ValidationIssue("column-type", "columns must be Column values", f"relations.{r.name}")); return
     names = [c.name for c in r.columns]
     if len(names) != len(set(names)): issues.append(ValidationIssue("duplicate-column", "column names must be unique", f"relations.{r.name}"))
@@ -372,6 +769,12 @@ def _validate_term(term, expected, env, issues, path, fact_only=False):
 
 def _validate_atom(atom, relations, issues, path, env, fact_only=False):
     if not isinstance(atom, Atom): issues.append(ValidationIssue("atom-type", "expected atom", path)); return
+    if not isinstance(atom.relation, str):
+        issues.append(ValidationIssue(
+            "atom-type", "atom relation must be a string", path)); return
+    if not isinstance(atom.terms, tuple):
+        issues.append(ValidationIssue(
+            "atom-type", "atom terms must be a tuple", path)); return
     relation = relations.get(atom.relation)
     if relation is None: issues.append(ValidationIssue("unknown-relation", atom.relation, path)); return
     if fact_only and not relation.primitive:
@@ -388,12 +791,18 @@ def _validate_atom(atom, relations, issues, path, env, fact_only=False):
 
 def _validate_rule(rule, relations, issues, path):
     env = {}
-    if not any(isinstance(item, Atom) and not item.negated for item in rule.body):
+    if not isinstance(rule.body, tuple):
+        issues.append(ValidationIssue(
+            "rule-body", "rule body must be a tuple", path))
+        body = ()
+    else:
+        body = rule.body
+    if not any(isinstance(item, Atom) and not item.negated for item in body):
         issues.append(ValidationIssue(
             "evidence-free-rule",
             "rules require at least one positive relational premise",
             path))
-    for j, atom in enumerate(rule.body):
+    for j, atom in enumerate(body):
         if isinstance(atom, Comparison):
             if atom.operator not in {"=", "!=", "<", "<=", ">", ">="}: issues.append(ValidationIssue("operator", atom.operator, f"{path}.body[{j}]"))
             left_type = env.get(atom.left.name) if isinstance(atom.left, Variable) else (atom.left.type or _python_type(atom.left.value)) if isinstance(atom.left, Constant) else None
@@ -411,10 +820,12 @@ def _validate_rule(rule, relations, issues, path):
             issues.append(ValidationIssue("unsafe-negation", "negation variables must be positively bound", f"{path}.body[{j}]"))
     bound = set(env)
     _validate_atom(rule.head, relations, issues, f"{path}.head", dict(env))
-    if isinstance(rule.head, Atom) and not _atom_vars(rule.head).issubset(bound):
+    if (isinstance(rule.head, Atom) and isinstance(rule.head.terms, tuple)
+            and not _atom_vars(rule.head).issubset(bound)):
         issues.append(ValidationIssue("unsafe-variable", "head variables must be positively bound", path))
     _validate_context_joins(rule, relations, issues, path)
-    for neg in (a for a in rule.body if isinstance(a, Atom) and a.negated): _validate_completeness(neg, rule, relations, issues, path)
+    for neg in (a for a in body if isinstance(a, Atom) and a.negated):
+        _validate_completeness(neg, rule, relations, issues, path)
     if rule.aggregation:
         if isinstance(rule.aggregation, Aggregation): _validate_aggregation(rule.aggregation, rule, relations, issues, path)
         else: issues.append(ValidationIssue("aggregation-type", "expected Aggregation", path))
@@ -496,10 +907,16 @@ def _validate_mapping_context_joins(mappings, relations, issues):
                     if not {static_decl.name, runtime_decl.name}.issubset(
                             set(witness_decl.compatibility_targets)):
                         continue
-                    witness_names = {column.name for column in witness_decl.columns}
-                    if (not {"index", "run"}.issubset(witness_names)
+                    witness_columns = {column.name: column
+                                       for column in witness_decl.columns}
+                    if (not {"index", "run"}.issubset(witness_columns)
                             or not {"index", "run"}.issubset(
                                 set(witness_decl.compatibility_context_indices))):
+                        continue
+                    if (witness_columns["index"].type
+                            != static_columns["index"].type
+                            or witness_columns["run"].type
+                            != runtime_columns["run"].type):
                         continue
                     witness_bindings = {right: left
                                         for left, right in witness_mapping.bindings}
@@ -520,8 +937,11 @@ def _validate_context_joins(rule, relations, issues, path):
     # the mixed-binding trust boundary.  A completeness atom inherits the
     # binding and compatibility identity of the relation it closes; a producer
     # cannot relabel static closure as runtime to evade the check.
-    atoms = [a for a in rule.body
-             if isinstance(a, Atom) and a.relation in relations]
+    body = rule.body if isinstance(rule.body, tuple) else ()
+    atoms = [a for a in body
+             if isinstance(a, Atom) and isinstance(a.relation, str)
+             and isinstance(a.terms, tuple) and a.relation in relations
+             and len(a.terms) == relations[a.relation].arity]
     compatibility = [(a, relations[a.relation]) for a in atoms
                      if not a.negated
                      and relations[a.relation].modality.value == "compatibility"]
@@ -548,47 +968,95 @@ def _validate_context_joins(rule, relations, issues, path):
                 path))
             return
         index_term = static_atom.terms[static_names.index("index")]
+        static_effective_columns = {
+            column.name: column for column in static_effective.columns}
         for runtime_atom, runtime_decl, runtime_effective in runtime_atoms:
             runtime_names = [c.name for c in runtime_decl.columns]
             if "run" not in runtime_names:
                 issues.append(ValidationIssue("mixed-binding-join", "indexed static/runtime joins require a runtime run column", path))
                 return
             run_term = runtime_atom.terms[runtime_names.index("run")]
+            runtime_effective_columns = {
+                column.name: column for column in runtime_effective.columns}
+            target_index = static_effective_columns.get("index")
+            target_run = runtime_effective_columns.get("run")
             found = False
             for witness, witness_decl in compatibility:
                 if not {static_effective.name, runtime_effective.name}.issubset(
                         witness_decl.compatibility_targets):
                     continue
                 witness_names = [c.name for c in witness_decl.columns]
-                if ("index" not in witness_names or "run" not in witness_names
+                witness_columns = {column.name: column
+                                   for column in witness_decl.columns}
+                if (target_index is None or target_run is None
+                        or "index" not in witness_names or "run" not in witness_names
                         or not {"index", "run"}.issubset(
                             set(witness_decl.compatibility_context_indices))):
                     continue
-                if (repr(witness.terms[witness_names.index("index")]) == repr(index_term)
-                        and repr(witness.terms[witness_names.index("run")]) == repr(run_term)):
+                witness_index = witness.terms[witness_names.index("index")]
+                witness_run = witness.terms[witness_names.index("run")]
+                if (witness_columns["index"].type == target_index.type
+                        and witness_columns["run"].type == target_run.type
+                        and _typed_compatibility_binding(
+                            index_term, witness_index, target_index.type)
+                        and _typed_compatibility_binding(
+                            run_term, witness_run, target_run.type)):
                     found = True; break
             if not found:
-                issues.append(ValidationIssue("mixed-binding-join", "static/runtime joins require an exact index/run compatibility witness", path))
+                issues.append(ValidationIssue("mixed-binding-join", "static/runtime joins require an exact typed index/run compatibility witness", path))
                 return
     context_bindings = []
     for atom in atoms:
         decl = relations[atom.relation]; names = [c.name for c in decl.columns]
-        context_bindings.append((atom, {n: atom.terms[names.index(n)] for n in decl.context_indices}))
-    for i, (_, left) in enumerate(context_bindings):
-        for _, right in context_bindings[i + 1:]:
-            differing = {k for k in left.keys() & right.keys() if repr(left[k]) != repr(right[k])}
-            differing_terms = tuple(term for key in differing for term in (left[key], right[key]))
-            left_rel = next((a.relation for a, b in context_bindings if b is left), None)
-            right_rel = next((a.relation for a, b in context_bindings if b is right), None)
+        context_bindings.append(
+            (atom, decl,
+             {name: atom.terms[names.index(name)]
+              for name in decl.context_indices},
+             {column.name: column for column in decl.columns}))
+    for i, (left_atom, _, left, left_columns) in enumerate(context_bindings):
+        for right_atom, _, right, right_columns in context_bindings[i + 1:]:
+            differing = {key for key in left.keys() & right.keys()
+                         if repr(left[key]) != repr(right[key])}
+
             def witness_matches(atom, decl):
-                if not {left_rel, right_rel}.issubset(set(decl.compatibility_targets)): return False
-                names = [c.name for c in decl.columns]
-                positions = decl.compatibility_context_indices or decl.context_indices
-                payload = tuple(atom.terms[names.index(p)] for p in positions if p in names)
-                return bool(differing) and all(term in payload for term in differing_terms)
-            witnessed = any(witness_matches(atom, decl) for atom, decl in compatibility)
+                if not {left_atom.relation, right_atom.relation}.issubset(
+                        set(decl.compatibility_targets)):
+                    return False
+
+                # Schema v1 has no declaration that associates arbitrary
+                # witness payload positions with named target dimensions.
+                # Preserve the unambiguous one-dimension form only: the two
+                # declared positions are, in order, the left and right values
+                # for the sole differing context key.  Scanning all payload
+                # columns for every key let one (a,b) pair authorize both
+                # tenant and run when their types/values happened to coincide.
+                if len(differing) != 1:
+                    return False
+                positions = decl.compatibility_context_indices
+                if len(positions) != 2:
+                    return False
+                names = [column.name for column in decl.columns]
+                if any(position not in names for position in positions):
+                    return False
+                key = next(iter(differing))
+                left_position, right_position = (
+                    names.index(position) for position in positions)
+                left_witness = atom.terms[left_position]
+                right_witness = atom.terms[right_position]
+                left_type = left_columns[key].type
+                right_type = right_columns[key].type
+                return (
+                    decl.columns[left_position].type == left_type
+                    and decl.columns[right_position].type == right_type
+                    and _typed_compatibility_binding(
+                        left[key], left_witness, left_type)
+                    and _typed_compatibility_binding(
+                        right[key], right_witness, right_type))
+
+            witnessed = any(witness_matches(atom, decl)
+                              for atom, decl in compatibility)
             if differing and not witnessed:
-                issues.append(ValidationIssue("missing-compatibility", "cross-context joins require an explicit compatibility witness", path)); return
+                issues.append(ValidationIssue("missing-compatibility", "cross-context joins require an explicit typed compatibility witness", path)); return
 
 
 def _validate_aggregation(a, rule, relations, issues, path):
@@ -675,9 +1143,11 @@ def _validate_claim(claim, relations, issues, path):
     env = {}
     for i, (term, col) in enumerate(zip(claim.terms, relation.columns)): _validate_term(term, col.type, env, issues, f"{path}.terms[{i}]")
     known_context = set(relation.context_indices)
-    if not hasattr(claim.context, "as_dict"):
-        issues.append(ValidationIssue("claim-context", "claim context must be a Context", path)); context = {}
-    else: context = claim.context.as_dict()
+    context = _context_values(claim.context)
+    if context is None:
+        issues.append(ValidationIssue(
+            "claim-context", "claim context must be a well-formed Context", path))
+        context = {}
     if set(context) != known_context: issues.append(ValidationIssue("claim-context", "claim context must exactly match relation context indices", path))
     relation_names = [column.name for column in relation.columns]
     for name in known_context:
@@ -686,7 +1156,12 @@ def _validate_claim(claim, relations, issues, path):
             column = relation.columns[position]
             _validate_term(Constant(context[name]), column.type, {}, issues, f"{path}.context.{name}")
             term = claim.terms[position]
-            if isinstance(term, Constant) and term.value != context[name]:
+            if (claim.quantifier.value == "forall"
+                    and isinstance(term, Variable)):
+                issues.append(ValidationIssue(
+                    "claim-context",
+                    f"FORALL context column {name!r} must be a ground constant", path))
+            elif isinstance(term, Constant) and term.value != context[name]:
                 issues.append(ValidationIssue(
                     "claim-context",
                     f"context value does not equal claim term for column {name!r}", path))
@@ -727,11 +1202,20 @@ def _validate_claim(claim, relations, issues, path):
 
 
 def _validate_recursion(bundle, relations, issues):
-    edges = {r.name: [] for r in bundle.relations}
+    # ``relations`` contains only structurally checked declarations.  Building
+    # this graph from raw Bundle members used to re-dereference ``r.name`` and
+    # defeat the earlier relation-type diagnostic with AttributeError.
+    edges = {name: [] for name in relations}
     for rule in bundle.rules:
-        if not isinstance(rule, Rule) or not isinstance(rule.head, Atom) or rule.head.relation not in edges: continue
-        for atom in rule.body:
-            if isinstance(atom, Atom) and atom.relation in edges: edges[rule.head.relation].append((atom.relation, atom.negated))
+        if (not isinstance(rule, Rule) or not isinstance(rule.head, Atom)
+                or not isinstance(rule.head.relation, str)
+                or rule.head.relation not in edges):
+            continue
+        body = rule.body if isinstance(rule.body, tuple) else ()
+        for atom in body:
+            if (isinstance(atom, Atom) and isinstance(atom.relation, str)
+                    and atom.relation in edges):
+                edges[rule.head.relation].append((atom.relation, atom.negated))
         if isinstance(rule.aggregation, Aggregation) and rule.aggregation.relation in edges: edges[rule.head.relation].append((rule.aggregation.relation, False))
     components = _scc(edges)
     for start in edges:
@@ -752,18 +1236,54 @@ def _reachable(edges, source):
 
 
 def _scc(edges):
-    index = 0; stack = []; on_stack = set(); indices = {}; low = {}; result = {}
-    def visit(node):
+    """Return strongly connected components with bounded iterative DFS."""
+    index = 0
+    stack = []
+    on_stack = set()
+    indices = {}
+    low = {}
+    result = {}
+
+    def enter(node):
         nonlocal index
-        indices[node] = low[node] = index; index += 1; stack.append(node); on_stack.add(node)
-        for child, _ in edges[node]:
-            if child not in indices: visit(child); low[node] = min(low[node], low[child])
-            elif child in on_stack: low[node] = min(low[node], indices[child])
-        if low[node] == indices[node]:
-            component = len(result); members = []
-            while True:
-                item = stack.pop(); on_stack.remove(item); result[item] = component; members.append(item)
-                if item == node: break
-    for node in edges:
-        if node not in indices: visit(node)
+        indices[node] = low[node] = index
+        index += 1
+        stack.append(node)
+        on_stack.add(node)
+
+    for root in edges:
+        if root in indices:
+            continue
+        enter(root)
+        # Frames are (node, next-child position, parent).  This is Tarjan's
+        # recursive call stack made explicit so producer input cannot consume
+        # the Python stack before the declared depth bound is checked.
+        frames = [(root, 0, None)]
+        while frames:
+            if len(frames) > MAX_RULE_DEPENDENCY_DEPTH:
+                raise ValidationResourceError(
+                    f"rule dependency depth exceeds {MAX_RULE_DEPENDENCY_DEPTH}")
+            node, position, parent = frames[-1]
+            children = edges[node]
+            if position < len(children):
+                child, _ = children[position]
+                frames[-1] = (node, position + 1, parent)
+                if child not in indices:
+                    enter(child)
+                    frames.append((child, 0, node))
+                elif child in on_stack:
+                    low[node] = min(low[node], indices[child])
+                continue
+
+            frames.pop()
+            if parent is not None:
+                low[parent] = min(low[parent], low[node])
+            if low[node] == indices[node]:
+                component = len(result)
+                while True:
+                    item = stack.pop()
+                    on_stack.remove(item)
+                    result[item] = component
+                    if item == node:
+                        break
     return result

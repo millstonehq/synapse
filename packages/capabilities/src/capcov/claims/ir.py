@@ -313,17 +313,37 @@ class Bundle:
     outputs: tuple[OutputTemplate, ...] = ()
 
     def __post_init__(self) -> None:
+        # ``compare`` and canonical replay accept Bundle values, not arbitrary
+        # Python object graphs.  Reject non-IR collection members here rather
+        # than letting validation partly inspect them and then crash (or making
+        # the shrinker pretend an unencodable object has replay bytes).
+        collections = (
+            ("relations", self.relations, RelationDecl),
+            ("facts", self.facts, Atom),
+            ("rules", self.rules, Rule),
+            ("claims", self.claims, Claim),
+            ("evidence", self.evidence, Evidence),
+            ("mappings", self.mappings, EvidenceMapping),
+            ("diagnostics", self.diagnostics, DiagnosticRule),
+            ("outputs", self.outputs, OutputTemplate),
+        )
+        normalized = {}
+        for name, values, expected in collections:
+            try:
+                values = tuple(values)
+            except TypeError as exc:
+                raise TypeError(f"Bundle.{name} must be an iterable of {expected.__name__} values") from exc
+            if any(not isinstance(value, expected) for value in values):
+                raise TypeError(f"Bundle.{name} must contain only {expected.__name__} values")
+            normalized[name] = tuple(sorted(values, key=_sort_key))
+        if not isinstance(self.diagnostic_policy, DiagnosticPolicy):
+            raise TypeError("Bundle.diagnostic_policy must be a DiagnosticPolicy")
+
         # These collections denote sets in the language.  Normalize their
         # order at construction time so independently assembled bundles hash
         # identically even when their producers enumerate inputs differently.
-        object.__setattr__(self, "relations", tuple(sorted(self.relations, key=_sort_key)))
-        object.__setattr__(self, "facts", tuple(sorted(self.facts, key=_sort_key)))
-        object.__setattr__(self, "rules", tuple(sorted(self.rules, key=_sort_key)))
-        object.__setattr__(self, "claims", tuple(sorted(self.claims, key=_sort_key)))
-        object.__setattr__(self, "evidence", tuple(sorted(self.evidence, key=_sort_key)))
-        object.__setattr__(self, "mappings", tuple(sorted(self.mappings, key=_sort_key)))
-        object.__setattr__(self, "diagnostics", tuple(sorted(self.diagnostics, key=_sort_key)))
-        object.__setattr__(self, "outputs", tuple(sorted(self.outputs, key=_sort_key)))
+        for name, values in normalized.items():
+            object.__setattr__(self, name, values)
         metadata_keys = [k for k, _ in self.metadata]
         if any(not isinstance(k, str) for k in metadata_keys): raise TypeError("metadata keys must be strings")
         if len(metadata_keys) != len(set(metadata_keys)): raise ValueError("duplicate metadata keys")
@@ -407,7 +427,13 @@ def _strict_object(raw, allowed, path):
     return raw
 
 
-def bundle_from_json(source: str | bytes | Mapping[str, Any], *, validate: bool = True) -> Bundle:
+class BundleIngestionError(ValueError):
+    """Raw input could not become a canonical Bundle."""
+
+    operational_failure = "invalid-input"
+
+
+def _bundle_from_json(source: str | bytes | Mapping[str, Any], *, validate: bool = True) -> Bundle:
     """Strictly ingest a schema-v1 JSON object; unknown fields are rejected."""
     def reject_constant(value): raise ValueError(f"non-standard JSON constant: {value}")
     def reject_duplicate(pairs):
@@ -513,6 +539,23 @@ def bundle_from_json(source: str | bytes | Mapping[str, Any], *, validate: bool 
         from .validation import assert_valid
         assert_valid(bundle)
     return bundle
+
+
+def bundle_from_json(source: str | bytes | Mapping[str, Any], *,
+                     validate: bool = True) -> Bundle:
+    """Ingest raw JSON or raise one named ``invalid-input`` boundary error.
+
+    Differential comparison starts only after this function has produced a
+    canonical Bundle.  Raw malformed bytes therefore do not pretend to have a
+    Bundle replay digest; callers can classify this explicit ingestion result
+    without broadly treating implementation ``AttributeError`` as bad input.
+    """
+    try:
+        return _bundle_from_json(source, validate=validate)
+    except BundleIngestionError:
+        raise
+    except (KeyError, TypeError, ValueError, UnicodeError) as exc:
+        raise BundleIngestionError(str(exc)) from exc
 
 
 def from_json(source): return bundle_from_json(source)
