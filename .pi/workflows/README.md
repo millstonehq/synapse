@@ -122,6 +122,9 @@ Shen/specialization chain remains represented only for journal aliasing.
 Legacy tasks are disabled and cannot run or satisfy the independent
 Python-plus-Souffle evidence gate.
 
+Gate commands set `PYTHONPATH="$PWD/src"` (absolute) because upstream tests spawn
+`python -m capcov` from a temporary working directory, where a relative `src` does not resolve.
+
 Gates that depend on an external binary (`souffle`, `scip`, `scip-go`) are
 fail-closed: they require the tool to resolve under `/nix/store` and reject a
 test run whose output contains `skipped`. Locally the same test modules skip
