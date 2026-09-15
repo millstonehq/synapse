@@ -4943,3 +4943,20 @@ across engines for 28 conclusions, fixpoint cross-check with zero differences, w
 indexings of the same copy now produce identical index, evidence ids, and bundle digest, with
 the index-file digest kept only as a run receipt). Each deliverable's gates were rerun by the
 integrator before merging. The target-go static pilot (section 30) is in progress on that base.
+
+#### 2026-09-15 target-go pilot integrated into the experiment line (`7e8b391`)
+
+`agent/scip-target-go-pilot` (`939fb57`, `3630c84`) merged without conflicts. On the merged tree the
+pilot gate failed one pin: `export.exported_bundle_digest` `89d2988a…` → `65f82965…`, with the
+combined bundle digest, the plain IR digest, and the two certificate hashes (which bind to the
+exact bundle) moving with it. Every run-independent value was equal: the static identity
+`0759ccef…`, all relation row counts, the kernel report digest `06daf07b…` (Python = Soufflé),
+coverage, and the certificate derivations. Cause, as for the go_app pin in section 29: the
+kernel line (`8a54a04`) serialises Context as a flat object, which changes each evidence
+record's canonical bytes; the pilot worktree predates that line. The committed artifacts
+(`receipt.json`, two certificates) are replaced by the merged-tree run's, so the pinned bundle
+digests describe the tree they live in; the identity pin is unchanged. Merged-tree gates
+(integrator's runs): full regression 1029 tests with that single failure before the re-pin;
+static differential 18, adversarial 6, cross-check 5, live exporter 8 all OK; pilot gate 9 OK
+after the re-pin.
+

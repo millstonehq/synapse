@@ -4,7 +4,7 @@
   "max_depth": 64,
   "max_nodes": 10000
  },
- "bundle_digest": "95ec166ef72edd6f419a93f0641432d70f349c67c1cb6daa438eb3723be4406a",
+ "bundle_digest": "d1b1a82d598b4b1592836a6668f527eb4ec1a9781824e55f22318d5fa9676bdb",
  "certificate_version": "capcov-static-certificate-v1",
  "conclusion": {
   "relation": "static_reaches",
