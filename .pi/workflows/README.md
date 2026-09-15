@@ -28,6 +28,15 @@ harness, not part of capcov's production engine.
    /capcov-workflow retry <task-id>
    ```
 
+Pin the devShell closure with a GC root before any long run. `nix develop` creates no
+root, so a garbage collection during a gate deletes Soufflé, Python, or Go mid-run
+and every external-binary gate fails for infrastructure reasons:
+
+```sh
+nix build --no-update-lock-file .#devShells.aarch64-darwin.default \
+  --out-link .capcov/pi-workflow/devshell-gcroot
+```
+
 Before `start` or any long resume, prove the installed Pi subprocess and parser
 contract cheaply in an interactive Pi session:
 
