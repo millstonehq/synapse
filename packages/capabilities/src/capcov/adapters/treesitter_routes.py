@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .. import artifacts
 from . import build_core_dict, project_flows_unresolved
 from ..flows import discovery as flows_discovery
 
@@ -80,6 +81,15 @@ def discover(
         raise ValueError(
             "treesitter-routes needs 'language' and 'query' in its [[adapters]] entry"
         )
+    # A language-only route config must analyze its language tree.  Leaving the
+    # glob empty made discovery fail closed in the engine while the CLI's
+    # provenance path appeared to hash a non-empty tree.  Keep explicit globs or
+    # files authoritative; otherwise use the safe per-language default.
+    if not config.get("globs") and not config.get("files"):
+        config = {
+            **config,
+            "globs": [artifacts.language_pattern(config.get("language"))],
+        }
     deep = config.get("deep")
     # The deep decision is made BEFORE the engine runs: whether tooling is present
     # settles whether the deep queries are even forwarded (state 3) or the run is
