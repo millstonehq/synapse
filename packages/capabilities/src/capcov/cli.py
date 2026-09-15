@@ -13,6 +13,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -153,10 +154,15 @@ def _diff(old: str, new: str, label: str) -> None:
         sys.stdout.write(line)
 
 
+def _bounded_ms(value: object) -> int:
+    return value if type(value) is int and 0 <= value <= 86_400_000 else 0
+
+
 # --------------------------------------------------------------------------
 
 
 def cmd_discover(args: argparse.Namespace) -> int:
+    phase_started = time.perf_counter_ns()
     target = Path(args.target).resolve()
     source_dir, specs = _resolve(target, args.source, args.adapter)
     # `plugin` (present only in an [[adapters]] entry that brings a bespoke reader)
@@ -262,7 +268,7 @@ def cmd_discover(args: argparse.Namespace) -> int:
     capabilities.sort(key=lambda c: (c["entity"], c["surface"]))
 
     patterns = _source_patterns(specs)
-    tree_hash, files = artifacts.tree_sha256(source_dir, patterns)
+    snapshot = artifacts.snapshot_tree(source_dir, patterns)
     blind = [b for b in raw["blind_spots"] if b["blind"]]
     extractor = "capcov " + (
         adapters[0].NAME
@@ -272,8 +278,20 @@ def cmd_discover(args: argparse.Namespace) -> int:
     doc = {
         "kind": "capabilities",
         "derived_from": artifacts.provenance(
-            str(source_dir.relative_to(target)), tree_hash, extractor, files, patterns,
+            str(source_dir.relative_to(target)),
+            snapshot.digest,
+            extractor,
+            snapshot.files,
+            patterns,
+            snapshot=snapshot,
         ),
+        "timing": {
+            "discover_ms": min(
+                max(0, (time.perf_counter_ns() - phase_started) // 1_000_000),
+                86_400_000,
+            ),
+            "source_verification": snapshot.verification,
+        },
         "entities": raw["entities"],
         "surfaces": raw["surfaces"],
         "capabilities": capabilities,
@@ -351,18 +369,31 @@ def cmd_observe(args: argparse.Namespace) -> int:
     their own exercise in-process, writing observed.json under the strong
     freshness guard.
     """
+    phase_started = time.perf_counter_ns()
     target = Path(args.target).resolve()
-    source_dir, _ = _resolve(target, args.source, args.adapter)
+    source_dir, specs = _resolve(target, args.source, args.adapter)
     probe_name = args.probe or _capcov_block(target).get("probe") or "pytest"
     probe_registry.resolve(probe_name)  # validate the name; unknown probe raises.
 
     out = Path(args.out)
+    patterns = _source_patterns(specs)
+    snapshot = artifacts.snapshot_tree(source_dir, patterns)
+    carried = snapshot.provenance(
+        str(source_dir.relative_to(target)), "capcov source-snapshot"
+    )
+    # A successful command must publish evidence from this invocation.  The
+    # command-driven pytest path cannot rely on a probe hook being installed to
+    # remove yesterday's output.
+    out.unlink(missing_ok=True)
     observe_env = {
         probe_registry.ENV_OBSERVE: "1",
         probe_registry.ENV_OUT: str(out.resolve()),
         probe_registry.ENV_SOURCE_ROOT: str(source_dir),
         probe_registry.ENV_TARGET: str(target),
         probe_registry.ENV_NONCE: uuid.uuid4().hex,
+        probe_registry.ENV_SOURCE_PROVENANCE: json.dumps(
+            carried, sort_keys=True, separators=(",", ":")
+        ),
     }
     only = getattr(args, "only", None)
     if only:
@@ -388,6 +419,12 @@ def cmd_observe(args: argparse.Namespace) -> int:
                 "same environment as the exercise."
             )
             return 1
+        try:
+            verified = snapshot.verify()
+        except (ValueError, OSError) as error:
+            print(f"capcov observe: source changed during the exercise: {error}")
+            return 1
+        _record_observe_timing(out, phase_started, verified.verification)
         return 0
 
     # In-process probes (browser, load). They read the unified env contract and
@@ -411,10 +448,44 @@ def cmd_observe(args: argparse.Namespace) -> int:
             f"{args.out}."
         )
         return 1
+    if rc == 0:
+        try:
+            verified = snapshot.verify()
+        except (ValueError, OSError) as error:
+            print(f"capcov observe: source changed during the exercise: {error}")
+            return 1
+        _record_observe_timing(out, phase_started, verified.verification)
     return rc
 
 
+def _record_observe_timing(
+    out: Path, phase_started: int, source_verification: dict
+) -> None:
+    """Attach bounded volatile timing without changing evidence semantics."""
+    try:
+        document = json.loads(out.read_text())
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(document, dict):
+        return
+    existing_timing = document.get("timing")
+    if not isinstance(existing_timing, dict):
+        existing_timing = {}
+    document["timing"] = {
+        **existing_timing,
+        "observe_ms": min(
+            max(0, (time.perf_counter_ns() - phase_started) // 1_000_000),
+            86_400_000,
+        ),
+        "source_verification": existing_timing.get(
+            "source_verification", source_verification
+        ),
+    }
+    artifacts.write_document(out, document)
+
+
 def cmd_reconcile(args: argparse.Namespace) -> int:
+    phase_started = time.perf_counter_ns()
     capabilities = artifacts.read(Path(args.capabilities), "capabilities")
     observed = artifacts.read(Path(args.observed), "observed")
     same, why = artifacts.same_artifact(capabilities, observed)
@@ -422,6 +493,21 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
         raise SystemExit(f"capcov reconcile: {why}")
 
     result = reconcile_mod.reconcile(capabilities, observed)
+    reconcile_ms = min(
+        max(0, (time.perf_counter_ns() - phase_started) // 1_000_000), 86_400_000
+    )
+    capabilities_timing = capabilities.get("timing", {})
+    observed_timing = observed.get("timing", {})
+    discover_ms = _bounded_ms(
+        capabilities_timing.get("discover_ms")
+        if isinstance(capabilities_timing, dict)
+        else None
+    )
+    observe_ms = _bounded_ms(
+        observed_timing.get("observe_ms")
+        if isinstance(observed_timing, dict)
+        else None
+    )
     doc = {
         "kind": "coverage",
         "derived_from": {
@@ -432,6 +518,12 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
         },
         **result,
         "blind_spots": capabilities.get("blind_spots", []),
+        "timing": {
+            "discover_ms": discover_ms,
+            "observe_ms": observe_ms,
+            "reconcile_ms": reconcile_ms,
+            "total_ms": min(discover_ms + observe_ms + reconcile_ms, 86_400_000),
+        },
     }
     # Carry the hybrid's SCIP evidence through the reconcile so coverage reports
     # resolved-by-SCIP AND unresolved-enumerated -- both survive to the gate and

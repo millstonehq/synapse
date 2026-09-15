@@ -54,6 +54,7 @@ ENV_SOURCE_ROOT = "CAPCOV_SOURCE_ROOT"
 ENV_TARGET = "CAPCOV_TARGET"
 ENV_NONCE = "CAPCOV_NONCE"
 ENV_ONLY = "CAPCOV_ONLY"
+ENV_SOURCE_PROVENANCE = "CAPCOV_SOURCE_PROVENANCE"
 
 # An observed envelope with no runtime-side excluded surfaces still carries the
 # key, explicitly empty. Absent-defaults-to-dropped is the Property-3 regression.
@@ -137,13 +138,20 @@ class FreshnessGuard:
     """
 
     def __init__(
-        self, out: Path | str, source_root: Path | str, *, patterns: tuple[str, ...] = ("**/*.py",)
+        self,
+        out: Path | str,
+        source_root: Path | str,
+        *,
+        patterns: tuple[str, ...] = ("**/*.py",),
+        snapshot=None,
     ) -> None:
         self.out = Path(out)
         self.source_root = Path(source_root)
         self.patterns = patterns
         self.nonce: str | None = None
         self._before: str | None = None
+        self.snapshot = snapshot
+        self.verification: dict = {}
 
     def _tree(self) -> str:
         from ..artifacts import tree_sha256
@@ -153,7 +161,12 @@ class FreshnessGuard:
     def begin(self, nonce: str | None = None) -> str:
         """Unlink stale output, snapshot the source tree, fix the nonce."""
         self.out.unlink(missing_ok=True)
-        self._before = self._tree()
+        if self.snapshot is None:
+            from ..artifacts import snapshot_tree
+
+            self.snapshot = snapshot_tree(self.source_root, self.patterns)
+        self._before = self.snapshot.digest
+        self.verification = dict(self.snapshot.verification)
         self.nonce = nonce or uuid.uuid4().hex
         return self.nonce
 
@@ -166,7 +179,11 @@ class FreshnessGuard:
                 "freshness guard: evidence nonce does not match this run "
                 "(a stale or reused artifact, not fresh observation)"
             )
-        if self._tree() != self._before:
+        from ..artifacts import snapshot_tree
+
+        current = snapshot_tree(self.source_root, self.patterns)
+        self.verification = dict(current.verification)
+        if current.digest != self._before or current.files != self.snapshot.files:
             raise ValueError(
                 "freshness guard: source changed during execution; "
                 "the observation describes a tree that no longer exists"
@@ -182,3 +199,25 @@ class FreshnessGuard:
                 f"({evidence_path})"
             )
         return self.verify(json.loads(evidence_path.read_text()))
+
+
+def source_provenance_from_env(source_root: Path | str) -> tuple[object | None, dict | None]:
+    """Validate and return the source snapshot passed by ``cmd_observe``.
+
+    Direct probe API users and older callers omit the variable and retain the
+    legacy capture path.
+    """
+    import os
+
+    raw = os.environ.get(ENV_SOURCE_PROVENANCE)
+    if raw is None:
+        return None, None
+    try:
+        derived_from = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("invalid CAPCOV_SOURCE_PROVENANCE JSON") from exc
+    if not isinstance(derived_from, dict):
+        raise ValueError("CAPCOV_SOURCE_PROVENANCE must be a JSON object")
+    from ..artifacts import carried_source_snapshot
+
+    return carried_source_snapshot(Path(source_root), derived_from), derived_from

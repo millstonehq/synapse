@@ -9,10 +9,12 @@ point, so there is not even a conftest line.
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import python_probe
+from .probe_registry import source_provenance_from_env
 
 if TYPE_CHECKING:  # pytest is present whenever this plugin loads; the guard
     # keeps the module importable by capcov's own stdlib-only test suite.
@@ -20,14 +22,16 @@ if TYPE_CHECKING:  # pytest is present whenever this plugin loads; the guard
 
 _ENABLED = False
 _EXERCISES = 0
+_STARTED_NS = 0
 
 
 def pytest_configure(config: Config) -> None:
-    global _ENABLED
+    global _ENABLED, _STARTED_NS
     if os.environ.get("CAPCOV_OBSERVE") != "1":
         return
     hooks = python_probe.install()
     _ENABLED = True
+    _STARTED_NS = time.perf_counter_ns()
     if not any(hooks.values()):
         raise RuntimeError(
             "CAPCOV_OBSERVE=1 but neither sqlalchemy nor fastapi could be "
@@ -53,4 +57,30 @@ def pytest_sessionfinish(session: Session, exitstatus: int) -> None:
         return
     out = Path(os.environ.get("CAPCOV_OUT", "observed.json"))
     source = Path(os.environ.get("CAPCOV_SOURCE_ROOT", "src"))
-    python_probe.dump(out, source, _EXERCISES)
+    snapshot, carried = source_provenance_from_env(source)
+    python_probe.dump(
+        out,
+        source,
+        _EXERCISES,
+        source_snapshot=snapshot,
+        source_provenance=carried,
+    )
+    if carried is not None:
+        from .. import artifacts
+
+        # This is deliberately after dump: the carried begin-side identity may
+        # only be published after one final authoritative tree verification.
+        verification = snapshot.verify().verification
+        document = artifacts.read(out, "observed")
+        document["derived_from"] = {
+            **carried,
+            "extractor": "capcov python-probe",
+        }
+        document["timing"] = {
+            "observe_ms": min(
+                max(0, (time.perf_counter_ns() - _STARTED_NS) // 1_000_000),
+                86_400_000,
+            ),
+            "source_verification": verification,
+        }
+        artifacts.write_document(out, document)

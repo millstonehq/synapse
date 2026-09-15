@@ -251,10 +251,23 @@ def install() -> dict[str, bool]:
     return hooks
 
 
-def dump(out: Path, source_root: Path, exercises: int) -> None:
+def dump(
+    out: Path,
+    source_root: Path,
+    exercises: int,
+    *,
+    source_snapshot=None,
+    source_provenance: dict | None = None,
+) -> None:
     from .. import artifacts
 
-    tree_hash, files = artifacts.tree_sha256(source_root)
+    # ``cmd observe`` already captured the source identity.  Reusing it here is
+    # important: the pytest process must not walk the oracle once for the
+    # command and then again merely to write its envelope.  Direct callers keep
+    # the legacy capture path.
+    snapshot = source_snapshot
+    if snapshot is None and source_provenance is None:
+        snapshot = artifacts.snapshot_tree(source_root)
     merged: dict[tuple[str, str], dict] = {}
     for (surface_id, entity, op), exercises_ in sorted(_BINDINGS.items()):
         row = merged.setdefault(
@@ -271,11 +284,11 @@ def dump(out: Path, source_root: Path, exercises: int) -> None:
         }
         for (surface_id, entity), row in sorted(merged.items())
     ]
-    artifacts.write(
-        out,
-        "observed",
-        artifacts.provenance(
-            os.path.basename(str(source_root)), tree_hash, "capcov python-probe", files
-        ),
-        {"bindings": bindings, "exercises": exercises},
-    )
+    if source_provenance is not None:
+        derived_from = {**source_provenance, "extractor": "capcov python-probe"}
+    else:
+        assert snapshot is not None
+        derived_from = snapshot.provenance(
+            os.path.basename(str(source_root)), "capcov python-probe"
+        )
+    artifacts.write(out, "observed", derived_from, {"bindings": bindings, "exercises": exercises})
