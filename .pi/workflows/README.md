@@ -110,6 +110,14 @@ test run whose output contains `skipped`. Locally the same test modules skip
 when the tool is absent so `unittest discover -s tests` stays honest outside
 `nix develop`; a skip is never accepted as gate evidence.
 
+Manifest, harness, or driver edits made by a human between checkpoints are
+committed by the human and journaled as a `manifest-checkpoint` event whose
+`checkpoint` is that commit. Resume accepts it as the expected HEAD; it completes
+no task and satisfies no admission requirement. A `task-reset` appended by a
+human must carry a `reason` naming the infrastructure failure (timeout
+misconfiguration, host kill) that consumed the attempts; it is never used after
+a gate or review failure.
+
 Tasks that were delivered manually from `codex/*` worktrees before the driver
 ran them are recorded in `events.jsonl` as `task-completed` events carrying
 `manual: true` and `integrated_from` revisions, with `checkpoint` set to the
