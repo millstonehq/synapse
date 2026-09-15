@@ -3627,9 +3627,32 @@ than absence. Completeness claims therefore require indexer and language coverag
 ### Identity and context
 
 Every static relation carries exactly one context column `index` (type `digest`,
-`context: true`), whose value is the SCIP index digest: `sha256` of the `index.scip` bytes
-(`digest_kind = binary`) or `sha256("scip-json:" + canonical_json(raw))` for a checked-in JSON
-fixture (`digest_kind = json`). Tree-sitter-side facts (routes, op sites, blind spots) are
+`context: true`), whose value is a content digest of the normalized relations the exporter
+emits — the `static-relations-v1` identity:
+
+```text
+index = sha256("static-relations-v1:" + canonical_json({
+          "relations": sorted(<every relation name the bundle declares>),
+          "rows": {relation: sorted(rows with the index column removed, by canonical JSON)
+                   for every exported primitive relation with at least one row,
+                   except the compatibility relations index_describes_run / scip_index_comparable}}))
+```
+
+`export_bundle` builds every fact under a placeholder index, computes this digest from the
+finished rows, then sets every `index` column to it and computes the evidence ids (which embed
+`index[:12]` and the row digest): content digest → index → ids. Two exports of the same
+normalized content therefore carry the same `index`, the same evidence ids and the same bundle
+digest regardless of the indexer's emission order (scip-go writes per-document `symbols` in Go
+map order, section 28) and of which copy of the tree was indexed. Compatibility relations bind
+the index to *other* contexts (a run, another index) and are supplied at claim time, so they are
+keyed by the identity rather than part of it. The digest of the index file the runner read —
+`sha256(index.scip bytes)` (`binary`) or `sha256("scip-json:" + canonical_json(raw))` for a
+checked-in JSON fixture (`json`) — is a *run receipt*, not identity: `read_scip_index` still
+returns it as `index_digest` / `index_digest_kind`, the exporter reports it in
+`ExportResult.messages`, carries it in bundle metadata as `index_file_digest` /
+`index_file_digest_kind`, and `scip_facts.bundle_digest` excludes those two keys
+(`RECEIPT_METADATA_KEYS`); `scip_index.digest_kind` carries the literal `static-relations-v1`.
+Tree-sitter-side facts (routes, op sites, blind spots) are
 keyed by the same `index`: the exporter binds one tree walk to one index and refuses to export
 unless the language-scoped tree digest matches (`artifacts.tree_sha256` gains per-language
 patterns; today Go and PHP trees hash as empty). Under `validation.py` this means cross-index
@@ -3693,8 +3716,10 @@ string (`scip-go 0.2.7`, `scip 0.9.0 print --json`, `treesitter-routes go`,
 `capcov.claims.static.scip_facts v1`). `depends_on` chains: an edge depends on its document,
 its reference occurrence, and the caller-definition occurrence; sites depend on the tree
 identity; witnesses depend on their document and the tree identity; `scip_index_commit`
-depends on `external:git-commit:<sha>`. Bundle metadata records export version, index digest,
-scope, producer versions, and profile (`slice` or `full`).
+depends on `external:git-commit:<sha>`. Bundle metadata records export version, index identity
+(`index_digest`, kind `static-relations-v1`), the index-file receipt (`index_file_digest`,
+`index_file_digest_kind`; outside `bundle_digest`), scope, producer versions, and profile
+(`slice` or `full`).
 
 ### Runner retention (opt-in, backward compatible)
 
@@ -3899,13 +3924,18 @@ pack, its 13 cases, `expected.json` and README (item 4, item 1), `test_scip_fact
 
 **go_app bundle identities (all computed by me in the devShell; the tests assert the first).**
 Golden `tests/fixtures/scip_go_app_index.json` sha256 `0b5183fc8d03afc1f86331ae3e1d5bdfe9ff87e0159c96156662b6bde51e687e`;
-index digest (`sha256("scip-json:"+canonical_json)`, kind `json`)
-`4a500048401a2c4e45d4f86710568a5543570e21db83f143965bf0a3d0b7c8da`; Go tree digest of
+index identity (`static-relations-v1`, see "Identity and context"; recomputed with the identity
+rebase recorded at the end of this section, when the file receipt
+`sha256("scip-json:"+canonical_json)` = `4a500048401a2c4e45d4f86710568a5543570e21db83f143965bf0a3d0b7c8da`
+stopped being the identity) `0360df877c99d8259f7f7f24cdca357afa64c4be9b27a739e1e78bb94c564320`,
+the same for the plain export and for the export that also declares `index_describes_run(run-1)`;
+Go tree digest of
 `tests/fixtures/go_app` over `**/*.go` `68a0ccf1d2af57276cca57696430f657e1de895e0af1906c36762376224dd870`
-(5 files). Exported bundle (facts+evidence+declarations+metadata, no rules/claims): digest
-`53dcade7ef62635161c9f825fbdee012d2511bdf23e3f7470cdb3b636426decc`, 210 facts / 210 evidence
-records, identical under two seeded permutations of documents, occurrences, symbols and of the
-ast_raw lists. Exported row counts: `scip_definition_site` 38, `scip_read_site` 42,
+(5 files). Exported bundle (facts+evidence+declarations+metadata minus the receipts, no
+rules/claims): digest `585240159f4abfa9eb96a778abaa1bbba4ab95553f79e7163901f5f91ca1a49d` (was
+`53dcade7…` under the file-digest identity), 210 facts / 210 evidence records, identical under
+two seeded permutations of documents, occurrences, symbols and of the ast_raw lists exported
+under a different fake file receipt. Exported row counts: `scip_definition_site` 38, `scip_read_site` 42,
 `scip_symbol` 37, `scip_symbol_node` 22, `scip_symbol_unrooted` 9, `scip_type_reference` 9,
 `scip_enclosing` 8, `scip_may_reference` 7, `scip_document` 5, `static_source_file` 5,
 `scip_definitions_closed` 5, `scip_references_closed` 5, `static_site_owner` 3, `static_op_site` 2,
@@ -3916,19 +3946,20 @@ ast_raw lists. Exported row counts: `scip_definition_site` 38, `scip_read_site` 
 section-29 relation and are not exported. Combined differential bundle (exporter + pack +
 `source_tree_observed` + two `runtime_route_observed` rows + `hop_succ(1..63→2..64)` /
 `static_reaches_within` cross-check + 7 claims): digest
-`20e2ed9be861fe642afa4f1848e5a7951bf76a1d8c273cc59c157d73a641da71`, 276 facts, 29 rules, 70
-relations; rules digest `3c7c80822404fc2ef221b91edd209db7ea8e73a40122a9f9764be20398a4d36c`;
-rule pack file sha256 `141867ba8aac496db62e52a9b27b3e2be55881f8886249c7f80d4474e8dafe66` (these
-three, the Soufflé digests, the kernel report digest and the closure counts below were recomputed
-after the duplicate-definition guard recorded at the end of this section; the reducer run at
-parent 7b1a65e had bundle `8b94be89…`, rules `128f22fb…`, pack `87959f38…`, program `f54bd921…`,
-output `71637edc…`, evidence `4f24b0bb…`, report `4588948e…`, 368 rows / 399 provenance nodes,
-and 22 `scip_duplicate_definition` rows). Soufflé program digest
-`9832600f50fe8cea420d7587efd6ae9de7361e57d7f7e2135ba7805f18129b4e`, output digest
-`0203dbdf127e4f3e33c417deab08523afe12de0cbd570684770a2efdefb28984`, Soufflé evidence digest
-`ad9b29a98aeab16601189bc618a5920119edf22551e97d0c5f91b765766a46cf`, runtime `souffle-2.5`; kernel
-report canonical digest (equal for Python and Soufflé)
-`39b9c5ff2d3163ff7822184412af4c16b990758899bc7dfb965239cdcebb6629`. Closure: 346 rows over all
+`1b61ce60009110b6cb923765502e235954b4bcd730d76083f8177b7893cbd299` (`scip_facts.bundle_digest`,
+receipt-free; the plain `claims.ir.digest` of the same bundle, which still sees the file receipt
+nested under `source_0`, is `77e157a175600a92e986722df69ddc6091dc9beabc0d42bcb81caa23a95588b6`), 276 facts,
+29 rules, 70 relations; rules digest `3c7c80822404fc2ef221b91edd209db7ea8e73a40122a9f9764be20398a4d36c`;
+rule pack file sha256 `141867ba8aac496db62e52a9b27b3e2be55881f8886249c7f80d4474e8dafe66` (the
+bundle, Soufflé and kernel-report digests and the closure counts below were recomputed after the
+duplicate-definition guard and again after the identity rebase, both recorded at the end of this
+section; the reducer run at parent 7b1a65e had bundle `8b94be89…`, rules `128f22fb…`, pack
+`87959f38…`, program `f54bd921…`, output `71637edc…`, evidence `4f24b0bb…`, report `4588948e…`,
+368 rows / 399 provenance nodes and 22 `scip_duplicate_definition` rows; after the guard alone,
+bundle `20e2ed9b…`, program `9832600f…`, output `0203dbdf…`, evidence `ad9b29a9…`, report
+`39b9c5ff…`). Soufflé program digest `9832600f50fe8cea420d7587efd6ae9de7361e57d7f7e2135ba7805f18129b4e`, output digest `1595607d9ffe8e2cb082fe606cfcacadf48ee342b892312eb8dd9bd36b1a5e1f`, Soufflé evidence
+digest `f2e02a84a8ac95aa1e47616eada231f0445d73683cb7240e4affe50f275746ab`, runtime `souffle-2.5`; kernel report canonical digest (equal for Python
+and Soufflé) `3bfbbde544e081240e9bd079e35c09667dc98ae4dcc6d55639512d06928033b2`. Closure: 346 rows over all
 relations (Python `derived_rows` 346, `provenance_nodes` 357, 0 unattributed facts, 0 discarded
 alternatives); derived rows of note: `static_edge` 7, `static_root` 1, `static_reaches` 5
 (GetJob → Fetch, Repo.Get, Repo.Write, DB.First, DB.Create), `static_reaches_eq` 6,
@@ -4012,12 +4043,10 @@ raised.
 - The census behind `scip_references_closed`/`static_reachability_closed` in the go_app bundle is
   a hand review of five files, so the negative verdict `claim-runtime-route-gap` rests on that
   review, not on tree-sitter; the `treesitter` extra is still not in the devShell.
-- Binary index identity is per run: two `scip-go` indexings of the *same* copy produced different
-  `index.scip` bytes (per-document `symbols` order, section 28), so `index_digest_kind=binary`
-  bundles from separate runs differ in every evidence id. The live test now asserts equality of
-  facts, evidence chains and metadata modulo the index identity (re-keyed by attested row) and
-  equality of digests only when the identities coincide; the reproducible identity is the JSON
-  golden's. A canonical identity for binary indexes would be a scheme change to this section.
+- (Fixed, see the identity record below.) Binary index identity was per run: two `scip-go`
+  indexings of the *same* copy produced different `index.scip` bytes (per-document `symbols`
+  order, section 28), so `binary` bundles from separate runs differed in every evidence id and
+  the live test could only compare them modulo identity.
 - `scip_duplicate_definition` over-approximated (fixed, see the record below): on go_app it had 22
   rows, all `local N` symbols, and on a multi-file Go package it would also fire on the package
   symbol scip-go defines in every file, so `scip_references_closed` would have been withheld for
@@ -4045,7 +4074,8 @@ class), so the derived relation and the witness policy agree; the pack README do
 guard. Effects: go_app `scip_duplicate_definition` 22 → 0 rows (all 22 were `local 0..3`), the
 five `scip_references_closed` witnesses and `static_reachability_closed` are unchanged, closure
 368 → 346 rows, and the identities above were recomputed (the exported bundle digest
-`53dcade7…` is unchanged because the exporter did not change). Reviewed expectations: case 09's
+`53dcade7…` was unchanged by the guard because the exporter did not change; it changed with the
+identity rebase below). Reviewed expectations: case 09's
 verdicts are unchanged; `claim-duplicate`'s support and observed leaf sets gain the callable's
 `scip_symbol:b87c0b7fbf06` row, because the guard is now part of the proof (the leaf-set change
 the previous limit predicted). New variant `09-duplicate-definitions-package-symbol`: `GetJob`
@@ -4063,6 +4093,42 @@ rows in 09 and the empty relation plus six witnesses in the variant, in both ker
 `test_scip_facts_export` asserts the gonest fixture's repeated definitions (`local 0..2` and the
 `internal/jobs` package symbol) are all category `other` and withhold no witness. Certificates:
 25 across the 14 static cases (was 23 across 13).
+
+### Identity rebased onto the exported relations (2026-09-15, follow-up on `scip-datalog/fan-in`)
+
+`scip_facts.export_bundle` now derives `index` from the content it exports ("Identity and
+context" above holds the recipe): facts are assembled under a placeholder, `_Facts.identity()`
+digests the sorted index-free rows of every non-compatibility primitive relation plus the
+declared relation names under the prefix `static-relations-v1:`, `_Facts.rebase(index)` sets
+every `index` column, recomputes every evidence id and rewrites `depends_on` (including the
+`external:scip-occurrence:<index12>:…` references) through the old→new map, and only then is
+the bundle materialized. `scip_index.digest_kind` is the literal `static-relations-v1`; the
+file digest the runner hashed (`read_scip_index` is unchanged) is reported in
+`ExportResult.messages` and carried as metadata `index_file_digest` / `index_file_digest_kind`,
+which `bundle_digest` strips (`RECEIPT_METADATA_KEYS`) — the one thing that had to stay
+receipt-only and outside the digest, because the requirement that two indexings of the same
+tree yield the same bundle digest cannot hold if the differing file bytes are digested. The
+frozen `schema_static_v1.json` is untouched; no `scip_index_receipt` relation was needed since
+the receipt is provenance of the export run, not a fact any rule joins. Compatibility relations
+(`index_describes_run`, `scip_index_comparable`) are excluded from the recipe on purpose: they
+bind the index to a run or another index at claim time, and including them made the golden's
+identity differ between the plain export and the differential bundle's export
+(`describes_runs=(run-1,)`), which the first cut of this change exposed. go_app identity
+`0360df877c99d8259f7f7f24cdca357afa64c4be9b27a739e1e78bb94c564320`, exported bundle digest
+`585240159f4abfa9eb96a778abaa1bbba4ab95553f79e7163901f5f91ca1a49d`; the differential identities
+above were recomputed. Tests: `test_scip_facts_export` asserts the metadata split (identity vs
+receipt), the `scip_index` literal, that a permuted copy of the same normalized index exported
+under a *different* fake `binary` receipt yields the same `index`, the same evidence id set and
+the same `bundle_digest` while the plain IR digest differs only by the receipts, that the recipe
+recomputes from the bundle's own rows, that changed content is a different identity, and that
+the placeholder never leaks; `test_differential_static_reachability` pins the golden identity
+and digest and repeats the shuffled export under a fake receipt; `test_scip_facts_live` replaces
+the modulo-identity comparison with strict equality of `index`, evidence id set, facts, evidence
+records and `bundle_digest` across two independent scip-go indexings of the same copy, with only
+the receipt keys allowed to differ — result: two independent `scip-go` indexings of the same copy in the devShell gave equal `index`, evidence
+id sets, facts, evidence records and `bundle_digest` (`test_scip_facts_live`: `Ran 8 tests` / `OK`, the
+re-indexing test `ok`, not skipped). The synthetic static cases keep their
+hand-written `IX` constants.
 
 ## 30. target-go static path pilot
 

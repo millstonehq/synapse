@@ -12,10 +12,38 @@ documents, occurrences or symbols of the index changes nothing.
 
 IDENTITY
 --------
-``index`` is ``sha256(index.scip bytes)`` (``digest_kind = "binary"``) or
-``sha256("scip-json:" + canonical_json(raw))`` for a checked-in JSON fixture
-(``digest_kind = "json"``); the caller supplies both because the exporter never
-touches the index file. The tree-sitter side is bound to the same ``index``
+``index`` is a content digest of the normalized relations the exporter emits,
+not of the index file: scip-go writes per-document ``symbols`` in Go map order,
+so two indexings of one tree produce different ``index.scip`` bytes, and a
+digest of those bytes is not reproducible (section 28). The recipe
+(``INDEX_IDENTITY = "static-relations-v1"``) is
+
+    index = sha256("static-relations-v1:" + canonical_json({
+        "relations": sorted(<every relation name the bundle declares>),
+        "rows": {relation: sorted(canonical rows with the ``index`` column
+                                  removed) for every exported primitive
+                 relation with at least one row, except the compatibility
+                 relations (``index_describes_run``, ``scip_index_comparable``)}}))
+
+Compatibility relations bind the index to *other* contexts (a run, another
+index) and are supplied by the consumer at claim time, so they are keyed by the
+identity rather than part of it: declaring that an index describes ``run-1``
+does not make it a different index.
+
+Every fact is first built under a placeholder index, the identity is computed
+from the finished rows, then every ``index`` column is set to it and the
+evidence ids (which embed ``index[:12]`` and the row digest) are computed --
+content digest, then index, then ids. Two exports of the same normalized
+content therefore carry the same ``index``, the same evidence ids and the same
+``bundle_digest`` whatever the indexer's emission order and whichever copy of
+the tree was indexed. The digest of the index file the caller read
+(``sha256(index.scip bytes)``, kind ``binary``, or ``sha256("scip-json:" +
+canonical_json(raw))`` for a checked-in fixture, kind ``json``) is a *run
+receipt*: it is reported in ``ExportResult.messages`` and carried in bundle
+metadata as ``index_file_digest`` / ``index_file_digest_kind``, and
+``bundle_digest`` excludes those two keys (``RECEIPT_METADATA_KEYS``) so the
+receipt never becomes identity. ``scip_index.digest_kind`` carries the literal
+``"static-relations-v1"``. The tree-sitter side is bound to the same ``index``
 through ``scip_index_tree``: the exporter hashes the language-scoped source
 tree (``artifacts.patterns_for(language)``) and, when ``ast_raw`` carries the
 ``tree_digest`` it was computed over, refuses to export (``status = "stale"``)
@@ -68,9 +96,9 @@ is emitted, because "no residue" cannot be asserted about a census nobody took.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from ... import artifacts
 from ...scip import map as scip_map
@@ -100,6 +128,16 @@ _SCOPE_KINDS = (SCOPE_ALL, SCOPE_PACKAGE_PREFIX, SCOPE_DOCUMENT_SET)
 
 LINE_FRAME = "1-based"
 _SCIP_LINE_IS_ZERO_BASED = 1
+
+# The index identity scheme (module docstring, IDENTITY): the value of
+# ``scip_index.digest_kind`` and of metadata ``index_digest_kind``.
+INDEX_IDENTITY = "static-relations-v1"
+_IDENTITY_PREFIX = INDEX_IDENTITY + ":"
+# Facts are assembled under this index and re-keyed once the identity is
+# known; it never appears in an exported bundle.
+_PLACEHOLDER_INDEX = "0" * 64
+# Run receipts carried in bundle metadata but excluded from ``bundle_digest``.
+RECEIPT_METADATA_KEYS = ("index_file_digest", "index_file_digest_kind")
 
 # The witnesses' predicate versions. Each Evidence.source names one of these so
 # a reviewer knows which emission contract was checked.
@@ -254,6 +292,27 @@ def occurrence_external_id(index_digest: str, occ_digest: str) -> str:
     return f"external:scip-occurrence:{index_digest[:12]}:{occ_digest[:12]}"
 
 
+_OCCURRENCE_PREFIX = "external:scip-occurrence:"
+
+
+def static_relations_index(rows_by_relation: Mapping[str, Iterable[list[Any]]],
+                           relation_names: Iterable[str]) -> str:
+    """The ``static-relations-v1`` identity of a set of exported rows.
+
+    ``rows_by_relation`` maps a relation to its rows *without* the ``index``
+    column; only relations with at least one row take part. Row order and
+    relation order do not matter; the declared relation names do.
+    """
+    payload = {
+        "relations": sorted(set(relation_names)),
+        "rows": {
+            relation: sorted((list(row) for row in rows), key=canonical_json)
+            for relation, rows in rows_by_relation.items() if rows
+        },
+    }
+    return hashlib.sha256((_IDENTITY_PREFIX + canonical_json(payload)).encode("utf-8")).hexdigest()
+
+
 def _occurrence_roles_int(occ: dict) -> int:
     roles = occ.get("symbol_roles")
     if isinstance(roles, int) and not isinstance(roles, bool):
@@ -356,6 +415,54 @@ class _Facts:
     def __len__(self) -> int:
         return len(self.rows)
 
+    def _index_positions(self, relation: str) -> list[int]:
+        return [i for i, column in enumerate(self.relations[relation].columns)
+                if column.name == "index" and column.type == TypeName.DIGEST]
+
+    def identity(self) -> str:
+        """``static_relations_index`` over every accumulated row of a
+        non-compatibility relation (module docstring, IDENTITY)."""
+        by_relation: dict[str, list[list[Any]]] = {}
+        for (relation, _), entry in self.rows.items():
+            if self.relations[relation].modality.value == "compatibility":
+                continue
+            skip = set(self._index_positions(relation))
+            by_relation.setdefault(relation, []).append(
+                [v for i, v in enumerate(entry["row"]) if i not in skip])
+        return static_relations_index(by_relation, self.relations)
+
+    def rebase(self, index: str) -> None:
+        """Set every ``index`` column to ``index`` and recompute evidence ids.
+
+        ``depends_on`` entries are rewritten through the old->new id map;
+        ``external:scip-occurrence:<old12>:<occ12>`` references are re-prefixed
+        and every other external id is left alone.
+        """
+        old12, new12 = self.index_digest[:12], index[:12]
+        rename: dict[str, str] = {}
+        rebased: dict[tuple[str, tuple], dict] = {}
+        for (relation, _), entry in self.rows.items():
+            row = list(entry["row"])
+            for i in self._index_positions(relation):
+                row[i] = index
+            eid = evidence_id(index, relation, row)
+            rename[entry["id"]] = eid
+            rebased[(relation, tuple(row))] = {**entry, "id": eid, "row": row}
+        occ_old = f"{_OCCURRENCE_PREFIX}{old12}:"
+        occ_new = f"{_OCCURRENCE_PREFIX}{new12}:"
+
+        def remap(dep: str) -> str:
+            if dep in rename:
+                return rename[dep]
+            if dep.startswith(occ_old):
+                return occ_new + dep[len(occ_old):]
+            return dep
+
+        for entry in rebased.values():
+            entry["depends_on"] = {remap(d) for d in entry["depends_on"]} - {entry["id"]}
+        self.rows = rebased
+        self.index_digest = index
+
     def materialize(self) -> tuple[tuple[Atom, ...], tuple[Evidence, ...]]:
         facts: list[Atom] = []
         evidence: list[Evidence] = []
@@ -452,8 +559,10 @@ def export_bundle(
                              f"source root hashes to {tree_digest[:12]} over {patterns}",))
 
     relations = {decl.name: decl for decl in static_relations()}
-    facts = _Facts(index_digest, relations)
-    ix = {"index": index_digest}
+    # Facts are keyed by a placeholder until the content identity is known
+    # (module docstring, IDENTITY); ``index_digest`` is the file receipt.
+    facts = _Facts(_PLACEHOLDER_INDEX, relations)
+    ix = {"index": _PLACEHOLDER_INDEX}
     meta = normalized_retained.get("metadata") or {}
     indexer = meta.get("tool_name") or "unknown"
     indexer_version = meta.get("tool_version") or "unknown"
@@ -469,7 +578,7 @@ def export_bundle(
     index_eid = facts.add("scip_index", {
         **ix, "indexer": indexer, "indexer_version": indexer_version,
         "language": language, "project_root": project_root,
-        "digest_kind": index_digest_kind,
+        "digest_kind": INDEX_IDENTITY,
     }, source=indexer_source)
     tree_eid = facts.add("scip_index_tree", {
         **ix, "tree_digest": tree_digest, "file_count": len(manifest),
@@ -506,7 +615,7 @@ def export_bundle(
             def_sites.setdefault(symbol, set()).add((path, occ["start_line"]))
             def_paths.setdefault(symbol, set()).add(path)
             def_occurrence_ids.setdefault(symbol, set()).add(
-                occurrence_external_id(index_digest, occurrence_digest(path, occ)))
+                occurrence_external_id(_PLACEHOLDER_INDEX, occurrence_digest(path, occ)))
     # A symbol defined at two distinct sites is ambiguous (case 09). Category
     # "other" is excluded: scip-go defines the namespace (package) symbol in
     # every file of the package and ``local N`` symbols are file-scoped, which is
@@ -585,7 +694,7 @@ def export_bundle(
             if not symbol or line0 is None:
                 continue
             line = line0 + _SCIP_LINE_IS_ZERO_BASED
-            occ_ext = occurrence_external_id(index_digest, occurrence_digest(path, occ))
+            occ_ext = occurrence_external_id(_PLACEHOLDER_INDEX, occurrence_digest(path, occ))
             roles = _occurrence_roles(occ)
             deps = [doc_eid, occ_ext]
             if occ.get("is_definition") or "definition" in roles:
@@ -614,7 +723,7 @@ def export_bundle(
             continue
         occ = edge["occurrence"]
         occ_digest = occurrence_digest(path, occ)
-        occ_ext = occurrence_external_id(index_digest, occ_digest)
+        occ_ext = occurrence_external_id(_PLACEHOLDER_INDEX, occ_digest)
         line = edge["line"] + _SCIP_LINE_IS_ZERO_BASED
         callee = edge["symbol"]
         doc_eid = doc_eids[path]
@@ -654,7 +763,7 @@ def export_bundle(
             **ix, "referrer": referrer, "type_symbol": type_symbol, "path": path,
             "line": edge["line"] + _SCIP_LINE_IS_ZERO_BASED, "occurrence": occ_digest,
         }, source=indexer_source,
-            depends_on=[doc_eid, occurrence_external_id(index_digest, occ_digest),
+            depends_on=[doc_eid, occurrence_external_id(_PLACEHOLDER_INDEX, occ_digest),
                         *sorted(def_occurrence_ids.get(referrer, ()))])
     if type_refs_at_module_scope:
         messages.append(
@@ -846,12 +955,19 @@ def export_bundle(
                             {**facts.counts(), "documents": len(documents),
                              "occurrences": occurrence_total},
                             (f"rows {len(facts)} exceed limit {limits.rows}",))
+    # content digest -> index -> evidence ids (module docstring, IDENTITY)
+    index = facts.identity()
+    facts.rebase(index)
+    messages.append(f"index identity {index} ({INDEX_IDENTITY}); the index file digest "
+                    f"{index_digest} ({index_digest_kind}) is a run receipt, not identity")
     fact_atoms, evidence = facts.materialize()
     metadata = {
         "export_version": EXPORT_VERSION,
         "exporter": EXPORTER,
-        "index_digest": index_digest,
-        "index_digest_kind": index_digest_kind,
+        "index_digest": index,
+        "index_digest_kind": INDEX_IDENTITY,
+        "index_file_digest": index_digest,
+        "index_file_digest_kind": index_digest_kind,
         "language": language,
         "profile": profile,
         "scope": {"kind": scope.kind, "values": scope.rows()},
@@ -990,13 +1106,32 @@ def export_from_tree(
     )
 
 
+def _without_receipts(items: Any) -> Any:
+    """``items`` (a mapping or a frozen sequence of pairs) minus the receipt keys."""
+    pairs = list(items.items()) if isinstance(items, Mapping) else list(items)
+    return tuple((k, v) for k, v in pairs if k not in RECEIPT_METADATA_KEYS)
+
+
 def bundle_digest(bundle: Bundle) -> str:
-    """The canonical digest of an exported bundle (``claims.ir.digest``)."""
-    return ir_digest(bundle)
+    """The canonical digest of an exported bundle (``claims.ir.digest``) with
+    the run receipts ``RECEIPT_METADATA_KEYS`` removed from the metadata, so
+    the digest is a function of the exported content and not of which
+    ``index.scip`` bytes happened to be read. ``combine.combine`` nests each
+    input's metadata under ``source_<i>``; the receipts are removed there too,
+    so a combined bundle's digest is receipt-free as well."""
+    metadata = []
+    for key, value in _without_receipts(bundle.metadata):
+        if key.startswith("source_") and isinstance(value, (Mapping, tuple, list)) \
+                and all(isinstance(item, (tuple, list)) and len(item) == 2 for item in
+                        (value.items() if isinstance(value, Mapping) else value)):
+            value = _without_receipts(value)
+        metadata.append((key, value))
+    return ir_digest(replace(bundle, metadata=tuple(metadata)))
 
 
 __all__ = [
-    "EXPORT_VERSION", "EXPORTER", "PRODUCER", "LINE_FRAME",
+    "EXPORT_VERSION", "EXPORTER", "PRODUCER", "LINE_FRAME", "INDEX_IDENTITY",
+    "RECEIPT_METADATA_KEYS", "static_relations_index",
     "STATUS_COMPLETE", "STATUS_RESOURCE_EXHAUSTED", "STATUS_INVALID_INPUT", "STATUS_STALE",
     "PROFILE_SLICE", "PROFILE_FULL", "Scope", "ExportLimits", "ExportResult",
     "ExportInputError", "evidence_id", "row_digest", "occurrence_digest",
