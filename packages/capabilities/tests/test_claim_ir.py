@@ -370,7 +370,12 @@ class ClaimIRTests(unittest.TestCase):
         self.assertEqual(reloaded.metadata, ())
 
     def test_nonempty_contexts_have_one_injective_wire_and_canonical_form(self):
-        for value in ("producer-context", [], [["tenant", "x"]]):
+        # A context key literally named "values" is legal.  The one reserved
+        # shape is the retired schema-v1 wrapper: sole key "values" holding a
+        # list of string-keyed pairs (including the empty list).  That shape is
+        # rejected by ingestion rather than reinterpreted, so it is covered by
+        # BoundaryTotalityRegressionTests instead of asserted here.
+        for value in ("producer-context", [1, 2], [["a"]]):
             value_type = ("symbol" if isinstance(value, str)
                           else "json-metadata-only")
             raw = {
@@ -522,3 +527,49 @@ class ClaimIRTests(unittest.TestCase):
 
 
 if __name__ == "__main__": unittest.main()
+
+
+class BoundaryTotalityRegressionTests(unittest.TestCase):
+    """Round-3 reviewer findings on kernel-closure-finalize (2026-09-15)."""
+
+    def test_mutable_constant_value_is_rejected_by_bundle_construction(self):
+        from capcov.claims.ir import Atom, Bundle, Column, Constant, RelationDecl
+        constant = Constant(("a",))
+        object.__setattr__(constant, "value", ["a"])  # bypass freezing
+        decl = RelationDecl("r", (Column("x", "json-metadata-only"),))
+        with self.assertRaises(TypeError):
+            Bundle((decl,), (Atom("r", (constant,)),))
+
+    def test_mutable_diagnostic_predicate_value_is_rejected(self):
+        from capcov.claims.ir import Bundle, Column, DiagnosticRule, RelationDecl
+        rule = DiagnosticRule("r", "forbidden", predicate=(("column", "x"), ("operator", "in"), ("value", ("a",))))
+        object.__setattr__(rule, "predicate", (("column", "x"), ("operator", "in"), ("value", ["a"])))
+        decl = RelationDecl("r", (Column("x", "symbol"),))
+        with self.assertRaises(TypeError):
+            Bundle((decl,), diagnostics=(rule,))
+
+    def test_legacy_context_wrapper_bytes_are_rejected_not_reinterpreted(self):
+        import json
+        from capcov.claims.ir import BundleIngestionError, bundle_from_json
+        legacy = {"schema_version": 1,
+                  "relations": [{"name": "r", "columns": [{"name": "tenant", "type": "symbol", "context": True}],
+                                 "context_indices": ["tenant"], "modality": "claim"}],
+                  "claims": [{"id": "c", "relation": "r", "terms": [{"value": "t1"}],
+                              "context": {"values": [["tenant", "t1"]]}}]}
+        for validate in (False, True):
+            with self.subTest(validate=validate):
+                with self.assertRaises(BundleIngestionError) as caught:
+                    bundle_from_json(json.dumps(legacy), validate=validate)
+                self.assertIn("retired schema-v1 context wrapper", str(caught.exception))
+
+    def test_genuine_values_context_key_round_trips(self):
+        import json
+        from capcov.claims.ir import bundle_from_json, canonical_json
+        raw = {"schema_version": 1,
+               "relations": [{"name": "r", "columns": [{"name": "values", "type": "symbol", "context": True}],
+                              "context_indices": ["values"], "modality": "claim"}],
+               "claims": [{"id": "c", "relation": "r", "terms": [{"value": "x"}], "context": {"values": "x"}}]}
+        bundle = bundle_from_json(json.dumps(raw), validate=True)
+        self.assertEqual(bundle.claims[0].context.as_dict(), {"values": "x"})
+        again = bundle_from_json(canonical_json(bundle), validate=True)
+        self.assertEqual(canonical_json(again), canonical_json(bundle))

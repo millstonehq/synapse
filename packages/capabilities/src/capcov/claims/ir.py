@@ -339,7 +339,13 @@ def _assert_bundle_ir_shape(value: Any, path: str) -> None:
         if isinstance(item, Constant):
             require(item.type is None or isinstance(item.type, TypeName),
                     f"{item_path} constant type must be a TypeName")
-            _freeze_value(item.value)
+            # Require the frozen representation itself, not merely that the
+            # value could be frozen: a mutable container smuggled in through
+            # object.__setattr__ would otherwise sit inside a hashed Bundle.
+            try:
+                _assert_frozen_value(item.value, f"{item_path}.value")
+            except (TypeError, ValueError) as exc:
+                require(False, str(exc))
             return
         require(False, f"{item_path} must be Variable or Constant")
 
@@ -499,7 +505,10 @@ def _assert_bundle_ir_shape(value: Any, path: str) -> None:
             require(isinstance(pair, tuple) and len(pair) == 2
                     and isinstance(pair[0], str),
                     f"diagnostic predicate[{index}] must be a string-keyed pair")
-            _freeze_value(pair[1])
+            try:
+                _assert_frozen_value(pair[1], f"diagnostic predicate[{index}].value")
+            except (TypeError, ValueError) as exc:
+                require(False, str(exc))
         return
     if isinstance(value, OutputTemplate):
         require(isinstance(value.kind, OutputKind),
@@ -738,7 +747,24 @@ def _object_or_pairs(raw, path):
     return dict(_strict_pairs(raw, path))
 
 
+# Schema v1 originally canonicalised a Context through the generic dataclass
+# path as {"values": [[key, value], ...]}.  The flat encoding now used is the
+# only accepted form, and the legacy wrapper is a reserved shape: a context
+# whose sole key is "values" holding a list of string-keyed pairs is rejected
+# rather than reinterpreted, so old canonical bytes cannot silently change
+# meaning and a genuine "values" context key (any other value shape) still works.
+def _is_legacy_context_wrapper(raw) -> bool:
+    if not isinstance(raw, Mapping) or set(raw) != {"values"}:
+        return False
+    inner = raw["values"]
+    return (isinstance(inner, (list, tuple))
+            and all(isinstance(pair, (list, tuple)) and len(pair) == 2 and isinstance(pair[0], str) for pair in inner))
+
+
 def _context(raw, path):
+    if _is_legacy_context_wrapper(raw):
+        raise ValueError(f"{path} uses the retired schema-v1 context wrapper {{\"values\": [[key, value], ...]}}; "
+                         "re-canonicalise the bundle (contexts are flat objects)")
     raw = _strict_object(raw, set(raw) if isinstance(raw, Mapping) else (), path)
     return Context.from_mapping(raw)
 
