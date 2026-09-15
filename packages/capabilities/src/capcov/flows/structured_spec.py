@@ -153,6 +153,9 @@ def _shape_dedupe(key: str, level: dict, level_index: int, bindings: dict,
                     f"{seen[shape]!r}; the document does not say which serves a concrete path"
                 ),
             },
+            # The digest role is "path"; overriding it with this level's key
+            # guarantees the digest input exists even when the level does not bind
+            # path itself, and keys the boundary on the colliding entry.
             {**bindings, "path": key},
             pointer,
             state,
@@ -228,7 +231,7 @@ def _emit_surface(bindings: dict, pointer: str, state: dict, value: object = Non
         # The document's own grouping and one-line intent, carried verbatim so a
         # feature tree can be seeded from it and `features map` can claim by tag.
         tags = value.get("tags")
-        if isinstance(tags, list) and all(isinstance(t, str) for t in tags):
+        if isinstance(tags, list) and tags and all(isinstance(t, str) for t in tags):
             obligation["tags"] = list(tags)
         summary = value.get("summary")
         if isinstance(summary, str) and summary:

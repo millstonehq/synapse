@@ -387,6 +387,11 @@ def _discover_from_config(config: dict, base: Path, config_name: str) -> dict:
             # A router mounted at a prefix serves prefix + literal; the file only
             # says the literal. Composed per adapter entry, joined by one slash.
             mount = str(adapter.get("mount", "")).rstrip("/")
+            if mount and not mount.startswith("/"):
+                raise ValueError(
+                    f"treesitter-routes mount must be empty or an absolute path: "
+                    f"{adapter.get('mount')!r}"
+                )
             strip_suffixes = adapter.get("strip_suffixes", ["{$}"])
             branch_nodes = set(adapter.get("branch_nodes", _DEFAULT_BRANCH_NODES))
             exception_nodes = set(

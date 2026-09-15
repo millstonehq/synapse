@@ -205,7 +205,9 @@ combined inventory.
 
 The same source read at more than one mount point is namespaced with distinct
 `id_prefix` values, which keeps each mount's surface and branch IDs separate;
-overlapping declarations of the same ID remain an error. An optional `methods`
+overlapping declarations of the same ID remain an error. A `mount` composes a
+router prefix into every path of an entry (one entry per mounted router), so the
+surface id is the path the runtime serves rather than the literal in the file. An optional `methods`
 allowlist records a matched, route-shaped candidate whose verb is outside the set
 under `excluded_surfaces` -- the query saw it and the verb filter dropped it, so
 the narrowed denominator stays legible instead of implied by absence. This is a
@@ -239,7 +241,10 @@ explicit gap. It also retains boundaries for runtime/omitted routes, business
 outcomes, authorization/configurations, schema/reference behavior, server bindings,
 and callbacks/webhooks/extensions. Descriptions, examples, operation IDs and server
 values are not copied into reports. Duplicate JSON members, unsupported versions,
-invalid path/operation shapes and equivalent templated paths fail discovery.
+and invalid path/operation shapes fail discovery. Equivalent templated paths
+(`/{id}` beside `/{optionId}`) do not: every operation is still inventoried and
+the collision is recorded as a `path-shape-collision` boundary carrying both paths,
+since the document does not say which serves a concrete path.
 The supported method and Path Item rules come from the
 [OpenAPI 3.1 specification](https://spec.openapis.org/oas/v3.1.0.html#path-item-object).
 

@@ -155,7 +155,8 @@ def build_core_dict(
 ) -> dict:
     """Assemble a CORE adapter dict from normalized surface records.
 
-    Each record is ``{id, method, path, handler, file, line, module}`` where
+    Each record is ``{id, method, path, handler, file, line, module}`` plus the
+    optional ``tags`` and ``summary`` a declarative reader may carry, where
     ``id`` is the ``"http:METHOD path"`` surface identity (the string a runtime
     probe must reproduce to land in `both`). The record's ``id`` is used as the
     fixpoint root key -- surface ids are unique, so a handler function serving
@@ -184,23 +185,23 @@ def build_core_dict(
                 "line": record.get("line"),
             }
         )
-        surfaces.append(
-            {
-                "id": sid,
-                "kind": "http",
-                "method": record.get("method"),
-                "path": record.get("path"),
-                "handler": root,
-                # The source-level handler name when the query captured one; the
-                # node id above is what the fixpoint keys on.
-                "handler_symbol": record.get("handler"),
-                "file": record.get("file"),
-                "line": record.get("line"),
-                "mounted": True,
-                **({"tags": record["tags"]} if record.get("tags") else {}),
-                **({"summary": record["summary"]} if record.get("summary") else {}),
-            }
-        )
+        surface = {
+            "id": sid,
+            "kind": "http",
+            "method": record.get("method"),
+            "path": record.get("path"),
+            "handler": root,
+            # The source-level handler name when the query captured one; the
+            # node id above is what the fixpoint keys on.
+            "handler_symbol": record.get("handler"),
+            "file": record.get("file"),
+            "line": record.get("line"),
+            "mounted": True,
+        }
+        for key in ("tags", "summary"):
+            if record.get(key):
+                surface[key] = record[key]
+        surfaces.append(surface)
         direct[root] = {sid}
         crud = _VERB_TO_CRUD.get((record.get("method") or "").upper())
         if crud:
