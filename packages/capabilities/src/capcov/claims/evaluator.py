@@ -57,18 +57,31 @@ class Derivation:
         object.__setattr__(self, "row", tuple(self.row))
         object.__setattr__(self, "children", tuple(self.children))
 
+    # Proof trees are immutable and heavily shared (a closure row's proof
+    # embeds its predecessor's).  Structural keys are therefore memoised per
+    # node; without this every insert re-walks trees whose depth is the
+    # recursion depth, which made transitive closure quadratic-times-depth.
+    def _memo(self, name: str, compute):
+        cached = self.__dict__.get(name)
+        if cached is None:
+            cached = compute()
+            object.__setattr__(self, name, cached)
+        return cached
+
     @property
     def leaves(self) -> tuple[str, ...]:
-        if self.leaf_id is not None:
-            return (self.leaf_id,)
-        values: set[str] = set()
-        for child in self.children:
-            values.update(child.leaves)
-        return tuple(sorted(values))
+        def compute():
+            if self.leaf_id is not None:
+                return (self.leaf_id,)
+            values: set[str] = set()
+            for child in self.children:
+                values.update(child.leaves)
+            return tuple(sorted(values))
+        return self._memo("_leaves", compute)
 
     @property
     def depth(self) -> int:
-        return 0 if not self.children else 1 + max(child.depth for child in self.children)
+        return self._memo("_depth", lambda: 0 if not self.children else 1 + max(child.depth for child in self.children))
 
     def contains(self, relation: str, row: Row) -> bool:
         """Return whether this proof already depends on the same ground tuple."""
@@ -78,13 +91,15 @@ class Derivation:
 
     def signature(self) -> tuple[Any, ...]:
         """Compact structural identity used instead of serialising proof trees."""
-        return (self.relation, self.row, self.rule, self.kind, self.leaf_id,
-                self.alternatives, tuple(child.signature() for child in self.children))
+        return self._memo("_signature", lambda: (
+            self.relation, self.row, self.rule, self.kind, self.leaf_id,
+            self.alternatives, tuple(child.signature() for child in self.children)))
 
     def _choice_structure(self) -> tuple[Any, ...]:
         """Return proof structure without mutable alternative-path counts."""
-        return (self.relation, self.row, self.rule, self.kind, self.leaf_id,
-                tuple(child._choice_structure() for child in self.children))
+        return self._memo("_choice_structure_cache", lambda: (
+            self.relation, self.row, self.rule, self.kind, self.leaf_id,
+            tuple(child._choice_structure() for child in self.children)))
 
     def choice_key(self) -> tuple[Any, ...]:
         """Stable canonical ordering: shortest proof, then lexical structure.
@@ -97,7 +112,7 @@ class Derivation:
         # Rows may contain ``_FrozenMap`` JSON values, whose inherited object
         # repr includes an allocation address.  Canonical JSON is the IR's
         # address-free lexical order and remains stable after strict reload.
-        return self.depth, canonical_json(self._choice_structure())
+        return self._memo("_choice_key", lambda: (self.depth, canonical_json(self._choice_structure())))
 
     def path_key(self) -> tuple[Any, ...]:
         """Identity of a ground proof path, independent of child snapshots.
@@ -106,10 +121,12 @@ class Derivation:
         derived.  Treating that as the same path lets the fixed point replace
         the stale snapshot instead of retaining both versions as alternatives.
         """
-        if self.kind == "fact":
-            return (self.relation, self.row, self.kind, self.leaf_id)
-        return (self.relation, self.row, self.rule, self.kind,
-                tuple((child.relation, child.row) for child in self.children))
+        def compute():
+            if self.kind == "fact":
+                return (self.relation, self.row, self.kind, self.leaf_id)
+            return (self.relation, self.row, self.rule, self.kind,
+                    tuple((child.relation, child.row) for child in self.children))
+        return self._memo("_path_key", compute)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -206,6 +223,40 @@ class _Engine:
         self._candidate_rows_examined = 0
         self._indexed_atom_matches = 0
         self._full_scan_atom_matches = 0
+        # Canonical-order caches.  Consumers still iterate rows in canonical
+        # JSON order; these only avoid re-serialising every row on every
+        # match.  Invalidation is by relation version, which advances only when
+        # a new row is inserted.
+        self._version: dict[str, int] = {name: 0 for name in self.relations}
+        self._row_key: dict[str, dict[Row, str]] = {name: {} for name in self.relations}
+        self._sorted_cache: dict[str, tuple[int, list[Row]]] = {}
+        self._override_cache: dict[int, tuple[int, list[Row]]] = {}
+        # Rows whose retained proofs or candidate set changed in the current
+        # iteration.  A derivation is a pure function of its children's
+        # retained proofs and candidate counts, so only derivations touching a
+        # changed row can produce a different outcome in the next pass; that is
+        # what lets the fixed point run semi-naively without losing canonical
+        # proof propagation.
+        self._changed: dict[str, set[Row]] = {name: set() for name in self.relations}
+        self._signatures: dict[str, dict[Row, set[tuple[Any, ...]]]] = {name: {} for name in self.relations}
+
+    def _canonical_key(self, relation: str, row: Row) -> str:
+        keys = self._row_key[relation]
+        key = keys.get(row)
+        if key is None:
+            key = canonical_json(row)
+            keys[row] = key
+        return key
+
+    def _canonical_rows(self, relation: str) -> list[Row]:
+        """Rows of ``relation`` in canonical JSON order, cached per version."""
+        version = self._version[relation]
+        cached = self._sorted_cache.get(relation)
+        if cached is not None and cached[0] == version:
+            return cached[1]
+        ordered = sorted(self.rows[relation], key=lambda row: self._canonical_key(relation, row))
+        self._sorted_cache[relation] = (version, ordered)
+        return ordered
 
     def check_limits(self) -> None:
         if self.limits.max_seconds is not None and time.monotonic() - self.started > self.limits.max_seconds:
@@ -226,10 +277,11 @@ class _Engine:
         row = tuple(row)
         if row in self.rows[relation]:
             paths = self.proofs[relation].setdefault(row, [])
-            if any(child.contains(relation, row) for child in proof.children):
-                return False
             signature = proof.signature()
-            if any(existing.signature() == signature for existing in paths):
+            signatures = self._signatures[relation].setdefault(row, set())
+            if signature in signatures:
+                return False
+            if any(child.contains(relation, row) for child in proof.children):
                 return False
             path_key = proof.path_key()
             same_path = next((i for i, existing in enumerate(paths)
@@ -240,6 +292,8 @@ class _Engine:
                     return False
                 paths[same_path] = proof
                 paths.sort(key=Derivation.choice_key)
+                signatures.discard(existing.signature()); signatures.add(signature)
+                self._changed[relation].add(row)
                 return True
 
             # Bounds may truncate explanations only if semantic evaluation is
@@ -258,14 +312,19 @@ class _Engine:
             candidate_keys.add(path_key)
             paths.append(proof)
             paths.sort(key=Derivation.choice_key)
+            signatures.add(signature)
+            self._changed[relation].add(row)
             self.provenance_count += 1
             return True
         if self.limits.max_provenance is not None and self.provenance_count >= self.limits.max_provenance:
             raise _LimitReached("evaluation exceeded the provenance limit")
         self.rows[relation].add(row)
+        self._version[relation] += 1
         for position, value in enumerate(row):
             self._row_indexes[relation][position].setdefault(value, set()).add(row)
         self.proofs[relation][row] = [proof]
+        self._signatures[relation][row] = {proof.signature()}
+        self._changed[relation].add(row)
         self.proof_path_candidates[relation][row] = {proof.path_key()}
         self.derived_rows += 1
         self.provenance_count += 1
@@ -317,21 +376,27 @@ class _Engine:
         self.seed()
         levels = self.strata()
         for level in range(max(levels.values(), default=0) + 1):
-            rules = [r for r in self.bundle.rules if levels[r.head.relation] == level]
+            rules = sorted((r for r in self.bundle.rules if levels[r.head.relation] == level),
+                           key=lambda r: canonical_json(r))
             iterations = 0
+            delta: Mapping[str, set[Row]] | None = None
             while True:
                 iterations += 1
                 if self.limits.max_iterations is not None and iterations > self.limits.max_iterations:
                     raise _LimitReached(f"stratum {level} exceeded the iteration limit")
-                changed = False
-                # A proof can become canonical after its row was discovered.
-                # Full deterministic passes propagate that replacement through
-                # downstream proof trees; relation-only semi-naive deltas do not.
-                for rule in sorted(rules, key=lambda r: canonical_json(r)):
-                    for row, proof in self._derive_rule(rule, None):
-                        changed = self.add(rule.head.relation, row, proof) or changed
+                self._override_cache.clear()
+                for name in self._changed: self._changed[name] = set()
+                # The first pass is complete.  Later passes are semi-naive over
+                # the rows whose retained proofs or candidates changed, which
+                # includes canonical-proof replacements, so a proof that becomes
+                # canonical after its row was discovered still propagates into
+                # downstream proof trees exactly as a full pass would.
+                for rule in rules:
+                    for row, proof in self._derive_rule(rule, delta):
+                        self.add(rule.head.relation, row, proof)
                 self.check_limits()
-                if not changed:
+                delta = {name: set(rows) for name, rows in self._changed.items() if rows}
+                if not delta:
                     break
 
     def _derive_rule(self, rule: Rule, delta: Mapping[str, set[Row]] | None) -> Iterable[tuple[Row, Derivation]]:
@@ -449,14 +514,18 @@ class _Engine:
         # pivots prevents old tuples from redoing the full Cartesian product.
         pivots = [i for i, atom in enumerate(rule.body)
                   if isinstance(atom, Atom) and not atom.negated and delta.get(atom.relation)]
-        seen: set[str] = set()
+        seen: set[Any] = set()
         for pivot in pivots:
             overrides = {pivot: delta[rule.body[pivot].relation]}  # type: ignore[index]
             for env, children, alternatives in self._match_body(rule.body, {}, overrides):
                 row = tuple(_ground_term(t, env) for t in rule.head.terms)
                 proof = Derivation(rule.head.relation, row, rule.name or "rule", tuple(children),
                                    alternatives=alternatives)
-                key = repr((row, proof.signature()))
+                try:
+                    key: Any = (row, proof.signature())
+                    hash(key)
+                except TypeError:
+                    key = repr((row, proof.signature()))
                 if key not in seen:
                     seen.add(key)
                     yield row, proof
@@ -523,7 +592,18 @@ class _Engine:
         del positive_only  # reserved for the future explicit negative relation form
         decl = self.relations[atom.relation]
         rows = self._candidate_rows(atom, env, rows_override)
-        for row in sorted(rows, key=canonical_json):
+        if rows is self.rows[atom.relation]:
+            ordered: Iterable[Row] = self._canonical_rows(atom.relation)
+        elif rows_override is not None and rows is rows_override:
+            cached = self._override_cache.get(id(rows_override))
+            if cached is None or cached[0] != len(rows_override):
+                ordered = sorted(rows_override, key=lambda row: self._canonical_key(atom.relation, row))
+                self._override_cache[id(rows_override)] = (len(rows_override), list(ordered))
+            else:
+                ordered = cached[1]
+        else:
+            ordered = sorted(rows, key=lambda row: self._canonical_key(atom.relation, row))
+        for row in ordered:
             self._candidate_rows_examined += 1
             next_env = dict(env)
             ok = True
@@ -566,7 +646,7 @@ class _Engine:
         projection = tuple(bindings)
         result = []
         names = [column.name for column in decl.columns]
-        for row in sorted(self.rows[relation_name], key=canonical_json):
+        for row in self._canonical_rows(relation_name):
             row_values = dict(zip(names, row))
             next_variables = dict(variable_values or {})
             matches_projection = True
@@ -687,7 +767,7 @@ class _Engine:
         predicate = dict(diagnostic.predicate)
         scoped_names = set(diagnostic.context_indices) | (set(names) & set(claim_values))
         result = []
-        for row in sorted(self.rows[diagnostic.trigger_relation], key=canonical_json):
+        for row in self._canonical_rows(diagnostic.trigger_relation):
             values = dict(zip(names, row))
             if any(name not in claim_values or values[name] != claim_values[name]
                    for name in scoped_names):
@@ -855,7 +935,7 @@ class _Engine:
         # the same tenant/run can enlarge this universal's member set.
         shared_values = {name: value for name, value in claim_values.items()
                          if name in domain_names}
-        domain_rows = [row for row in sorted(self.rows[domain.name], key=canonical_json)
+        domain_rows = [row for row in self._canonical_rows(domain.name)
                        if all(dict(zip(domain_names, row))[name] == value
                               for name, value in shared_values.items())]
         blocked = self._blocked_evidence(claim)
@@ -868,7 +948,7 @@ class _Engine:
         closure_proof = None
         for closure in closure_decls:
             names = [column.name for column in closure.columns]
-            for row in sorted(self.rows[closure.name], key=canonical_json):
+            for row in self._canonical_rows(closure.name):
                 values = dict(zip(names, row))
                 if any(values[name] != shared_values[name]
                        for name in names if name in shared_values):
@@ -997,7 +1077,7 @@ def evaluate(bundle: Bundle, limits: ResourceLimits | None = None) -> Evaluation
         engine = _Engine(bundle, limits)
         engine.run()
         claims = tuple(engine.evaluate_claim(i, claim) for i, claim in enumerate(bundle.claims))
-        relations = tuple((name, tuple(sorted(rows, key=canonical_json))) for name, rows in sorted(engine.rows.items()))
+        relations = tuple((name, tuple(engine._canonical_rows(name))) for name in sorted(engine.rows))
         provenance = tuple((name, tuple((row, tuple(proofs)) for row, proofs in sorted(data.items(), key=lambda x: canonical_json(x[0]))))
                            for name, data in sorted(engine.proofs.items()))
         # Runtime is intentionally not part of the canonical result: it would
