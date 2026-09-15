@@ -962,6 +962,32 @@ Exit 0. Output path `/nix/store/m6vdgvc4g4djhm9ld1s16jrd39k001lm-shen-go-0-unsta
 
 **Limit:** pins are unchanged, not tightened. This run still cannot honestly establish a clean-checkout rebuild: the driver owns the commit, and appending this subsection dirties `EXPERIMENT-PLAN.md`, which changes `${self}` and will rebuild `capability-regression` with a dirty-tree warning. Linux remains evaluation-only. Host Nix is unpinned. The skip gap (`69` in the Python-only check vs `67` in develop) is documented and was not equalized by copying `.git` into the sandbox. The pinned `shen-go` revision remains accepted only for the observed smoke, not for Stage D (`pyrex41/Shen-Backpressure@6b9dde09` is prior art only). Live `origin/main` can still drift after this recording; this attempt's develop regression passed against `8994d639` with identical `cli.py` blobs.
 
+### Stage 0 addendum — Shen runtime for Stage D (2026-09-15)
+
+Decision (repository owner): Stage D uses the shen-go that `pyrex41/bifrost` drives, not the
+flake's `shen-go` pin (`610ba42`), matching the target-go model work in the `shen1` session. The two
+pins are recorded as different on purpose; the flake pin stays for the Stage 0 smoke until it is
+repointed. Runtime provenance: `pyrex41/shen-go` `c12933d89d7312d5d25a951bbe20d1511c3dfbea`
+(2026-09-14, checkout clean apart from an untracked `.worktrees/`), built with the pinned Go into
+`.capcov/shen-go-c12933d/shen-go`, sha256
+`05cac13837e0a78ca207030540721468e13d910979692cb9c1c4b9280f72a29d`; driven by `pyrex41/bifrost`
+`3027741` via `BIFROST_SHEN_GO` (`bifrost eval --impl shen-go -e …`, `bifrost run --impl shen-go
+FILE`; the launcher's own subcommands are `script FILE` and `eval`). `bifrost eval -e '(+ 20 22)'`
+printed `42`; malformed `(+ 1` exited 1.
+
+Bounded stress probe (the plan's precondition for Stage D, prompted by Shen-Backpressure's
+"known memory allocation crash bugs and hangs during cold bootstrap" warning; record in
+`.capcov/shen-go-c12933d/stress-probe.json`): cold bootstrap ×3 [0.964, 0.981, 1.015] s;
+300 sequential `bifrost eval` calls with a 30 s per-call timeout: 0
+failures, 0 timeouts, p50 1.009 s, max
+2.304 s, children peak RSS 76.1 MB; a
+200,000-element list build plus 20,000-deep recursive sum: 1.33 s,
+peak RSS 127.5 MB; a 400-definition program:
+1.48 s, peak RSS 83.1 MB. No
+crash or hang was observed. The warning stays on the record; the mitigation Stage D must keep
+is a hard per-call timeout, closed stdin, and captured output, with timeouts reported as named
+operational failures. Note: `sum` is a reserved kernel name in this Shen.
+
 ## 15. Stage A — Adversarial semantic corpus
 
 Add:
