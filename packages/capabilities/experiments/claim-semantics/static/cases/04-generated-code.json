@@ -88,28 +88,6 @@
       }
     },
     {
-      "id": "static:462980747b49:static_source_tree_observed:a535d866dbdd",
-      "kind": "fact",
-      "relation": "static_source_tree_observed",
-      "arg_order": [
-        "index",
-        "tree_digest"
-      ],
-      "args": [
-        "462980747b4936911e784ea8f2e072bcc5b7d376324372fdaae1a9a452469d1a",
-        "ae72ffda69b52eea36e16736281be2ca56fd8580fc6be2e1f82ef7a5ee9845b9"
-      ],
-      "context": {
-        "index": "462980747b4936911e784ea8f2e072bcc5b7d376324372fdaae1a9a452469d1a"
-      },
-      "source": "reviewer claim-time observation",
-      "provenance": {
-        "depends_on": [
-          "static:claim-time:source_tree_observed:e35bb6de4b1c"
-        ]
-      }
-    },
-    {
       "id": "static:462980747b49:static_language_covered:2aea720398dd",
       "kind": "fact",
       "relation": "static_language_covered",
@@ -1477,7 +1455,7 @@
           "static:462980747b49:route_handler_location:257743c86088",
           "static:462980747b49:route_site:d4f045cdf983",
           "static:462980747b49:static_route_inventory_closed:404824db8316",
-          "static:462980747b49:static_source_tree_observed:a535d866dbdd"
+          "static:claim-time:source_tree_observed:e35bb6de4b1c"
         ],
         "refutation_leaves": [],
         "observed_leaves": [
@@ -1490,7 +1468,7 @@
           "static:462980747b49:route_handler_location:257743c86088",
           "static:462980747b49:route_site:d4f045cdf983",
           "static:462980747b49:static_route_inventory_closed:404824db8316",
-          "static:462980747b49:static_source_tree_observed:a535d866dbdd"
+          "static:claim-time:source_tree_observed:e35bb6de4b1c"
         ],
         "forbidden_leaves": [],
         "discrepancies": [

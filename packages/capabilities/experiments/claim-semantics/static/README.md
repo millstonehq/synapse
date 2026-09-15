@@ -28,7 +28,6 @@ what section 29 names but the frozen file does not carry:
 | relation | why |
 |---|---|
 | `runtime_route_observed(tenant, surface, event, run)` | runtime side of `runtime_route_without_static`; same shape as `tests/claim_semantics/corpus/schema-v1.json` |
-| `static_source_tree_observed(index, tree_digest)` | indexed bridge for the context-free `source_tree_observed`; see "Validator findings" |
 | `generated_code_in_scope__accepted(index, path)` / `__rejected` | the case-04 assumptions named in the section-29 table |
 
 `derived` declares the twenty section-29 relations plus the two projections
@@ -58,8 +57,8 @@ static_reaches_eq(IX,R,R)       :- static_root(IX,R).
 static_reaches_eq(IX,R,D)       :- static_reaches(IX,R,D).
 static_op_owner(IX,Sym,E,V)     :- static_op_site(IX,F,L,V,E), static_site_owner(IX,F,L,Sym).
 static_path_to_storage(IX,S,E,V):- static_route_handler(IX,S,H), static_reaches_eq(IX,H,N), static_op_owner(IX,N,E,V).
-static_index_current(IX)        :- scip_index_tree(IX,T,_,_), static_source_tree_observed(IX,T).
-scip_index_stale(IX,T,O)        :- scip_index_tree(IX,T,_,_), static_source_tree_observed(IX,O), T != O.
+static_index_current(IX)        :- scip_index_tree(IX,T,_,_), source_tree_observed(T).
+scip_index_stale(IX,T,O)        :- scip_index_tree(IX,T,_,_), source_tree_observed(O), T != O.
 static_capability_op(IX,S,E,V)  :- static_path_to_storage(IX,S,E,V), static_index_current(IX).
 static_capability(IX,S,E,V)     :- static_capability_op(IX,S,E,V), scip_index(IX,_,_,_,_,_).
 static_file_unindexed(IX,P)     :- static_source_file(IX,P,_), scip_documents_closed(IX), !scip_document_path(IX,P).
@@ -94,22 +93,50 @@ means a gap was proven.  Neither can become `supported`/`refuted` by absence
 of facts; without the closure witnesses they stay `unresolved` with a visible
 missing premise.
 
+## Line frame
+
+Every `line` / `start_line` / `end_line` value in a case is **1-based**, the
+frame `claims/static/scip_facts.py` exports (`LINE_FRAME = "1-based"`: SCIP's
+0-based range lines are lifted once, in the exporter) and the frame the
+tree-sitter side and every human-facing capcov line use.  The joins
+`route_handler_location(IX,S,F,L) ⋈ scip_definition_site(IX,F,L,Sym)` and
+`static_op_site(IX,F,L,V,E) ⋈ static_site_owner(IX,F,L,Sym)` therefore need
+no per-rule shift.  The control case `00-go-app-control` follows the
+`tests/fixtures/go_app` source: `GetJob` is defined on `api/jobs.go:10` (SCIP
+range line 9 in the golden `tests/fixtures/scip_go_app_index.json`), the route
+call is on line 17, `Service.Fetch` on `internal/service/service.go:12`,
+`Repo.Get` / `Repo.Write` on `internal/jobs/repo.go` lines 14 and 19 with the
+`First` / `Create` sites on lines 15 and 20.  The control case is a
+go_app-*shaped* synthetic (abbreviated symbols, an extra `internal/authz`
+package for the authorization claims); the exporter's own output over the
+golden is evaluated by `tests/claim_semantics/test_differential_static_*.py`
+through `tests/claim_semantics/static_rules/go_app.py`.
+
+## Combining the pack with exported facts
+
+The exporter's bundle validates alone, so it declares rule-less stubs for the
+relations the frozen primitives point at (`scip_document_path`,
+`scip_definition_site_at`, `static_route_declared_surface`, `static_reaches`,
+`runtime_route_observed`), byte-identical to the declarations here.
+`claims/static/combine.combine(exported, pack_bundle(), ...)` merges the two
+declaration sets by name and refuses a duplicate that is not identical, so the
+pack stays the single authority on shapes and rules.
+
 ## Validator findings
 
-`validation._validate_context_joins` reports `mixed-binding-join`
-("context-free static relations cannot join runtime evidence without an
-index/run witness") for *every* rule that mentions a static relation without
-an `index` column, whether or not the rule contains a runtime atom.  Section
-29's `static_index_current` and `scip_index_stale` rules join
-`scip_index_tree` with the frozen context-free primitive
-`source_tree_observed(tree_digest)` and are rejected as written.  The
-validator is outside this task's write set, so the pack introduces the indexed
-bridge `static_source_tree_observed(index, tree_digest)`: the reviewer records
-the claim-time tree digest once as `source_tree_observed(T)` and once per
-index as `static_source_tree_observed(IX, T)`, whose evidence `depends_on` the
-former.  Cases carry both rows.  When the validator check is scoped to rules
-that actually contain runtime atoms, the two rules can be rewritten against
-`source_tree_observed` directly and the bridge dropped.
+An earlier revision of `validation._validate_context_joins` reported
+`mixed-binding-join` for *every* rule that mentioned a static relation without
+an `index` column, whether or not the rule read runtime evidence, and the pack
+had to route `static_index_current` / `scip_index_stale` through an indexed
+bridge `static_source_tree_observed(index, tree_digest)`.  The check is now
+scoped to bodies that also contain a runtime atom (regression test in
+`tests/claim_semantics/test_validation_section27.py`), the two rules read the
+frozen context-free `source_tree_observed(T)` directly as section 29 writes
+them, and the bridge is gone: each case carries one claim-time
+`source_tree_observed` row with evidence id
+`static:claim-time:source_tree_observed:<row12>`, and that id is the leaf the
+support sets name.  A rule that joins `source_tree_observed` with runtime
+evidence is still rejected.
 
 No other rule needed changes: the `forall` domain, the projections behind
 negation, the digest inequality comparison and the mixed static/runtime rule
@@ -179,7 +206,7 @@ document and the tree.  `Evidence.source` is the producer string.
 | 02 incomplete indexer | `static_source_file` for `internal/audit/hooks.go` without `scip_document`; `static_reachability_closed` withheld | capability supported; `static_file_unindexed` supported; gap claim unresolved. Variant `-lying-witness`: witness present, gap supported, labelled seeded fault |
 | 03 dynamic dispatch | `static_blind_spot(interface_dispatch)` on the path; references/reachability withheld | capability supported with `blind-spot-on-path`; gap unresolved |
 | 04 generated code | handler defined in `api/jobs_gen.go` (`scip_generated_site`) | forall supported with `handler-in-generated-code`; `-accepted` clears the discrepancy; `-rejected` forbids the definition site: unresolved, `out-of-scope` |
-| 05 stale index | `scip_index_tree(IX,T1)`, `static_source_tree_observed(IX,T2)` | `static_path_to_storage` supported; `static_capability` unresolved, `stale`, missing premise `static_index_current` |
+| 05 stale index | `scip_index_tree(IX,T1)`, `source_tree_observed(T2)` | `static_path_to_storage` supported; `static_capability` unresolved, `stale`, missing premise `static_index_current` |
 | 06 synthesized enclosing | scip-php shape, `enclosing_synthesized=true`, edges `caller_synthesized=true`, no witnesses | capability supported with `caller-attribution-synthesized`; authorization gap and runtime gap unresolved |
 | 07 constructor as type reference | `scip_type_reference(Repo#Get, models/Job#)`, no edge | capability supported through the op owner; `static_reaches(GetJob, Job#)` unresolved |
 | 08 module-scope reference | `handle(...)` and `Repo#Seed` referenced at package scope | route -> handler supported; `static_op_owner(Seed)` supported; "init reaches storage" unresolved |

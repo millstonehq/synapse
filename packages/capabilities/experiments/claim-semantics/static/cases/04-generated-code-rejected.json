@@ -88,28 +88,6 @@
       }
     },
     {
-      "id": "static:e5bfdde259ce:static_source_tree_observed:794cf189efd1",
-      "kind": "fact",
-      "relation": "static_source_tree_observed",
-      "arg_order": [
-        "index",
-        "tree_digest"
-      ],
-      "args": [
-        "e5bfdde259ce2e62832e95a30012a70562967cb7050f11e864f86466a441c1d9",
-        "ed88b1b814c662a6118546e75d17dfd4a0445a3230b2b28c4282df62d77af5b0"
-      ],
-      "context": {
-        "index": "e5bfdde259ce2e62832e95a30012a70562967cb7050f11e864f86466a441c1d9"
-      },
-      "source": "reviewer claim-time observation",
-      "provenance": {
-        "depends_on": [
-          "static:claim-time:source_tree_observed:a920b8dfecfd"
-        ]
-      }
-    },
-    {
       "id": "static:e5bfdde259ce:static_language_covered:b9e390b11e7f",
       "kind": "fact",
       "relation": "static_language_covered",

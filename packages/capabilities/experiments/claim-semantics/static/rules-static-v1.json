@@ -2918,11 +2918,8 @@
           ]
         },
         {
-          "relation": "static_source_tree_observed",
+          "relation": "source_tree_observed",
           "terms": [
-            {
-              "variable": "IX"
-            },
             {
               "variable": "T"
             }
@@ -2959,11 +2956,8 @@
           ]
         },
         {
-          "relation": "static_source_tree_observed",
+          "relation": "source_tree_observed",
           "terms": [
-            {
-              "variable": "IX"
-            },
             {
               "variable": "Observed"
             }
@@ -3762,34 +3756,6 @@
       "finite": false,
       "modality": "observation",
       "name": "runtime_route_observed",
-      "nonempty": false,
-      "polarity": "positive",
-      "primitive": true,
-      "producer_classes": []
-    },
-    {
-      "binding": "static",
-      "columns": [
-        {
-          "context": true,
-          "name": "index",
-          "type": "digest"
-        },
-        {
-          "context": false,
-          "name": "tree_digest",
-          "type": "digest"
-        }
-      ],
-      "compatibility_context_indices": [],
-      "compatibility_targets": [],
-      "completes": null,
-      "context_indices": [
-        "index"
-      ],
-      "finite": false,
-      "modality": "observation",
-      "name": "static_source_tree_observed",
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,

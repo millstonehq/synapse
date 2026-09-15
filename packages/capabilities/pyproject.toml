@@ -75,3 +75,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# The frozen static claim schema (EXPERIMENT-PLAN section 29) ships inside the
+# wheel: capcov.claims.static loads it through importlib.resources, so an
+# installed distribution must carry the JSON next to the module.
+[tool.setuptools.package-data]
+"capcov.claims.static" = ["*.json"]

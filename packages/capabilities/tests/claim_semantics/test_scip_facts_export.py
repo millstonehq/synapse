@@ -241,10 +241,17 @@ class MetadataTest(_Exported):
         self.assertTrue(meta["census_available"])
 
     def test_identity_rows_match_the_metadata(self) -> None:
+        # The dump reports file:///tmp/gonest; the fact keeps only the basename
+        # so the bundle digest does not depend on where the index was built.
+        self.assertEqual(self.raw["metadata"]["project_root"], "file:///tmp/gonest")
         self.assertEqual(
             _rows(self.bundle, "scip_index"),
-            [["scip-go", "0.2.7", "go", "file:///tmp/gonest", "json"]],
+            [["scip-go", "0.2.7", "go", "file:///gonest", "json"]],
         )
+        self.assertTrue(any("file:///tmp/gonest" in m for m in self.result.messages))
+        self.assertEqual(scip_facts.canonical_project_root(None), "")
+        self.assertEqual(scip_facts.canonical_project_root("file:///Users/x/y/go_app/"), "file:///go_app")
+        self.assertEqual(scip_facts.canonical_project_root("/private/tmp/abc/go_app"), "file:///go_app")
         [[tree_digest, file_count, pattern]] = _rows(self.bundle, "scip_index_tree")
         self.assertEqual((tree_digest, file_count, pattern),
                          (*artifacts.tree_sha256(GO_TREE, ("**/*.go",)), "**/*.go"))
