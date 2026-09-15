@@ -27,6 +27,8 @@ from __future__ import annotations
 
 from types import ModuleType
 
+from ..artifacts import language_pattern
+
 # Registry entries are dotted-path strings, imported lazily by `load`. Nothing
 # here imports cli, a probe, or the browser seam at module load -- the whole
 # point of the strings is that adding a route reader does not drag the runtime
@@ -71,6 +73,12 @@ def source_patterns(specs: list[tuple[str, dict | None]]) -> tuple[str, ...]:
         declared = list(config.get("globs") or [])
         if not declared and name == "treesitter-routes":
             declared = list(config.get("files") or [])
+            if not declared:
+                declared = [
+                    language_pattern(
+                        config.get("language") or config.get("scip_language")
+                    )
+                ]
         if not declared and name == "structured-spec" and config.get("document"):
             declared = [config["document"]]
         patterns.extend(
