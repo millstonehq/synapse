@@ -37,13 +37,13 @@ except ImportError:  # unittest discover -s imports this directory as top-level
 # merge of the kernel line (8a54a04): Context is now serialised as a flat object
 # instead of the {"values": [...]} dataclass wrapper, which alters every evidence
 # record's canonical bytes.  The static index identity (GOLDEN_INDEX, derived
-# from the exported relations, not from IR serialisation) did not change, nor did
-# the facts, evidence ids, or closure; the sibling tests assert those directly.
-EXPORTED_BUNDLE_DIGEST = "3f5aef11182c7caf50d7a9bfecc5010e04e0af488c44d353bb580c620dbbbbf5"
+# from the exported relation contract, not from IR serialisation) changes when
+# that contract changes; the sibling tests assert facts, evidence ids and closure.
+EXPORTED_BUNDLE_DIGEST = "b1bd7ecee96f0968ba7d280cfa9b1bc252b4c7119c214836858e20a4ad28319e"
 EXPORTED_FACT_COUNT = 210
 # The golden's static-relations-v1 identity (metadata index_digest, every
 # fact's index column, the <index12> of every evidence id).
-GOLDEN_INDEX = "0360df877c99d8259f7f7f24cdca357afa64c4be9b27a739e1e78bb94c564320"
+GOLDEN_INDEX = "f0ef037bd20151829fc8b59fb5cbbabf138017546aacab9f574b8ea049c18b23"
 
 IX = go_app.index_digest()
 EXPECTED_REACHES = {(IX, go_app.GET_JOB, dst) for dst in (

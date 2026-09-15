@@ -73,7 +73,7 @@ class FrozenStaticSchemaTests(unittest.TestCase):
         document = self.load()
         canonical = json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
         self.assertEqual(hashlib.sha256(canonical).hexdigest(),
-                         "d936ba0c35465bcded2d3a51d5d3facfdd9fe2b27991de7fa216bac252299071")
+                         "98cefbf987a78a8954fae960e7a3af526a6fa329f48453e1e91fb509a7c27564")
         declarations = document["relations"]
         self.assertEqual([item["name"] for item in declarations], list(COLUMNS))
         for item in declarations:
@@ -126,6 +126,24 @@ class FrozenStaticSchemaTests(unittest.TestCase):
             RelationDecl("runtime_route_observed", (Column("tenant", "symbol", True), Column("surface", "symbol", True),
                          Column("event", "symbol", True), Column("run", "symbol", True)),
                          context_indices=("tenant", "surface", "event", "run")),
+            RelationDecl("runtime_function_entered", (Column("run", "symbol", True), Column("request", "symbol", True),
+                         Column("symbol", "symbol")), producer_classes=("target-go-runtime-trace-v2",),
+                         context_indices=("run", "request")),
+            RelationDecl("runtime_sql_executed", (Column("run", "symbol", True), Column("request", "symbol", True),
+                         Column("tx", "symbol", True), Column("operation", "symbol"), Column("ordinal", "unsigned")),
+                         producer_classes=("target-go-runtime-trace-v2",), context_indices=("run", "request", "tx")),
+            RelationDecl("runtime_tx_committed", (Column("run", "symbol", True), Column("request", "symbol", True),
+                         Column("tx", "symbol", True)), producer_classes=("target-go-runtime-trace-v2",),
+                         context_indices=("run", "request", "tx")),
+            RelationDecl("runtime_route_completed", (Column("run", "symbol", True), Column("request", "symbol", True),
+                         Column("surface", "symbol", True)), producer_classes=("target-go-runtime-trace-v2",),
+                         context_indices=("run", "request", "surface")),
+            RelationDecl("runtime_route_reaches_sql_on_index", (Column("index", "digest", True),
+                         Column("run", "symbol", True), Column("request", "symbol", True),
+                         Column("surface", "symbol", True), Column("symbol", "symbol"),
+                         Column("tx", "symbol", True), Column("operation", "symbol")),
+                         modality="derived", primitive=False,
+                         context_indices=("index", "run", "request", "surface", "tx")),
             RelationDecl("cross_out", (Column("path", "symbol"), Column("symbol", "symbol")), primitive=False),
             RelationDecl("runtime_route_without_static", (Column("tenant", "symbol", True), Column("surface", "symbol", True),
                          Column("run", "symbol", True), Column("index", "digest", True)), modality="claim",
