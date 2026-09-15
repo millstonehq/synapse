@@ -1476,6 +1476,39 @@ not reformat them, and make `static-context` apply only to relations that declar
 `index` column rather than forcing `index` onto the corpus's existing static relations).
 The dirty tree is left in place for attempt 3, which the driver treats as a retry.
 
+#### 2026-09-15 second driver run of `datalog-differential` (`70077c7`, 90-minute budget)
+
+Attempt 1 (05:11–05:52 UTC): implementer ready in 25 minutes; all three gates green under the
+driver; both reviewers requested changes (Soufflé `all` compared cardinalities only; Python
+claim matching ignored repeated-variable equality; the alternatives cap could discard the only
+surviving producer while reporting complete; revocation was relation-global; `static-context`
+enforced only when an `index` column existed; the differential shrank only when both kernels
+were operationally complete). Attempt 2 (05:52–06:31): implementer ready in 23 minutes; gates
+green; reviewers requested changes again (`forall` domains scoped only by context columns;
+`all` collapses domain identity when the source lacks the member column; evidence mappings may
+under-bind causal identities; indexless static relations bypass the static/runtime join guard;
+mapping-valued JSON rows crash the Python kernel instead of yielding a report; a
+`refutation`-effect diagnostic does not revoke; the Soufflé `outputs` subset can change
+verdicts; replay bundles are not minimized over evidence records). Attempt 3 (06:31–07:06):
+implementer ready in 27 minutes reporting all gates green locally; the driver's
+`differential-tests` gate then failed 4 of 17 tests.
+
+Attempt 3's failure was infrastructure, not semantics. The three replay bundles the failing
+tests wrote (`packages/capabilities/.capcov/differential/{8b1d980e…,fbb3d3b5…,98cfaf87…}.json`)
+are shrunk to zero facts, which the shrinker only produces when the Soufflé side fails
+operationally for every input; the fourth failure shows Soufflé returning an empty relation
+set. Rerunning the identical module in the identical tree at 07:10 UTC passed 15/15, and that
+`nix develop` had to re-fetch the entire devShell closure (souffle-2.5, python3-3.12.14,
+go-1.27.0, shen-go) from cache.nixos.org, so the store paths had been deleted between the
+green 06:22 gate and the red 07:06 gate. `nix develop` registers no GC root, so any garbage
+collection removes the closure; the initiator of that collection is UNKNOWN (`gc.lock` was
+not touched; `db.sqlite` was written at 07:06:18 UTC, inside the gate window). Repair: the
+devShell is now built with `--out-link .capcov/pi-workflow/devshell-gcroot` (1.9 GiB closure,
+indirect root registered under `/nix/var/nix/gcroots/auto`), documented in the workflow
+README. The attempt counter is reset a second time by a `task-reset` naming this cause; the
+attempt-3 tree is left in place, and the human feedback restores the attempt-2 reviewer
+findings that the gate-noise feedback had replaced.
+
 ## 27. Kernel provenance repair and differential closure
 
 Owner: `datalog-differential` (reducer, wave `datalog-kernels`). Write set: `claims/**`,
@@ -1523,6 +1556,338 @@ Required changes:
 Checkpoint record must include: commit, gate commands and exit codes, Soufflé version and
 store path, per-fixture differential result, and which corpus fixtures (if any) changed leaf
 sets under the AND-structured children change and why that is correct.
+
+### 2026-09-15 reducer completion record
+
+The manifest dependencies had already been integrated manually and journaled in section 26 as
+`python-reference` then `souffle-kernel`, the same order as the task manifest. Their worker
+worktrees were no longer present during this reducer run, so no worker commit was applied and no
+worker worktree was mutated. The reducer inspected and repaired the already-integrated
+`claims/evaluator.py` first, then `claims/souffle.py`, and treated both implementations as
+unreviewed inputs rather than authority. Reviewed fixtures 02 and 07 and the corpus schema were
+restored byte-for-byte to `70077c7`; no `index` was forced onto their tenant-keyed static
+relations.
+
+Checkpoint ownership remains with the driver. The working tree was tested from base HEAD
+`70077c74713d4eeb2218d6c682de1df8e654dd66`; there is deliberately no claimed completion commit
+here because the task instruction forbids the implementer from committing. The driver must add
+the resulting checkpoint hash after admission. Required ancestor `d1550e4d49401a0e8fa8cdd813fb2fd7bbd00765`
+remains in the history.
+
+Tool observation through the pinned shell:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc \
+  'set -eu; p=$(command -v souffle); printf "path=%s\\n" "$p"; souffle --version 2>&1; printf "deriver=%s\\n" "$(nix-store --query --deriver "${p%/bin/souffle}")"; python --version; nix --version'
+```
+
+Exit 0. Soufflé resolved to
+`/nix/store/hjf84h92h4ynbbn9sg9q1biyr25r617i-souffle-2.5/bin/souffle`; its derivation was
+`/nix/store/jgyfiny19jxvqk395xlzilr9bgwzhi1x-souffle-2.5.drv`. The packaged version is 2.5.
+The binary's own `--version` banner printed a blank value after `Version:` (plus 32-bit word size
+and `ffi ncurses sqlite zlib`); this record does not invent a missing banner value. Python was
+3.12.14 and Nix was Determinate Nix 3.21.5 / Nix 2.34.8.
+
+The three manifest gates were run exactly through `nix develop`:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'command -v souffle && set -eu; for c in souffle; do p=$(command -v "$c"); case "$p" in /nix/store/*) ;; *) echo "unpinned $c=$p" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p '\''test_differential*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p '\''test_shrinker*.py'\'' -t .'
+```
+
+Exit 0: differential discovery ran 8 tests in 6.034s with no skips; shrinker discovery ran 4
+tests in 0.688s, all passing.
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'command -v souffle && set -eu; for c in souffle; do p=$(command -v "$c"); case "$p" in /nix/store/*) ;; *) echo "unpinned $c=$p" >&2; exit 1;; esac; done; cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p '\''test_python_evaluator*.py'\'' -t . && PYTHONPATH=src python -m unittest discover -s tests -p '\''test_claim_python_evaluator*.py'\'' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p '\''test_provenance*.py'\'' -t . && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p '\''test_souffle_evaluator*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac && out=$(PYTHONPATH=src python -m unittest discover -s tests -p '\''test_claim_souffle*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac'
+```
+
+Exit 0. The five discoveries ran 1, 10, 7, 2, and 22 tests respectively; neither Soufflé
+discovery reported a skip. The real Nix-store binary covered startup, recursion, aggregation,
+all four verdict states, empty universal domains, claim-local revocation, and reordered domain
+columns. Patched absent/permission boundaries remained unguarded and produced named
+`SouffleUnavailable` failures.
+
+```sh
+nix develop --no-update-lock-file --command bash -lc \
+  'cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t .'
+```
+
+Exit 0: `Ran 606 tests in 12.290s`, `OK (skipped=67)`. Those 67 are the pre-existing full-suite
+optional-tool/platform skips; this broad regression is not used as Soufflé evidence. The two
+Soufflé gate commands above explicitly rejected any skip and observed none.
+
+A separate `compare(load_fixture(path), shrink=False)` report over every numbered fixture
+produced the following canonical Python/Soufflé agreements (all compared every declared
+relation, including empty primitives):
+
+| fixture | result | claims | canonical report digest |
+|---|---|---|---|
+| 01-correlated-positive | match, 50 relations | terminal-delivery supported/complete/derivational | `72f385df2c33b9eefc503c06e23c4502eeb008f4b1ffde06374107603aed96fb` |
+| 02-surface-mismatch | match, 50 | effect unresolved/complete/derivational | `fbef722d99a70a0b66f46e36de877df7f6e7efcb3c7ee4c355853bd2319ad135` |
+| 03-post-without-creation | match, 50 | created unresolved; request supported (both complete/derivational) | `d52d05321e47d95cccc64e9e8a81cefa81dc56b4cf97157b9cafa5dca9b4e4c8` |
+| 04-authorization-polarity | match, 50 | allow supported; deny supported (complete/derivational) | `d1b0e16d3390a50c9707c34ee45dcc80819834d680b540e2dba090672059eaf5` |
+| 05-wrong-event-email | match, 50 | target-mail unresolved/complete/derivational | `416484a285af3de3632137f528ba48aa102a03a4706cad739b9cf3dcd083634d` |
+| 06-context-contamination | match, 50 | terminal unresolved/complete/derivational | `c28aa042f5e7bfa854b96f610b023a725f2cdbc103d73ecefe5b56787813ce57` |
+| 07-shared-mistaken-assumption | match, 50 | delivered unresolved/complete/derivational | `957d06342036fb2e4ca1899e870dbab5e8f986abeb2efa0f49926933f6203926` |
+| 08-rejection-versus-missing | match, 50 | explicit-denial refuted; missing-denial unresolved (complete/derivational) | `7fb25480922aedebead44f0dd84fba1b8b4b5ec56c365d305c2e563c3c837f13` |
+| 09-support-and-refutation | match, 50 | terminal conflicting/complete/derivational | `10fe80267ba1e8b13b9f4be5c925d68f3e265cc1254d15c0570e0ebde37769ff` |
+| 10-revoked-assumption-alternative | match, 50 | saved supported/complete/derivational | `11d72c3c860b92c10c8528727832979810f78ffb275e00ce07be560a9d2cc02e` |
+| 11-compatible-history-sets | match, 51 | universal unresolved/inconsistent-premises/bounded-history-model; mixed unresolved/complete/bounded-history-model | `7525fdc6cceea21fbf1b62191bb57fee18ea6825f8526e52bc8a5b98a0c033d1` |
+| 12-unexpected-runtime-surface | match, 50 | model-complete unresolved/out-of-scope/derivational | `1d4e7934ca9bb7cc67f08ca762fe8441265b91418be366b2d9a31662fe07128f` |
+| 13-acceptance-sql-ack-failure | match, 50 | terminal unresolved; provider supported (complete/derivational) | `d24cb0a13e8ccf18d46bf564609cda6062c9305ea75d3efd386306b5f3ff3f40` |
+| 14-bounded-no-resend | match, 50 | bounded supported; forever unresolved (complete/derivational) | `c64ed2edab993064ba43c969bf8f955a74b96538dfed4bffafeb01ceba5cc766` |
+
+Exactly one reviewed leaf set changed. Fixture 10's supported proof is an AND application of
+`sql_row_exists` and `sql_snapshot_current__accepted`; after fact leaves became Evidence IDs,
+its exact canonical support tuple is
+`("assumption-independent-source", "fact-independent-proof")`. The fixture-local expectation
+and mirrored `expected.json` now both name those two required children. The revoked
+`assumption-revoked` is not on that path. No other corpus support/refutation leaf set changed.
+This is a provenance correction, not a change made merely to force kernel agreement.
+
+The static primitive contract contains 43 declarations and has canonical JSON SHA-256
+`d936ba0c35465bcded2d3a51d5d3facfdd9fe2b27991de7fa216bac252299071`.
+A gate-discovered test checks every primitive name/column order and the full digest, merges the
+future completeness projections, and validates both `scip_index_comparable(index_a,index_b)`
+and section 29's `index_describes_run(index,run)` rule.
+
+Limits: Soufflé independently computes full and claim-eligible relation closure, but claim
+mapping, quantifier folding, and diagnostic status are normalized in Python in `souffle.py`;
+therefore this is stronger independent closure evidence than independent end-to-end verdict
+implementation evidence. Claim-local eligibility reruns Soufflé after excluding only fact rows
+whose every evidence producer path reaches a forbidden assumption; it does not trust producer
+verdict metadata. Replay shrinking preserves validation, dependency closure, mismatch shape,
+and operational completeness within 200 executions. Operational and semantic failures now both
+enter bounded shrinking; a replay is called minimized only when `shrink_truncated` is false. No
+Shen run, SCIP execution, certificate, specialization, generated experiment, real Go receipt,
+Linux execution, or section 22 final recommendation is claimed by this checkpoint.
+
+### 2026-09-15 reviewer-gate repair (attempt 2)
+
+This sole-root reducer started from the still-dirty attempt-1 tree at HEAD
+`70077c74713d4eeb2218d6c682de1df8e654dd66`. The `python-reference` and
+`souffle-kernel` artifacts were already integrated in manifest order as recorded above. No
+parallel patch/commit was listed for this attempt, no `git apply` was needed, and no worker
+commit or worker worktree was used. The reducer did not commit; checkpoint ownership remains
+with the driver.
+
+Prior reviewer findings were reproduced with focused controls and repaired as follows:
+
+- Existential direct claims and evidence mappings now unify repeated variables. `pair(X,X)`
+  does not match `pair("a","b")` in either kernel.
+- Forbidden-assumption eligibility identifies exact diagnostic rows, constrained by the
+  claim's shared constants/context and the diagnostic predicate, then blocks only those
+  Evidence IDs. Tests include same-relation assumptions in another context and another row.
+- The 64-alternative proof limit no longer silently evicts a potentially eligible path. The
+  evaluator reports `resource-exhausted` as soon as a 65th distinct path is encountered, and
+  its candidate-key set is bounded by the same limit. A differential control with 64 tainted
+  producers and one late independent producer proves Python fails closed while Soufflé finds
+  support; `compare` blocks admission rather than reporting false complete agreement.
+- Static observation/completeness declarations without `index` are rejected except for three
+  exact frozen contracts: legacy `mail_path_declared`, legacy `static_route_exists`, and
+  section 29's context-free `source_tree_observed`. Renaming a legacy declaration does not
+  mint an exception. Facts and evidence targeting `primitive=false` are rejected by shared
+  validation.
+- Soufflé `all` lowering now compares projected source keys, domain keys, and their exact
+  intersection, rejects any false source row, and collapses extra source-only dimensions.
+  Boolean `any`/`all` relations emit explicit false rows when the aggregate variable is in
+  the head; when it is absent, false remains a guard failure. Equal-cardinality wrong-member
+  and duplicate-extra-dimension controls agree with Python.
+- Differential backend `ValueError`/`TypeError`/Unicode and I/O failures become named
+  operational reports. A valid IR symbol containing a tab exercises the real TSV translation
+  failure and produces a reloadable replay. Semantic and operational mismatch classes use
+  bounded ddmin; a threshold-injected resource failure minimized from eight facts to its
+  four-fact boundary,
+  and a fact-independent resource failure minimized to zero facts. Strict canonical replay
+  loading also works for an intentionally invalid producer input.
+- The admitted differential claim contract is explicit: `semantic`, `operational`, `basis`,
+  and `missing_premises`, plus every declared relation. Mutation controls cover each field.
+  Support/refutation provenance, discrepancies, resources, and messages are not claimed as
+  independently produced Soufflé results; exact Python leaves remain checked against the
+  reviewed corpus.
+
+The pinned runtime observation was unchanged:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc \
+  'p=$(command -v souffle); printf "%s\\n" "$p"; souffle --version 2>&1'
+```
+
+Exit 0. Path:
+`/nix/store/hjf84h92h4ynbbn9sg9q1biyr25r617i-souffle-2.5/bin/souffle`.
+The banner again printed a blank value after `Version:`; the Nix package path identifies 2.5.
+
+The manifest `differential-tests` command was run exactly as authored. Exit 0: differential
+discovery ran 15 tests in 6.629s (`OK`, no skips), then shrinker discovery ran 5 tests in
+0.732s (`OK`). The manifest `kernel-tests` command was also run exactly. Exit 0: its five
+discoveries ran 1, 10, 7, 2, and 23 tests; both Soufflé discoveries reported `OK` with no
+skips. The resolved binary printed the Nix-store path above in both gates.
+
+The manifest regression command was run exactly after the focused repairs:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc \
+  'cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t .'
+```
+
+Its first run exited 1 after 616 tests because the pre-existing renamed-program test renamed
+`static_route_exists` and therefore correctly hit the new frozen-exception boundary. The test
+was changed to retain that exact legacy relation name while continuing to rename unrelated
+program/evidence identifiers. The exact regression command was rerun after the final boundary
+control and exited 0: `Ran 617 tests in 13.218s`, `OK (skipped=67)`. The broad suite's optional-tool/platform skips
+are not Soufflé execution evidence; the two manifest gates above rejected `skipped` and saw
+none. An additional focused command over the six modified semantic modules ran 66 tests in
+10.272s, all passing.
+
+A final pinned-shell script reran `compare(load_fixture(path), shrink=False)` for all fourteen
+numbered fixtures. Every fixture still matched over 50 relations (51 for fixture 11), and all
+fourteen canonical digests were byte-for-byte the values in the table above. Thus this repair
+changed no reviewed corpus verdict or leaf set; fixture 10 remains the sole leaf-set correction
+from the original reducer work.
+
+Limits: crossing the alternative-proof bound now fails honestly rather than computing a
+verdict; this is not a claim that explanations above the bound are available. Shrinking is
+bounded at 200 executions by default, and `shrink_truncated=true` explicitly means the replay
+has not been proved minimal. Soufflé independently computes closure, including the new exact
+aggregate-key helpers, but Python code still performs claim folding and diagnostics. The
+frozen static exceptions are transitional contracts, not general permission for identity-free
+static producers. Section 16's experimental CLI namespace is still absent and was not added
+through a production CLI file outside this task's intended kernel scope. No Shen, certificate,
+specialization, real-Go, Linux, performance, or section 22 recommendation evidence is added.
+
+### 2026-09-15 prior-review repair (attempt 3)
+
+This sole-root reducer continued from the attempt-2 dirty tree at base HEAD
+`70077c74713d4eeb2218d6c682de1df8e654dd66`. The dependency artifacts were already integrated
+in manifest order (`python-reference`, then `souffle-kernel`) as recorded in section 26. No
+parallel artifact or patch was listed for this attempt, so no `git apply` was performed; no
+worker commit was consumed and no worker worktree was mutated. The reducer made no commit.
+
+The two request-changes reviews were treated as gates and repaired before re-running admission:
+
+- `FORALL` domain selection now honors every shared named claim constant as well as context,
+  so another capability in the same run cannot enlarge a claim's finite domain. Both kernels
+  have a two-capability oracle.
+- `all` validation now requires each domain member identity in the aggregate source with the
+  same type and term. The bounded-history corpus's explicitly reviewed `outcome` label is the
+  sole frozen non-key payload exception; `history` remains mandatory. A source containing only
+  `(tenant, holds)` is rejected rather than collapsing all members to `tenant`.
+- Support/refutation mappings cannot omit shared Stage-B causal identities (tenant, actor, run,
+  request, event, notification, recipient, message, attempt, interval, environment, build and
+  model/config/source identities). Mapping bindings must also preserve types. Observation-only
+  mappings remain non-authorizing and may be deliberately partial.
+- Every mixed static/runtime rule now requires an indexed static atom, a runtime `run`, and a
+  compatibility witness whose declared payload positions include and exactly bind both
+  `index` and `run`. The three frozen indexless static declarations remain valid only outside
+  mixed rules. Consequently fixtures 02 and 07 had their unsafe mixed rules removed; their
+  observations, mappings, expectations, verdicts, and leaf sets did not change. This is a
+  trust-boundary correction, not a kernel-agreement edit.
+- Mapping-valued JSON constants are hashable immutable IR values, so the Python relation set no
+  longer crashes. Soufflé symbols and JSON metadata now use one reversible hexadecimal UTF-8
+  encoding in rule literals, TSV facts, and decoded outputs; tabs and newlines are valid and
+  compare identically instead of becoming a translation failure.
+- Count binds `Aggregation.value_variable` in Python, including zero-count groups. Soufflé's
+  output subset automatically emits derived claim/domain/mapping/diagnostic relations required
+  for verdict folding, so omitting a derived claim relation cannot silently change the verdict.
+  Direct negative evidence plus a positive mapping is explicitly tested as `conflicting`.
+- Assumption diagnostics with effect `refutation`, as well as `forbidden`, now revoke dependent
+  proof paths in both kernels. Fixture 10 now contains `fact-revoked-proof` depending on
+  `assumption-revoked` plus the existing independent proof; removing the independent producer
+  yields `unresolved/stale`, while the reviewed complete bundle remains supported by exactly
+  `assumption-independent-source` and `fact-independent-proof`.
+- The shrinker minimizes individual Evidence IDs as well as fact rows, preserves dependency and
+  attribution closure, and performs a bounded one-deletion certification pass. Mismatch shape
+  uses the union of left/right relation names. Replay filenames equal the replay bundle digest;
+  persistence failure raises named `ReplayPersistenceError` and blocks comparison. A bound hit
+  remains `shrink_truncated=true`, never a minimality claim.
+- The provenance topology control now uses two positive body atoms with two producers each. A
+  rule proof has exactly two AND children, records two discarded OR alternatives, and resolves
+  to the independent producer for either revoked canonical child. `path_key()` and the bounded
+  alternative failure semantics were not weakened.
+
+Pinned runtime observation remained
+`/nix/store/hjf84h92h4ynbbn9sg9q1biyr25r617i-souffle-2.5/bin/souffle`.
+The final manifest `differential-tests` command was run exactly as authored in
+`.pi/workflows/capcov-experiment.json`:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'command -v souffle && set -eu; for c in souffle; do p=$(command -v "$c"); case "$p" in /nix/store/*) ;; *) echo "unpinned $c=$p" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p '\''test_differential*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p '\''test_shrinker*.py'\'' -t .'
+```
+
+Exit 0. Differential discovery ran 17 tests in 33.615s and shrinker discovery ran 8 tests in
+1.958s. Both reported `OK`; the gate's skip rejection did not fire.
+
+The final manifest `kernel-tests` command was also run exactly as authored:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'command -v souffle && set -eu; for c in souffle; do p=$(command -v "$c"); case "$p" in /nix/store/*) ;; *) echo "unpinned $c=$p" >&2; exit 1;; esac; done; cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p '\''test_python_evaluator*.py'\'' -t . && PYTHONPATH=src python -m unittest discover -s tests -p '\''test_claim_python_evaluator*.py'\'' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p '\''test_provenance*.py'\'' -t . && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p '\''test_souffle_evaluator*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac && out=$(PYTHONPATH=src python -m unittest discover -s tests -p '\''test_claim_souffle*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac'
+```
+
+Exit 0. Its five discoveries ran 1, 10, 9, 2, and 26 tests in 0.044s, 0.006s, 0.056s,
+0.092s, and 2.141s respectively. Every discovery reported `OK`; the two real-Soufflé
+discoveries had no skips.
+
+The final manifest regression command was run exactly:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc \
+  'cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t .'
+```
+
+Exit 0: `Ran 630 tests in 39.736s`, `OK (skipped=67)`. Those broad-suite skips remain the
+pre-existing optional-tool/platform skips and are not used as Soufflé evidence.
+
+A final pinned-shell per-fixture script ran every numbered fixture:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'cd packages/capabilities && PYTHONPATH=src python - <<"PY"
+from pathlib import Path
+from tests.claim_semantics.adapter import load_fixture
+from capcov.claims.differential import compare
+for path in sorted(Path("tests/claim_semantics/corpus").glob("[0-9][0-9]-*.json")):
+    result = compare(load_fixture(path), shrink=False)
+    print(path.stem, len(result.python.relations), result.python.canonical_digest,
+          ";".join(f"{claim.key}={claim.semantic}/{claim.operational}/{claim.basis}"
+                   for claim in result.python.claims))
+PY'
+```
+
+Exit 0. All compared every declared relation and matched. Canonical digests/verdicts:
+
+| fixture | relations | canonical report digest | claims |
+|---|---:|---|---|
+| 01-correlated-positive | 50 | `72f385df2c33b9eefc503c06e23c4502eeb008f4b1ffde06374107603aed96fb` | supported/complete/derivational |
+| 02-surface-mismatch | 50 | `fbef722d99a70a0b66f46e36de877df7f6e7efcb3c7ee4c355853bd2319ad135` | unresolved/complete/derivational |
+| 03-post-without-creation | 50 | `d52d05321e47d95cccc64e9e8a81cefa81dc56b4cf97157b9cafa5dca9b4e4c8` | created unresolved; request supported |
+| 04-authorization-polarity | 50 | `d1b0e16d3390a50c9707c34ee45dcc80819834d680b540e2dba090672059eaf5` | allow supported; deny supported |
+| 05-wrong-event-email | 50 | `416484a285af3de3632137f528ba48aa102a03a4706cad739b9cf3dcd083634d` | unresolved/complete/derivational |
+| 06-context-contamination | 50 | `c28aa042f5e7bfa854b96f610b023a725f2cdbc103d73ecefe5b56787813ce57` | unresolved/complete/derivational |
+| 07-shared-mistaken-assumption | 50 | `ec6946397ee18fb525364ad0ee7b378357c6fde07b4289aa5fadf3eb8be6523f` | unresolved/complete/derivational |
+| 08-rejection-versus-missing | 50 | `7fb25480922aedebead44f0dd84fba1b8b4b5ec56c365d305c2e563c3c837f13` | explicit refuted; missing unresolved |
+| 09-support-and-refutation | 50 | `10fe80267ba1e8b13b9f4be5c925d68f3e265cc1254d15c0570e0ebde37769ff` | conflicting/complete/derivational |
+| 10-revoked-assumption-alternative | 50 | `9295043b384a3ec90cff0158784b1b3f1709d2a57cac2e69f5eba4007e0d7fb8` | supported/complete/derivational |
+| 11-compatible-history-sets | 51 | `7525fdc6cceea21fbf1b62191bb57fee18ea6825f8526e52bc8a5b98a0c033d1` | universal inconsistent/unresolved; mixed unresolved |
+| 12-unexpected-runtime-surface | 50 | `1d4e7934ca9bb7cc67f08ca762fe8441265b91418be366b2d9a31662fe07128f` | unresolved/out-of-scope/derivational |
+| 13-acceptance-sql-ack-failure | 50 | `d24cb0a13e8ccf18d46bf564609cda6062c9305ea75d3efd386306b5f3ff3f40` | terminal unresolved; provider supported |
+| 14-bounded-no-resend | 50 | `c64ed2edab993064ba43c969bf8f955a74b96538dfed4bffafeb01ceba5cc766` | bounded supported; forever unresolved |
+
+Only fixture 07's report digest changed due removal of an inadmissible rule, and fixture 10's
+changed due the added revoked producer. Their reviewed verdicts and leaves did not change.
+Fixture 02's removed rule had never derived a row in the mismatched-surface input, so its report
+digest is unchanged. Fixture 10 remains the only fixture whose expected leaf set changed in the
+original provenance repair; this attempt changed no expected leaf set.
+
+Honest limits: Soufflé still independently computes closure, not end-to-end claim policy or
+provenance; Python performs claim folding and diagnostics. The IR lacks a general domain-key
+annotation, so the reviewed `outcome` non-key exception is frozen by name and should be replaced
+by explicit key metadata before broadening aggregation schemas. Replay one-minimality is claimed
+only when the 200-execution bound completes; a truncated replay is merely a reproducer. Section
+16's `capcov experiment claims validate/evaluate` production CLI dispatch remains absent because
+`packages/capabilities/src/capcov/cli.py` is outside this task's declared write set; no hidden
+production command was changed. Section 22's performance/memory/startup/artifact/maintenance
+study and final recommendation remain future `datalog-evaluation` work. No Shen, SCIP, external
+execution, receipt, certificate, specialization, real-Go, Linux execution, or driver checkpoint
+commit is claimed.
 
 ## 28. Stage 0 addendum — SCIP toolchain
 
