@@ -4862,6 +4862,41 @@ writer as with Pi). The exhausted `kernel-closure-integrate` is retired and repl
 is: same tree, same gates, same reviewer lenses, different agent runtime. Codex results are
 labelled `backend=codex` on every `agent-start` line in `driver.log`.
 
+### 2026-09-15 runtime join follow-up
+
+The fg-go pilot now accepts an optional retained runtime receipt via
+`CAPCOV_FG_GO_RUNTIME_RECEIPT`. The producer is the existing disposable
+`tools/check_subscription_links.py` path in fg-go, extended at candidate
+`bc404ec84d576220993777cade81c6e238fe19e8`. The successful receipt records run
+`claims-runtime-20260915-02`, tenant `tenant-a`, the concrete subscribe surface,
+HTTP 200, a run-bound request id, the final SQL state (no unsubscribe row and one
+cancelled confirmation), and zero owned resources after cleanup.
+
+The pilot validates that receipt before admitting `runtime_route_observed`, asks
+the SCIP exporter to emit `index_describes_run(index, run)`, and derives
+`runtime_route_observed_on_index` in both Python and Souffle. The two kernels
+agreed and all 10 pilot tests passed in 178.828 seconds. The mixed certificate
+contains runtime receipt, `scip_index`, and `index_describes_run` leaves. The
+existing independent static certificate proves the handler reaches
+`database/sql.Tx.ExecContext`. These are complementary certificates, not a
+single claim that runtime tracing observed the call stack or SQL statement.
+
+The first attempted rule tried to introduce a new runtime SQL relation. Bundle
+validation rejected it because the frozen compatibility witness does not
+authorize that producer/target pair. The final rule stays within the declared
+`index_describes_run` target set; this fail-closed result is retained as a design
+constraint for the producer-authority work.
+
+Reproduction from `packages/capabilities`:
+
+```sh
+CAPCOV_GO_FIXTURE_ROOT=/Users/reuben/fg/.worktrees/fg-go-capcov-claims-runtime \
+CAPCOV_GO_CACHE_ROOT=/Users/reuben/projects/.capcov-go-cache \
+CAPCOV_FG_GO_RUNTIME_RECEIPT="$PWD/tests/claim_semantics/fg_go/artifacts/runtime-recipient-route.json" \
+nix develop --no-update-lock-file --command bash -lc \
+  'export PYTHONPATH="$PWD/src"; python -m unittest discover -s tests/claim_semantics -p "test_fg_go_static*.py" -t .'
+```
+
 ## 31. Performance: evaluator access paths and artifact caching
 
 Two independent efforts on 2026-09-15, stacked on branch `codex/capcov-performance-cas` (`0d7d514`):
