@@ -634,7 +634,7 @@ async function checkResumePreconditions(root: string, config: Config, events: Ev
   // A human-owned manifest/harness commit is journaled as `manifest-checkpoint`
   // (see .pi/workflows/README.md); it moves the expected resume HEAD without
   // pretending any task completed.
-  const expectedHead = String([...events].reverse().find((event) => event.type === "task-completed" || event.type === "manifest-checkpoint")?.data?.checkpoint ??
+  const expectedHead = String([...events].reverse().find((event) => event.type === "task-completed" || event.type === "manifest-checkpoint" || event.type === "human-checkpoint")?.data?.checkpoint ??
     events.find((event) => event.type === "run-started")?.data?.head ?? "");
   const currentHead = (await git(root, ["rev-parse", "HEAD"])).stdout.trim();
   if (expectedHead && currentHead !== expectedHead) throw new Error(`Resume HEAD ${currentHead} differs from journal checkpoint ${expectedHead}`);
