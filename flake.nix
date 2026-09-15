@@ -62,6 +62,8 @@
             jq
             hyperfine
             souffle
+            scip
+            scip-go
             values.shenGo
           ];
           # macOS login shells run path_helper after `nix develop` sets PATH.
@@ -95,6 +97,8 @@
           values = forSystem system;
           pkgs = values.pkgs;
           capabilitiesSource = pkgs.lib.cleanSource ./packages/capabilities;
+          goAppSource = pkgs.lib.cleanSource ./packages/capabilities/tests/fixtures/go_app;
+          goAppGolden = ./packages/capabilities/tests/fixtures/scip_go_app_index.json;
         in {
           shen-package = values.shenGo;
 
@@ -126,13 +130,37 @@
           '';
 
           capability-regression = pkgs.runCommand "capcov-capability-regression" {
-            nativeBuildInputs = [ pkgs.python312 ];
+            nativeBuildInputs = [ pkgs.python312 pkgs.souffle ];
           } ''
+            export LC_ALL=C
             cp -R ${capabilitiesSource} source
             chmod -R u+w source
             cd source
-            PYTHONPATH=src python -m unittest discover -s tests -t .
+            # Absolute PYTHONPATH: some tests spawn `python -m capcov` from a temp cwd.
+            PYTHONPATH="$PWD/src" python -m unittest discover -s tests -t .
             touch "$out"
+          '';
+
+          # Index the Go fixture with the pinned scip-go, print it with the pinned
+          # scip CLI, canonicalize, and compare byte-for-byte with the committed golden.
+          # go.mod has no `require` lines, so no module download is needed.
+          scip-go-index-smoke = pkgs.runCommand "scip-go-index-smoke" {
+            nativeBuildInputs = [ values.go pkgs.scip pkgs.scip-go pkgs.jq ];
+          } ''
+            export HOME="$TMPDIR/home" GOCACHE="$TMPDIR/gocache" GOPATH="$TMPDIR/gopath"
+            export GOFLAGS=-mod=mod GOPROXY=off GOTOOLCHAIN=local LC_ALL=C
+            mkdir -p "$HOME" "$GOCACHE" "$GOPATH" "$out"
+            cp -R ${goAppSource} go_app
+            chmod -R u+w go_app
+            ( cd go_app && scip-go --output index.scip )
+            scip print --json go_app/index.scip > raw.json
+            jq -S -f ${./tests/scip/canonicalize.jq} raw.json > canonical.json
+            diff -u ${goAppGolden} canonical.json
+            cp canonical.json "$out/scip_go_app_index.json"
+            scip --version | tee "$out/scip-version.txt"
+            { scip-go --version 2>&1 || true; } | tee "$out/scip-go-version.txt"
+            go version | tee "$out/go-version.txt"
+            sha256sum go_app/index.scip | tee "$out/index.scip.sha256"
           '';
         });
     };

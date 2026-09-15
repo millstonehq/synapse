@@ -3888,6 +3888,143 @@ Owner: `scip-toolchain` (single-task wave). Write set: `flake.nix`, `flake.lock`
   change the assertion to sorted symbol set plus per-document occurrence counts and record
   the nondeterminism explicitly.
 
+### SCIP toolchain record (2026-09-15, task `scip-toolchain`)
+
+Worktree `/Users/dev/projects/capcov-scip-toolchain`, branch `agent/scip-toolchain`, parent
+HEAD `cfd3af4e7a8ecbcf142a13bcc729fde840c57370`. Host `aarch64-darwin`, Darwin kernel `25.5.0`
+(macOS 26.5.2, build 25F84), Nix `nix (Determinate Nix 3.21.5) 2.34.8` (host Nix CLI is not
+pinned by the flake). `flake.lock` was not edited and `nix flake update` was not run;
+`shasum -a 256 flake.lock` is `d078f9fba512323fd35b24afc6a81aa3bb95c63caa1d00acf700e0827f9e6bac`
+before and after. That unchanged lock proves only that nixpkgs is still
+`34ab99075ac4f7e40cf037eef32cb1c360bb85e9`; the closure evidence is the store paths and sizes below.
+
+Changes in this task's write set:
+
+- `flake.nix`: `scip` and `scip-go` added to devShell `toolPackages`; `capability-regression`
+  now has `nativeBuildInputs = [ pkgs.python312 pkgs.souffle ]`, exports `LC_ALL=C`, and runs
+  with `PYTHONPATH="$PWD/src"` (absolute) because the merged upstream test
+  `tests.test_feature_evidence.FeatureEvidenceTests.test_cli_reconciles_in_a_real_subprocess`
+  spawns `python -m capcov` with a temporary cwd, where a relative `src` does not resolve; new
+  check `scip-go-index-smoke` (inputs `values.go`, `pkgs.scip`, `pkgs.scip-go`, `pkgs.jq`)
+  copies `cleanSource ./packages/capabilities/tests/fixtures/go_app`, sets
+  `HOME`/`GOCACHE`/`GOPATH` under `$TMPDIR` with `GOFLAGS=-mod=mod GOPROXY=off GOTOOLCHAIN=local
+  LC_ALL=C`, runs `scip-go --output index.scip`, `scip print --json`,
+  `jq -S -f tests/scip/canonicalize.jq`, `diff -u` against the committed golden, and writes
+  `scip_go_app_index.json`, `scip-version.txt`, `scip-go-version.txt`, `go-version.txt`, and
+  `index.scip.sha256` under `$out`.
+- `tests/scip/canonicalize.jq`, `tests/scip/README.md`: canonicalization and rationale.
+- `packages/capabilities/tests/fixtures/scip_go_app_index.json`: golden, produced once in the
+  devShell with that exact jq script; sha256
+  `0b5183fc8d03afc1f86331ae3e1d5bdfe9ff87e0159c96156662b6bde51e687e` (1369 lines, trailing
+  newline). The go_app fixture lives at `packages/capabilities/tests/fixtures/go_app`, which is
+  the path the manifest gate uses; the `tests/fixtures/go_app` spelling earlier in this section
+  is shorthand for the same directory.
+
+Pinned tools observed through `nix develop --no-update-lock-file --command bash -lc`, all under
+`/nix/store`:
+
+- scip `v0.9.0` at `/nix/store/hckm2075va6x941b4lwncv8ls3p6ssr1-scip-0.9.0/bin/scip` (closure 22.4 MiB)
+- scip-go `0.2.7` at `/nix/store/3inxss33qhklfr6416j0kwp4cbjkdlys-scip-go-0.2.7/bin/scip-go` (closure 14.4 MiB)
+- souffle `2.5` at `/nix/store/hjf84h92h4ynbbn9sg9q1biyr25r617i-souffle-2.5/bin/souffle` (closure 1.4 GiB; already in the devShell before this task)
+- go `go1.27.0 darwin/arm64` at `/nix/store/lz3qw52rpazqga73xgsqlj4qz1lgs4hg-go-1.27.0/bin/go`
+- python `3.12.14` at `/nix/store/p1wfv7znig26m3hns4583cb9va3kzxkg-python3-3.12.14/bin/python`
+- jq `1.8.2` at `/nix/store/d01nk4ck93bwlzwbnnb1qf1kv4d94a09-jq-1.8.2-bin/bin/jq`
+
+devShell closure (`nix build --no-update-lock-file .#devShells.aarch64-darwin.default
+--out-link .capcov/devshell-gcroot`; `nix path-info -S`):
+
+- before: `/nix/store/hc9i3s6l94vdlq8hx10zxmy4shq3gfjr-nix-shell`, 2,075,908,424 bytes (`-Sh`: 1.9 GiB); identical to the driver's existing GC root
+- after: `/nix/store/mfaim3jlm3qfx1xl9f0hzcn19fgpr9im-nix-shell`, 2,108,790,296 bytes (`-Sh`: 2.0 GiB); delta +32,881,872 bytes, consistent with scip + scip-go
+
+Smoke derivation `/nix/store/0bjmfii20s639nac455mj13my06y4849-scip-go-index-smoke.drv`, output
+`/nix/store/xdi059dwma7qm4ybbyn9fk26j97znmj1-scip-go-index-smoke`; `$out/scip_go_app_index.json`
+sha256 `0b5183fc…` (equal to the golden); `$out/index.scip.sha256` =
+`7b267d0f35ad1973c221a036fecb433522d18b8bd08d29e6f622adf8e20f3731`; `scip-version.txt` =
+`scip version v0.9.0`; `scip-go-version.txt` = `0.2.7`; `go-version.txt` = `go version go1.27.0
+darwin/arm64`. Regression derivation
+`/nix/store/nfk4qqfmdhn8p17zdp1qzlhxif35yxg0-capcov-capability-regression.drv`.
+
+Determinism, observed rather than assumed: two consecutive `scip-go` runs on copies of go_app in
+the same devShell produced different `index.scip` digests (`6726ce99…`, `a0b4be0b…`) and different
+raw `scip print --json` output. Apart from `metadata.project_root` (`file://` URI of the temp
+directory), the only difference was the order of entries in each document's `symbols` array (Go
+map iteration order); document order, occurrence order, and the per-document symbol and occurrence
+multisets were equal. After `canonicalize.jq` both runs were byte-identical (`0b5183fc…`), and the
+sandboxed check reproduced the same bytes, so the byte-for-byte assertion stands; it was not
+weakened to symbol-set plus counts. Sort keys (`symbol` within `symbols`, `(range, symbol)` within
+`occurrences`) were checked unique per document in the golden, so the sort is a total order. The
+raw output with `project_root` removed contains no `/tmp`, `/private`, `/Users`, or `file://`
+strings; `external_symbols` is absent in scip-go's output for go_app and is normalized to `[]`.
+The `index.scip` digest under `$out` embeds `project_root` and is a record of that build, not an
+invariant; the canonical JSON digest is the invariant.
+
+Gates, run with the exact manifest command form `nix develop --no-update-lock-file --command bash
+-lc '…'` from the worktree with the new files staged (Nix warned `Git tree … has uncommitted
+changes`; unstaged files would be excluded from `self`):
+
+```sh
+nix flake check --no-update-lock-file
+```
+
+Exit 0. Built `capability-regression`, `scip-go-index-smoke`, `shen-evaluator-smoke`,
+`souffle-recursive-typed-smoke`; `shen-package` previously built. Sandboxed regression log:
+`Ran 880 tests in 320.539s`, `OK (skipped=127)`. Linux checks omitted on this host.
+
+```sh
+set -eu; for c in scip scip-go souffle go python; do p=$(command -v "$c"); case "$p" in /nix/store/*) ;; *) echo "unpinned $c=$p" >&2; exit 1;; esac; done; scip --version; souffle --version; go version; test "$(shasum -a 256 flake.lock | cut -d' ' -f1)" = d078f9fb…
+```
+
+Exit 0 (`scip version v0.9.0`, Soufflé 2.5 banner, `go version go1.27.0 darwin/arm64`).
+
+```sh
+# scip-go-index-smoke-develop (manifest command: mktemp, cp go_app, scip-go, scip print, jq -S -f, diff -u golden)
+```
+
+Exit 0; `diff -u` printed nothing.
+
+```sh
+nix flake check --all-systems --no-build --no-update-lock-file
+```
+
+Exit 0. Evaluated `scip-go-index-smoke`, `souffle-recursive-typed-smoke`, `capability-regression`,
+`shen-*`, packages, and devShells for `aarch64-darwin`, `aarch64-linux`, `x86_64-linux`. Linux is
+evaluation-only; no Linux build or execution is claimed, and the golden's cross-platform validity
+is untested.
+
+```sh
+cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t .
+```
+
+Exit 1: `Ran 880 tests in 217.378s`, `FAILED (failures=1, skipped=125)`. The single failure is
+`tests.test_feature_evidence.FeatureEvidenceTests.test_cli_reconciles_in_a_real_subprocess`:
+`AssertionError: 1 != 0 : /nix/store/p1wfv7znig26m3hns4583cb9va3kzxkg-python3-3.12.14/bin/python:
+No module named capcov`. The test runs `sys.executable -m capcov` with `cwd` set to a temp
+directory, so the manifest's relative `PYTHONPATH=src` does not resolve there. This is a manifest
+command defect, not a toolchain or test defect; the test and `.pi/workflows/capcov-experiment.json`
+are outside this write set and were not edited. Same suite with the absolute form:
+
+```sh
+cd packages/capabilities && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -t .
+```
+
+Exit 0: `Ran 880 tests in 89.245s`, `OK (skipped=125)`. **Needed manifest change:** the
+`regression` gate command for this task (and any other task using the relative form) should read
+`PYTHONPATH="$PWD/src"`; the flake's `capability-regression` check already uses it.
+
+Soufflé in the sandbox: `tests.test_claim_souffle.SouffleBackendTests` is the only
+`skipUnless(shutil.which("souffle"))` class and holds 31 tests (`unittest -v` in the devShell:
+33 tests in the module, 31 in that class, all `ok`). The sandboxed check skipped 127 versus 125 in
+the devShell, the same two-test gap documented in section 14 for Go/Git-dependent tests; had souffle
+been absent in the sandbox the gap would be 33. The sandboxed run does not print per-test names, so
+this is inferred from skip counts, not read off a verbose log.
+
+**Limits:** Linux remains evaluation-only, and the golden has only been reproduced on
+`aarch64-darwin` (twice in the devShell, once in the sandbox). A clean-checkout rebuild from the
+committed SHA has not been demonstrated by this task (the commit is made after these runs;
+`nix flake check` ran against the staged, uncommitted tree). `scip-go --version` prints `0.2.7`
+followed by an empty `Version:` banner; the recorded version is the first line. The host Nix CLI
+is unpinned. `scip-python` is not provided by this nixpkgs revision and is out of scope.
+
 ## 29. SCIP → Datalog: static observations as claim evidence
 
 Owner: wave `scip-datalog` (`scip-fact-export` and `static-rule-pack` in parallel,
@@ -3905,9 +4042,32 @@ than absence. Completeness claims therefore require indexer and language coverag
 ### Identity and context
 
 Every static relation carries exactly one context column `index` (type `digest`,
-`context: true`), whose value is the SCIP index digest: `sha256` of the `index.scip` bytes
-(`digest_kind = binary`) or `sha256("scip-json:" + canonical_json(raw))` for a checked-in JSON
-fixture (`digest_kind = json`). Tree-sitter-side facts (routes, op sites, blind spots) are
+`context: true`), whose value is a content digest of the normalized relations the exporter
+emits — the `static-relations-v1` identity:
+
+```text
+index = sha256("static-relations-v1:" + canonical_json({
+          "relations": sorted(<every relation name the bundle declares>),
+          "rows": {relation: sorted(rows with the index column removed, by canonical JSON)
+                   for every exported primitive relation with at least one row,
+                   except the compatibility relations index_describes_run / scip_index_comparable}}))
+```
+
+`export_bundle` builds every fact under a placeholder index, computes this digest from the
+finished rows, then sets every `index` column to it and computes the evidence ids (which embed
+`index[:12]` and the row digest): content digest → index → ids. Two exports of the same
+normalized content therefore carry the same `index`, the same evidence ids and the same bundle
+digest regardless of the indexer's emission order (scip-go writes per-document `symbols` in Go
+map order, section 28) and of which copy of the tree was indexed. Compatibility relations bind
+the index to *other* contexts (a run, another index) and are supplied at claim time, so they are
+keyed by the identity rather than part of it. The digest of the index file the runner read —
+`sha256(index.scip bytes)` (`binary`) or `sha256("scip-json:" + canonical_json(raw))` for a
+checked-in JSON fixture (`json`) — is a *run receipt*, not identity: `read_scip_index` still
+returns it as `index_digest` / `index_digest_kind`, the exporter reports it in
+`ExportResult.messages`, carries it in bundle metadata as `index_file_digest` /
+`index_file_digest_kind`, and `scip_facts.bundle_digest` excludes those two keys
+(`RECEIPT_METADATA_KEYS`); `scip_index.digest_kind` carries the literal `static-relations-v1`.
+Tree-sitter-side facts (routes, op sites, blind spots) are
 keyed by the same `index`: the exporter binds one tree walk to one index and refuses to export
 unless the language-scoped tree digest matches (`artifacts.tree_sha256` gains per-language
 patterns; today Go and PHP trees hash as empty). Under `validation.py` this means cross-index
@@ -3971,8 +4131,10 @@ string (`scip-go 0.2.7`, `scip 0.9.0 print --json`, `treesitter-routes go`,
 `capcov.claims.static.scip_facts v1`). `depends_on` chains: an edge depends on its document,
 its reference occurrence, and the caller-definition occurrence; sites depend on the tree
 identity; witnesses depend on their document and the tree identity; `scip_index_commit`
-depends on `external:git-commit:<sha>`. Bundle metadata records export version, index digest,
-scope, producer versions, and profile (`slice` or `full`).
+depends on `external:git-commit:<sha>`. Bundle metadata records export version, index identity
+(`index_digest`, kind `static-relations-v1`), the index-file receipt (`index_file_digest`,
+`index_file_digest_kind`; outside `bundle_digest`), scope, producer versions, and profile
+(`slice` or `full`).
 
 ### Runner retention (opt-in, backward compatible)
 
@@ -4016,7 +4178,18 @@ static_route_authorized(IX,S) :- static_route_handler(IX,S,H), static_reaches_eq
                                  authz_symbol__accepted(IX,N), static_index_current(IX).
 static_route_authorization_gap(IX,S) :- static_route_declared_surface(IX,S),
                                         static_route_authorized_closed(IX), !static_route_authorized(IX,S).
+scip_duplicate_definition(IX,Sym,PA,LA,PB,LB) :- scip_definition_site(IX,PA,LA,Sym), scip_definition_site(IX,PB,LB,Sym),
+                                                 scip_symbol(IX,Sym,_k,Cat,_d), Cat != "other", PA != PB.
+scip_duplicate_definition(IX,Sym,PA,LA,PB,LB) :- scip_definition_site(IX,PA,LA,Sym), scip_definition_site(IX,PB,LB,Sym),
+                                                 scip_symbol(IX,Sym,_k,Cat,_d), Cat != "other", LA != LB.
 ```
+
+The category guard on `scip_duplicate_definition` is the exporter's own predicate
+(`_symbol_category(symbol) != "other"`, `scip_facts.py`): namespace (package) symbols, whose
+descriptor ends in `/`, are defined by scip-go in every file of the package, and `local N`
+symbols are file-scoped, so neither is an ambiguous definition; only `callable`, `type` and
+`term` symbols can be. A guard on `scip_symbol_unrooted(IX,Sym,"local")` was not used because
+negating it would need a completeness witness the exporter does not emit.
 
 Validation consequences already verified against `validation.py`: negating a relation with
 unbound extra columns is `unsafe-negation`, so negations go through projections and
@@ -4065,6 +4238,7 @@ slice; negatives become `unresolved` with a visible missing premise, never silen
 | 07 | constructor as type reference | `scip_type_reference` to `Job#`, no edge | capability supported through the op owner; `static_reaches(GetJob, Job#)` unresolved and documented |
 | 08 | module-scope reference | `handle(...)` at package scope | route → handler supported; "init reaches storage" unresolved (no root symbol) |
 | 09 | duplicate definitions | two `scip_definition_site` rows for one symbol | supported plus discrepancy `ambiguous-definition`; negatives unresolved |
+| 09 (variant `-package-symbol`) | package symbol defined per file | `Handler#GetJob` defined once; the package symbol `api/` (category `other`) defined in two files; every reference witness present | `scip_duplicate_definition` empty, claim unresolved with missing premise `scip_symbol`; no discrepancy; the negative gap claim resolves (`supported`) because the witnesses are not withheld |
 
 ### Cross-check against the current resolver
 
@@ -4086,6 +4260,290 @@ enumerated set is a mismatch, not a pass. `resource-exhausted` on the bounded sl
 never fixed by raising limits silently. A golden mismatch across machines changes the assertion
 basis explicitly. A bundle whose `index_digest` differs from the index actually evaluated is
 `stale`. The go_app pilot is never described as target-go evidence.
+
+### Reducer record (2026-09-15, task `scip-datalog-differential`)
+
+Worktree `/Users/dev/projects/capcov-scip-datalog`, branch `scip-datalog/fan-in`, integration
+parent `7b1a65ed94e73d64ac70277436972a6550e79e62` (the three parallel deliverables merged:
+`agent/scip-toolchain` 2f3b4d8, `agent/scip-fact-export` 98e695f, `agent/static-rule-pack`
+e6c1845). Host `aarch64-darwin`, Darwin `25.5.0`; devShell GC root rebuilt first
+(`nix build --no-update-lock-file .#devShells.aarch64-darwin.default --out-link
+.capcov/devshell-gcroot` → `/nix/store/mfaim3jlm3qfx1xl9f0hzcn19fgpr9im-nix-shell`, the same
+closure section 28 recorded). Soufflé store path
+`/nix/store/hjf84h92h4ynbbn9sg9q1biyr25r617i-souffle-2.5/bin/souffle` (`souffle-2.5`); scip
+`/nix/store/hckm2075va6x941b4lwncv8ls3p6ssr1-scip-0.9.0/bin/scip`; scip-go
+`/nix/store/3inxss33qhklfr6416j0kwp4cbjkdlys-scip-go-0.2.7/bin/scip-go`; python
+`/nix/store/p1wfv7znig26m3hns4583cb9va3kzxkg-python3-3.12.14/bin/python`. No driver checkpoint
+hash is recorded or promised here.
+
+**Reconciliation decisions (items 1–5).**
+
+1. *Line frame.* 1-based everywhere, as the exporter's `LINE_FRAME` says: SCIP's 0-based range
+   lines are lifted once in `scip_facts.export_bundle`, and `route_handler_location(IX,S,F,L)`
+   joins `scip_definition_site(IX,F,L,Sym)` without a per-rule shift. The hand-written control
+   case `00-go-app-control` already agreed (GetJob defined on `api/jobs.go:10`, route on 17,
+   `Repo.Get`/`Repo.Write` on `internal/jobs/repo.go` 14/19, sites on 15/20; the golden's
+   definition occurrence for `GetJob` has range line 9). The frame is now stated in the rule pack
+   README ("Line frame"), together with the fact that the control case is a go_app-*shaped*
+   synthetic (abbreviated symbols, an extra `internal/authz` package); the exporter's own output
+   over the golden is evaluated by the new differential tests through
+   `tests/claim_semantics/static_rules/go_app.py`.
+2. *Duplicate declarations.* The exporter keeps declaring the five stubs (its bundle must validate
+   alone: the frozen witnesses' `completes` targets and `index_describes_run`'s compatibility
+   target must resolve), but they are now byte-identical to the pack's declarations
+   (`modality=derived`; `scip_definition_site_at` gained the `line` column the pack declares).
+   New `claims/static/combine.py::combine(*bundles, ...)` merges declaration sets by name and
+   raises `CombineError` on a non-identical duplicate (tested with a widened `static_reaches`),
+   unions facts/rules/claims/mappings/diagnostics/outputs, requires unique evidence ids and equal
+   diagnostic policies, and validates the result. So: option "merge identical declarations by
+   name", with identity enforced rather than assumed; the pack stays the authority on rules.
+3. *`project_root`.* `scip_index.project_root` now carries
+   `scip_facts.canonical_project_root(reported)` = `file:///<basename>` of the indexer's root
+   (or `""` when the index has none, as the canonicalized JSON golden does); the reported host
+   path goes to `ExportResult.messages`, not into any fact and not into bundle metadata (metadata
+   is part of the bundle digest). The exporter test's `file:///tmp/gonest` expectation became
+   `file:///gonest`; the live go_app export records `file:///go_app`. The committed exported-bundle
+   digest for the golden (below) is asserted by `test_differential_static_reachability.py`.
+4. *Validator.* `validation._validate_context_joins` now skips the context-free static atom when
+   the body has no runtime atom and still returns `mixed-binding-join` when it has one
+   (regression test `test_context_free_static_join_is_flagged_only_when_runtime_evidence_is_read`
+   in `test_validation_section27.py`). The pack's bridge `static_source_tree_observed(index,
+   tree_digest)` was therefore removed: `static_index_current` and `scip_index_stale` read the
+   frozen `source_tree_observed(T)` directly, exactly as this section writes them; every case
+   dropped its bridge fact and the reviewed leaf sets now name the claim-time
+   `static:claim-time:source_tree_observed:<row12>` leaf instead (mechanical rewrite of the 13
+   case files and `expected.json`; the Python-evaluator agreement test and the Soufflé
+   differential over all cases pass unchanged in verdicts). The README's "Validator findings"
+   records the history.
+5. *No faked census.* `export_from_tree` still emits no `scip_references_closed` without a
+   census. The go_app differential uses the JSON golden plus a hand-built `ast_raw`
+   (`static_rules/go_app.py`: route `http:GET /jobs/{id}` at `api/jobs.go:17`, handler location
+   `api/jobs.go:10`, op sites `internal/jobs/repo.go:15` read `jobs` and `:20` create
+   `audit_logs`, two entities) whose empty `blind_spots`/`scip_residue` are a *hand review* of the
+   five Go files — stated in the module docstring and here, not presented as recognizer output.
+   The surface id follows the deep adapter's `http:<METHOD> <path>` spelling, so the acceptance
+   statement's `GET /jobs/{id}` reads as that surface.
+
+**Files.** New: `packages/capabilities/src/capcov/claims/static/certificate.py` (certify,
+recheck, claim_conclusions, rules_digest), `.../static/combine.py`,
+`tests/claim_semantics/static_rules/go_app.py`, and tests
+`test_differential_static_reachability.py`, `test_differential_static_certificate.py`,
+`test_static_crosscheck_fixpoint.py`, `test_static_adversarial_both_engines.py`,
+`test_static_evidence_policy.py`, `test_bounds_static.py`, `test_static_schema_package_data.py`.
+Changed: `claims/validation.py` (item 4), `claims/static/scip_facts.py` (items 2, 3;
+`primitive_relations`, `STUB_RELATIONS`, `canonical_project_root`), `claims/static/__init__.py`
+(schema read through `importlib.resources`), `pyproject.toml`
+(`[tool.setuptools.package-data] "capcov.claims.static" = ["*.json"]`), `MANIFEST.in`, the rule
+pack, its 13 cases, `expected.json` and README (item 4, item 1), `test_scip_facts_export.py`
+(project root), `test_scip_facts_live.py` (see limits), `test_validation_section27.py`.
+
+**go_app bundle identities (all computed by me in the devShell; the tests assert the first).**
+Golden `tests/fixtures/scip_go_app_index.json` sha256 `0b5183fc8d03afc1f86331ae3e1d5bdfe9ff87e0159c96156662b6bde51e687e`;
+index identity (`static-relations-v1`, see "Identity and context"; recomputed with the identity
+rebase recorded at the end of this section, when the file receipt
+`sha256("scip-json:"+canonical_json)` = `4a500048401a2c4e45d4f86710568a5543570e21db83f143965bf0a3d0b7c8da`
+stopped being the identity) `0360df877c99d8259f7f7f24cdca357afa64c4be9b27a739e1e78bb94c564320`,
+the same for the plain export and for the export that also declares `index_describes_run(run-1)`;
+Go tree digest of
+`tests/fixtures/go_app` over `**/*.go` `68a0ccf1d2af57276cca57696430f657e1de895e0af1906c36762376224dd870`
+(5 files). Exported bundle (facts+evidence+declarations+metadata minus the receipts, no
+rules/claims): digest `585240159f4abfa9eb96a778abaa1bbba4ab95553f79e7163901f5f91ca1a49d` (was
+`53dcade7…` under the file-digest identity), 210 facts / 210 evidence records, identical under
+two seeded permutations of documents, occurrences, symbols and of the ast_raw lists exported
+under a different fake file receipt. Exported row counts: `scip_definition_site` 38, `scip_read_site` 42,
+`scip_symbol` 37, `scip_symbol_node` 22, `scip_symbol_unrooted` 9, `scip_type_reference` 9,
+`scip_enclosing` 8, `scip_may_reference` 7, `scip_document` 5, `static_source_file` 5,
+`scip_definitions_closed` 5, `scip_references_closed` 5, `static_site_owner` 3, `static_op_site` 2,
+`static_entity` 2, and one each of `scip_index`, `scip_index_tree`, `route_site`,
+`route_handler_location`, `static_scope`, `static_language_covered`, `scip_documents_closed`,
+`static_route_inventory_closed`, `static_scope_closed`, `static_reachability_closed`,
+`index_describes_run` (run-1). Exporter message: 5 type references at module scope have no
+section-29 relation and are not exported. Combined differential bundle (exporter + pack +
+`source_tree_observed` + two `runtime_route_observed` rows + `hop_succ(1..63→2..64)` /
+`static_reaches_within` cross-check + 7 claims): digest
+`1b61ce60009110b6cb923765502e235954b4bcd730d76083f8177b7893cbd299` (`scip_facts.bundle_digest`,
+receipt-free; the plain `claims.ir.digest` of the same bundle, which still sees the file receipt
+nested under `source_0`, is `77e157a175600a92e986722df69ddc6091dc9beabc0d42bcb81caa23a95588b6`), 276 facts,
+29 rules, 70 relations; rules digest `3c7c80822404fc2ef221b91edd209db7ea8e73a40122a9f9764be20398a4d36c`;
+rule pack file sha256 `141867ba8aac496db62e52a9b27b3e2be55881f8886249c7f80d4474e8dafe66` (the
+bundle, Soufflé and kernel-report digests and the closure counts below were recomputed after the
+duplicate-definition guard and again after the identity rebase, both recorded at the end of this
+section; the reducer run at parent 7b1a65e had bundle `8b94be89…`, rules `128f22fb…`, pack
+`87959f38…`, program `f54bd921…`, output `71637edc…`, evidence `4f24b0bb…`, report `4588948e…`,
+368 rows / 399 provenance nodes and 22 `scip_duplicate_definition` rows; after the guard alone,
+bundle `20e2ed9b…`, program `9832600f…`, output `0203dbdf…`, evidence `ad9b29a9…`, report
+`39b9c5ff…`). Soufflé program digest `9832600f50fe8cea420d7587efd6ae9de7361e57d7f7e2135ba7805f18129b4e`, output digest `1595607d9ffe8e2cb082fe606cfcacadf48ee342b892312eb8dd9bd36b1a5e1f`, Soufflé evidence
+digest `f2e02a84a8ac95aa1e47616eada231f0445d73683cb7240e4affe50f275746ab`, runtime `souffle-2.5`; kernel report canonical digest (equal for Python
+and Soufflé) `3bfbbde544e081240e9bd079e35c09667dc98ae4dcc6d55639512d06928033b2`. Closure: 346 rows over all
+relations (Python `derived_rows` 346, `provenance_nodes` 357, 0 unattributed facts, 0 discarded
+alternatives); derived rows of note: `static_edge` 7, `static_root` 1, `static_reaches` 5
+(GetJob → Fetch, Repo.Get, Repo.Write, DB.First, DB.Create), `static_reaches_eq` 6,
+`static_reaches_within` 5 (hops 1/2/2/3/3), `static_route_handler` 1, `static_op_owner` 2,
+`static_path_to_storage` 2, `static_capability_op` 2 = `static_capability` 2 =
+{(`http:GET /jobs/{id}`, jobs, read), (`http:GET /jobs/{id}`, audit_logs, create)},
+`static_index_current` 1, `scip_index_stale` 0, `runtime_route_without_static` 1
+(`tenant-a`, `http:POST /jobs`, run-1), `static_route_authorized` 0,
+`static_route_authorization_gap` 1, `scip_document_path` 5, `scip_definition_site_at` 27,
+`scip_duplicate_definition` 0 (22 before the guard; see the record at the end of this section). Claims,
+identical in both kernels:
+`claim-cap-jobs-read` and `claim-cap-audit-create` supported (10 leaves each:
+`scip_definition_site`, `scip_index`, `scip_index_tree`, 2× `scip_may_reference`, `scip_symbol`,
+`route_handler_location`, `static_op_site`, `static_site_owner`, claim-time
+`source_tree_observed`), `claim-reaches-repo-get` / `-repo-write` supported (5 leaves),
+`claim-reaches-register` unresolved, `claim-all-routes-authorized` unresolved
+(bounded-history-model; domain closed, member unproven), `claim-runtime-route-gap` refuted
+(leaves `runtime:` + `static:` — `runtime_route_observed`, `index_describes_run`,
+`static_route_inventory_closed`). Certificates from Python rows and from Soufflé rows are
+identical for every conclusion (5 in go_app: steps 0/1/1/1/1, nodes 7/72/70/37/37; 25 across the
+14 static cases), `recheck` accepts them against both closures with no unchecked negation, their
+leaves equal the Python evaluator's support/refutation leaves for every `exists` claim in go_app,
+`steps+1` equals both `static_reaches_within.hops` and `fixpoint.distances`, and a substituted
+leaf, row, conclusion, rule or a negated row smuggled into the closure is rejected; a foreign
+bundle digest is rejected; `max_depth=1` / `max_nodes=3` yield `truncated: true`.
+
+**Cross-check against the resolver (stdlib path).** `map.call_edges` → `calls_graph(...,
+language="go")` gives GetJob→Fetch, Register→{GetJob, handle}, Fetch→{Repo.Get, Repo.Write},
+Repo.Get→DB.First, Repo.Write→DB.Create (7 edges); `direct` from the two op sites' owners;
+`fixpoint.bind([api:GetJob])` = `{jobs: 2, audit_logs: 2}`, history `[0, 0, 2, 2]`;
+`fixpoint.chain` = GetJob → Service.Fetch → Repo.Get / Repo.Write. Facets compared:
+capabilities per root, reachable node set per root, edge set (after `scip_symbol_node`), hop
+counts. Legitimate-differences table:
+
+| class | reason | observed on go_app |
+|---|---|---|
+| `unrooted-endpoint` | Datalog keeps a symbol-level edge whose endpoint has no `scip_symbol_node` (local, parameter, unknown scheme); `calls_graph` cannot root it and drops it | none |
+| `module-scope-reference` | a reference with no enclosing definition is `scip_module_scope_reference` on the Datalog side and a `caller=None` edge the fixpoint consumer skips | none |
+
+Observed set = ∅ = `EXPECTED_DIFFERENCES`; the test asserts exact equality and that any other
+shape is `differential-mismatch`. The function-as-value reference Register→GetJob is *not* a
+difference on this path — both sides read the same callable reference occurrences — it would be
+one against the tree-sitter AST call resolver, which is the skip-guarded, non-gate comparison.
+
+**Gates (manifest command form, run by me from the worktree; exit codes and final unittest
+lines).**
+
+- `scip-differential` (`-p 'test_differential_static*.py'`, guarded against "skipped"): exit 0 —
+  `Ran 17 tests in 17.396s` / `OK` / `rc=0`.
+- `static-fixpoint-crosscheck` (`-p 'test_static_crosscheck*.py'`): exit 0 — `Ran 5 tests in
+  0.223s` / `OK`.
+- `static-adversarial` (`-p 'test_static_adversarial*.py'`, guarded against "skipped"): exit 0 —
+  `Ran 5 tests in 19.209s` / `OK` / `rc=0`.
+- `static-evidence-policy` (`-p 'test_static_evidence_policy*.py'` then `-p 'test_bounds*.py'`):
+  exit 0 — `Ran 5 tests in 3.650s` / `OK` and `Ran 2 tests in 3.478s` / `OK`.
+- `regression` (`-s tests -t .`): exit 0 — `Ran 1004 tests in 316.547s` / `OK (skipped=126)`
+  (880 before this wave's merges plus the new suites; the skip count is the documented
+  tool-dependent set plus the package-data install test below).
+- live exporter, `-p 'test_scip_facts_live*.py'` (scip/scip-go in this devShell): exit 0 —
+  `Ran 8 tests in 2.276s` / `OK`. One earlier run of this file and of `regression` failed on my
+  own first version of the re-index test's identity-free comparison (it blanked the 12-character
+  prefix before the full digest and did not re-key evidence ids); fixed and rerun as recorded.
+- Not a gate, recorded as evidence of the fifth acceptance: the install layer of
+  `test_static_schema_package_data.py` is skip-guarded because the devShell python has neither
+  `pip` nor `setuptools`; on the host interpreter (`python3` 3.14.7, pip 26.2.1, setuptools
+  84.0.0) `PYTHONPATH=src python3 -m unittest discover -s tests/claim_semantics -p
+  'test_static_schema_package*.py' -t .` ran `pip install --no-deps --no-build-isolation
+  --target <tmp> .` and loaded `schema_static_v1.json` from the installed tree through
+  `importlib.resources`: `Ran 3 tests in 12.802s` / `OK`. Build byproducts (`build/`,
+  `src/synapse_capabilities.egg-info`) were removed afterwards.
+
+**Bounds evidence.** `test_bounds_static.py`: a 120-handler directed ring (605 facts, 14 400
+`static_reaches` rows) with `ResourceLimits(max_derived_rows=10_000, max_provenance=40_000)` and
+Soufflé `max_rows=10_000` yields `operational_failure == "resource-exhausted"` in both kernels
+with no exception, and `reports_match` refuses the identical failure pair; a 6-handler ring
+completes and matches (36 + 36 rows, claim supported). Limits were passed explicitly, not
+raised.
+
+**Remaining limits.**
+
+- The census behind `scip_references_closed`/`static_reachability_closed` in the go_app bundle is
+  a hand review of five files, so the negative verdict `claim-runtime-route-gap` rests on that
+  review, not on tree-sitter; the `treesitter` extra is still not in the devShell.
+- (Fixed, see the identity record below.) Binary index identity was per run: two `scip-go`
+  indexings of the *same* copy produced different `index.scip` bytes (per-document `symbols`
+  order, section 28), so `binary` bundles from separate runs differed in every evidence id and
+  the live test could only compare them modulo identity.
+- `scip_duplicate_definition` over-approximated (fixed, see the record below): on go_app it had 22
+  rows, all `local N` symbols, and on a multi-file Go package it would also fire on the package
+  symbol scip-go defines in every file, so `scip_references_closed` would have been withheld for
+  nearly every package of a real service (target-go) and every negative claim left unresolved for a
+  wrong reason.
+- `certificate.py` handles linear recursion only (one SCC atom per body, which is all the pack
+  has); a non-linear recursive rule raises `CertificateError`. `forall` claims are certified per
+  domain member; the closure witness and domain rows the evaluator adds to a universal's support
+  set are not part of the member certificates.
+- `static_reaches_within`/`hop_succ` live only in the go_app differential bundle (63 facts), as
+  this section intended; the pack has no arithmetic.
+- The `scip-differential` and `static-adversarial` tests fail rather than skip without Soufflé;
+  `test_static_corpus_evaluation`'s Soufflé class still skips (unchanged, outside the gate).
+- Linux remains evaluation-only; every run above is aarch64-darwin.
+
+### Duplicate-definition guard (2026-09-15, follow-up on branch `scip-datalog/fan-in`)
+
+Both `scip_duplicate_definition` rules now join `scip_symbol(IX,Sym,_,Cat,_)` and require
+`Cat != "other"` (positive join plus a constant comparison; the IR supports both in either
+kernel and `validation.py` accepts it without a completeness witness, which a negated
+`scip_symbol_unrooted(IX,Sym,"local")` guard would have needed). This is the exporter's own
+predicate for withholding `scip_definitions_closed` / `scip_references_closed`
+(`_symbol_category != "other"`, which already covered both the namespace and the `local`
+class), so the derived relation and the witness policy agree; the pack README documents the
+guard. Effects: go_app `scip_duplicate_definition` 22 → 0 rows (all 22 were `local 0..3`), the
+five `scip_references_closed` witnesses and `static_reachability_closed` are unchanged, closure
+368 → 346 rows, and the identities above were recomputed (the exported bundle digest
+`53dcade7…` was unchanged by the guard because the exporter did not change; it changed with the
+identity rebase below). Reviewed expectations: case 09's
+verdicts are unchanged; `claim-duplicate`'s support and observed leaf sets gain the callable's
+`scip_symbol:b87c0b7fbf06` row, because the guard is now part of the proof (the leaf-set change
+the previous limit predicted). New variant `09-duplicate-definitions-package-symbol`: `GetJob`
+defined once, the package symbol `api/` (`kind Package`, category `other`,
+`scip_symbol_unrooted(non-node-descriptor)`) defined in `api/jobs.go:1` and
+`api/jobs_legacy.go:1`, all six `scip_references_closed` witnesses and
+`static_reachability_closed` present — `scip_duplicate_definition` is empty in both kernels,
+`claim-duplicate` is unresolved with missing premise `scip_symbol`, the capability has no
+`ambiguous-definition` discrepancy, and the negative gap claim resolves (`supported`) instead of
+being withheld. Tests: `test_differential_static_reachability` asserts zero duplicate rows and
+five reference witnesses in both kernels on the golden and that the only repeated definitions
+are `local` or package symbols; `test_static_adversarial_both_engines` asserts the two callable
+rows in 09 and the empty relation plus six witnesses in the variant, in both kernels;
+`test_static_corpus_schema` asserts the guard's shape in both rules and the variant's table;
+`test_scip_facts_export` asserts the gonest fixture's repeated definitions (`local 0..2` and the
+`internal/jobs` package symbol) are all category `other` and withhold no witness. Certificates:
+25 across the 14 static cases (was 23 across 13).
+
+### Identity rebased onto the exported relations (2026-09-15, follow-up on `scip-datalog/fan-in`)
+
+`scip_facts.export_bundle` now derives `index` from the content it exports ("Identity and
+context" above holds the recipe): facts are assembled under a placeholder, `_Facts.identity()`
+digests the sorted index-free rows of every non-compatibility primitive relation plus the
+declared relation names under the prefix `static-relations-v1:`, `_Facts.rebase(index)` sets
+every `index` column, recomputes every evidence id and rewrites `depends_on` (including the
+`external:scip-occurrence:<index12>:…` references) through the old→new map, and only then is
+the bundle materialized. `scip_index.digest_kind` is the literal `static-relations-v1`; the
+file digest the runner hashed (`read_scip_index` is unchanged) is reported in
+`ExportResult.messages` and carried as metadata `index_file_digest` / `index_file_digest_kind`,
+which `bundle_digest` strips (`RECEIPT_METADATA_KEYS`) — the one thing that had to stay
+receipt-only and outside the digest, because the requirement that two indexings of the same
+tree yield the same bundle digest cannot hold if the differing file bytes are digested. The
+frozen `schema_static_v1.json` is untouched; no `scip_index_receipt` relation was needed since
+the receipt is provenance of the export run, not a fact any rule joins. Compatibility relations
+(`index_describes_run`, `scip_index_comparable`) are excluded from the recipe on purpose: they
+bind the index to a run or another index at claim time, and including them made the golden's
+identity differ between the plain export and the differential bundle's export
+(`describes_runs=(run-1,)`), which the first cut of this change exposed. go_app identity
+`0360df877c99d8259f7f7f24cdca357afa64c4be9b27a739e1e78bb94c564320`, exported bundle digest
+`585240159f4abfa9eb96a778abaa1bbba4ab95553f79e7163901f5f91ca1a49d`; the differential identities
+above were recomputed. Tests: `test_scip_facts_export` asserts the metadata split (identity vs
+receipt), the `scip_index` literal, that a permuted copy of the same normalized index exported
+under a *different* fake `binary` receipt yields the same `index`, the same evidence id set and
+the same `bundle_digest` while the plain IR digest differs only by the receipts, that the recipe
+recomputes from the bundle's own rows, that changed content is a different identity, and that
+the placeholder never leaks; `test_differential_static_reachability` pins the golden identity
+and digest and repeats the shuffled export under a fake receipt; `test_scip_facts_live` replaces
+the modulo-identity comparison with strict equality of `index`, evidence id set, facts, evidence
+records and `bundle_digest` across two independent scip-go indexings of the same copy, with only
+the receipt keys allowed to differ — result: two independent `scip-go` indexings of the same copy in the devShell gave equal `index`, evidence
+id sets, facts, evidence records and `bundle_digest` (`test_scip_facts_live`: `Ran 8 tests` / `OK`, the
+re-indexing test `ok`, not skipped). The synthetic static cases keep their
+hand-written `IX` constants.
 
 ## 30. target-go static path pilot
 
