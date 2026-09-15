@@ -41,7 +41,7 @@ the tree was indexed. The digest of the index file the caller read
 canonical_json(raw))`` for a checked-in fixture, kind ``json``) is a *run
 receipt*: it is reported in ``ExportResult.messages`` and carried in bundle
 metadata as ``index_file_digest`` / ``index_file_digest_kind``, and
-``bundle_digest`` excludes those two keys (``RECEIPT_METADATA_KEYS``) so the
+``bundle_digest`` excludes those keys (``RECEIPT_METADATA_KEYS``, with ``out_of_tree_documents``) so the
 receipt never becomes identity. ``scip_index.digest_kind`` carries the literal
 ``"static-relations-v1"``. The tree-sitter side is bound to the same ``index``
 through ``scip_index_tree``: the exporter hashes the language-scoped source
@@ -97,7 +97,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field, replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping
 
 from ... import artifacts
@@ -137,7 +137,7 @@ _IDENTITY_PREFIX = INDEX_IDENTITY + ":"
 # known; it never appears in an exported bundle.
 _PLACEHOLDER_INDEX = "0" * 64
 # Run receipts carried in bundle metadata but excluded from ``bundle_digest``.
-RECEIPT_METADATA_KEYS = ("index_file_digest", "index_file_digest_kind")
+RECEIPT_METADATA_KEYS = ("index_file_digest", "index_file_digest_kind", "out_of_tree_documents")
 
 # The witnesses' predicate versions. Each Evidence.source names one of these so
 # a reviewer knows which emission contract was checked.
@@ -215,9 +215,11 @@ class Scope:
     ``all`` exports every document; ``package_prefix`` the documents whose path
     or whose defining package (via the language normalizer) starts with
     ``values[0]``; ``document_set`` exactly the listed paths. Document-level rows
-    (``scip_document``) are always exported for the whole index so
-    ``scip_documents_closed`` stays truthful; symbols, occurrence-derived rows
-    and per-document witnesses follow the scope.
+    (``scip_document``) are always exported for every document of the indexed
+    tree, whatever the scope, so ``scip_documents_closed`` stays truthful (a
+    document whose path escapes the tree is a receipt, not a fact -- see
+    ``export_bundle``); symbols, occurrence-derived rows and per-document
+    witnesses follow the scope.
     """
     kind: str = SCOPE_ALL
     values: tuple[str, ...] = ()
@@ -538,6 +540,18 @@ def export_bundle(
         return ExportResult(STATUS_INVALID_INPUT, None, {}, (problem,))
 
     documents = normalized_retained.get("documents", []) or []
+    # A document whose path escapes the indexed tree is not a document of that
+    # tree.  scip-go emits Go's generated ``_testmain.go`` for every ``pkg.test``
+    # package it loads, read out of GOCACHE and spelled relative to the project
+    # root (``../../<cache>/<hash>-d``): none of the target's source, and a path
+    # that names the build cache's per-run location.  Such documents contribute
+    # to no fact -- the identity rows in particular -- and are recorded as a
+    # receipt (``out_of_tree_documents``, excluded from ``bundle_digest``).
+    out_of_tree = [d for d in documents if _escapes_tree(d.get("path"))]
+    if out_of_tree:
+        documents = [d for d in documents if not _escapes_tree(d.get("path"))]
+        messages.append(f"{len(out_of_tree)} document(s) outside the indexed tree are not exported "
+                        "(paths escaping the project root; recorded as metadata out_of_tree_documents)")
     occurrence_total = sum(len(d.get("occurrences", []) or []) for d in documents)
     if len(documents) > limits.documents:
         return ExportResult(STATUS_RESOURCE_EXHAUSTED, None,
@@ -980,6 +994,10 @@ def export_bundle(
         "line_frame": LINE_FRAME,
         "census_available": census_available,
         "in_scope_documents": sorted(in_scope),
+        "out_of_tree_documents": sorted(
+            ({"basename": PurePosixPath(d["path"]).name,
+              "occurrence_count": len(d.get("occurrences", []) or [])} for d in out_of_tree),
+            key=lambda entry: entry["basename"]),
         "row_counts": facts.counts(),
     }
     if commit:
@@ -1047,6 +1065,14 @@ def _document_package(document: dict, to_node: resolve._Normalizer) -> str | Non
         if node is not None:
             return node.split(":", 1)[0]
     return None
+
+
+def _escapes_tree(path: Any) -> bool:
+    """True for a document path that is absolute or climbs out of the project root."""
+    if not isinstance(path, str) or not path:
+        return False
+    parsed = PurePosixPath(path)
+    return parsed.is_absolute() or ".." in parsed.parts
 
 
 def _in_scope(document: dict, scope: Scope, to_node: resolve._Normalizer) -> bool:

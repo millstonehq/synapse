@@ -1,0 +1,349 @@
+{
+ "certificates": {
+  "claim-route-reaches-change-subscription": {
+   "derivation_sha256": "267bc470a7694c17a4f1efb0227a6d99c6fab7f84a2e68b3d2cdf53c900eadd3",
+   "leaves": 3,
+   "nodes": 13,
+   "sha256": "ea8ce51df9e038f45fd96d87e2553c436ff7cbdf5d13a71ee4b5fcd13bb019f9",
+   "steps": 0,
+   "truncated": false
+  },
+  "claim-route-reaches-sql-tx-exec": {
+   "derivation_sha256": "02bd7b2203e9f3c37a7ea5663b7262eb2b98ead8dc91eee1fc9d708c6180b6f7",
+   "leaves": 4,
+   "nodes": 173,
+   "sha256": "3d69d89af0bf5ebdac386e7fe55bbff8bce82443268e04cf7926625e13372793",
+   "steps": 1,
+   "truncated": false
+  }
+ },
+ "claims": {
+  "claim-route-reaches-change-subscription": {
+   "basis": "derivational",
+   "missing_premises": [],
+   "operational": "complete",
+   "semantic": "supported"
+  },
+  "claim-route-reaches-sql-tx-exec": {
+   "basis": "derivational",
+   "missing_premises": [],
+   "operational": "complete",
+   "semantic": "supported"
+  },
+  "control-route-reaches-send-due-digests": {
+   "basis": "derivational",
+   "missing_premises": [
+    "\"claim:static_reaches:{\\\"index\\\":\\\"0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b\\\"}\""
+   ],
+   "operational": "complete",
+   "semantic": "unresolved"
+  }
+ },
+ "combined": {
+  "bundle_digest": "413014e24facd45783b79eb3905bafb49773c853ea137e6aee71658ff089e253",
+  "facts": 20619,
+  "ir_digest": "95ec166ef72edd6f419a93f0641432d70f349c67c1cb6daa438eb3723be4406a",
+  "relations": 69,
+  "rules": 28,
+  "rules_digest": "1490a850b07272f5c53a750d7cbc8375fb3538cbd70b03e333c3b87a607160ec"
+ },
+ "coverage": {
+  "deep_unresolved": 0,
+  "ratio": 1.0,
+  "rooted_edges": 1714,
+  "rooted_symbols": 935,
+  "route_closure_symbols": 48,
+  "total_edges": 1714,
+  "unrooted_on_route_closure": {},
+  "unrooted_reasons": {
+   "local": 104,
+   "non-node-descriptor": 11
+  },
+  "unrooted_symbols": 115
+ },
+ "export": {
+  "exported_bundle_digest": "89d2988a92a4f5e17d9eea77002a07b44768c875ce071660c40245d36771e4f0",
+  "facts": 20617,
+  "index_identity": "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
+  "index_identity_kind": "static-relations-v1",
+  "limits": {
+   "documents": 500,
+   "occurrences": 200000,
+   "rows": 100000
+  },
+  "messages": [
+   "9 document(s) outside the indexed tree are not exported (paths escaping the project root; recorded as metadata out_of_tree_documents)",
+   "scip_index.project_root recorded as 'file:///fg-go'; the indexer reported 'file:///private/tmp/nix-shell.pkTq7q/capcov-fg-go-pilot-1_plvvgw/fg-go' (host path, not a fact)",
+   "105 type reference(s) at module scope have no referrer symbol and no section-29 relation; not exported",
+   "index identity 0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b (static-relations-v1); the index file digest a3141c39c7f04f4e0a120896c12bf3b5c29e0b2a14bf6c01697b82b66496aa25 (binary) is a run receipt, not identity"
+  ],
+  "out_of_tree_documents": [
+   {
+    "basename": "0ff5b09eee553f7ef397fd5a5b798e523389ec0faeeb3ffdc498d041fd60103c-d",
+    "occurrence_count": 67
+   },
+   {
+    "basename": "4a6eb265982f34d63abf4b4b93b30f7343d0cad5221b5583d22f62d69c932958-d",
+    "occurrence_count": 99
+   },
+   {
+    "basename": "523a3925c1f5ee838a9b6b84e32d25e0dae69b86e0faa02f933c7dd797334a00-d",
+    "occurrence_count": 40
+   },
+   {
+    "basename": "671c8d2547a522caee8811e24c6284e7db58ae9511b83c9cfe78324a50863333-d",
+    "occurrence_count": 63
+   },
+   {
+    "basename": "928a46f1816bed04242bd32c9eb0b39b73e9c49b8227e2000b1d5e139a435e17-d",
+    "occurrence_count": 69
+   },
+   {
+    "basename": "d9416117a5a1869cec7e76b4f051d27cc19835e4752ab04efbc7431dfd88d0d1-d",
+    "occurrence_count": 46
+   },
+   {
+    "basename": "db3ba83fd79db33cc3996b5f75392de37d99afc8ca6b80db591897b59bbe5a15-d",
+    "occurrence_count": 43
+   },
+   {
+    "basename": "ecd11509b01f09bd48b9720f0ed22c100131a416ad54a1773d4decd2c40b1336-d",
+    "occurrence_count": 47
+   },
+   {
+    "basename": "febed0acb72541a9b85260650d4084f17a1d074d5e4a259b8b4f18181614ed18-d",
+    "occurrence_count": 45
+   }
+  ],
+  "profile": "slice",
+  "row_counts": {
+   "scip_definition_site": 2561,
+   "scip_definitions_closed": 54,
+   "scip_document": 96,
+   "scip_documents_closed": 1,
+   "scip_enclosing": 165,
+   "scip_index": 1,
+   "scip_index_commit": 1,
+   "scip_index_tree": 1,
+   "scip_may_reference": 1714,
+   "scip_module_scope_reference": 23,
+   "scip_read_site": 11591,
+   "scip_relationship": 8,
+   "scip_symbol": 2508,
+   "scip_symbol_node": 935,
+   "scip_symbol_unrooted": 115,
+   "scip_type_reference": 667,
+   "static_language_covered": 1,
+   "static_scope": 54,
+   "static_scope_closed": 1,
+   "static_source_file": 120
+  },
+  "status": "complete",
+  "tree": {
+   "digest": "67d035789074e6f61eb61694d8b11a67bc1011d456e23676ff31f01f62d370c6",
+   "file_count": 120,
+   "pattern": "**/*.go"
+  },
+  "unindexed_files": [
+   "internal/legacyissues/digest_delivery_integration_test.go",
+   "internal/legacyissues/metadata_preview_integration_test.go",
+   "internal/legacyissues/notification_changed_integration_test.go",
+   "internal/legacyissues/notification_mail_handoff_integration_test.go",
+   "internal/legacyissues/read_properties_integration_test.go",
+   "internal/legacyissues/subscriptions_integration_test.go",
+   "internal/legacyissues/system_statistics_integration_test.go",
+   "internal/legacyissues/type_task_statistics_integration_test.go",
+   "internal/legacyissues/write_integration_test.go",
+   "internal/legacypermissions/project_integration_test.go",
+   "internal/legacyprojects/access_integration_test.go",
+   "internal/legacysessions/browser_integration_test.go",
+   "internal/legacysessions/cache_integration_test.go",
+   "internal/legacysessions/cached_browser_integration_test.go",
+   "internal/legacysessions/guard_integration_test.go",
+   "internal/pilot/cloud_save_properties_integration_test.go",
+   "internal/pilot/dispatch_integration_test.go",
+   "internal/pilot/migrate_integration_test.go",
+   "internal/pilot/recipient_links_integration_test.go",
+   "test-harness/notification/cloud_mail_fixture_integration_test.go",
+   "test-harness/notification/cloud_save_mail_flow_integration_test.go",
+   "test-harness/notification/mixed_trigger_grouping_test.go",
+   "test-harness/notification/smtp_capture_integration_test.go",
+   "test-harness/notification/sql_properties_test.go"
+  ]
+ },
+ "go_environment": {
+  "GOCACHE": "/tmp/nix-shell.pkTq7q/capcov-fg-go-pilot/gocache",
+  "GOFLAGS": "-mod=mod",
+  "GOMODCACHE": "/tmp/nix-shell.pkTq7q/capcov-fg-go-pilot/gomodcache",
+  "GOTOOLCHAIN": "local"
+ },
+ "index_file": {
+  "bytes": 2330245,
+  "documents": 105,
+  "kind": "binary receipt, not identity",
+  "occurrences": 28284,
+  "sha256": "a3141c39c7f04f4e0a120896c12bf3b5c29e0b2a14bf6c01697b82b66496aa25",
+  "tool_name": "scip-go",
+  "tool_version": "0.2.7"
+ },
+ "kernels": {
+  "derived_rows": {
+   "scip_duplicate_definition": 0,
+   "scip_index_stale": 0,
+   "scip_references_closed": 0,
+   "static_edge": 1095,
+   "static_file_unindexed": 24,
+   "static_index_current": 1,
+   "static_reachability_closed": 0,
+   "static_reaches": 47,
+   "static_root": 1,
+   "static_route_handler": 1,
+   "static_scope_closed": 1,
+   "static_scope_leak": 0
+  },
+  "matched": true,
+  "python_digest": "06daf07b4a6dd63038390e2c055b152856bc3f07b83b12a7dd3e62adb4d4ff16",
+  "python_failure": null,
+  "replay_path": null,
+  "souffle_digest": "06daf07b4a6dd63038390e2c055b152856bc3f07b83b12a7dd3e62adb4d4ff16",
+  "souffle_failure": null
+ },
+ "outcome": "supported",
+ "outcome_reasons": [],
+ "path": {
+  "claim-route-reaches-change-subscription": [
+   [
+    "scip-go gomod lab.facilitygrid.net/facility-grid/fg-go . `lab.facilitygrid.net/facility-grid/fg-go/internal/pilot`/Runtime#recipientLinks().",
+    "scip-go gomod lab.facilitygrid.net/facility-grid/fg-go . `lab.facilitygrid.net/facility-grid/fg-go/internal/legacyissues`/ChangeSubscription()."
+   ]
+  ],
+  "claim-route-reaches-sql-tx-exec": [
+   [
+    "scip-go gomod lab.facilitygrid.net/facility-grid/fg-go . `lab.facilitygrid.net/facility-grid/fg-go/internal/pilot`/Runtime#recipientLinks().",
+    "scip-go gomod lab.facilitygrid.net/facility-grid/fg-go . `lab.facilitygrid.net/facility-grid/fg-go/internal/legacyissues`/ChangeSubscription()."
+   ],
+   [
+    "scip-go gomod lab.facilitygrid.net/facility-grid/fg-go . `lab.facilitygrid.net/facility-grid/fg-go/internal/legacyissues`/ChangeSubscription().",
+    "scip-go gomod github.com/golang/go/src go1.25.0 `database/sql`/Tx#ExecContext()."
+   ]
+  ]
+ },
+ "pilot": "EXPERIMENT-PLAN section 30 fg-go static path pilot",
+ "route": {
+  "assumption_evidence_id": "static:0759ccef8fbb:route_handler_symbol__accepted:517419cba2c0",
+  "binding": "labelled assumption; no route_site / route_handler_location observation",
+  "declared_from": "human-declared from router source: internal/pilot/runtime.go:163 registers GET /api/cloud/notification-unsubscribe/<action>-email -> r.recipientLinks(action); handler defined at internal/pilot/recipient_links.go:13; app mounted at internal/httpserver/server.go:47 and wired at cmd/fg-go/main.go:181",
+  "handler_symbol": "scip-go gomod lab.facilitygrid.net/facility-grid/fg-go . `lab.facilitygrid.net/facility-grid/fg-go/internal/pilot`/Runtime#recipientLinks().",
+  "surface": "http:GET /api/cloud/notification-unsubscribe/subscribe-email"
+ },
+ "runtime_join": "none: no retained fg-go run receipt exists, so no index_describes_run row was declared",
+ "slice": {
+  "document_count": 54,
+  "documents": [
+   "internal/issues/delete_policy.go",
+   "internal/legacyfiles/logo.go",
+   "internal/legacyflags/responsibility.go",
+   "internal/legacyissues/audit.go",
+   "internal/legacyissues/charts.go",
+   "internal/legacyissues/cloud_assignment.go",
+   "internal/legacyissues/cloud_dates.go",
+   "internal/legacyissues/cloud_notify.go",
+   "internal/legacyissues/cloud_write.go",
+   "internal/legacyissues/deletion.go",
+   "internal/legacyissues/digest_render.go",
+   "internal/legacyissues/digest_send.go",
+   "internal/legacyissues/digest_ses.go",
+   "internal/legacyissues/digests.go",
+   "internal/legacyissues/metadata.go",
+   "internal/legacyissues/notification_schedule.go",
+   "internal/legacyissues/notifications.go",
+   "internal/legacyissues/read.go",
+   "internal/legacyissues/read_labels.go",
+   "internal/legacyissues/read_responsibility.go",
+   "internal/legacyissues/recipient_token.go",
+   "internal/legacyissues/statistics.go",
+   "internal/legacyissues/subscriptions.go",
+   "internal/legacyissues/system_statistics.go",
+   "internal/legacyissues/task_properties.go",
+   "internal/legacyissues/task_statistics.go",
+   "internal/legacyissues/type_task_statistics.go",
+   "internal/legacyissues/write.go",
+   "internal/legacypermissions/project.go",
+   "internal/legacyprojects/access.go",
+   "internal/legacysessions/browser.go",
+   "internal/legacysessions/cache.go",
+   "internal/legacysessions/cached_browser.go",
+   "internal/legacysessions/cloud.go",
+   "internal/legacysessions/cloud_file.go",
+   "internal/legacysessions/cloud_history.go",
+   "internal/legacysessions/cloud_redis.go",
+   "internal/legacysessions/credentials.go",
+   "internal/legacysessions/guard.go",
+   "internal/legacysessions/populate.go",
+   "internal/legacysessions/users.go",
+   "internal/phpcache/decode.go",
+   "internal/phpcache/encode.go",
+   "internal/pilot/browser_failure.go",
+   "internal/pilot/cloud_save.go",
+   "internal/pilot/completion.go",
+   "internal/pilot/config.go",
+   "internal/pilot/connections.go",
+   "internal/pilot/dispatch.go",
+   "internal/pilot/migrate.go",
+   "internal/pilot/notifications.go",
+   "internal/pilot/recipient_links.go",
+   "internal/pilot/runtime.go",
+   "internal/pilot/worker.go"
+  ],
+  "edge_count": 11,
+  "excluded_test_documents": 46,
+  "occurrences": 15392,
+  "packages": [
+   "lab.facilitygrid.net/facility-grid/fg-go/internal/issues",
+   "lab.facilitygrid.net/facility-grid/fg-go/internal/legacyfiles",
+   "lab.facilitygrid.net/facility-grid/fg-go/internal/legacyflags",
+   "lab.facilitygrid.net/facility-grid/fg-go/internal/legacyissues",
+   "lab.facilitygrid.net/facility-grid/fg-go/internal/legacypermissions",
+   "lab.facilitygrid.net/facility-grid/fg-go/internal/legacyprojects",
+   "lab.facilitygrid.net/facility-grid/fg-go/internal/legacysessions",
+   "lab.facilitygrid.net/facility-grid/fg-go/internal/phpcache",
+   "lab.facilitygrid.net/facility-grid/fg-go/internal/pilot"
+  ],
+  "start": "lab.facilitygrid.net/facility-grid/fg-go/internal/pilot"
+ },
+ "target": {
+  "dirty": true,
+  "go_directive": "1.25.0",
+  "head": "7e339e07dbaafe7e606a20afe644623a1f58228f",
+  "module_path": "lab.facilitygrid.net/facility-grid/fg-go",
+  "porcelain": [
+   "?? .worktrees/",
+   "?? tools/corejs-map/"
+  ],
+  "root": "/Users/reuben/fg/fg-go"
+ },
+ "timings_seconds": {
+  "compare": 80.2,
+  "export": 6.3,
+  "index": 105.5,
+  "total": 216.0
+ },
+ "tools": {
+  "go": {
+   "path": "/nix/store/lz3qw52rpazqga73xgsqlj4qz1lgs4hg-go-1.27.0/bin/go",
+   "version": "go version go1.27.0 darwin/arm64"
+  },
+  "scip": {
+   "path": "/nix/store/hckm2075va6x941b4lwncv8ls3p6ssr1-scip-0.9.0/bin/scip",
+   "version": "scip version v0.9.0"
+  },
+  "scip-go": {
+   "path": "/nix/store/3inxss33qhklfr6416j0kwp4cbjkdlys-scip-go-0.2.7/bin/scip-go",
+   "version": "0.2.7"
+  },
+  "souffle": {
+   "path": "/nix/store/hjf84h92h4ynbbn9sg9q1biyr25r617i-souffle-2.5/bin/souffle",
+   "version": "Version:"
+  }
+ }
+}
