@@ -249,6 +249,20 @@ class SourceSnapshot:
     # manifest instead of opening every file a second time.  The public tree
     # hash API remains the compact ``(digest, files)`` pair.
     entries: tuple[tuple[str, str], ...] = ()
+    # True when this identity was handed over by a driving `capcov observe`
+    # rather than captured here.  The driver owns the one exact verification
+    # at the publication boundary; a carried snapshot never verifies itself.
+    carried: bool = False
+
+    @property
+    def exact(self) -> bool:
+        """Every digest in this snapshot came from bytes read by this process.
+
+        A cache miss and a `trust_cache=False` walk are both exact -- nothing
+        was reused -- so this is a property of what happened, not of a flag.
+        A carried identity is never exact: the process holding it read nothing.
+        """
+        return not self.carried and self.verification.get("files_reused") == 0
 
     def provenance(self, artifact: str, extractor: str) -> dict:
         return provenance(
@@ -263,12 +277,12 @@ class SourceSnapshot:
     def verify(self) -> "SourceSnapshot":
         """Re-read the tree FROM BYTES and require it to still be this tree.
 
-        Never from the cache. Anything running as this user can write
-        `~/.cache` -- including the exercise a freshness guard exists to
-        distrust -- so a cache-backed verification lets the observed process
-        answer the question being asked about it. One exact walk per run is
-        also what makes the published digest content-derived rather than
-        cache-derived, whatever the cheap begin-side capture believed.
+        This is THE exact walk of a run, and there is one: at the publication
+        boundary, in the process that publishes.  Never from the cache --
+        anything running as this user can write `~/.cache`, including the
+        exercise a freshness guard exists to distrust, so a cache-backed
+        verification lets the observed process answer the question being
+        asked about it.  The returned snapshot is exact; publish from it.
         """
         current = snapshot_tree(self.root, self.patterns, trust_cache=False)
         if current.digest != self.digest or current.files != self.files:
@@ -399,6 +413,7 @@ def snapshot_tree(
             "cache_hit": status == "hit",
             "files_hashed": hashed,
             "files_reused": reused,
+            "exact": reused == 0,
             "duration_ms": min(elapsed_ms, 86_400_000),
         },
         entries=tuple((relative, entry["sha256"]) for relative, entry in sorted(fresh.items())),
@@ -452,12 +467,82 @@ def provenance(
     if snapshot is not None:
         if snapshot.digest != artifact_sha256 or snapshot.files != files:
             raise ValueError("source snapshot does not match artifact provenance")
+        # `exact`: every digest was read from bytes by the publishing process.
+        # `cached`: the fast path was used and this identity is PROVISIONAL --
+        # it becomes authoritative only when an exact artifact over the same
+        # tree agrees with it (reconcile enforces this), never on its own.
         doc["source_snapshot"] = {
             "version": 1,
             "manifest_sha256": snapshot.digest,
             "files": snapshot.files,
+            "verification": "exact" if snapshot.exact else "cached",
         }
     return doc
+
+
+SNAPSHOT_VERIFICATIONS = ("exact", "cached")
+
+
+def snapshot_verification_of(derived_from: dict) -> str:
+    """How an artifact's digest was established: ``exact`` or ``cached``.
+
+    Artifacts written before the cache existed have no ``source_snapshot`` and
+    were always hashed from bytes, so their absence reads as exact.  A snapshot
+    block that does not say it was read from bytes was not: it is provisional.
+    """
+    optional = derived_from.get("source_snapshot")
+    if optional is None:
+        return "exact"
+    if not isinstance(optional, dict) or optional.get("version") != 1:
+        raise ValueError("invalid serialized source snapshot")
+    verification = optional.get("verification", "cached")
+    if verification not in SNAPSHOT_VERIFICATIONS:
+        raise ValueError(f"unknown source snapshot verification {verification!r}")
+    return verification
+
+
+def mark_provisional(derived_from: dict) -> dict:
+    """What a driver hands to a probe: an identity nobody has yet verified.
+
+    The driver's begin-side capture may itself have been exact (a cold miss),
+    but that was the tree BEFORE the exercise.  The artifact is published
+    after it, in a process the driver cannot vouch for, so the identity it
+    carries is provisional until the driver's own exact walk stamps it --
+    otherwise a driver that dies mid-run leaves an artifact reconcile accepts.
+    """
+    optional = derived_from.get("source_snapshot") or {
+        "version": 1,
+        "manifest_sha256": derived_from.get("artifact_sha256"),
+        "files": derived_from.get("artifact_files"),
+    }
+    return {
+        **derived_from,
+        "source_snapshot": {**optional, "verification": "cached"},
+    }
+
+
+def mark_exact(derived_from: dict, verified: SourceSnapshot) -> dict:
+    """Carry an exact verification outward onto a provisional provenance.
+
+    The one process that read the bytes stamps the artifact; a child that was
+    handed a carried identity cannot, because it read nothing.
+    """
+    if not verified.exact:
+        raise ValueError("only an exact snapshot can mark provenance exact")
+    if (
+        derived_from.get("artifact_sha256") != verified.digest
+        or derived_from.get("artifact_files") != verified.files
+    ):
+        raise ValueError("exact snapshot does not match the provenance it would mark")
+    optional = derived_from.get("source_snapshot") or {
+        "version": 1,
+        "manifest_sha256": verified.digest,
+        "files": verified.files,
+    }
+    return {
+        **derived_from,
+        "source_snapshot": {**optional, "verification": "exact"},
+    }
 
 
 def source_snapshot_of(root: Path, derived_from: dict) -> SourceSnapshot:
@@ -512,6 +597,7 @@ def carried_source_snapshot(root: Path, derived_from: dict) -> SourceSnapshot:
         or optional.get("files") != files
     ):
         raise ValueError("serialized source snapshot disagrees with derived_from")
+    snapshot_verification_of(derived_from)
     return SourceSnapshot(
         root=Path(root).resolve(),
         patterns=source_patterns_of(derived_from),
@@ -519,14 +605,16 @@ def carried_source_snapshot(root: Path, derived_from: dict) -> SourceSnapshot:
         files=files,
         verification={
             # Nothing was read to build this: it is an identity handed over by
-            # the parent, and the guard verifies it from bytes before publish.
+            # the driver, which verifies it from bytes before publication.
             "cache": "carried",
             "cache_hit": False,
             "files_hashed": 0,
             "files_reused": 0,
+            "exact": False,
             "duration_ms": 0,
         },
         entries=(),
+        carried=True,
     )
 
 

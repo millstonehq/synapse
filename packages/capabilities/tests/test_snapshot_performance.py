@@ -212,25 +212,202 @@ class PatternAndProvenanceTests(unittest.TestCase):
                 derived = artifacts.provenance("src", digest, "test", count, (pattern,))
                 self.assertEqual(derived["source_patterns"], [pattern])
 
-    def test_carried_provenance_is_reused_and_finally_verified(self) -> None:
+    def test_carried_identity_is_published_provisional_and_walks_nothing(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "src"
             source.mkdir()
             (source / "pipeline.py").write_text("STAGES = []\n")
             snapshot = artifacts.snapshot_tree(source, cache_dir=root / "cache")
-            derived = snapshot.provenance("src", "capcov source-snapshot")
-            result = load_probe.observe(
-                source_root=source,
-                out=root / "observed.json",
-                source_snapshot=snapshot,
-                source_provenance=derived,
+            # A cold miss IS exact in the driver's process, but what it hands
+            # over is provisional: the artifact is published after the exercise.
+            self.assertTrue(snapshot.exact)
+            derived = artifacts.mark_provisional(
+                snapshot.provenance("src", "capcov source-snapshot")
             )
-            for key in ("artifact", "artifact_sha256", "artifact_files", "source_snapshot"):
+            carried = artifacts.carried_source_snapshot(source, derived)
+            self.assertTrue(carried.carried)
+            self.assertFalse(carried.exact)
+            with patch.object(
+                artifacts, "snapshot_tree", side_effect=AssertionError("walked the tree")
+            ):
+                # Driven by capcov observe: the probe walks the oracle ZERO times.
+                # The driver owns the one exact verification after this returns.
+                result = load_probe.observe(
+                    source_root=source,
+                    out=root / "observed.json",
+                    source_snapshot=carried,
+                    source_provenance=derived,
+                )
+            for key in ("artifact", "artifact_sha256", "artifact_files"):
                 self.assertEqual(result["derived_from"][key], derived[key])
             self.assertEqual(result["derived_from"]["extractor"], "capcov load-probe (stub)")
-            self.assertIn("observe_ms", result["timing"])
-            self.assertIn("cache_hit", result["timing"]["source_verification"])
+            # ... and what it publishes is provisional until the driver stamps it.
+            self.assertEqual(
+                artifacts.snapshot_verification_of(result["derived_from"]), "cached"
+            )
+
+    def test_standalone_probe_is_the_boundary_and_publishes_exact(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "src"
+            source.mkdir()
+            (source / "pipeline.py").write_text("STAGES = []\n")
+            # Warm the cache so the begin-side capture is a hit ...
+            artifacts.snapshot_tree(source)
+            result = load_probe.observe(source_root=source, out=root / "observed.json")
+            # ... and the published digest is still exact: the guard's verify
+            # read the bytes and the probe published from THAT snapshot.
+            self.assertEqual(
+                artifacts.snapshot_verification_of(result["derived_from"]), "exact"
+            )
+            self.assertTrue(result["timing"]["source_verification"]["exact"])
+
+    def test_driver_performs_exactly_one_exact_walk_and_stamps_the_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "src"
+            source.mkdir()
+            (source / "a.py").write_text("x = 1\n")
+            out = root / "observed.json"
+            snapshot = artifacts.snapshot_tree(source, cache_dir=root / "cache")
+            derived = snapshot.provenance("src", "capcov source-snapshot")
+            self.assertEqual(derived["source_snapshot"]["verification"], "exact")  # cold miss
+            warm = artifacts.snapshot_tree(source, cache_dir=root / "cache")
+            provisional = warm.provenance("src", "capcov source-snapshot")
+            self.assertEqual(provisional["source_snapshot"]["verification"], "cached")
+            # What the child leaves behind: a provisional artifact.
+            artifacts.write(out, "observed", {**provisional, "extractor": "probe"}, {"bindings": []})
+
+            real_hash = artifacts._hash_file
+            hashed: list[Path] = []
+
+            def counting(path, before):
+                hashed.append(path)
+                return real_hash(path, before)
+
+            with patch.object(artifacts, "_hash_file", side_effect=counting):
+                rc = cli._publish_verified(warm, out, time.perf_counter_ns())
+            self.assertEqual(rc, 0)
+            # ONE exact walk: every selected file read from bytes, once.
+            self.assertEqual(sorted(p.name for p in hashed), ["a.py"])
+            stamped = artifacts.read(out, "observed")
+            self.assertEqual(
+                artifacts.snapshot_verification_of(stamped["derived_from"]), "exact"
+            )
+            self.assertTrue(stamped["timing"]["source_verification"]["exact"])
+            self.assertEqual(stamped["derived_from"]["extractor"], "probe")
+
+    def test_driver_discards_an_artifact_that_names_a_different_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "src"
+            source.mkdir()
+            (source / "a.py").write_text("x = 1\n")
+            out = root / "observed.json"
+            snapshot = artifacts.snapshot_tree(source, cache_dir=root / "cache")
+            derived = snapshot.provenance("src", "capcov source-snapshot")
+            artifacts.write(
+                out, "observed", {**derived, "artifact_sha256": "f" * 64}, {"bindings": []}
+            )
+            rc = cli._publish_verified(snapshot, out, time.perf_counter_ns())
+            self.assertEqual(rc, 1)
+            self.assertFalse(out.exists())
+
+    def test_reconcile_refuses_a_provisional_observed_and_confirms_a_cached_discover(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "src"
+            source.mkdir()
+            (source / "a.py").write_text("x = 1\n")
+            artifacts.snapshot_tree(source, cache_dir=root / "cache")  # warm
+            cached = artifacts.snapshot_tree(source, cache_dir=root / "cache")
+            exact = artifacts.snapshot_tree(source, trust_cache=False)
+            self.assertEqual(cached.digest, exact.digest)
+            body = {"entities": [], "surfaces": [], "capabilities": [], "blind_spots": []}
+            observed_body = {"bindings": [], "exercises": 1}
+            capabilities = root / "capabilities.json"
+            observed = root / "observed.json"
+            coverage = root / "coverage.json"
+            artifacts.write(
+                capabilities, "capabilities", cached.provenance("src", "capcov discover"), body
+            )
+
+            # A provisional observed never reaches coverage.
+            artifacts.write(
+                observed, "observed", cached.provenance("src", "probe"), observed_body
+            )
+            with self.assertRaises(SystemExit) as refused:
+                cli.main(
+                    ["reconcile", str(capabilities), str(observed), "--out", str(coverage), "--quiet"]
+                )
+            self.assertIn("provisional", str(refused.exception))
+            self.assertFalse(coverage.exists())
+
+            # An exact observed over the same tree confirms the cached discover,
+            # and the coverage artifact carries the confirmed identity.
+            artifacts.write(
+                observed, "observed", exact.provenance("src", "probe"), observed_body
+            )
+            rc = cli.main(
+                ["reconcile", str(capabilities), str(observed), "--out", str(coverage), "--quiet"]
+            )
+            self.assertEqual(rc, 0)
+            self.assertEqual(
+                artifacts.snapshot_verification_of(
+                    artifacts.read(coverage, "coverage")["derived_from"]
+                ),
+                "exact",
+            )
+
+    def test_a_forged_discover_digest_cannot_reach_coverage(self) -> None:
+        """The P1 scenario end to end: discover's cache is forged, so its digest
+        names bytes that are not on disk. The exact observed walk disagrees, and
+        reconcile refuses -- a cached digest becomes evidence only by agreeing
+        with one that was read."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "src"
+            source.mkdir()
+            (source / "a.py").write_text("x = 1\n")
+            cache = root / "cache"
+            honest = artifacts.snapshot_tree(source, cache_dir=cache)
+            (source / "a.py").write_text("x = 2\n")
+            info = (source / "a.py").stat()
+            index = next(cache.glob("*.json"))
+            document = json.loads(index.read_text())
+            document["entries"]["a.py"].update(
+                {
+                    "size": info.st_size,
+                    "mtime_ns": info.st_mtime_ns,
+                    "ctime_ns": info.st_ctime_ns,
+                    "device": info.st_dev,
+                    "inode": info.st_ino,
+                    "mode": info.st_mode,
+                }
+            )
+            document.pop("integrity_sha256")
+            document["integrity_sha256"] = hashlib.sha256(
+                json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            index.write_text(json.dumps(document, sort_keys=True, separators=(",", ":")))
+            forged = artifacts.snapshot_tree(source, cache_dir=cache)
+            self.assertEqual(forged.digest, honest.digest)  # discover is fooled ...
+            self.assertFalse(forged.exact)  # ... but says so
+
+            capabilities = root / "capabilities.json"
+            observed = root / "observed.json"
+            body = {"entities": [], "surfaces": [], "capabilities": [], "blind_spots": []}
+            artifacts.write(
+                capabilities, "capabilities", forged.provenance("src", "capcov discover"), body
+            )
+            exact = artifacts.snapshot_tree(source, trust_cache=False)
+            artifacts.write(
+                observed, "observed", exact.provenance("src", "probe"), {"bindings": [], "exercises": 1}
+            )
+            with self.assertRaises(SystemExit) as refused:
+                cli.main(["reconcile", str(capabilities), str(observed), "--out", str(root / "c.json"), "--quiet"])
+            self.assertIn("Re-run both against the same tree", str(refused.exception))
 
     def test_legacy_artifact_without_optional_snapshot_still_reads(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -361,7 +538,7 @@ class PatternAndProvenanceTests(unittest.TestCase):
                 artifacts.normalise(coverage), artifacts.normalise(changed_timing)
             )
 
-    def test_pytest_probe_replaces_rescan_provenance_with_carried_identity(self) -> None:
+    def test_pytest_probe_under_a_driver_walks_nothing_and_keeps_the_carried_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "src"
@@ -369,10 +546,18 @@ class PatternAndProvenanceTests(unittest.TestCase):
             (source / "a.py").write_text("x = 1\n")
             out = root / "observed.json"
             snapshot = artifacts.snapshot_tree(source, cache_dir=root / "cache")
-            derived = snapshot.provenance("src", "capcov source-snapshot")
+            derived = artifacts.mark_provisional(
+                snapshot.provenance("src", "capcov source-snapshot")
+            )
 
             def fake_dump(path, source_root, exercises, **kwargs):
-                artifacts.write(path, "observed", {"artifact_sha256": "old"}, {"bindings": []})
+                # What python_probe.dump does with a carried provenance.
+                artifacts.write(
+                    path,
+                    "observed",
+                    {**kwargs["source_provenance"], "extractor": "capcov python-probe"},
+                    {"bindings": []},
+                )
 
             old_enabled, old_started = pytest_probe._ENABLED, pytest_probe._STARTED_NS
             self.addCleanup(setattr, pytest_probe, "_ENABLED", old_enabled)
@@ -381,6 +566,9 @@ class PatternAndProvenanceTests(unittest.TestCase):
             pytest_probe._STARTED_NS = time.perf_counter_ns()
             with (
                 patch.object(pytest_probe.python_probe, "dump", side_effect=fake_dump),
+                patch.object(
+                    artifacts, "snapshot_tree", side_effect=AssertionError("walked the tree")
+                ),
                 patch.dict(
                     os.environ,
                     {
@@ -395,6 +583,12 @@ class PatternAndProvenanceTests(unittest.TestCase):
             result = artifacts.read(out, "observed")
             self.assertEqual(result["derived_from"]["artifact_sha256"], snapshot.digest)
             self.assertEqual(result["derived_from"]["extractor"], "capcov python-probe")
+            self.assertEqual(
+                artifacts.snapshot_verification_of(result["derived_from"]), "cached"
+            )
+            self.assertIn("observe_ms", result["timing"])
+            # No source_verification: this process read no bytes and says none.
+            self.assertNotIn("source_verification", result["timing"])
 
 
 if __name__ == "__main__":

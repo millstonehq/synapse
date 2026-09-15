@@ -273,6 +273,11 @@ def cmd_discover(args: argparse.Namespace) -> int:
     capabilities.sort(key=lambda c: (c["entity"], c["surface"]))
 
     patterns = _source_patterns(specs)
+    # The fast path.  A cache hit makes this digest PROVISIONAL, and the
+    # artifact says so (`source_snapshot.verification`).  It cannot reach the
+    # gate on its own: reconcile requires an EXACT observed digest over the
+    # same tree to agree with it, which is what makes a cached discover
+    # digest authoritative -- or refuses it.
     snapshot = artifacts.snapshot_tree(source_dir, patterns)
     blind = [b for b in raw["blind_spots"] if b["blind"]]
     extractor = "capcov " + (
@@ -383,8 +388,11 @@ def cmd_observe(args: argparse.Namespace) -> int:
     out = Path(args.out)
     patterns = _source_patterns(specs)
     snapshot = artifacts.snapshot_tree(source_dir, patterns)
-    carried = snapshot.provenance(
-        str(source_dir.relative_to(target)), "capcov source-snapshot"
+    # Handed to the probe as PROVISIONAL whatever this capture believed: the
+    # artifact is published after the exercise, and only this process's exact
+    # walk afterwards (`_publish_verified`) may stamp it exact.
+    carried = artifacts.mark_provisional(
+        snapshot.provenance(str(source_dir.relative_to(target)), "capcov source-snapshot")
     )
     # A successful command must publish evidence from this invocation.  The
     # command-driven pytest path cannot rely on a probe hook being installed to
@@ -424,11 +432,7 @@ def cmd_observe(args: argparse.Namespace) -> int:
                 "same environment as the exercise."
             )
             return 1
-        verified = _verify_or_discard(snapshot, out)
-        if verified is None:
-            return 1
-        _record_observe_timing(out, phase_started, verified.verification)
-        return 0
+        return _publish_verified(snapshot, out, phase_started)
 
     # In-process probes (browser, load). They read the unified env contract and
     # drive their own exercise; the env is set for the duration of the call and
@@ -452,40 +456,51 @@ def cmd_observe(args: argparse.Namespace) -> int:
         )
         return 1
     if rc == 0:
-        verified = _verify_or_discard(snapshot, out)
-        if verified is None:
-            return 1
-        _record_observe_timing(out, phase_started, verified.verification)
+        return _publish_verified(snapshot, out, phase_started)
     return rc
 
 
-def _verify_or_discard(snapshot, out: Path):
-    """Re-verify the source, and remove the artifact if it no longer holds.
+def _publish_verified(snapshot, out: Path, phase_started: int) -> int:
+    """The publication boundary: one exact walk, then stamp or discard.
 
-    Leaving it on disk publishes an artifact whose `artifact_sha256` names a
-    tree that is not there -- exactly the stale evidence `begin` unlinks for.
+    The probe wrote a PROVISIONAL artifact under a carried identity and walked
+    nothing.  This is the run's single byte-level verification, done in the
+    process the exercise could not reach, and its result is carried outward
+    onto the artifact.  A failed verification removes the artifact rather than
+    leaving one whose `artifact_sha256` names a tree that is not there.
     """
     try:
-        return snapshot.verify()
+        verified = snapshot.verify()
     except (ValueError, OSError) as error:
         out.unlink(missing_ok=True)
         print(
             f"capcov observe: source changed during the exercise: {error}; "
             f"discarded {out}"
         )
-        return None
-
-
-def _record_observe_timing(
-    out: Path, phase_started: int, source_verification: dict
-) -> None:
-    """Attach bounded volatile timing without changing evidence semantics."""
+        return 1
     try:
         document = json.loads(out.read_text())
     except (OSError, json.JSONDecodeError):
-        return
+        out.unlink(missing_ok=True)
+        print(f"capcov observe: the probe wrote an unreadable {out}; discarded it")
+        return 1
     if not isinstance(document, dict):
-        return
+        out.unlink(missing_ok=True)
+        print(f"capcov observe: the probe wrote a malformed {out}; discarded it")
+        return 1
+    derived_from = document.get("derived_from")
+    if derived_from is not None:
+        # A probe that publishes no provenance makes no claim to stamp (and
+        # reconcile refuses it downstream).  One that publishes a DIFFERENT
+        # identity than it was handed is not describing this run.
+        try:
+            if not isinstance(derived_from, dict):
+                raise ValueError("derived_from is not an object")
+            document["derived_from"] = artifacts.mark_exact(derived_from, verified)
+        except ValueError as error:
+            out.unlink(missing_ok=True)
+            print(f"capcov observe: {error}; discarded {out}")
+            return 1
     existing_timing = document.get("timing")
     if not isinstance(existing_timing, dict):
         existing_timing = {}
@@ -495,11 +510,10 @@ def _record_observe_timing(
             max(0, (time.perf_counter_ns() - phase_started) // 1_000_000),
             86_400_000,
         ),
-        "source_verification": existing_timing.get(
-            "source_verification", source_verification
-        ),
+        "source_verification": verified.verification,
     }
     artifacts.write_document(out, document)
+    return 0
 
 
 def cmd_reconcile(args: argparse.Namespace) -> int:
@@ -509,6 +523,21 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
     same, why = artifacts.same_artifact(capabilities, observed)
     if not same and not args.allow_drift:
         raise SystemExit(f"capcov reconcile: {why}")
+    # The join point where a provisional digest becomes evidence or does not.
+    # The observed side must be exact -- read from bytes at its publication
+    # boundary.  The static side may be a cached discover; agreeing with an
+    # exact digest over the same tree is what confirms it.  `--allow-drift`
+    # relaxes WHICH tree, never whether the tree was read.
+    try:
+        runtime_verification = artifacts.snapshot_verification_of(observed["derived_from"])
+    except ValueError as error:
+        raise SystemExit(f"capcov reconcile: observed artifact: {error}")
+    if runtime_verification != "exact":
+        raise SystemExit(
+            "capcov reconcile: the observed artifact is provisional (its source "
+            "digest was taken from the cache, not from bytes). Produce it through "
+            "`capcov observe`, which verifies the source exactly before publishing."
+        )
 
     result = reconcile_mod.reconcile(capabilities, observed)
     reconcile_ms = min(
@@ -526,10 +555,16 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
         if isinstance(observed_timing, dict)
         else None
     )
+    derived_from = dict(capabilities["derived_from"])
+    if same and "source_snapshot" in observed["derived_from"]:
+        # The static digest is the exact observed one (they agree), so the
+        # coverage artifact carries the confirmed identity, not a provisional
+        # one.  Under --allow-drift the trees differ and nothing is confirmed.
+        derived_from["source_snapshot"] = observed["derived_from"]["source_snapshot"]
     doc = {
         "kind": "coverage",
         "derived_from": {
-            **capabilities["derived_from"],
+            **derived_from,
             "extractor": "capcov reconcile",
             "static_from": capabilities["derived_from"]["extractor"],
             "runtime_from": observed["derived_from"]["extractor"],

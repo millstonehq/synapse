@@ -261,13 +261,13 @@ def dump(
 ) -> None:
     from .. import artifacts
 
-    # ``cmd observe`` already captured the source identity.  Reusing it here is
-    # important: the pytest process must not walk the oracle once for the
-    # command and then again merely to write its envelope.  Direct callers keep
-    # the legacy capture path.
+    # ``cmd observe`` already captured the source identity and owns the one
+    # exact verification; reusing it here means the pytest process walks the
+    # oracle zero times.  A direct caller IS the publication boundary, so it
+    # keeps the legacy behaviour: one exact walk, from bytes.
     snapshot = source_snapshot
     if snapshot is None and source_provenance is None:
-        snapshot = artifacts.snapshot_tree(source_root)
+        snapshot = artifacts.snapshot_tree(source_root, trust_cache=False)
     merged: dict[tuple[str, str], dict] = {}
     for (surface_id, entity, op), exercises_ in sorted(_BINDINGS.items()):
         row = merged.setdefault(

@@ -68,19 +68,17 @@ def pytest_sessionfinish(session: Session, exitstatus: int) -> None:
     if carried is not None:
         from .. import artifacts
 
-        # This is deliberately after dump: the carried begin-side identity may
-        # only be published after one final authoritative tree verification.
-        verification = snapshot.verify().verification
+        # Driven by `capcov observe`: the artifact just written is PROVISIONAL.
+        # The driver owns the run's one exact source verification, after this
+        # process exits, and stamps or discards the artifact.  Walking the tree
+        # here too would charge every observation for the source twice -- and
+        # a walk performed inside the exercised process is exactly the one the
+        # driver could not take on trust.
         document = artifacts.read(out, "observed")
-        document["derived_from"] = {
-            **carried,
-            "extractor": "capcov python-probe",
-        }
         document["timing"] = {
             "observe_ms": min(
                 max(0, (time.perf_counter_ns() - _STARTED_NS) // 1_000_000),
                 86_400_000,
             ),
-            "source_verification": verification,
         }
         artifacts.write_document(out, document)

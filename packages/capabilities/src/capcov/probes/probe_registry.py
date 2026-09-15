@@ -131,9 +131,14 @@ class FreshnessGuard:
     3. ``verify`` refuses evidence whose nonce does not match, or evidence
        produced against a source tree that changed while the exercise ran.
 
-    The weak ``cmd_observe`` guard has neither a nonce nor a before/after recheck,
-    so it trusts yesterday's ``--out``; a probe that drives an external runner
-    must not. The nonce goes in the probe's PRIVATE run evidence, not in the final
+    Where the source recheck happens depends on who publishes.  Standalone, the
+    probe is the publication boundary and ``verify`` does the run's one exact
+    (byte-level) walk.  Driven by ``capcov observe``, the driver hands in a
+    ``carried`` identity, owns that one exact walk after the probe exits, and
+    stamps or discards the artifact; the probe then writes a PROVISIONAL
+    artifact and walks nothing.  Either way there is exactly one exact walk.
+
+    The nonce goes in the probe's PRIVATE run evidence, not in the final
     ``observed`` artifact -- the observed schema has no nonce field.
     """
 
@@ -174,11 +179,21 @@ class FreshnessGuard:
                 "freshness guard: evidence nonce does not match this run "
                 "(a stale or reused artifact, not fresh observation)"
             )
+        if self.snapshot.carried:
+            # A driving `capcov observe` handed this identity over and owns the
+            # one exact verification at the publication boundary, after this
+            # process exits.  Walking the tree here as well would make every
+            # observation pay for the source twice, and a walk done inside the
+            # exercised process is the one the driver could not trust anyway.
+            # The artifact this probe writes is therefore PROVISIONAL, and the
+            # driver either stamps it exact or discards it.
+            return evidence
         from ..artifacts import snapshot_tree
 
-        # From bytes, never from the cache: the exercise that just ran can
-        # write `~/.cache`, and a guard whose subject supplies the answer is
-        # not a guard.
+        # Standalone: this process is the publication boundary, so this is
+        # the run's one exact walk.  From bytes, never from the cache -- the
+        # exercise that just ran can write `~/.cache`, and a guard whose
+        # subject supplies the answer is not a guard.
         current = snapshot_tree(self.source_root, self.patterns, trust_cache=False)
         self.verification = dict(current.verification)
         if current.digest != self._before or current.files != self.snapshot.files:
@@ -186,6 +201,9 @@ class FreshnessGuard:
                 "freshness guard: source changed during execution; "
                 "the observation describes a tree that no longer exists"
             )
+        # Publish from the exact snapshot, not the cheap begin-side one: the
+        # digests are equal, and this is the one that read the bytes.
+        self.snapshot = current
         return evidence
 
     def verify_output(self, path: Path | str | None = None) -> dict:
