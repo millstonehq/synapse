@@ -672,6 +672,101 @@ class HybridBeatsAstAmbiguityTest(unittest.TestCase):
         )
 
 
+class ExplainTest(unittest.TestCase):
+    """``_Normalizer.explain`` gives the reason a symbol is not a node instead of
+    a silent None; the vocabulary is the frozen ``scip_symbol_unrooted.reason``."""
+
+    GO = "scip-go gomod github.com/example/gonest . "
+
+    def test_a_rooted_symbol_has_a_node_and_no_reason(self) -> None:
+        node, reason = resolve.normalizer("go").explain(
+            self.GO + "`github.com/example/gonest/api`/Handler#GetJob()."
+        )
+        self.assertEqual(node, "github.com/example/gonest/api:Handler.GetJob")
+        self.assertIsNone(reason)
+
+    def test_every_reason_is_in_the_frozen_vocabulary(self) -> None:
+        cases = {
+            "local 3": "local",
+            "": "unknown-scheme",
+            None: "unknown-scheme",
+            "scip-go gomod x": "unknown-scheme",
+            self.GO + "`github.com/example/gonest/api`/Handler#GetJob().(id)": "non-node-descriptor",
+            self.GO + "`github.com/example/gonest/api`/": "non-node-descriptor",
+            "scip-python python spike 0.0.1 Job#": "no-package",
+        }
+        n = resolve.normalizer("go")
+        for symbol, expected in cases.items():
+            with self.subTest(symbol=symbol):
+                node, reason = n.explain(symbol)
+                self.assertIsNone(node)
+                self.assertEqual(reason, expected)
+                self.assertIn(reason, resolve.UNROOTED_REASONS)
+                # symbol_to_node is exactly the node half of explain
+                self.assertEqual(n.symbol_to_node(symbol), node)
+
+    def test_symbol_to_node_is_unchanged_on_the_real_go_dump(self) -> None:
+        normalized = runner.normalize_scip_json(json.loads(GO_FIXTURE.read_text()))
+        n = resolve.normalizer("go")
+        for doc in normalized["documents"]:
+            for sym in doc["symbols"]:
+                node, reason = n.explain(sym["symbol"])
+                self.assertEqual(n.symbol_to_node(sym["symbol"]), node)
+                self.assertTrue((node is None) != (reason is None))
+
+
+class ResolveDigestTest(unittest.TestCase):
+    def test_resolve_hashes_the_index_before_unlinking_it(self) -> None:
+        import hashlib
+        import tempfile
+
+        raw_text = FIXTURE.read_text()
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            index = root / runner._INDEX_FILENAME
+
+            def fake_index(target_dir, language, *, timeout=600):
+                index.write_bytes(b"real-index-bytes")
+                return index
+
+            observed = {}
+
+            def fake_read(path, *, retain=False):
+                observed["retain"] = retain
+                observed["existed"] = Path(path).exists()
+                out = runner.normalize_scip_json(
+                    {"documents": json.loads(raw_text)["documents"]}, retain=retain
+                )
+                if retain:
+                    out["index_digest"] = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+                    out["index_digest_kind"] = "binary"
+                return out
+
+            with (
+                patch("capcov.scip.resolve.shutil.which", return_value="/usr/bin/scip-python"),
+                patch("capcov.scip.runner._locate_scip_cli", return_value="/usr/bin/scip"),
+                patch("capcov.scip.runner.run_scip_index", fake_index),
+                patch("capcov.scip.runner.read_scip_index", fake_read),
+                patch("capcov.scip.resolve._enumerate_call_sites", return_value=[]),
+                patch("capcov.scip.resolve._enumerate_blind_spots", return_value=[]),
+            ):
+                hybrid = resolve.resolve(
+                    root, {"_direct": {}, "_calls": {}, "surfaces": []}, language="python"
+                )
+
+            self.assertTrue(observed["retain"])
+            self.assertTrue(observed["existed"], "read (and hash) before unlink")
+            self.assertFalse(index.exists(), "the transient index is still removed")
+        self.assertEqual(
+            hybrid["scip_index_digest"], hashlib.sha256(b"real-index-bytes").hexdigest()
+        )
+        self.assertEqual(hybrid["scip_index_digest_kind"], "binary")
+        # the hybrid keeps its shape: the resolver keys are all still there
+        for key in ("_calls", "resolver", "scip_resolved_edges", "scip_entities",
+                    "scip_residue", "scip_residue_summary"):
+            self.assertIn(key, hybrid)
+
+
 class ToolGuardTest(unittest.TestCase):
     def test_resolve_names_a_missing_indexer_rather_than_degrading(self) -> None:
         with patch("capcov.scip.resolve.shutil.which", return_value=None):

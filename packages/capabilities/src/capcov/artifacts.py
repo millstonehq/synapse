@@ -20,6 +20,18 @@ SCHEMA_VERSION = 1
 # The source glob set a tree hash is taken over when nothing else is declared.
 DEFAULT_PATTERNS = ("**/*.py",)
 
+# Per-language glob sets. The default stays the Python set so every artifact
+# written before this table existed keeps hashing identically; a Go or PHP tree
+# hashed over the Python default is the empty manifest (zero files), which is a
+# digest that means nothing and, worse, agrees across every Go tree -- so a
+# language-scoped consumer (the SCIP fact exporter's ``scip_index_tree``) asks
+# for its own pattern set through ``patterns_for``.
+LANGUAGE_PATTERNS: dict[str, tuple[str, ...]] = {
+    "python": DEFAULT_PATTERNS,
+    "go": ("**/*.go",),
+    "php": ("**/*.php",),
+}
+
 # `derived_from` describes the RUN -- when it happened and against which exact
 # bytes. `--check` asks a different question: has what the system can do changed?
 # Diffing the provenance too would fail the check on every reformatted line,
@@ -32,23 +44,53 @@ DEFAULT_PATTERNS = ("**/*.py",)
 VOLATILE = ("derived_from",)
 
 
+def patterns_for(language: str) -> tuple[str, ...]:
+    """The glob set a tree of ``language`` is hashed over.
+
+    Raises ``KeyError`` for a language with no pattern set rather than falling
+    back to the Python default: hashing a Go tree as ``**/*.py`` yields the
+    empty manifest, a digest that would agree across every Go tree.
+    """
+    return LANGUAGE_PATTERNS[language]
+
+
+def tree_manifest(
+    root: Path, patterns: tuple[str, ...] = DEFAULT_PATTERNS
+) -> list[tuple[str, str]]:
+    """The sorted, deduplicated ``(tree-relative posix path, sha256)`` manifest
+    ``tree_sha256`` hashes -- exposed so a consumer that needs the file list
+    itself (which files *should* have been indexed) walks the tree exactly once
+    and exactly the way the digest did."""
+    entries: set[tuple[str, str]] = set()
+    for pattern in patterns:
+        for path in sorted(root.glob(pattern)):
+            if not path.is_file() or "__pycache__" in path.parts:
+                continue
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            entries.add((path.relative_to(root).as_posix(), digest))
+    return sorted(entries)
+
+
 def tree_sha256(root: Path, patterns: tuple[str, ...] = DEFAULT_PATTERNS) -> tuple[str, int]:
     """Hash a source tree: sha256 over a sorted manifest of per-file hashes.
 
     Returns (hash, file_count). The manifest is hashed rather than the
     concatenated bytes so that a renamed file changes the hash -- a file moving
     between packages moves its surfaces, and the artifact must not claim
-    otherwise.
+    otherwise. ``patterns`` defaults to the Python set; pass
+    ``patterns_for(language)`` for a Go or PHP tree.
     """
-    entries = []
-    for pattern in patterns:
-        for path in sorted(root.glob(pattern)):
-            if not path.is_file() or "__pycache__" in path.parts:
-                continue
-            digest = hashlib.sha256(path.read_bytes()).hexdigest()
-            entries.append(f"{path.relative_to(root).as_posix()} {digest}")
-    manifest = "\n".join(sorted(set(entries)))
-    return hashlib.sha256(manifest.encode()).hexdigest(), len(set(entries))
+    entries = tree_manifest(root, patterns)
+    return manifest_sha256(entries), len(entries)
+
+
+def manifest_sha256(entries: list[tuple[str, str]]) -> str:
+    """The tree digest of a ``tree_manifest``: sha256 over its lines
+    (``"<path> <sha256>"``), sorted as lines -- exactly the formula
+    ``tree_sha256`` has always used, so a consumer holding the manifest can
+    reproduce the digest without a second walk."""
+    manifest = "\n".join(sorted(set(f"{rel} {digest}" for rel, digest in entries)))
+    return hashlib.sha256(manifest.encode()).hexdigest()
 
 
 def provenance(
