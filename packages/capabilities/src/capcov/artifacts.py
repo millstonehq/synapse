@@ -13,23 +13,33 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
+import stat as stat_module
 import tempfile
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .cas import FilesystemCAS, IntegrityError, sha256_bytes
-
 SCHEMA_VERSION = 1
 
 # The source glob set a tree hash is taken over when nothing else is declared.
 DEFAULT_PATTERNS = ("**/*.py",)
+# Every language the tree-sitter discovery path can actually parse. A language
+# outside this table has no honest default glob, so `language_pattern` refuses
+# rather than hashing some other language's files under its name.
 LANGUAGE_PATTERNS = {
     "python": "**/*.py",
     "go": "**/*.go",
     "php": "**/*.php",
+    "javascript": "**/*.js",
+    "typescript": "**/*.ts",
+    "tsx": "**/*.tsx",
 }
+
+# Set to an affirmative value to bind every digest to exact bytes, at the cost
+# of the incremental fast path. The verification walks are always exact.
+ENV_NO_CACHE = "CAPCOV_NO_CACHE"
 
 TREE_CACHE_VERSION = 1
 MAX_TREE_CACHE_BYTES = 32 * 1024 * 1024
@@ -48,18 +58,40 @@ VOLATILE = ("derived_from", "timing")
 
 
 def language_pattern(language: object) -> str:
-    """A safe source default for a configured language.
+    """The source default for a configured language.
 
-    Unknown or absent languages retain the historic Python default.  In
-    particular they never become an empty pattern set (whose shared empty digest
+    An absent language retains the historic Python default. A NAMED language
+    this table does not know is refused: silently handing it `**/*.py` hashed
+    one language's tree and called it another's, which is a false provenance
+    claim, and it never becomes an empty pattern set (whose shared empty digest
     would make unrelated sources appear identical).
     """
-    return LANGUAGE_PATTERNS.get(str(language or "python").lower(), DEFAULT_PATTERNS[0])
+    if language is None or str(language).strip() == "":
+        return DEFAULT_PATTERNS[0]
+    name = str(language).strip().lower()
+    try:
+        return LANGUAGE_PATTERNS[name]
+    except KeyError:
+        raise ValueError(
+            f"no source glob default for language {name!r}; "
+            f"declare 'globs' or 'files' explicitly "
+            f"(known: {', '.join(sorted(LANGUAGE_PATTERNS))})"
+        ) from None
 
 
-def _patterns(patterns: tuple[str, ...]) -> tuple[str, ...]:
+def normalise_patterns(patterns: tuple[str, ...]) -> tuple[str, ...]:
+    """The one glob-set normalization: de-duplicated, empties dropped.
+
+    Public because callers that COMPARE a recorded pattern set against a
+    snapshot's must normalize both sides, or a harmless duplicate reads as a
+    stale inventory.
+    """
     normalized = tuple(dict.fromkeys(str(pattern) for pattern in patterns if pattern))
     return normalized or DEFAULT_PATTERNS
+
+
+# Historic private spelling, kept for in-module call sites.
+_patterns = normalise_patterns
 
 
 def _default_cache_dir() -> Path:
@@ -78,37 +110,33 @@ def _cache_path(root: Path, patterns: tuple[str, ...], cache_dir: Path) -> Path:
     return cache_dir / f"{hashlib.sha256(identity).hexdigest()}.json"
 
 
+def _cache_dir_is_private(directory: Path) -> bool:
+    """A cache is only usable when nobody else can write the digests we trust.
+
+    On a first run nothing under the cache root exists yet, so the nearest
+    existing ancestor is what decides whether it is safe to create it there.
+    """
+    candidate = directory if directory.is_absolute() else directory.absolute()
+    for path in (candidate, *candidate.parents):
+        try:
+            info = path.stat()
+        except OSError:
+            continue
+        if info.st_uid != os.getuid():
+            return False
+        return not info.st_mode & (stat_module.S_IWGRP | stat_module.S_IWOTH)
+    return False
+
+
 def _read_cache(path: Path, root: Path, patterns: tuple[str, ...]) -> dict[str, dict]:
-    stat = path.stat()
-    if stat.st_size > MAX_TREE_CACHE_BYTES:
+    info = path.stat()
+    if info.st_uid != os.getuid() or info.st_mode & (
+        stat_module.S_IWGRP | stat_module.S_IWOTH
+    ):
+        raise ValueError("tree cache is not private to this user")
+    if info.st_size > MAX_TREE_CACHE_BYTES:
         raise ValueError("tree cache exceeds the read bound")
     document = json.loads(path.read_bytes())
-    # The deterministic index is a mutable name; the manifest it points to is
-    # an immutable CAS object.  Accept the pre-CAS inline format too, so a
-    # user's existing cache is upgraded on its next successful write.
-    if isinstance(document, dict) and "object_sha256" in document:
-        reference_integrity = document.get("integrity_sha256")
-        reference_payload = {
-            key: value
-            for key, value in document.items()
-            if key != "integrity_sha256"
-        }
-        expected_reference_integrity = hashlib.sha256(
-            json.dumps(
-                reference_payload, sort_keys=True, separators=(",", ":")
-            ).encode()
-        ).hexdigest()
-        if (
-            reference_integrity != expected_reference_integrity
-            or document.get("version") != TREE_CACHE_VERSION
-            or document.get("root") != str(root.resolve())
-            or document.get("patterns") != list(patterns)
-        ):
-            raise ValueError("invalid tree cache reference")
-        object_value = FilesystemCAS(path.parent / "cas").read_bytes(
-            document["object_sha256"]
-        )
-        document = json.loads(object_value)
     integrity = document.get("integrity_sha256") if isinstance(document, dict) else None
     payload = {
         key: value for key, value in document.items() if key != "integrity_sha256"
@@ -169,7 +197,14 @@ def _hash_file(path: Path, before: os.stat_result) -> tuple[str, os.stat_result]
 
 def _write_cache(
     path: Path, root: Path, patterns: tuple[str, ...], entries: dict[str, dict]
-) -> None:
+) -> bool:
+    """Replace this index in one rename. Returns False when it does not fit.
+
+    There is exactly one live manifest per (root, patterns), it is never shared
+    with a second referent, and `os.replace` is already atomic -- so the index
+    IS the manifest. An indirection through a content-addressed object bought
+    nothing here and leaked one orphaned object per edit, forever.
+    """
     document = {
         "version": TREE_CACHE_VERSION,
         "root": str(root.resolve()),
@@ -179,29 +214,13 @@ def _write_cache(
     document["integrity_sha256"] = hashlib.sha256(
         json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
-    manifest_value = json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
-    if len(manifest_value) > MAX_TREE_CACHE_BYTES:
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    cas = FilesystemCAS(path.parent / "cas")
-    try:
-        object_digest = cas.put_bytes(manifest_value)
-    except IntegrityError:
-        # The source hash was freshly computed, so a corrupt cache object may
-        # be repaired at this exact content-addressed path.  The cache is
-        # optional; this never applies to source or evidence objects.
-        cas.object_path(sha256_bytes(manifest_value)).unlink(missing_ok=True)
-        object_digest = cas.put_bytes(manifest_value)
-    reference = {
-        "version": TREE_CACHE_VERSION,
-        "root": str(root.resolve()),
-        "patterns": list(patterns),
-        "object_sha256": object_digest,
-    }
-    reference["integrity_sha256"] = hashlib.sha256(
-        json.dumps(reference, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
-    value = json.dumps(reference, sort_keys=True, separators=(",", ":")).encode()
+    value = json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
+    if len(value) > MAX_TREE_CACHE_BYTES:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    # An index written by the superseded content-addressed format leaves its
+    # object store behind; drop it the first time we replace that index.
+    shutil.rmtree(path.parent / "cas", ignore_errors=True)
     fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     temporary = Path(temporary_name)
     try:
@@ -209,9 +228,11 @@ def _write_cache(
             stream.write(value)
             stream.flush()
             os.fsync(stream.fileno())
+        os.chmod(temporary, 0o600)
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
+    return True
 
 
 @dataclass(frozen=True)
@@ -239,11 +260,24 @@ class SourceSnapshot:
             snapshot=self,
         )
 
-    def verify(self, *, cache_dir: Path | str | None = None) -> "SourceSnapshot":
-        current = snapshot_tree(self.root, self.patterns, cache_dir=cache_dir)
+    def verify(self) -> "SourceSnapshot":
+        """Re-read the tree FROM BYTES and require it to still be this tree.
+
+        Never from the cache. Anything running as this user can write
+        `~/.cache` -- including the exercise a freshness guard exists to
+        distrust -- so a cache-backed verification lets the observed process
+        answer the question being asked about it. One exact walk per run is
+        also what makes the published digest content-derived rather than
+        cache-derived, whatever the cheap begin-side capture believed.
+        """
+        current = snapshot_tree(self.root, self.patterns, trust_cache=False)
         if current.digest != self.digest or current.files != self.files:
             raise ValueError("source changed since the source snapshot was captured")
         return current
+
+
+def _cache_disabled_by_env() -> bool:
+    return os.environ.get(ENV_NO_CACHE, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def snapshot_tree(
@@ -251,8 +285,16 @@ def snapshot_tree(
     patterns: tuple[str, ...] = DEFAULT_PATTERNS,
     *,
     cache_dir: Path | str | None = None,
+    trust_cache: bool = True,
 ) -> SourceSnapshot:
     """Capture an exact source manifest, reusing only metadata-matched entries.
+
+    `trust_cache=False` hashes every selected file from bytes.  That is what
+    every verification walk does, because the shared cache is writable by
+    anything running as this user -- including the exercise a freshness guard
+    exists to distrust -- so a cache-backed verification would let the observed
+    process answer the question asked about it.  `CAPCOV_NO_CACHE=1` forces the
+    same for every walk.
 
     Cache failure is deliberately optional: a missing, corrupt, oversized, or
     unwritable cache falls back to exact content hashing.  Source read/stat
@@ -270,7 +312,12 @@ def snapshot_tree(
     cache_path = _cache_path(root, patterns, requested_cache)
     cached: dict[str, dict] = {}
     cache_read_error = False
-    cache_enabled = not cache_inside_source
+    cache_enabled = (
+        trust_cache
+        and not cache_inside_source
+        and not _cache_disabled_by_env()
+        and _cache_dir_is_private(requested_cache)
+    )
     if cache_enabled:
         try:
             cached = _read_cache(cache_path, root, patterns)
@@ -286,10 +333,11 @@ def snapshot_tree(
                 continue
             relative = path.relative_to(root).as_posix()
             paths[relative] = path
-    if len(paths) > MAX_TREE_CACHE_ENTRIES:
-        raise ValueError(
-            f"source manifest has more than {MAX_TREE_CACHE_ENTRIES} files"
-        )
+    # Past the index bound the tree is still hashed exactly; only the
+    # incremental index is given up.  A large tree must stay slow, not fail.
+    unbounded = len(paths) > MAX_TREE_CACHE_ENTRIES
+    if unbounded:
+        cached = {}
 
     fresh: dict[str, dict] = {}
     reused = 0
@@ -322,13 +370,18 @@ def snapshot_tree(
     manifest = "\n".join(manifest_entries)
     digest = hashlib.sha256(manifest.encode()).hexdigest()
     cache_write_error = False
-    if cache_enabled:
+    oversized = False
+    if cache_enabled and not unbounded:
         try:
-            _write_cache(cache_path, root, patterns, fresh)
+            oversized = not _write_cache(cache_path, root, patterns, fresh)
         except OSError:
             cache_write_error = True
-    if not cache_enabled:
+    if unbounded:
+        status = "unbounded"
+    elif not cache_enabled:
         status = "disabled"
+    elif oversized:
+        status = "oversized"
     elif cache_read_error or cache_write_error:
         status = "fallback"
     elif paths and reused == len(paths) and set(cached) == set(paths):
@@ -414,9 +467,14 @@ def source_snapshot_of(root: Path, derived_from: dict) -> SourceSnapshot:
     fields have always been ``artifact_sha256`` and ``artifact_files``.
     """
     patterns = source_patterns_of(derived_from)
-    current = snapshot_tree(root, patterns)
+    # A validation helper answers "is this exactly the tree it names", so it
+    # reads bytes; a cached answer here would be the cache validating itself.
+    current = snapshot_tree(root, patterns, trust_cache=False)
     expected_digest = derived_from.get("artifact_sha256")
-    expected_files = derived_from.get("artifact_files", current.files)
+    expected_files = derived_from.get("artifact_files")
+    if type(expected_files) is not int:
+        # Defaulting this to the value under test made the check vacuous.
+        raise ValueError("source provenance lacks an exact file count")
     optional = derived_from.get("source_snapshot")
     if optional is not None:
         if not isinstance(optional, dict) or optional.get("version") != 1:
@@ -460,10 +518,12 @@ def carried_source_snapshot(root: Path, derived_from: dict) -> SourceSnapshot:
         digest=digest,
         files=files,
         verification={
+            # Nothing was read to build this: it is an identity handed over by
+            # the parent, and the guard verifies it from bytes before publish.
             "cache": "carried",
-            "cache_hit": True,
+            "cache_hit": False,
             "files_hashed": 0,
-            "files_reused": files,
+            "files_reused": 0,
             "duration_ms": 0,
         },
         entries=(),

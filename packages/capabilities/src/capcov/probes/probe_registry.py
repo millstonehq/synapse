@@ -153,11 +153,6 @@ class FreshnessGuard:
         self.snapshot = snapshot
         self.verification: dict = {}
 
-    def _tree(self) -> str:
-        from ..artifacts import tree_sha256
-
-        return tree_sha256(self.source_root, self.patterns)[0]
-
     def begin(self, nonce: str | None = None) -> str:
         """Unlink stale output, snapshot the source tree, fix the nonce."""
         self.out.unlink(missing_ok=True)
@@ -181,7 +176,10 @@ class FreshnessGuard:
             )
         from ..artifacts import snapshot_tree
 
-        current = snapshot_tree(self.source_root, self.patterns)
+        # From bytes, never from the cache: the exercise that just ran can
+        # write `~/.cache`, and a guard whose subject supplies the answer is
+        # not a guard.
+        current = snapshot_tree(self.source_root, self.patterns, trust_cache=False)
         self.verification = dict(current.verification)
         if current.digest != self._before or current.files != self.snapshot.files:
             raise ValueError(

@@ -11,7 +11,6 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from capcov import artifacts, cli
-from capcov.cas import FilesystemCAS, IntegrityError
 from capcov.outcomes import provenance as outcome_provenance
 from capcov.probes import load_probe, pytest_probe
 
@@ -83,17 +82,83 @@ class IncrementalTreeTests(unittest.TestCase):
         self.assertEqual(fallback.verification["files_hashed"], 2)
         self.assertEqual(artifacts.snapshot_tree(self.root, cache_dir=self.cache).verification["cache"], "hit")
 
-    def test_corrupt_content_addressed_manifest_falls_back_to_content(self) -> None:
+    def test_tampered_integrity_field_falls_back_to_content(self) -> None:
         expected = artifacts.snapshot_tree(self.root, cache_dir=self.cache)
-        reference = json.loads(next(self.cache.glob("*.json")).read_text())
-        object_path = FilesystemCAS(self.cache / "cas").object_path(
-            reference["object_sha256"]
-        )
-        object_path.write_bytes(b"corrupt manifest")
+        index = next(self.cache.glob("*.json"))
+        document = json.loads(index.read_text())
+        document["entries"]["a.py"]["sha256"] = "0" * 64
+        index.write_text(json.dumps(document, sort_keys=True, separators=(",", ":")))
         fallback = artifacts.snapshot_tree(self.root, cache_dir=self.cache)
         self.assertEqual((fallback.digest, fallback.files), (expected.digest, expected.files))
         self.assertEqual(fallback.verification["cache"], "fallback")
         self.assertEqual(fallback.verification["files_hashed"], 2)
+
+    def test_index_is_replaced_in_place_and_never_accumulates_objects(self) -> None:
+        for edit in range(8):
+            (self.root / "a.py").write_text(f"x = {edit}\n")
+            artifacts.snapshot_tree(self.root, cache_dir=self.cache)
+        # One index per (root, patterns) and nothing else: the superseded
+        # content-addressed store leaked one orphan object per edit.
+        self.assertEqual(sorted(p.name for p in self.cache.iterdir()),
+                         [next(self.cache.glob("*.json")).name])
+        self.assertFalse((self.cache / "cas").exists())
+
+    def test_a_writable_cache_cannot_forge_a_verified_digest(self) -> None:
+        captured = artifacts.snapshot_tree(self.root, cache_dir=self.cache)
+        # Exactly what an exercised process can do: change the source, then
+        # rewrite the shared cache so the new stat identity maps to the old
+        # digest. A cache-backed verification would call this unchanged.
+        (self.root / "a.py").write_text("x = 99\n")
+        info = (self.root / "a.py").stat()
+        index = next(self.cache.glob("*.json"))
+        document = json.loads(index.read_text())
+        document["entries"]["a.py"].update(
+            {
+                "size": info.st_size,
+                "mtime_ns": info.st_mtime_ns,
+                "ctime_ns": info.st_ctime_ns,
+                "device": info.st_dev,
+                "inode": info.st_ino,
+                "mode": info.st_mode,
+            }
+        )
+        document.pop("integrity_sha256")
+        document["integrity_sha256"] = hashlib.sha256(
+            json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        index.write_text(json.dumps(document, sort_keys=True, separators=(",", ":")))
+        self.assertEqual(
+            artifacts.snapshot_tree(self.root, cache_dir=self.cache).digest,
+            captured.digest,
+        )  # the cheap begin-side read is fooled ...
+        with self.assertRaises(ValueError):  # ... the verification walk is not
+            captured.verify()
+        # And a cache poisoned BEFORE the capture is caught too, because the
+        # verification walk re-reads bytes rather than a remembered identity:
+        # whatever the begin-side believed, a published digest is content-bound.
+        poisoned = artifacts.snapshot_tree(self.root, cache_dir=self.cache)
+        self.assertEqual(poisoned.verification["cache"], "hit")
+        with self.assertRaises(ValueError):
+            poisoned.verify()
+        self.assertEqual(
+            artifacts.snapshot_tree(self.root, trust_cache=False).digest,
+            legacy_tree_digest(self.root, ("**/*.py",))[0],
+        )
+
+    def test_env_opt_out_binds_every_walk_to_exact_bytes(self) -> None:
+        artifacts.snapshot_tree(self.root, cache_dir=self.cache)
+        with patch.dict(os.environ, {artifacts.ENV_NO_CACHE: "1"}):
+            snapshot = artifacts.snapshot_tree(self.root, cache_dir=self.cache)
+        self.assertEqual(snapshot.verification["cache"], "disabled")
+        self.assertEqual(snapshot.verification["files_hashed"], 2)
+        self.assertEqual(snapshot.digest, legacy_tree_digest(self.root, ("**/*.py",))[0])
+
+    def test_group_writable_cache_is_refused(self) -> None:
+        artifacts.snapshot_tree(self.root, cache_dir=self.cache)
+        self.cache.chmod(0o770)
+        snapshot = artifacts.snapshot_tree(self.root, cache_dir=self.cache)
+        self.assertEqual(snapshot.verification["cache"], "disabled")
+        self.assertEqual(snapshot.verification["files_hashed"], 2)
 
     def test_unwritable_or_invalid_cache_location_is_optional(self) -> None:
         blocked = self.cache
@@ -109,59 +174,30 @@ class IncrementalTreeTests(unittest.TestCase):
         self.assertFalse(inside.exists())
 
 
-class CASTests(unittest.TestCase):
-    def setUp(self) -> None:
-        temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
-        self.cas = FilesystemCAS(self.root / "cas")
-
-    def test_exact_objects_canonical_snapshot_parent_and_materialization(self) -> None:
-        a = self.cas.put_bytes(b"alpha\x00")
-        b = self.cas.put_bytes(b"beta\n")
-        first = self.cas.put_manifest({"b/value": b, "a/value": a})
-        reordered = self.cas.put_manifest([("a/value", a), ("b/value", b)])
-        child = self.cas.put_manifest({"a/value": a}, parent=first)
-        self.assertEqual(first, reordered)
-        self.assertNotEqual(first, child)
-        self.assertEqual(self.cas.read_manifest(child)["parent"], first)
-        output = self.cas.materialize(first, self.root / "materialized")
-        self.assertEqual((output / "a/value").read_bytes(), b"alpha\x00")
-        self.assertEqual((output / "b/value").read_bytes(), b"beta\n")
-
-    def test_existing_object_is_validated_and_corruption_is_never_a_hit(self) -> None:
-        digest = self.cas.put_bytes(b"immutable")
-        self.assertEqual(self.cas.put_bytes(b"immutable"), digest)
-        self.cas.object_path(digest).write_bytes(b"corrupt")
-        with self.assertRaises(IntegrityError):
-            self.cas.read_bytes(digest)
-        with self.assertRaises(IntegrityError):
-            self.cas.put_bytes(b"immutable")
-
-    def test_materialization_failure_never_publishes_a_partial_destination(self) -> None:
-        missing = self.cas.put_bytes(b"present when snapshotted")
-        manifest = self.cas.put_manifest({"missing": missing})
-        self.cas.object_path(missing).unlink()
-        destination = self.root / "destination"
-        with self.assertRaises(FileNotFoundError):
-            self.cas.materialize(manifest, destination)
-        self.assertFalse(destination.exists())
-
-
 class PatternAndProvenanceTests(unittest.TestCase):
-    def test_language_defaults_cover_python_go_php_and_fail_safe(self) -> None:
-        self.assertEqual(
-            cli._source_patterns([("treesitter-routes", {"language": "go"})]),
-            ("**/*.go",),
-        )
-        self.assertEqual(
-            cli._source_patterns([("treesitter-routes", {"language": "php"})]),
-            ("**/*.php",),
-        )
-        self.assertEqual(
-            cli._source_patterns([("treesitter-routes", {"language": "unknown"})]),
-            ("**/*.py",),
-        )
+    def test_language_defaults_cover_every_discoverable_language(self) -> None:
+        for language, expected in (
+            ("go", "**/*.go"),
+            ("php", "**/*.php"),
+            ("javascript", "**/*.js"),
+            ("typescript", "**/*.ts"),
+            ("tsx", "**/*.tsx"),
+        ):
+            self.assertEqual(
+                cli._source_patterns([("treesitter-routes", {"language": language})]),
+                (expected,),
+                language,
+            )
+
+    def test_unknown_language_is_refused_not_hashed_as_python(self) -> None:
+        # Handing an unknown language `**/*.py` parsed one language's tree with
+        # another's grammar and published the Python digest under its name.
+        with self.assertRaises(SystemExit) as caught:
+            cli._source_patterns([("treesitter-routes", {"language": "rust"})])
+        self.assertIn("rust", str(caught.exception))
+        self.assertIn("globs", str(caught.exception))
+        # An ABSENT language keeps the historic default.
+        self.assertEqual(artifacts.language_pattern(None), "**/*.py")
 
     def test_go_and_php_defaults_count_files_and_never_use_the_empty_digest(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

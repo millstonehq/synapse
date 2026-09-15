@@ -17,7 +17,13 @@ import time
 import uuid
 from pathlib import Path
 
-from .artifacts import SourceSnapshot, snapshot_tree, source_patterns_of, tree_sha256
+from .artifacts import (
+    SourceSnapshot,
+    normalise_patterns,
+    snapshot_tree,
+    source_patterns_of,
+    tree_sha256,
+)
 from .flows.model import digest
 
 STATUSES = ("demonstrated", "failed", "missing", "unresolved", "inconclusive")
@@ -91,7 +97,10 @@ def provenance(
     # staleness finding, it is two different questions -- and it made every
     # `capcov outcomes` command unusable on the non-Python targets discover now
     # supports.
-    patterns = source_patterns_of(inventory["derived_from"])
+    # Normalized on both sides: a duplicate or empty glob in a recorded
+    # `source_patterns` is not a staleness finding, and reporting it as one
+    # sends the reader to a re-discover that cannot fix it.
+    patterns = normalise_patterns(source_patterns_of(inventory["derived_from"]))
     source_snapshot = source_snapshot or snapshot_tree(source, patterns)
     if (
         source_snapshot.root != source.resolve()
@@ -216,7 +225,7 @@ def execute(
     if timeout <= 0:
         raise ValueError("timeout must be positive")
     source = local_path(root, inventory["derived_from"]["artifact"])
-    patterns = source_patterns_of(inventory["derived_from"])
+    patterns = normalise_patterns(source_patterns_of(inventory["derived_from"]))
     source_snapshot = snapshot_tree(source, patterns)
     before = provenance(root, mapping, inventory, source_snapshot)
     expected = sorted({t for row in mapping["outcomes"] for t in row.get("tests", [])})
@@ -339,7 +348,12 @@ def main(argv: list[str]) -> int:
                 )
             # One host-callable acceptance operation: execute the whole map and
             # decide against the required set, never accept a supplied receipt.
-            report = reconcile(mapping, inventory, run, run["provenance"])
+            # `current` must be derived independently -- passing run["provenance"]
+            # here makes reconcile's staleness check compare a value to itself,
+            # and stops covering the window between execute() and the decision.
+            report = reconcile(
+                mapping, inventory, run, provenance(root, mapping, inventory)
+            )
         else:
             current = provenance(root, mapping, inventory)
             report = reconcile(mapping, inventory, read(args.run), current)

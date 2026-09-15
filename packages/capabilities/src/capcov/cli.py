@@ -118,7 +118,12 @@ def _source_patterns(specs: list[tuple[str, dict | None]]) -> tuple[str, ...]:
     know what an adapter reads -- because the browser probe resolves the same set
     and `reconcile` refuses two artifacts hashed over different trees.
     """
-    return _adapter_source_patterns(specs)
+    try:
+        return _adapter_source_patterns(specs)
+    except ValueError as error:
+        # A config the adapter layer refuses (an unknown language with no
+        # declared globs) is a user error, not a crash.
+        raise SystemExit(f"capcov: {error}") from None
 
 
 def _emit(path: Path, doc: dict, check: bool) -> int:
@@ -419,10 +424,8 @@ def cmd_observe(args: argparse.Namespace) -> int:
                 "same environment as the exercise."
             )
             return 1
-        try:
-            verified = snapshot.verify()
-        except (ValueError, OSError) as error:
-            print(f"capcov observe: source changed during the exercise: {error}")
+        verified = _verify_or_discard(snapshot, out)
+        if verified is None:
             return 1
         _record_observe_timing(out, phase_started, verified.verification)
         return 0
@@ -449,13 +452,28 @@ def cmd_observe(args: argparse.Namespace) -> int:
         )
         return 1
     if rc == 0:
-        try:
-            verified = snapshot.verify()
-        except (ValueError, OSError) as error:
-            print(f"capcov observe: source changed during the exercise: {error}")
+        verified = _verify_or_discard(snapshot, out)
+        if verified is None:
             return 1
         _record_observe_timing(out, phase_started, verified.verification)
     return rc
+
+
+def _verify_or_discard(snapshot, out: Path):
+    """Re-verify the source, and remove the artifact if it no longer holds.
+
+    Leaving it on disk publishes an artifact whose `artifact_sha256` names a
+    tree that is not there -- exactly the stale evidence `begin` unlinks for.
+    """
+    try:
+        return snapshot.verify()
+    except (ValueError, OSError) as error:
+        out.unlink(missing_ok=True)
+        print(
+            f"capcov observe: source changed during the exercise: {error}; "
+            f"discarded {out}"
+        )
+        return None
 
 
 def _record_observe_timing(

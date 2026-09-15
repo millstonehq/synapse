@@ -504,6 +504,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         model, plan_target, patterns = _load_model(Path(target))
         source_snapshot, source_provenance = source_provenance_from_env(source_root)
+        # The carried identity settles the glob set. `_load_model` reads only
+        # capcov.toml, so with `--adapter` overriding it the guard would take
+        # its before-digest over one language and its after-digest over another
+        # and call an unchanged tree changed.
+        if source_snapshot is not None:
+            patterns = source_snapshot.patterns
         observe(
             model=model,
             source_root=source_root,

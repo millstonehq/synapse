@@ -287,7 +287,8 @@ def dump(
     if source_provenance is not None:
         derived_from = {**source_provenance, "extractor": "capcov python-probe"}
     else:
-        assert snapshot is not None
+        if snapshot is None:
+            raise ValueError("python probe needs a source snapshot or provenance")
         derived_from = snapshot.provenance(
             os.path.basename(str(source_root)), "capcov python-probe"
         )
