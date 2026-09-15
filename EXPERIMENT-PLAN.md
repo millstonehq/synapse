@@ -3295,6 +3295,143 @@ Owner: `scip-toolchain` (single-task wave). Write set: `flake.nix`, `flake.lock`
   change the assertion to sorted symbol set plus per-document occurrence counts and record
   the nondeterminism explicitly.
 
+### SCIP toolchain record (2026-09-15, task `scip-toolchain`)
+
+Worktree `/Users/reuben/projects/capcov-scip-toolchain`, branch `agent/scip-toolchain`, parent
+HEAD `cfd3af4e7a8ecbcf142a13bcc729fde840c57370`. Host `aarch64-darwin`, Darwin kernel `25.5.0`
+(macOS 26.5.2, build 25F84), Nix `nix (Determinate Nix 3.21.5) 2.34.8` (host Nix CLI is not
+pinned by the flake). `flake.lock` was not edited and `nix flake update` was not run;
+`shasum -a 256 flake.lock` is `d078f9fba512323fd35b24afc6a81aa3bb95c63caa1d00acf700e0827f9e6bac`
+before and after. That unchanged lock proves only that nixpkgs is still
+`34ab99075ac4f7e40cf037eef32cb1c360bb85e9`; the closure evidence is the store paths and sizes below.
+
+Changes in this task's write set:
+
+- `flake.nix`: `scip` and `scip-go` added to devShell `toolPackages`; `capability-regression`
+  now has `nativeBuildInputs = [ pkgs.python312 pkgs.souffle ]`, exports `LC_ALL=C`, and runs
+  with `PYTHONPATH="$PWD/src"` (absolute) because the merged upstream test
+  `tests.test_feature_evidence.FeatureEvidenceTests.test_cli_reconciles_in_a_real_subprocess`
+  spawns `python -m capcov` with a temporary cwd, where a relative `src` does not resolve; new
+  check `scip-go-index-smoke` (inputs `values.go`, `pkgs.scip`, `pkgs.scip-go`, `pkgs.jq`)
+  copies `cleanSource ./packages/capabilities/tests/fixtures/go_app`, sets
+  `HOME`/`GOCACHE`/`GOPATH` under `$TMPDIR` with `GOFLAGS=-mod=mod GOPROXY=off GOTOOLCHAIN=local
+  LC_ALL=C`, runs `scip-go --output index.scip`, `scip print --json`,
+  `jq -S -f tests/scip/canonicalize.jq`, `diff -u` against the committed golden, and writes
+  `scip_go_app_index.json`, `scip-version.txt`, `scip-go-version.txt`, `go-version.txt`, and
+  `index.scip.sha256` under `$out`.
+- `tests/scip/canonicalize.jq`, `tests/scip/README.md`: canonicalization and rationale.
+- `packages/capabilities/tests/fixtures/scip_go_app_index.json`: golden, produced once in the
+  devShell with that exact jq script; sha256
+  `0b5183fc8d03afc1f86331ae3e1d5bdfe9ff87e0159c96156662b6bde51e687e` (1369 lines, trailing
+  newline). The go_app fixture lives at `packages/capabilities/tests/fixtures/go_app`, which is
+  the path the manifest gate uses; the `tests/fixtures/go_app` spelling earlier in this section
+  is shorthand for the same directory.
+
+Pinned tools observed through `nix develop --no-update-lock-file --command bash -lc`, all under
+`/nix/store`:
+
+- scip `v0.9.0` at `/nix/store/hckm2075va6x941b4lwncv8ls3p6ssr1-scip-0.9.0/bin/scip` (closure 22.4 MiB)
+- scip-go `0.2.7` at `/nix/store/3inxss33qhklfr6416j0kwp4cbjkdlys-scip-go-0.2.7/bin/scip-go` (closure 14.4 MiB)
+- souffle `2.5` at `/nix/store/hjf84h92h4ynbbn9sg9q1biyr25r617i-souffle-2.5/bin/souffle` (closure 1.4 GiB; already in the devShell before this task)
+- go `go1.27.0 darwin/arm64` at `/nix/store/lz3qw52rpazqga73xgsqlj4qz1lgs4hg-go-1.27.0/bin/go`
+- python `3.12.14` at `/nix/store/p1wfv7znig26m3hns4583cb9va3kzxkg-python3-3.12.14/bin/python`
+- jq `1.8.2` at `/nix/store/d01nk4ck93bwlzwbnnb1qf1kv4d94a09-jq-1.8.2-bin/bin/jq`
+
+devShell closure (`nix build --no-update-lock-file .#devShells.aarch64-darwin.default
+--out-link .capcov/devshell-gcroot`; `nix path-info -S`):
+
+- before: `/nix/store/hc9i3s6l94vdlq8hx10zxmy4shq3gfjr-nix-shell`, 2,075,908,424 bytes (`-Sh`: 1.9 GiB); identical to the driver's existing GC root
+- after: `/nix/store/mfaim3jlm3qfx1xl9f0hzcn19fgpr9im-nix-shell`, 2,108,790,296 bytes (`-Sh`: 2.0 GiB); delta +32,881,872 bytes, consistent with scip + scip-go
+
+Smoke derivation `/nix/store/0bjmfii20s639nac455mj13my06y4849-scip-go-index-smoke.drv`, output
+`/nix/store/xdi059dwma7qm4ybbyn9fk26j97znmj1-scip-go-index-smoke`; `$out/scip_go_app_index.json`
+sha256 `0b5183fc…` (equal to the golden); `$out/index.scip.sha256` =
+`7b267d0f35ad1973c221a036fecb433522d18b8bd08d29e6f622adf8e20f3731`; `scip-version.txt` =
+`scip version v0.9.0`; `scip-go-version.txt` = `0.2.7`; `go-version.txt` = `go version go1.27.0
+darwin/arm64`. Regression derivation
+`/nix/store/nfk4qqfmdhn8p17zdp1qzlhxif35yxg0-capcov-capability-regression.drv`.
+
+Determinism, observed rather than assumed: two consecutive `scip-go` runs on copies of go_app in
+the same devShell produced different `index.scip` digests (`6726ce99…`, `a0b4be0b…`) and different
+raw `scip print --json` output. Apart from `metadata.project_root` (`file://` URI of the temp
+directory), the only difference was the order of entries in each document's `symbols` array (Go
+map iteration order); document order, occurrence order, and the per-document symbol and occurrence
+multisets were equal. After `canonicalize.jq` both runs were byte-identical (`0b5183fc…`), and the
+sandboxed check reproduced the same bytes, so the byte-for-byte assertion stands; it was not
+weakened to symbol-set plus counts. Sort keys (`symbol` within `symbols`, `(range, symbol)` within
+`occurrences`) were checked unique per document in the golden, so the sort is a total order. The
+raw output with `project_root` removed contains no `/tmp`, `/private`, `/Users`, or `file://`
+strings; `external_symbols` is absent in scip-go's output for go_app and is normalized to `[]`.
+The `index.scip` digest under `$out` embeds `project_root` and is a record of that build, not an
+invariant; the canonical JSON digest is the invariant.
+
+Gates, run with the exact manifest command form `nix develop --no-update-lock-file --command bash
+-lc '…'` from the worktree with the new files staged (Nix warned `Git tree … has uncommitted
+changes`; unstaged files would be excluded from `self`):
+
+```sh
+nix flake check --no-update-lock-file
+```
+
+Exit 0. Built `capability-regression`, `scip-go-index-smoke`, `shen-evaluator-smoke`,
+`souffle-recursive-typed-smoke`; `shen-package` previously built. Sandboxed regression log:
+`Ran 880 tests in 320.539s`, `OK (skipped=127)`. Linux checks omitted on this host.
+
+```sh
+set -eu; for c in scip scip-go souffle go python; do p=$(command -v "$c"); case "$p" in /nix/store/*) ;; *) echo "unpinned $c=$p" >&2; exit 1;; esac; done; scip --version; souffle --version; go version; test "$(shasum -a 256 flake.lock | cut -d' ' -f1)" = d078f9fb…
+```
+
+Exit 0 (`scip version v0.9.0`, Soufflé 2.5 banner, `go version go1.27.0 darwin/arm64`).
+
+```sh
+# scip-go-index-smoke-develop (manifest command: mktemp, cp go_app, scip-go, scip print, jq -S -f, diff -u golden)
+```
+
+Exit 0; `diff -u` printed nothing.
+
+```sh
+nix flake check --all-systems --no-build --no-update-lock-file
+```
+
+Exit 0. Evaluated `scip-go-index-smoke`, `souffle-recursive-typed-smoke`, `capability-regression`,
+`shen-*`, packages, and devShells for `aarch64-darwin`, `aarch64-linux`, `x86_64-linux`. Linux is
+evaluation-only; no Linux build or execution is claimed, and the golden's cross-platform validity
+is untested.
+
+```sh
+cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t .
+```
+
+Exit 1: `Ran 880 tests in 217.378s`, `FAILED (failures=1, skipped=125)`. The single failure is
+`tests.test_feature_evidence.FeatureEvidenceTests.test_cli_reconciles_in_a_real_subprocess`:
+`AssertionError: 1 != 0 : /nix/store/p1wfv7znig26m3hns4583cb9va3kzxkg-python3-3.12.14/bin/python:
+No module named capcov`. The test runs `sys.executable -m capcov` with `cwd` set to a temp
+directory, so the manifest's relative `PYTHONPATH=src` does not resolve there. This is a manifest
+command defect, not a toolchain or test defect; the test and `.pi/workflows/capcov-experiment.json`
+are outside this write set and were not edited. Same suite with the absolute form:
+
+```sh
+cd packages/capabilities && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -t .
+```
+
+Exit 0: `Ran 880 tests in 89.245s`, `OK (skipped=125)`. **Needed manifest change:** the
+`regression` gate command for this task (and any other task using the relative form) should read
+`PYTHONPATH="$PWD/src"`; the flake's `capability-regression` check already uses it.
+
+Soufflé in the sandbox: `tests.test_claim_souffle.SouffleBackendTests` is the only
+`skipUnless(shutil.which("souffle"))` class and holds 31 tests (`unittest -v` in the devShell:
+33 tests in the module, 31 in that class, all `ok`). The sandboxed check skipped 127 versus 125 in
+the devShell, the same two-test gap documented in section 14 for Go/Git-dependent tests; had souffle
+been absent in the sandbox the gap would be 33. The sandboxed run does not print per-test names, so
+this is inferred from skip counts, not read off a verbose log.
+
+**Limits:** Linux remains evaluation-only, and the golden has only been reproduced on
+`aarch64-darwin` (twice in the devShell, once in the sandbox). A clean-checkout rebuild from the
+committed SHA has not been demonstrated by this task (the commit is made after these runs;
+`nix flake check` ran against the staged, uncommitted tree). `scip-go --version` prints `0.2.7`
+followed by an empty `Version:` banner; the recorded version is the first line. The host Nix CLI
+is unpinned. `scip-python` is not provided by this nixpkgs revision and is out of scope.
+
 ## 29. SCIP → Datalog: static observations as claim evidence
 
 Owner: wave `scip-datalog` (`scip-fact-export` and `static-rule-pack` in parallel,
