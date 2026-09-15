@@ -25,6 +25,12 @@ Follow the engine's maintained documentation rather than recreating schema or
 aggregation rules in this skill. Do not weaken source/context checks to reuse an
 old report.
 
+When developing the engine and consumers in parallel, qualify downstream runs
+against an immutable installed engine revision. A shared editable engine checkout
+can change its fingerprint mid-run and invalidate otherwise useful execution.
+Freeze and publish/build once, then run consumers on those exact bytes; do not
+repeat expensive fixtures against a moving engine or restamp old receipts.
+
 ## Establish breadth, then refine acceptance
 
 Start from incumbent entry points across the product: client actions, HTTP routes,
