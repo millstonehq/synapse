@@ -95,3 +95,20 @@ name   = "deluge"                       # free label
 plugin = "mycompany.capcov_deluge:read" # the bespoke reader
 # ...any keys your reader reads...
 ```
+
+## Shipped contrib readers
+
+`capcov_contrib` ships bespoke readers that use this seam and are NOT part of the
+core. Declare them exactly like a consumer-local plugin:
+
+    [[adapters]]
+    name = "laravel-routes"
+    plugin = "capcov_contrib.laravel_routes:discover"
+    globs = ["routes/**/*.php", "app/**/Routes/**/*.php"]   # default
+
+`laravel_routes` composes nested `Route::group` / `Route::prefix()->group()`
+prefixes into each route's path, reads `[C::class, 'm']`, `'C@m'`,
+`['uses' => 'C@m']` and closures, expands `resource`/`apiResource` (honouring
+`only`/`except`), and names what it cannot read: `dynamic-route`,
+`dynamic-prefix`, `no-surfaces` unresolved entries and duplicate declarations
+under `excluded_surfaces`. Requires the `treesitter` extra.
