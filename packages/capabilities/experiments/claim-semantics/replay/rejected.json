@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "description": "Cases the ingestion boundary must refuse; each names the validation issues that refuse it and the verdicts an unvalidated evaluation would have reached, so the test can prove validation is the sole barrier",
+  "rule_pack": "rules-replay-v1",
+  "cases": {
+    "07-producer-class-violation": {
+      "validation_issues": ["evidence-producer", "evidence-producer", "evidence-producer"],
+      "relabelled_relation": "php_post_state",
+      "relabelled_source": "shen shen-model-host v1",
+      "unvalidated_verdicts": {
+        "claim-qualified-create": "supported",
+        "claim-qualified-close": "supported"
+      }
+    }
+  }
+}
