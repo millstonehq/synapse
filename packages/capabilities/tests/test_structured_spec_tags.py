@@ -1,6 +1,6 @@
 """Two OpenAPI reader changes for real-world documents.
 
-Leap Crew's committed openapi.json (692 paths) has four templated-path
+A real committed openapi.json (several hundred paths) has four templated-path
 collisions ("/{id}" beside "/{optionId}"). The reader raised and produced
 nothing -- a hard failure on a spec quirk, against the package's own rule that a
 limit becomes a named entry. It now records a boundary and keeps every surface.

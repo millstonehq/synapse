@@ -98,11 +98,11 @@ def _run_capcov(src_dir: Path, argv: list[str], extra_env: dict | None = None) -
 
 
 def _mask_volatile(doc: dict) -> dict:
-    """Drop only extracted_at: everything else (incl. artifact_sha256, extractor)
-    must match for a genuine byte-identity claim, not merely normalise()'s
-    provenance-blind compare."""
+    """Drop new optional run metadata while pinning legacy semantic fields."""
     clone = json.loads(json.dumps(doc))
     clone.get("derived_from", {}).pop("extracted_at", None)
+    clone.get("derived_from", {}).pop("source_snapshot", None)
+    clone.pop("timing", None)
     return clone
 
 
@@ -347,17 +347,17 @@ class ObservePytestBackCompatTests(unittest.TestCase):
 
         base_env = json.loads(base_dump.read_text())
         new_env = json.loads(new_dump.read_text())
-        # CAPCOV_NONCE is deliberately fresh per invocation.  A live origin/main
-        # may already contain the nonce behavior, so compare its contract rather
-        # than two independently generated values.
-        base_nonce = base_env.pop("CAPCOV_NONCE", None)
-        new_nonce = new_env.pop("CAPCOV_NONCE", None)
-        self.assertRegex(new_nonce or "", r"^[0-9a-f]{32}$")
-        if base_nonce is not None:
-            self.assertRegex(base_nonce, r"^[0-9a-f]{32}$")
-        self.assertEqual(base_env, new_env)
-        # Apart from that freshness token, the observed environment is unchanged
-        # whether the pinned baseline predates the nonce or live origin/main has it.
+        # Every variable origin/main set is set identically by the new observe.
+        for key, value in base_env.items():
+            self.assertEqual(new_env.get(key), value, key)
+        # The additions are the freshness nonce and the carried source snapshot;
+        # existing probe variables remain byte-identical.
+        self.assertEqual(
+            set(new_env) - set(base_env),
+            {"CAPCOV_NONCE", "CAPCOV_SOURCE_PROVENANCE"},
+        )
+        carried = json.loads(new_env["CAPCOV_SOURCE_PROVENANCE"])
+        self.assertTrue(carried["artifact_sha256"])
         self.assertEqual(base_env["CAPCOV_OBSERVE"], "1")
 
     def test_default_probe_requires_a_command(self) -> None:
