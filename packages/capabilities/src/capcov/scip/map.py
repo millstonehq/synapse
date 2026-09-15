@@ -196,6 +196,99 @@ def entities(normalized: dict) -> list[dict]:
     return out
 
 
+def _enclosers(occurrences: list[dict]) -> list[tuple[int, int, str | None]]:
+    """The ``(start, end, symbol)`` line spans of every definition in a
+    document that carries an enclosing range -- the candidates a reference on a
+    line is attributed to."""
+    return [
+        (
+            occ["enclosing_start_line"],
+            occ["enclosing_end_line"],
+            occ.get("symbol"),
+        )
+        for occ in occurrences
+        if occ.get("is_definition")
+        and occ.get("enclosing_start_line") is not None
+        and occ.get("enclosing_end_line") is not None
+    ]
+
+
+def _encloser_synthesized(occurrences: list[dict]) -> dict[str | None, bool]:
+    """symbol -> whether its enclosing span was synthesized by the runner
+    (``enclosing_synthesized`` on a retained occurrence). A non-retained
+    occurrence reads as not synthesized."""
+    out: dict[str | None, bool] = {}
+    for occ in occurrences:
+        if occ.get("is_definition") and occ.get("enclosing_start_line") is not None:
+            out[occ.get("symbol")] = bool(occ.get("enclosing_synthesized", False))
+    return out
+
+
+def reference_edges(normalized: dict, category: str) -> list[dict]:
+    """Every *reference* occurrence to a symbol of ``category`` (``"callable"``
+    or ``"type"``), attributed to its innermost enclosing definition.
+
+    The shared walk behind ``call_edges`` and ``type_references``. Each entry is
+    ``{owner, symbol, file, line, occurrence, owner_synthesized}`` where
+    ``owner`` is the enclosing definition's symbol (``None`` at module scope),
+    ``occurrence`` is the normalized occurrence dict itself (so a consumer can
+    mint a stable occurrence identity) and ``owner_synthesized`` says whether
+    the owner's span was invented by the runner (scip-php). Not deduplicated
+    and in document order; the public wrappers dedupe and sort.
+    """
+    table = _symbol_table(normalized)
+    out: list[dict] = []
+    for document in normalized.get("documents", []) or []:
+        path = document.get("path")
+        occurrences = document.get("occurrences", []) or []
+        enclosers = _enclosers(occurrences)
+        synthesized = _encloser_synthesized(occurrences)
+        for occ in occurrences:
+            if occ.get("is_definition"):
+                continue
+            symbol = occ.get("symbol")
+            if not symbol:
+                continue
+            info = table.get(symbol, {})
+            if _category(symbol, info.get("kind")) != category:
+                continue
+            line = occ.get("start_line")
+            owner = _innermost_caller(enclosers, line)
+            out.append(
+                {
+                    "owner": owner,
+                    "symbol": symbol,
+                    "file": path,
+                    "line": line,
+                    "occurrence": occ,
+                    "owner_synthesized": (
+                        synthesized.get(owner, False) if owner is not None else False
+                    ),
+                }
+            )
+    return out
+
+
+def _dedupe_sorted(edges: list[dict], owner_key: str, target_key: str) -> list[dict]:
+    seen: set[tuple] = set()
+    deduped: list[dict] = []
+    for edge in edges:
+        key = (edge[owner_key], edge[target_key], edge["file"], edge["line"])
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(edge)
+    deduped.sort(
+        key=lambda e: (
+            e["file"] or "",
+            _line_key(e["line"]),
+            e[owner_key] or "",
+            e[target_key] or "",
+        )
+    )
+    return deduped
+
+
 def call_edges(normalized: dict) -> list[dict]:
     """Resolved call edges, as ``{caller, callee, file, line}``.
 
@@ -211,58 +304,71 @@ def call_edges(normalized: dict) -> list[dict]:
     docstring on never losing a name), and a consumer building the fixpoint's
     ``calls`` map simply skips the ``None`` root.
     """
-    table = _symbol_table(normalized)
-    edges: list[dict] = []
-    for document in normalized.get("documents", []) or []:
-        path = document.get("path")
-        occurrences = document.get("occurrences", []) or []
-        enclosers = [
-            (
-                occ["enclosing_start_line"],
-                occ["enclosing_end_line"],
-                occ.get("symbol"),
-            )
-            for occ in occurrences
-            if occ.get("is_definition")
-            and occ.get("enclosing_start_line") is not None
-            and occ.get("enclosing_end_line") is not None
-        ]
-        for occ in occurrences:
-            if occ.get("is_definition"):
-                continue
-            symbol = occ.get("symbol")
-            if not symbol:
-                continue
-            info = table.get(symbol, {})
-            if _category(symbol, info.get("kind")) != "callable":
-                continue
-            line = occ.get("start_line")
-            edges.append(
-                {
-                    "caller": _innermost_caller(enclosers, line),
-                    "callee": symbol,
-                    "file": path,
-                    "line": line,
-                }
-            )
+    edges = [
+        {"caller": e["owner"], "callee": e["symbol"], "file": e["file"], "line": e["line"]}
+        for e in reference_edges(normalized, "callable")
+    ]
+    return _dedupe_sorted(edges, "caller", "callee")
 
-    seen: set[tuple] = set()
-    deduped: list[dict] = []
-    for edge in edges:
-        key = (edge["caller"], edge["callee"], edge["file"], edge["line"])
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(edge)
-    deduped.sort(
-        key=lambda e: (
-            e["file"] or "",
-            _line_key(e["line"]),
-            e["caller"] or "",
-            e["callee"] or "",
+
+def type_references(normalized: dict) -> list[dict]:
+    """References to *type* symbols, as ``{referrer, type_symbol, file, line}``.
+
+    The other half of the reference graph ``call_edges`` deliberately leaves
+    out: SCIP encodes a constructor call (``Job()``, ``&models.Job{}``) as a
+    reference to the type, never as a call edge, so construction -- and every
+    other mention of a type inside a body -- is recovered here. ``referrer`` is
+    the innermost enclosing definition, ``None`` at module scope, exactly as
+    ``call_edges`` attributes a caller. Deduplicated and sorted the same way.
+    """
+    edges = [
+        {"referrer": e["owner"], "type_symbol": e["symbol"], "file": e["file"], "line": e["line"]}
+        for e in reference_edges(normalized, "type")
+    ]
+    return _dedupe_sorted(edges, "referrer", "type_symbol")
+
+
+def site_owners(
+    normalized: dict, sites: list[dict], *, line_base: int = 1
+) -> list[dict]:
+    """The innermost enclosing SCIP definition for each ``{file, line}`` site.
+
+    ``sites`` come from the tree-sitter side (route sites, data-access sites,
+    call sites) whose lines are 1-based; SCIP spans are 0-based as delivered, so
+    ``line_base`` says which frame the sites are in (``1`` shifts them onto the
+    SCIP frame for the lookup and echoes the input line back unchanged). Returns
+    ``{file, line, owner, owner_synthesized}`` per input site, in input order,
+    ``owner`` ``None`` when no definition span holds the line (module scope) or
+    the file is not an indexed document. Reuses ``_innermost_caller`` so a site
+    and a reference on the same line are attributed to the same owner.
+    """
+    by_path: dict[str, tuple[list, dict]] = {}
+    for document in normalized.get("documents", []) or []:
+        occurrences = document.get("occurrences", []) or []
+        by_path[document.get("path")] = (
+            _enclosers(occurrences),
+            _encloser_synthesized(occurrences),
         )
-    )
-    return deduped
+    out: list[dict] = []
+    for site in sites:
+        file, line = site.get("file"), site.get("line")
+        enclosers, synthesized = by_path.get(file, ([], {}))
+        owner = (
+            _innermost_caller(enclosers, line - line_base)
+            if line is not None
+            else None
+        )
+        out.append(
+            {
+                "file": file,
+                "line": line,
+                "owner": owner,
+                "owner_synthesized": (
+                    synthesized.get(owner, False) if owner is not None else False
+                ),
+            }
+        )
+    return out
 
 
 def _innermost_caller(
