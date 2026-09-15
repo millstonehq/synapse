@@ -17,7 +17,7 @@ from .ir import (Aggregation, Atom, Bundle, Claim, Comparison, Constant,
                  OutputKind, RelationDecl, Rule, Variable, canonical_dict,
                  canonical_json)
 from .output import output_triggered, relevant_evidence_ids
-from .validation import ValidationError, assert_valid
+from .validation import ValidationError, ValidationResourceError, assert_valid
 from .verdicts import (EvaluationBasis, EvaluationResult, OperationalStatus,
                        SemanticVerdict, verdict)
 
@@ -80,6 +80,24 @@ class Derivation:
         """Compact structural identity used instead of serialising proof trees."""
         return (self.relation, self.row, self.rule, self.kind, self.leaf_id,
                 self.alternatives, tuple(child.signature() for child in self.children))
+
+    def _choice_structure(self) -> tuple[Any, ...]:
+        """Return proof structure without mutable alternative-path counts."""
+        return (self.relation, self.row, self.rule, self.kind, self.leaf_id,
+                tuple(child._choice_structure() for child in self.children))
+
+    def choice_key(self) -> tuple[Any, ...]:
+        """Stable canonical ordering: shortest proof, then lexical structure.
+
+        ``alternatives`` is intentionally absent.  It describes discarded OR
+        paths, not the quality of this proof, and can grow while closure is
+        being computed.  Letting it select a canonical proof would make an
+        otherwise unchanged path churn as alternatives are discovered.
+        """
+        # Rows may contain ``_FrozenMap`` JSON values, whose inherited object
+        # repr includes an allocation address.  Canonical JSON is the IR's
+        # address-free lexical order and remains stable after strict reload.
+        return self.depth, canonical_json(self._choice_structure())
 
     def path_key(self) -> tuple[Any, ...]:
         """Identity of a ground proof path, independent of child snapshots.
@@ -186,7 +204,12 @@ class _Engine:
             raise _LimitReached("evaluation exceeded the provenance limit")
 
     def add(self, relation: str, row: Row, proof: Derivation) -> bool:
-        """Retain a canonical bounded set and report row *or proof* changes."""
+        """Retain a canonical bounded set and report row *or proof* changes.
+
+        A path is replaced only by a strictly better canonical proof.  In
+        particular, a recursive snapshot cannot repeatedly replace its
+        shallower base proof merely because the nested signature changed.
+        """
         self.check_limits()
         row = tuple(row)
         if row in self.rows[relation]:
@@ -200,8 +223,11 @@ class _Engine:
             same_path = next((i for i, existing in enumerate(paths)
                               if existing.path_key() == path_key), None)
             if same_path is not None:
+                existing = paths[same_path]
+                if proof.choice_key() >= existing.choice_key():
+                    return False
                 paths[same_path] = proof
-                paths.sort(key=lambda item: repr(item.signature()))
+                paths.sort(key=Derivation.choice_key)
                 return True
 
             # Bounds may truncate explanations only if semantic evaluation is
@@ -219,7 +245,7 @@ class _Engine:
                 raise _LimitReached("evaluation exceeded the provenance limit")
             candidate_keys.add(path_key)
             paths.append(proof)
-            paths.sort(key=lambda item: repr(item.signature()))
+            paths.sort(key=Derivation.choice_key)
             self.provenance_count += 1
             return True
         if self.limits.max_provenance is not None and self.provenance_count >= self.limits.max_provenance:
@@ -567,7 +593,8 @@ class _Engine:
         """
         values = self._claim_values(claim)
         active_evidence = relevant_evidence_ids(
-            self.bundle, claim.id, set(self.evidence_by_leaf))
+            self.bundle, claim.id, set(self.evidence_by_leaf),
+            scoped_claim=claim)
         evidence_values: dict[str, dict[str, Any]] = {}
         for record in self.bundle.evidence:
             declaration = self.relations.get(record.atom.relation)
@@ -584,7 +611,8 @@ class _Engine:
                     or output.kind != OutputKind.MISSING_PREMISE
                     or not output_triggered(
                         output, active_evidence,
-                        (claim_state.value, "underived"))):
+                        (claim_state.value, "underived"), bundle=self.bundle,
+                        scoped_claim=claim)):
                 continue
             item: dict[str, Any] = {"relation": output.relation}
             complete = True
@@ -872,9 +900,15 @@ class _Engine:
         subresult_missing = tuple(item for subresult in subresults
                                   for item in subresult.missing_premises)
         semantic = verdict(all_supported, any_refuted)
-        missing = (() if all_supported or any_refuted else
-                   self._declared_missing_premises(claim, subresult_missing,
-                                                   semantic))
+        # Missing-premise outputs were evaluated against each grounded member
+        # above.  Re-evaluating them against the open FORALL claim would let
+        # evidence for one member trigger a template for another member.
+        if all_supported or any_refuted:
+            missing = ()
+        else:
+            unique_missing = {canonical_json(item): item
+                              for item in subresult_missing}
+            missing = tuple(unique_missing[key] for key in sorted(unique_missing))
         result = EvaluationResult(semantic, status,
                                   EvaluationBasis.BOUNDED_HISTORY_MODEL,
                                   support=support,
@@ -947,6 +981,15 @@ def evaluate(bundle: Bundle, limits: ResourceLimits | None = None) -> Evaluation
                                                                OperationalStatus.UNSUPPORTED_CONSTRUCT,
                                                                message=str(exc))) for i, claim in enumerate(bundle.claims))
         return EvaluationReport((), (), claims, OperationalStatus.UNSUPPORTED_CONSTRUCT, str(exc))
+    except (RecursionError, ValidationResourceError) as exc:
+        # Deep producer input must cross the evaluator boundary as a named
+        # operational failure, never leak a Python implementation exception.
+        message = str(exc) or "evaluation exceeded the proof recursion limit"
+        claims = tuple(ClaimResult(i, claim, EvaluationResult(
+            SemanticVerdict.UNRESOLVED, OperationalStatus.RESOURCE_EXHAUSTED,
+            message=message)) for i, claim in enumerate(bundle.claims))
+        return EvaluationReport((), (), claims,
+                                OperationalStatus.RESOURCE_EXHAUSTED, message)
 
 
 evaluate_bundle = evaluate

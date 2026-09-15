@@ -554,7 +554,8 @@ def _declared_missing_premises(bundle, claim, relation, relation_map, fallback,
                                claim_state=SemanticVerdict.UNRESOLVED):
     values = _claim_values(claim, relation)
     active_evidence = relevant_evidence_ids(
-        bundle, claim.id, {record.id for record in bundle.evidence})
+        bundle, claim.id, {record.id for record in bundle.evidence},
+        scoped_claim=claim)
     evidence_values = {}
     for record in bundle.evidence:
         declaration = relation_map.get(record.atom.relation)
@@ -571,7 +572,8 @@ def _declared_missing_premises(bundle, claim, relation, relation_map, fallback,
                 or output.kind != OutputKind.MISSING_PREMISE
                 or not output_triggered(
                     output, active_evidence,
-                    (claim_state.value, "underived"))):
+                    (claim_state.value, "underived"), bundle=bundle,
+                    scoped_claim=claim)):
             continue
         item = {"relation": output.relation}; complete = True
         for name, template in output.fields:
@@ -790,9 +792,14 @@ def _claim_result(claim, relation, relations, diagnostic_relations, relation_map
     subresult_missing = tuple(item for result in subresults
                               for item in result.missing_premises)
     semantic = verdict(support, refutation)
-    missing = (() if support or refutation else
-               _declared_missing_premises(bundle, claim, relation, relation_map,
-                                          subresult_missing, semantic))
+    # Each subresult has already rendered outputs against its grounded domain
+    # member.  Applying templates again to the open FORALL claim would allow
+    # evidence for one member to satisfy another member's trigger.
+    if support or refutation:
+        missing = ()
+    else:
+        unique_missing = {canonical_json(item): item for item in subresult_missing}
+        missing = tuple(unique_missing[key] for key in sorted(unique_missing))
     return EvaluationResult(semantic, status,
                             EvaluationBasis.BOUNDED_HISTORY_MODEL,
                             missing_premises=missing)

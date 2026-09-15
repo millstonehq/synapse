@@ -1,4 +1,22 @@
-"""Fail-closed differential comparison for the independent claim kernels."""
+"""Fail-closed differential comparison for the independent claim kernels.
+
+Cross-kernel report contract
+----------------------------
+An operationally complete report is comparable only when every declared
+relation has exactly the same normalized closure and each claim has exactly
+the same ``semantic``, ``operational``, ``basis``, and canonical
+``missing_premises`` fields.  Those are the admitted fields below.
+
+Invalid or exhausted input has a deliberately narrower contract: only the
+exact pair of named top-level ``operational_failure`` values is stable across
+backends.  Relations and per-claim payloads may differ (the Python evaluator
+retains invalid claim results while Souffle stops at validation), and prose
+messages, resources, diagnostics, and provenance are outside this contract.
+Any top-level failure remains non-admissible even when both names are
+identical: ``compare`` blocks and persists a replay.  The shrinker's
+``_difference_shape`` preserves that exact ordered failure pair; it does not
+claim message- or resource-stable minimization.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -80,28 +98,53 @@ def _missing(values: Any) -> tuple[str, ...]:
 def run_python(bundle: Bundle, *, limits: ResourceLimits | None = None) -> KernelReport:
     try:
         report = evaluate(bundle, limits)
+        relations = tuple(
+            (decl.name, _rows(report.relation_rows(decl.name)))
+            for decl in bundle.relations)
+        claims = tuple(
+            KernelClaim(
+                entry.claim.id or str(entry.index), entry.index,
+                entry.result.semantic.value, entry.result.operational.value,
+                entry.result.basis.value,
+                _missing(entry.result.missing_premises))
+            for entry in report.claims)
+        failure = None if report.status.value == "complete" else report.status.value
+        return KernelReport("python", relations, claims, failure, report.message)
+    except RecursionError as exc:
+        return KernelReport(
+            "python", (), (), "resource-exhausted",
+            str(exc) or "Python kernel exceeded the recursion limit")
     except (OverflowError, TimeoutError) as exc:
         return KernelReport("python", (), (), "resource-exhausted", str(exc))
     except (ValueError, TypeError, UnicodeError) as exc:
         return KernelReport("python", (), (), "python-evaluation-invalid", str(exc))
     except OSError as exc:
         return KernelReport("python", (), (), "python-io-failed", str(exc))
-    relations = tuple((decl.name, _rows(report.relation_rows(decl.name))) for decl in bundle.relations)
-    claims = tuple(KernelClaim(entry.claim.id or str(entry.index), entry.index,
-                               entry.result.semantic.value, entry.result.operational.value,
-                               entry.result.basis.value, _missing(entry.result.missing_premises))
-                   for entry in report.claims)
-    failure = None if report.status.value == "complete" else report.status.value
-    return KernelReport("python", relations, claims, failure, report.message)
 
 
 def run_souffle(bundle: Bundle, **kwargs: Any) -> KernelReport:
     try:
-        report = run_bundle(bundle, outputs=(decl.name for decl in bundle.relations), **kwargs)
+        report = run_bundle(
+            bundle, outputs=(decl.name for decl in bundle.relations), **kwargs)
+        relations = tuple(
+            (decl.name, _rows(report.relations.get(decl.name, ())))
+            for decl in bundle.relations)
+        claims = tuple(
+            KernelClaim(
+                claim.id or str(index), index, result.semantic.value,
+                result.operational.value, result.basis.value,
+                _missing(result.missing_premises))
+            for index, (claim, result) in enumerate(
+                zip(bundle.claims, report.claims)))
+        return KernelReport("souffle", relations, claims)
     except SouffleUnavailable as exc:
         return KernelReport("souffle", (), (), "souffle-unavailable", str(exc))
     except ValidationError as exc:
         return KernelReport("souffle", (), (), "invalid-input", str(exc))
+    except RecursionError as exc:
+        return KernelReport(
+            "souffle", (), (), "resource-exhausted",
+            str(exc) or "Souffle kernel boundary exceeded the recursion limit")
     except (OverflowError, TimeoutError) as exc:
         return KernelReport("souffle", (), (), "resource-exhausted", str(exc))
     except NotImplementedError as exc:
@@ -112,20 +155,25 @@ def run_souffle(bundle: Bundle, **kwargs: Any) -> KernelReport:
         return KernelReport("souffle", (), (), "souffle-translation-or-output-invalid", str(exc))
     except OSError as exc:
         return KernelReport("souffle", (), (), "souffle-io-failed", str(exc))
-    relations = tuple((decl.name, _rows(report.relations.get(decl.name, ()))) for decl in bundle.relations)
-    claims = tuple(KernelClaim(claim.id or str(index), index, result.semantic.value,
-                               result.operational.value, result.basis.value,
-                               _missing(result.missing_premises))
-                   for index, (claim, result) in enumerate(zip(bundle.claims, report.claims)))
-    return KernelReport("souffle", relations, claims)
 
 
 def reports_match(left: KernelReport, right: KernelReport) -> bool:
-    # Operational exhaustion is never positive semantic evidence, including
-    # when both implementations happen to hit their bounds.
+    # Every top-level operational failure blocks admission, including an
+    # identical named invalid/exhausted result from both implementations.
     if left.operational_failure or right.operational_failure:
         return False
     return left.semantic_payload() == right.semantic_payload()
+
+
+def _invoke_runner(runner: Callable[[Bundle], KernelReport], bundle: Bundle,
+                   backend: str) -> KernelReport:
+    """Convert recursion at an injected or normalization boundary to a report."""
+    try:
+        return runner(bundle)
+    except RecursionError as exc:
+        return KernelReport(
+            backend, (), (), "resource-exhausted",
+            str(exc) or f"{backend} kernel boundary exceeded the recursion limit")
 
 
 def compare(bundle: Bundle, *, python_runner: Callable[[Bundle], KernelReport] = run_python,
@@ -135,7 +183,15 @@ def compare(bundle: Bundle, *, python_runner: Callable[[Bundle], KernelReport] =
     from .shrinker import MAX_SHRINK_STEPS
     if max_steps < 1 or max_steps > MAX_SHRINK_STEPS:
         raise ValueError(f"max_steps must be between 1 and {MAX_SHRINK_STEPS}")
-    left = python_runner(bundle); right = souffle_runner(bundle)
+
+    def guarded_python(candidate: Bundle) -> KernelReport:
+        return _invoke_runner(python_runner, candidate, "python")
+
+    def guarded_souffle(candidate: Bundle) -> KernelReport:
+        return _invoke_runner(souffle_runner, candidate, "souffle")
+
+    left = guarded_python(bundle)
+    right = guarded_souffle(bundle)
     if reports_match(left, right):
         return DifferentialResult(left, right, True)
     replay_path = None; steps = 0; truncated = False
@@ -145,8 +201,8 @@ def compare(bundle: Bundle, *, python_runner: Callable[[Bundle], KernelReport] =
     # avoid work on expected matches; it cannot bypass replay minimization on
     # an actual disagreement.  A bound hit is surfaced as shrink_truncated.
     del shrink
-    shrunk = shrink_mismatch(bundle, python_runner=python_runner,
-                             souffle_runner=souffle_runner,
+    shrunk = shrink_mismatch(bundle, python_runner=guarded_python,
+                             souffle_runner=guarded_souffle,
                              replay_root=replay_root, max_steps=max_steps,
                              baseline_left=left, baseline_right=right)
     replay_path = str(shrunk.path); steps = shrunk.steps; truncated = shrunk.truncated

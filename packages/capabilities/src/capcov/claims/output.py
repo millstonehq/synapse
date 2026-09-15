@@ -4,7 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable
 
-from .ir import Bundle, Claim, Constant, Evidence, EvidenceMapping, OutputKind, OutputTemplate
+from .ir import (Bundle, Claim, Constant, Evidence, EvidenceMapping,
+                 OutputKind, OutputTemplate, Variable)
 
 
 @dataclass(frozen=True)
@@ -55,9 +56,107 @@ def _predicate_matches(value: Any, operator: str, expected: Any) -> bool:
     return False
 
 
-def _relevant(bundle: Bundle, claim_id: str, evidence_id: str, proof: set[str]) -> bool:
+def _mapping_environment(
+        bundle: Bundle, claim: Claim, evidence: Evidence,
+        mapping: EvidenceMapping, variables: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Unify one mapped evidence row, optionally extending shared variables."""
+    claim_relation = next(
+        (relation for relation in bundle.relations
+         if relation.name == claim.relation), None)
+    evidence_relation = next(
+        (relation for relation in bundle.relations
+         if relation.name == evidence.atom.relation), None)
+    if (claim_relation is None or evidence_relation is None
+            or mapping.claim_relation != claim.relation):
+        return None
+    claim_names = [column.name for column in claim_relation.columns]
+    evidence_values = _evidence_values(bundle, evidence.id)
+    claim_values = dict(claim.context.as_dict())
+    claim_values.update(
+        (column.name, term.value)
+        for column, term in zip(claim_relation.columns, claim.terms)
+        if isinstance(term, Constant))
+    unified = dict(variables or {})
+    for left, right in mapping.bindings:
+        if left not in claim_names or right not in evidence_values:
+            return None
+        value = evidence_values[right]
+        term = claim.terms[claim_names.index(left)]
+        if isinstance(term, Constant) and term.value != value:
+            return None
+        if isinstance(term, Variable):
+            previous = unified.setdefault(term.name, value)
+            if previous != value:
+                return None
+        elif not isinstance(term, Constant):
+            return None
+        if left in claim_values and claim_values[left] != value:
+            return None
+    # Output mappings intentionally scope only their declared context indices.
+    # Observation mappings may compare a differing claim/evidence dimension in
+    # order to render that mismatch; treating every shared column as an
+    # implicit equality would hide the very diagnostic they declare.
+    evidence_context = evidence.context.as_dict()
+    if any(evidence_context.get(index) != claim_values.get(index)
+           for index in mapping.context_indices):
+        return None
+    return unified
+
+
+def _mapping_unifies(bundle: Bundle, claim: Claim, evidence: Evidence,
+                      mapping: EvidenceMapping) -> bool:
+    """Match one mapped evidence row against a possibly open claim tuple."""
+    return _mapping_environment(bundle, claim, evidence, mapping) is not None
+
+
+def _joint_environments(
+        bundle: Bundle, claim: Claim, evidence_ids: tuple[str, ...],
+        variables: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], ...]:
+    """Enumerate shared environments for mapped trigger evidence."""
+    environment = dict(variables or {})
+    if not evidence_ids:
+        return (environment,)
+    evidence_id, *rest = evidence_ids
+    evidence = next((item for item in bundle.evidence
+                     if item.id == evidence_id), None)
+    if evidence is None:
+        return ()
+    mappings = tuple(
+        mapping for mapping in bundle.mappings
+        if mapping.claim_id == claim.id
+        and mapping.evidence_relation == evidence.atom.relation)
+    # Evidence relevant through a diagnostic or proof path has no mapping
+    # variables to constrain.  A row with a viable mapping must, however,
+    # participate in the same environment as every other mapped trigger row.
+    viable_alone = tuple(
+        candidate for mapping in mappings
+        if (candidate := _mapping_environment(
+            bundle, claim, evidence, mapping)) is not None)
+    if not viable_alone:
+        return _joint_environments(bundle, claim, tuple(rest), environment)
+    results = []
+    for mapping in mappings:
+        candidate = _mapping_environment(
+            bundle, claim, evidence, mapping, environment)
+        if candidate is not None:
+            results.extend(_joint_environments(
+                bundle, claim, tuple(rest), candidate))
+    return tuple(results)
+
+
+def _jointly_unifies(bundle: Bundle, claim: Claim,
+                      evidence_ids: tuple[str, ...],
+                      variables: dict[str, Any] | None = None) -> bool:
+    """Require mapped trigger rows to describe one shared claim instance."""
+    return bool(_joint_environments(bundle, claim, evidence_ids, variables))
+
+
+def _relevant(bundle: Bundle, claim_id: str, evidence_id: str, proof: set[str],
+              scoped_claim: Claim | None = None) -> bool:
     evidence = next((item for item in bundle.evidence if item.id == evidence_id), None)
-    claim = _claim(bundle, claim_id)
+    claim = scoped_claim or _claim(bundle, claim_id)
     if evidence is None or claim is None:
         return False
     values = _evidence_values(bundle, evidence_id)
@@ -65,11 +164,7 @@ def _relevant(bundle: Bundle, claim_id: str, evidence_id: str, proof: set[str]) 
     for mapping in bundle.mappings:
         if mapping.claim_id != claim_id or mapping.evidence_relation != evidence.atom.relation:
             continue
-        if any(evidence.context.as_dict().get(index) != claim_context.get(index) for index in mapping.context_indices):
-            continue
-        claim_relation = next((r for r in bundle.relations if r.name == claim.relation), None)
-        claim_values = {c.name: t.value for c, t in zip(claim_relation.columns, claim.terms) if isinstance(t, Constant)} if claim_relation else {}
-        if all(claim_values.get(left) == values.get(right) for left, right in mapping.bindings):
+        if _mapping_unifies(bundle, claim, evidence, mapping):
             return True
     for diagnostic in bundle.diagnostics:
         if diagnostic.claim_id != claim_id or diagnostic.trigger_relation != evidence.atom.relation or diagnostic.when_missing:
@@ -85,7 +180,12 @@ def _relevant(bundle: Bundle, claim_id: str, evidence_id: str, proof: set[str]) 
         if any(evidence.context.as_dict().get(name) != value for name, value in claim_context.items() if name in evidence.context.as_dict()):
             return False
         claim_relation = next((r for r in bundle.relations if r.name == claim.relation), None)
-        claim_values = {column.name: term.value for column, term in zip(claim_relation.columns, claim.terms) if isinstance(term, Constant)} if claim_relation else {}
+        claim_values = dict(claim.context.as_dict())
+        if claim_relation:
+            claim_values.update(
+                (column.name, term.value)
+                for column, term in zip(claim_relation.columns, claim.terms)
+                if isinstance(term, Constant))
         if any(name in values and values[name] != value for name, value in claim_values.items()):
             return False
         return any(rule.head.relation == claim.relation and any(atom.relation == evidence.atom.relation for atom in rule.body) for rule in bundle.rules)
@@ -94,25 +194,66 @@ def _relevant(bundle: Bundle, claim_id: str, evidence_id: str, proof: set[str]) 
 
 def relevant_evidence_ids(bundle: Bundle, claim_id: str,
                           active_evidence: set[str] | frozenset[str],
-                          proof_evidence: set[str] | frozenset[str] = frozenset()) -> set[str]:
-    """Return active Evidence ids scoped to one claim's causal declarations."""
+                          proof_evidence: set[str] | frozenset[str] = frozenset(),
+                          *, scoped_claim: Claim | None = None) -> set[str]:
+    """Return active Evidence ids scoped to one claim instance.
+
+    ``scoped_claim`` is used for grounded members of a universal claim; looking
+    the id up in the bundle would recover the open aggregate claim instead.
+    """
     proof = set(proof_evidence)
     return {evidence_id for evidence_id in active_evidence
-            if _relevant(bundle, claim_id, evidence_id, proof)}
+            if _relevant(bundle, claim_id, evidence_id, proof, scoped_claim)}
 
 
-def output_triggered(output: OutputTemplate, relevant: set[str],
-                     claim_state: str | Iterable[str] | None) -> bool:
-    """Apply every declarative output condition to a reviewed evidence set."""
-    if not set(output.requires_all_evidence).issubset(relevant):
+def output_triggered(
+        output: OutputTemplate, relevant: set[str],
+        claim_state: str | Iterable[str] | None, *, bundle: Bundle | None = None,
+        scoped_claim: Claim | None = None,
+) -> bool:
+    """Apply every declarative output condition to a reviewed evidence set.
+
+    When the bundle and claim are supplied, all mapped evidence consumed by a
+    trigger or field must jointly unify.  Individual relevance is insufficient:
+    two rows assigning different values to one open claim variable cannot
+    jointly describe a single claim instance.
+    """
+    required = set(output.requires_all_evidence)
+    if output.evidence_id:
+        required.add(output.evidence_id)
+    required.update(
+        template.evidence_id for _, template in output.fields
+        if template.source == "evidence" and template.evidence_id)
+    if not required.issubset(relevant):
         return False
-    if output.requires_any_evidence and not set(output.requires_any_evidence) & relevant:
+    any_relevant = set(output.requires_any_evidence) & relevant
+    if output.requires_any_evidence and not any_relevant:
         return False
-    if set(output.excludes_evidence) & relevant:
-        return False
+    excluded_relevant = set(output.excludes_evidence) & relevant
     states = ({claim_state} if isinstance(claim_state, str)
               else set(claim_state or ()))
-    return output.when_claim in (None, "always") or output.when_claim in states
+    if output.when_claim not in (None, "always") and output.when_claim not in states:
+        return False
+    if bundle is None:
+        # Preserve the context-free helper contract: without IR mappings there
+        # is no environment in which an exclusion can be interpreted.
+        return not excluded_relevant
+    claim = scoped_claim or _claim(bundle, output.claim_id)
+    if claim is None:
+        return False
+    alternatives = tuple(sorted(any_relevant)) if any_relevant else (None,)
+    for alternative in alternatives:
+        selected = required | ({alternative} if alternative else set())
+        for environment in _joint_environments(
+                bundle, claim, tuple(sorted(selected))):
+            # Exclusion is an anti-join over the same claim instance.  An
+            # excluded X=b row must not suppress a required X=a candidate,
+            # while another excluded X=a producer still suppresses it.
+            if not any(_joint_environments(
+                    bundle, claim, (evidence_id,), environment)
+                       for evidence_id in excluded_relevant):
+                return True
+    return False
 
 
 def render_outputs(bundle: Bundle, claim_id: str, active_evidence: set[str] | frozenset[str], proof_evidence: VerifiedProofEvidence | None = None, claim_state: str | None = None, missing_relations: set[str] | frozenset[str] = frozenset()) -> tuple[dict[str, Any], ...]:
@@ -129,7 +270,10 @@ def render_outputs(bundle: Bundle, claim_id: str, active_evidence: set[str] | fr
     relevant = relevant_evidence_ids(bundle, claim_id, active, proof)
     rendered = []
     for output in bundle.outputs:
-        if output.claim_id != claim_id or not output_triggered(output, relevant, claim_state):
+        if (output.claim_id != claim_id
+                or not output_triggered(
+                    output, relevant, claim_state, bundle=bundle,
+                    scoped_claim=_claim(bundle, claim_id))):
             continue
         if output.evidence_id and output.evidence_id not in relevant:
             continue

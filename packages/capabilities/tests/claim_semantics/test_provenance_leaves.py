@@ -169,7 +169,7 @@ class CorpusProvenanceTests(unittest.TestCase):
                          {("leaf-a",), ("leaf-b",)})
         self.assertEqual(report.claims[0].result.support, ("leaf-a",))
 
-    def test_late_canonical_proof_replacement_propagates_to_downstream_leaf(self):
+    def test_shallower_canonical_proof_is_not_replaced_by_late_lexical_path(self):
         one = (Column("x", "symbol"),)
         relations = tuple(RelationDecl(name, one, primitive=name in {"aa_seed_z", "zz_seed_a"})
                           for name in ("aa_seed_z", "zz_seed_a", "zz_hop", "mid", "out"))
@@ -186,9 +186,11 @@ class CorpusProvenanceTests(unittest.TestCase):
                         claims=(Claim("out", (Constant("v"),), id="claim"),))
         report = evaluate(bundle, ResourceLimits(max_alternatives_per_row=2, max_provenance=6))
         self.assertEqual(report.status.value, "complete")
-        self.assertEqual(report.claims[0].result.support, ("leaf-a",))
+        # ``leaf-a`` is lexically first but reaches ``mid`` through an extra
+        # hop.  Canonical proof choice is depth-first, then lexical.
+        self.assertEqual(report.claims[0].result.support, ("leaf-z",))
         out_proof = dict(dict(report.provenance)["out"])[("v",)][0]
-        self.assertEqual(out_proof.leaves, ("leaf-a",))
+        self.assertEqual(out_proof.leaves, ("leaf-z",))
 
     def test_many_duplicate_producers_fail_closed_at_the_explanation_bound(self):
         observed = RelationDecl("observed_many", (Column("x", "symbol"),))

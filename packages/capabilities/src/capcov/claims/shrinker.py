@@ -28,15 +28,18 @@ class ReplayPersistenceError(RuntimeError):
 def persist_bundle(bundle: Bundle, replay_root: str | Path) -> Path:
     """Persist and independently reload-check one canonical replay bundle."""
     root = Path(replay_root)
-    path = root / f"{digest(bundle)}.json"
+    path = None
     try:
+        path = root / f"{digest(bundle)}.json"
         root.mkdir(parents=True, exist_ok=True)
         path.write_text(canonical_json(bundle) + "\n", encoding="utf-8")
         # Strict parsing and digest identity apply even when the differential
         # input is itself invalid.  Candidate validity is checked separately.
         reloaded = bundle_from_json(path.read_text(encoding="utf-8"), validate=False)
     except (OSError, TypeError, ValueError) as exc:
-        raise ReplayPersistenceError(f"differential replay persistence failed: {path}: {exc}") from exc
+        location = path or root / "<no-canonical-digest>"
+        raise ReplayPersistenceError(
+            f"differential replay persistence failed: {location}: {exc}") from exc
     if digest(reloaded) != digest(bundle):
         raise ReplayPersistenceError("persisted replay digest changed on reload")
     return path
@@ -92,44 +95,56 @@ def _candidate(bundle: Bundle, selected: set[Unit]) -> Bundle | None:
         fact_keys = {_key(fact) for fact in facts}
         evidence = [record for record in evidence if _key(record.atom) in fact_keys]
 
-    retained_ids = {record.id for record in evidence}
-    outputs = []
-    for output in bundle.outputs:
-        references = set((*output.requires_all_evidence, *output.requires_any_evidence,
-                          *output.excludes_evidence))
-        if output.evidence_id:
-            references.add(output.evidence_id)
-        references.update(value.evidence_id for _, value in output.fields if value.evidence_id)
-        if references.issubset(retained_ids):
-            outputs.append(output)
-    candidate = replace(bundle, facts=facts, evidence=tuple(evidence), outputs=tuple(outputs))
+    # Facts and their producer records are the reducer's only dimensions.
+    # In particular, never "repair" a candidate by rewriting reviewed output
+    # policy.  If a retained OutputTemplate references removed evidence,
+    # validation rejects that candidate and the evidence is not removable.
+    candidate = replace(bundle, facts=facts, evidence=tuple(evidence))
     try:
         assert_valid(candidate)
-    except ValueError:
+    except (ValueError, OverflowError, RecursionError):
         return None
     return candidate
 
 
 def _difference_shape(left: Any, right: Any) -> tuple[Any, ...]:
-    # Operational reductions preserve which side failed and each named
-    # failure. Relation payloads from a surviving side are not frozen into the
-    # shape, allowing irrelevant facts to be removed.
+    """Return the exact values that constitute this disagreement.
+
+    Equal relation payloads and equal claim fields may change while unrelated
+    facts are removed.  Values that differ may not: accepting merely the same
+    relation or field names could turn one bug into a different bug while
+    labelling the replay a reproduction.
+    """
     if left.operational_failure or right.operational_failure:
         return "operational", left.operational_failure, right.operational_failure
+
+    absent = ("absent",)
     left_relations = dict(left.relations)
     right_relations = dict(right.relations)
-    relation_names = tuple(name for name in sorted(set(left_relations) | set(right_relations))
-                           if left_relations.get(name) != right_relations.get(name))
-    left_claims = {claim.key: claim for claim in left.claims}
-    right_claims = {claim.key: claim for claim in right.claims}
-    claim_fields = []
-    for key in sorted(set(left_claims) | set(right_claims)):
-        a, b = left_claims.get(key), right_claims.get(key)
-        fields = tuple(field for field in ("semantic", "operational", "basis", "missing_premises")
-                       if a is None or b is None or getattr(a, field) != getattr(b, field))
-        if fields:
-            claim_fields.append((key, fields))
-    return "semantic", relation_names, tuple(claim_fields)
+    relation_values = []
+    for name in sorted(set(left_relations) | set(right_relations)):
+        a = ("present", left_relations[name]) if name in left_relations else absent
+        b = ("present", right_relations[name]) if name in right_relations else absent
+        if a != b:
+            relation_values.append((name, a, b))
+
+    claim_values = []
+    claim_fields = ("key", "index", "semantic", "operational", "basis",
+                    "missing_premises")
+    for index in range(max(len(left.claims), len(right.claims))):
+        if index >= len(left.claims):
+            claim_values.append((index, absent, ("present", right.claims[index])))
+            continue
+        if index >= len(right.claims):
+            claim_values.append((index, ("present", left.claims[index]), absent))
+            continue
+        a, b = left.claims[index], right.claims[index]
+        differences = tuple((field, getattr(a, field), getattr(b, field))
+                            for field in claim_fields
+                            if getattr(a, field) != getattr(b, field))
+        if differences:
+            claim_values.append((index, differences))
+    return "semantic", tuple(relation_values), tuple(claim_values)
 
 
 def shrink_mismatch(bundle: Bundle, *, python_runner: Callable[[Bundle], Any],
@@ -139,33 +154,53 @@ def shrink_mismatch(bundle: Bundle, *, python_runner: Callable[[Bundle], Any],
                     baseline_right: Any | None = None) -> ShrinkResult:
     """Minimise fact/Evidence units within at most 200 comparisons.
 
-    One step invokes both kernel runners.  The caller's initial comparison (or
-    the optional direct-call baseline below) is outside ``steps``.  One step is
-    reserved to rerun the persisted, strictly reloaded replay.
+    One step invokes both kernel runners.  The caller's initial comparison is
+    outside ``steps``.  The first step reruns the persisted original bytes;
+    when reduction occurs, one final step reruns the persisted candidate.
     """
     if max_steps < 1:
         raise ValueError("max_steps must be positive")
     if max_steps > MAX_SHRINK_STEPS:
         raise ValueError(f"max_steps cannot exceed {MAX_SHRINK_STEPS}")
-    from .differential import reports_match
+    from .differential import _invoke_runner, reports_match
+
+    def run_pair(candidate: Bundle):
+        return (_invoke_runner(python_runner, candidate, "python"),
+                _invoke_runner(souffle_runner, candidate, "souffle"))
+
+    if (baseline_left is None) != (baseline_right is None):
+        raise ValueError("baseline reports must be provided together")
+
+    # Persist before trusting another producer execution.  The first shrink
+    # step reruns the strict replay bytes and establishes that the caller's
+    # original disagreement is stable.  If it has disappeared (or changed),
+    # the original input remains the blocking replay instead of raising or
+    # minimizing a different disagreement.
+    path = persist_bundle(bundle, replay_root)
+    original = bundle_from_json(path.read_text(encoding="utf-8"), validate=False)
+    replay_left, replay_right = run_pair(original)
+    steps = 1
+    if baseline_left is None:
+        baseline_left, baseline_right = replay_left, replay_right
+    baseline_shape = _difference_shape(baseline_left, baseline_right)
+    if (reports_match(baseline_left, baseline_right)
+            or reports_match(replay_left, replay_right)
+            or _difference_shape(replay_left, replay_right) != baseline_shape):
+        return ShrinkResult(original, path, steps, True, False)
 
     current = _units(bundle)
-    steps = 0
     truncated = False
-    if baseline_left is None or baseline_right is None:
-        baseline_left = python_runner(bundle)
-        baseline_right = souffle_runner(bundle)
-    if reports_match(baseline_left, baseline_right):
-        raise ValueError("shrinking requires a differential mismatch")
-    baseline_shape = _difference_shape(baseline_left, baseline_right)
-    minimization_limit = max_steps - 1
+    # Reserve the last execution for the persisted minimized replay.  With a
+    # one-step budget, the strict baseline execution above is also the final
+    # replay check.
+    minimization_limit = max(1, max_steps - 1)
 
     def mismatch(candidate: Bundle) -> bool:
         nonlocal steps
         if steps >= minimization_limit:
             return False
         steps += 1
-        left, right = python_runner(candidate), souffle_runner(candidate)
+        left, right = run_pair(candidate)
         return (not reports_match(left, right)
                 and _difference_shape(left, right) == baseline_shape)
 
@@ -218,13 +253,20 @@ def shrink_mismatch(bundle: Bundle, *, python_runner: Callable[[Bundle], Any],
     if minimized is None:
         minimized = bundle
         truncated = True
+    if max_steps == 1:
+        # The strict baseline replay is the only permitted execution.  It is
+        # already a reproduction, but any unchecked unit makes minimization
+        # explicitly truncated.
+        truncated = truncated or bool(current)
+        return ShrinkResult(original, path, steps, truncated, True)
+
     # Persistence is not enough: execute the strictly reloaded bytes.  This
     # catches transient/nondeterministic external failures instead of calling a
     # digest match reproduction evidence.
     path = persist_bundle(minimized, replay_root)
     reloaded = bundle_from_json(path.read_text(encoding="utf-8"), validate=False)
     steps += 1
-    replay_left, replay_right = python_runner(reloaded), souffle_runner(reloaded)
+    replay_left, replay_right = run_pair(reloaded)
     reproduced = (not reports_match(replay_left, replay_right)
                   and _difference_shape(replay_left, replay_right) == baseline_shape)
     if not reproduced:

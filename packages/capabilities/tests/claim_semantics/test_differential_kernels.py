@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import shutil
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -66,6 +67,30 @@ def mixed_mapping_bundle(*, include_witness=True, witness_effect="support",
                   claims=(claim,), mappings=tuple(mappings))
 
 
+def alternative_overflow_bundle():
+    rejected = R("rejected", ("x", "symbol"), modality="assumption")
+    observed = R("observed_overflow", ("x", "symbol"))
+    claimed = R("claimed_overflow", ("x", "symbol"),
+                modality="claim", primitive=False)
+    trigger = Atom("rejected", (Constant("v"),))
+    seen = Atom("observed_overflow", (Constant("v"),))
+    evidence = (
+        Evidence("blocked", trigger, source="test"),
+        *(Evidence(f"a-tainted-{i:03d}", seen, source="test",
+                   depends_on=("blocked",)) for i in range(64)),
+        Evidence("z-independent", seen, source="test"),
+    )
+    return Bundle(
+        (rejected, observed, claimed), facts=(trigger, seen),
+        evidence=evidence,
+        rules=(Rule(Atom("claimed_overflow", (Variable("x"),)),
+                    (Atom("observed_overflow", (Variable("x"),)),),
+                    "derive"),),
+        claims=(Claim("claimed_overflow", (Constant("v"),), id="claim"),),
+        diagnostics=(DiagnosticRule(
+            "rejected", "forbidden", claim_id="claim"),))
+
+
 def revoked_bundle(*, mapped_refutation=False):
     rejected = R("source__rejected", ("x", "symbol"), modality="assumption")
     observed = R("observed", ("x", "symbol"))
@@ -108,6 +133,19 @@ class DifferentialBoundaryTests(unittest.TestCase):
             with self.assertRaises(DifferentialMismatch) as caught:
                 compare(bundle, replay_root=directory)
             self.assertTrue(Path(caught.exception.result.replay_path).is_file())
+
+    def test_report_normalization_recursion_is_named_at_both_boundaries(self):
+        bundle = Bundle((R("seen", ("x", "symbol")),))
+        with patch("capcov.claims.differential._rows",
+                   side_effect=RecursionError("normalization recursion")):
+            python = run_python(bundle)
+            with patch(
+                    "capcov.claims.differential.run_bundle",
+                    return_value=SimpleNamespace(relations={"seen": ()}, claims=())):
+                souffle = run_souffle(bundle)
+        self.assertEqual(
+            (python.operational_failure, souffle.operational_failure),
+            ("resource-exhausted", "resource-exhausted"))
 
     def test_differential_claim_contract_names_every_compared_field(self):
         self.assertEqual(COMPARABLE_CLAIM_FIELDS,
@@ -466,19 +504,7 @@ class DifferentialCorpusTests(unittest.TestCase):
         self.assertEqual(compare(tainted_only, shrink=False).python.claims[0].semantic, "unresolved")
 
     def test_alternative_provenance_overflow_fails_closed_and_blocks_admission(self):
-        rejected = R("rejected", ("x", "symbol"), modality="assumption")
-        observed = R("observed_overflow", ("x", "symbol"))
-        claimed = R("claimed_overflow", ("x", "symbol"), modality="claim", primitive=False)
-        trigger = Atom("rejected", (Constant("v"),)); seen = Atom("observed_overflow", (Constant("v"),))
-        evidence = (Evidence("blocked", trigger, source="test"),
-                    *(Evidence(f"a-tainted-{i:03d}", seen, source="test", depends_on=("blocked",))
-                      for i in range(64)),
-                    Evidence("z-independent", seen, source="test"))
-        bundle = Bundle((rejected, observed, claimed), facts=(trigger, seen), evidence=evidence,
-                        rules=(Rule(Atom("claimed_overflow", (Variable("x"),)),
-                                    (Atom("observed_overflow", (Variable("x"),)),), "derive"),),
-                        claims=(Claim("claimed_overflow", (Constant("v"),), id="claim"),),
-                        diagnostics=(DiagnosticRule("rejected", "forbidden", claim_id="claim"),))
+        bundle = alternative_overflow_bundle()
         python = run_python(bundle); souffle = run_souffle(bundle)
         self.assertEqual(python.operational_failure, "resource-exhausted")
         self.assertEqual(souffle.claims[0].semantic, "supported")
