@@ -257,10 +257,13 @@ class EvaluatorIndexTests(unittest.TestCase):
         full_scan, full_scan_report = run_engine(_FullScanEngine, bundle)
 
         self.assertEqual(indexed_report, full_scan_report)
-        self.assertEqual(indexed._indexed_atom_matches, 2)
+        # The fixed point is semi-naive over changed rows: a non-recursive rule
+        # is matched once in the complete first pass, and the second pass has
+        # no pivot because the head relation never appears in the body.
+        self.assertEqual(indexed._indexed_atom_matches, 1)
         self.assertEqual(indexed._full_scan_atom_matches, 0)
-        self.assertEqual(indexed._candidate_rows_examined, 2)
-        self.assertEqual(full_scan._candidate_rows_examined, 200)
+        self.assertEqual(indexed._candidate_rows_examined, 1)
+        self.assertEqual(full_scan._candidate_rows_examined, 100)
 
     def test_indexed_and_full_scan_semantics_are_identical(self):
         cases = {
@@ -284,12 +287,13 @@ class EvaluatorIndexTests(unittest.TestCase):
         small, _ = run_engine(_Engine, equijoin_bundle(small_size))
         large, _ = run_engine(_Engine, equijoin_bundle(large_size))
 
-        # Two fixed-point passes each examine N unconstrained left rows and
-        # one indexed right row per left row: 4N rather than N squared.
-        self.assertEqual(small._candidate_rows_examined, 4 * small_size)
-        self.assertEqual(large._candidate_rows_examined, 4 * large_size)
-        self.assertEqual(large._full_scan_atom_matches, 2)
-        self.assertEqual(large._indexed_atom_matches, 2 * large_size)
+        # One complete pass examines N unconstrained left rows and one indexed
+        # right row per left row: 2N rather than N squared.  The semi-naive
+        # second pass matches nothing because the head is not in the body.
+        self.assertEqual(small._candidate_rows_examined, 2 * small_size)
+        self.assertEqual(large._candidate_rows_examined, 2 * large_size)
+        self.assertEqual(large._full_scan_atom_matches, 1)
+        self.assertEqual(large._indexed_atom_matches, large_size)
         quadratic_growth = (large_size // small_size) ** 2
         self.assertLess(
             large._candidate_rows_examined,
