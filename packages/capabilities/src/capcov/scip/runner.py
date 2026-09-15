@@ -55,6 +55,7 @@ Tool requirements:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -126,6 +127,27 @@ _BUNDLED_SCIP = Path(__file__).resolve().parent / "vendor" / "scip"
 # SCIP SymbolRole bitset: bit 0x1 is Definition; every other bit (import,
 # write/read access, generated, test, ...) is orthogonal to it.
 _DEFINITION_ROLE = 0x1
+
+# The full SymbolRole bitset (scip.proto), in bit order. ``decode_roles`` turns
+# the raw integer into the names the retained output and the static fact
+# exporter (section 29 role relations) consume; the default output keeps only
+# the ``is_definition`` projection it always had.
+_ROLE_BITS = (
+    (0x1, "definition"),
+    (0x2, "import"),
+    (0x4, "write"),
+    (0x8, "read"),
+    (0x10, "generated"),
+    (0x20, "test"),
+    (0x40, "forward_definition"),
+)
+
+# Digest kinds for an index identity (section 29): a real ``index.scip`` is
+# hashed as its bytes; a checked-in ``scip print --json`` fixture has no bytes
+# to hash, so it is hashed as its canonical JSON behind a fixed prefix.
+INDEX_DIGEST_BINARY = "binary"
+INDEX_DIGEST_JSON = "json"
+_JSON_DIGEST_PREFIX = "scip-json:"
 
 # A symbol whose kind the indexer left unset. scip-python emits none of these;
 # scip-go populates a string like "Struct"/"Field"/"Function". For an unset
@@ -277,7 +299,9 @@ def _run_scip_print(
     return result.stdout
 
 
-def read_scip_index(index_path: str | os.PathLike[str]) -> dict:
+def read_scip_index(
+    index_path: str | os.PathLike[str], *, retain: bool = False
+) -> dict:
     """Read ``index_path`` via ``scip print --json`` and return normalized dict.
 
     Shape::
@@ -290,11 +314,46 @@ def read_scip_index(index_path: str | os.PathLike[str]) -> dict:
                               "enclosing_end_line"}]}
         ]}
 
-    Raises ``ScipCliNotFound`` when the ``scip`` CLI cannot be located.
+    With ``retain=True`` the dict additionally carries everything
+    ``normalize_scip_json(..., retain=True)`` retains plus the index identity:
+    ``index_digest`` (sha256 of the ``index.scip`` bytes) and
+    ``index_digest_kind`` (``"binary"``). The default output is byte-identical
+    to before. Raises ``ScipCliNotFound`` when the ``scip`` CLI cannot be located.
     """
     scip_cli = _locate_scip_cli()
     raw = _run_scip_print(index_path, scip_cli)
-    return normalize_scip_json(json.loads(raw))
+    if not retain:
+        return normalize_scip_json(json.loads(raw))
+    # Hash the bytes the CLI actually read, before any caller unlinks them.
+    index_digest = hashlib.sha256(Path(index_path).read_bytes()).hexdigest()
+    out = normalize_scip_json(json.loads(raw), retain=True)
+    out["index_digest"] = index_digest
+    out["index_digest_kind"] = INDEX_DIGEST_BINARY
+    return out
+
+
+def index_digest_of_bytes(data: bytes) -> str:
+    """The section-29 index identity of a real ``index.scip``: sha256(bytes)."""
+    return hashlib.sha256(data).hexdigest()
+
+
+def json_index_digest(raw: dict) -> str:
+    """The section-29 index identity of a checked-in ``scip print --json`` fixture.
+
+    ``sha256("scip-json:" + canonical_json(raw))`` where canonical JSON is
+    sorted keys, compact separators, UTF-8 -- the same canonical form the claims
+    IR uses for plain JSON data. A fixture has no ``index.scip`` bytes, so this
+    is the only stable identity it can carry (``index_digest_kind = "json"``).
+    """
+    canonical = json.dumps(
+        raw, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    return hashlib.sha256((_JSON_DIGEST_PREFIX + canonical).encode("utf-8")).hexdigest()
+
+
+def decode_roles(roles: int) -> list[str]:
+    """The SymbolRole names set in ``roles``, in bit order."""
+    return [name for bit, name in _ROLE_BITS if roles & bit]
 
 
 def _first(mapping: dict, *keys: str, default: object = None) -> object:
@@ -339,12 +398,39 @@ def _coerce_kind(raw_kind: object, symbol: str) -> str | None:
     return raw_kind
 
 
-def _normalize_symbol(symbol: dict) -> dict:
+def _normalize_symbol(symbol: dict, *, retain: bool = False) -> dict:
     name = symbol["symbol"]
-    return {
+    raw_kind = _first(symbol, "kind")
+    out = {
         "symbol": name,
-        "kind": _coerce_kind(_first(symbol, "kind"), name),
+        "kind": _coerce_kind(raw_kind, name),
         "display_name": _first(symbol, "display_name", "displayName"),
+    }
+    if retain:
+        out["kind_number"] = (
+            raw_kind
+            if isinstance(raw_kind, int) and not isinstance(raw_kind, bool)
+            else None
+        )
+        out["relationships"] = [
+            _normalize_relationship(r)
+            for r in (symbol.get("relationships") or [])
+        ]
+    return out
+
+
+def _normalize_relationship(rel: dict) -> dict:
+    """One SCIP ``Relationship`` with its four flags as plain booleans."""
+    return {
+        "symbol": rel.get("symbol"),
+        "is_reference": bool(_first(rel, "is_reference", "isReference", default=False)),
+        "is_implementation": bool(
+            _first(rel, "is_implementation", "isImplementation", default=False)
+        ),
+        "is_type_definition": bool(
+            _first(rel, "is_type_definition", "isTypeDefinition", default=False)
+        ),
+        "is_definition": bool(_first(rel, "is_definition", "isDefinition", default=False)),
     }
 
 
@@ -366,13 +452,24 @@ def _enclosing_span(rng: list | None) -> tuple[int | None, int | None]:
     return rng[0], end_line
 
 
-def _normalize_occurrence(occ: dict) -> dict:
+def _range_end(rng: list | None) -> tuple[int | None, int | None]:
+    """End (line, col) of a SCIP range: ``[l, sc, ec]`` ends on ``l``,
+    ``[sl, sc, el, ec]`` on ``el``."""
+    if not rng:
+        return None, None
+    if len(rng) >= 4:
+        return rng[2], rng[3]
+    return rng[0], rng[2]
+
+
+def _normalize_occurrence(occ: dict, *, retain: bool = False) -> dict:
     roles = _first(occ, "symbol_roles", "symbolRoles", default=0) or 0
-    start_line, start_col = _range_start(_first(occ, "range"))
+    rng = _first(occ, "range")
+    start_line, start_col = _range_start(rng)
     enc_start, enc_end = _enclosing_span(
         _first(occ, "enclosing_range", "enclosingRange")
     )
-    return {
+    out = {
         "symbol": occ.get("symbol"),
         "is_definition": bool(roles & _DEFINITION_ROLE),
         "start_line": start_line,
@@ -380,6 +477,15 @@ def _normalize_occurrence(occ: dict) -> dict:
         "enclosing_start_line": enc_start,
         "enclosing_end_line": enc_end,
     }
+    if retain:
+        end_line, end_col = _range_end(rng)
+        out["symbol_roles"] = int(roles)
+        out["roles"] = decode_roles(int(roles))
+        out["end_line"] = end_line
+        out["end_col"] = end_col
+        # flipped by _synthesize_enclosing when it invents the span
+        out["enclosing_synthesized"] = False
+    return out
 
 
 def _is_callable_suffix(symbol: str | None) -> bool:
@@ -396,45 +502,89 @@ def _synthesize_enclosing(occurrences: list[dict]) -> None:
     through the document's last line; ``map._innermost_caller`` (latest start
     wins) then attributes an in-body call to the tightest enclosing method. A
     non-callable definition (class, field, parameter) is left without a span so
-    it can never swallow a call. Mutates ``occurrences`` in place.
+    it can never swallow a call. Mutates ``occurrences`` in place and returns
+    whether any span was synthesized; a retained occurrence (one carrying the
+    ``enclosing_synthesized`` key) has that flag flipped so a consumer can tell
+    an indexer-supplied span from an invented one.
     """
     definitions = [o for o in occurrences if o["is_definition"]]
     if not definitions:
-        return
+        return False
     if any(o["enclosing_start_line"] is not None for o in occurrences):
-        return
+        return False
     lines = [o["start_line"] for o in occurrences if o["start_line"] is not None]
     if not lines:
-        return
+        return False
     doc_end = max(lines)
+    synthesized = False
     for occ in definitions:
         if occ["start_line"] is None or not _is_callable_suffix(occ["symbol"]):
             continue
         occ["enclosing_start_line"] = occ["start_line"]
         occ["enclosing_end_line"] = doc_end
+        if "enclosing_synthesized" in occ:
+            occ["enclosing_synthesized"] = True
+        synthesized = True
+    return synthesized
 
 
-def normalize_scip_json(doc: dict) -> dict:
+def _normalize_metadata(meta: dict | None) -> dict:
+    """The indexer identity a retained index carries (section 29 ``scip_index``)."""
+    meta = meta or {}
+    tool = _first(meta, "tool_info", "toolInfo", default={}) or {}
+    return {
+        "tool_name": tool.get("name"),
+        "tool_version": tool.get("version"),
+        "arguments": list(tool.get("arguments") or []),
+        "project_root": _first(meta, "project_root", "projectRoot"),
+        "text_document_encoding": _first(
+            meta, "text_document_encoding", "textDocumentEncoding"
+        ),
+    }
+
+
+def normalize_scip_json(doc: dict, *, retain: bool = False) -> dict:
     """Normalize a ``scip print --json`` document into capcov's shape.
 
     Pure over its input: no filesystem, no tools -- which is what lets the test
     suite exercise it against a checked-in sample. Reconciles the per-indexer
     dialects: numeric kinds are named (see ``_coerce_kind``) and a missing
     enclosing range (scip-php) is synthesized (see ``_synthesize_enclosing``).
+
+    ``retain=False`` (the default) is byte-identical to the historical output.
+    ``retain=True`` keeps what the static fact exporter needs and the default
+    shape discards: top-level ``metadata`` (tool name/version/arguments, project
+    root, text-document encoding) and ``external_symbols``; per document
+    ``language`` and ``enclosing_synthesized``; per occurrence the raw
+    ``symbol_roles``, the decoded ``roles`` list, ``end_line``/``end_col`` and
+    ``enclosing_synthesized``; per symbol ``relationships`` and ``kind_number``.
+    Every default key keeps its default value, so the retained dict minus the
+    new keys equals the default dict.
     """
     documents = []
     for document in doc.get("documents", []):
         occurrences = [
-            _normalize_occurrence(o) for o in document.get("occurrences", [])
+            _normalize_occurrence(o, retain=retain)
+            for o in document.get("occurrences", [])
         ]
-        _synthesize_enclosing(occurrences)
-        documents.append(
-            {
-                "path": _first(document, "relative_path", "relativePath", "path"),
-                "symbols": [
-                    _normalize_symbol(s) for s in document.get("symbols", [])
-                ],
-                "occurrences": occurrences,
-            }
-        )
-    return {"documents": documents}
+        synthesized = _synthesize_enclosing(occurrences)
+        entry = {
+            "path": _first(document, "relative_path", "relativePath", "path"),
+            "symbols": [
+                _normalize_symbol(s, retain=retain)
+                for s in document.get("symbols", [])
+            ],
+            "occurrences": occurrences,
+        }
+        if retain:
+            entry["language"] = document.get("language")
+            entry["enclosing_synthesized"] = synthesized
+        documents.append(entry)
+    out = {"documents": documents}
+    if retain:
+        out["metadata"] = _normalize_metadata(doc.get("metadata"))
+        out["external_symbols"] = [
+            _normalize_symbol(s, retain=True)
+            for s in (_first(doc, "external_symbols", "externalSymbols", default=[]) or [])
+        ]
+    return out
