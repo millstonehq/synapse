@@ -1,6 +1,6 @@
 """Laravel route reader: group prefixes composed, both handler styles, resources.
 
-the target system's backend declares 592 distinct routes across 47 Route::group
+A large production backend can declare hundreds of routes across dozens of Route::group
 prefixes. The generic tree-sitter query sees the literal path only, so 'GET /'
 under /account and 'GET /' under /project collapse to one surface and the
 inventory reads 323. This reader walks the nesting and composes the path a

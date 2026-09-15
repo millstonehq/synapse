@@ -41,7 +41,7 @@ unchanged, exactly as a built-in adapter's do.
 
 ### FLOWS path — `flows.discovery._discover_from_config` / `flows.discovery.discover(config)`
 
-This is the path ladle's `product_flows.py` drives via `discover(config)`.
+This is the path a consumer's own product-flow tooling drives via `discover(config)`.
 
 ```python
 def reader(adapter: dict, root: pathlib.Path) -> dict:
@@ -155,7 +155,7 @@ with no `mounts` at all the empty prefix IS the declared contract and stays
 silent.
 
 **A `mounts` list is unconditional; an app may register a route type
-conditionally.** the target system's `config/rest.php:40` gates `RestType::TEST` on
+conditionally.** A target may gate a whole route type on a debug flag, so
 `APP_DEBUG`, so its eleven `/api/test` surfaces are declared by the mount but
 are NOT served by a production runtime -- they will read `static_only` in the
 four-cell diff. That is guidance for whoever reads the report, not a defect in

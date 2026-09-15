@@ -48,6 +48,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 from .. import adapters, artifacts
@@ -60,6 +61,7 @@ from .probe_registry import (
     ENV_TARGET,
     FreshnessGuard,
     observed_carriers,
+    source_provenance_from_env,
 )
 
 # HTTP verb -> CRUD, the SAME weak-but-declared map the promoted route adapter
@@ -348,6 +350,8 @@ def observe(
     timeout: int = 180,
     max_states: int = 10000,
     source_patterns: tuple[str, ...] = ("**/*.py",),
+    source_snapshot=None,
+    source_provenance: dict | None = None,
 ) -> dict:
     """Plan, drive the runner under the freshness guard, project, write observed.
 
@@ -358,12 +362,15 @@ def observe(
     artifact. The nonce lives only in the runner's private evidence; the observed
     schema has no nonce field.
     """
+    phase_started = time.perf_counter_ns()
     if not runner:
         raise ValueError("browser probe requires a runner command")
     execution_plan = plan(model, target, max_states)
     source = Path(source_root)
     out_path = Path(out)
-    guard = FreshnessGuard(out_path, source, patterns=source_patterns)
+    guard = FreshnessGuard(
+        out_path, source, patterns=source_patterns, snapshot=source_snapshot
+    )
     run_nonce = guard.begin(nonce)
     with tempfile.TemporaryDirectory(prefix="capcov-browser-") as directory:
         plan_path = Path(directory) / "plan.json"
@@ -392,17 +399,26 @@ def observe(
             )
 
     body = project(execution_plan, run, only=only)
-    tree_hash, files = artifacts.tree_sha256(source, source_patterns)
+    if source_provenance is not None:
+        derived_from = {
+            **source_provenance,
+            "extractor": "capcov browser-probe",
+        }
+    else:
+        derived_from = guard.snapshot.provenance(
+            os.path.basename(str(source)), "capcov browser-probe"
+        )
+    body["timing"] = {
+        "observe_ms": min(
+            max(0, (time.perf_counter_ns() - phase_started) // 1_000_000),
+            86_400_000,
+        ),
+        "source_verification": guard.verification,
+    }
     artifacts.write(
         out_path,
         "observed",
-        artifacts.provenance(
-            os.path.basename(str(source)),
-            tree_hash,
-            "capcov browser-probe",
-            files,
-            source_patterns,
-        ),
+        derived_from,
         body,
     )
     return artifacts.read(out_path, "observed")
@@ -440,7 +456,22 @@ def _load_model(target_dir: Path) -> tuple[dict, str, tuple[str, ...]]:
         specs = [(capcov["adapter"], None)]
     else:
         specs = [(entry.get("name"), entry) for entry in data.get("adapters", [])]
-    return model, plan_target, adapters.source_patterns(specs)
+    normalized = []
+    for name, config in specs:
+        resolved = None if config is None else dict(config)
+        if (
+            name == "treesitter-routes"
+            and resolved is not None
+            and not resolved.get("globs")
+            and not resolved.get("files")
+        ):
+            resolved["globs"] = [
+                artifacts.language_pattern(
+                    resolved.get("language") or resolved.get("scip_language")
+                )
+            ]
+        normalized.append((name, resolved))
+    return model, plan_target, adapters.source_patterns(normalized)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -472,6 +503,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         model, plan_target, patterns = _load_model(Path(target))
+        source_snapshot, source_provenance = source_provenance_from_env(source_root)
+        # The carried identity settles the glob set. `_load_model` reads only
+        # capcov.toml, so with `--adapter` overriding it the guard would take
+        # its before-digest over one language and its after-digest over another
+        # and call an unchanged tree changed.
+        if source_snapshot is not None:
+            patterns = source_snapshot.patterns
         observe(
             model=model,
             source_root=source_root,
@@ -481,6 +519,8 @@ def main(argv: list[str] | None = None) -> int:
             nonce=os.environ.get(ENV_NONCE),
             only=os.environ.get(ENV_ONLY),
             source_patterns=patterns,
+            source_snapshot=source_snapshot,
+            source_provenance=source_provenance,
         )
     except (ValueError, OSError, subprocess.TimeoutExpired) as error:
         print(f"capcov browser-probe: {error}", file=sys.stderr)

@@ -13,10 +13,17 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from pathlib import Path
 
-from .artifacts import source_patterns_of, tree_sha256
+from .artifacts import (
+    SourceSnapshot,
+    normalise_patterns,
+    snapshot_tree,
+    source_patterns_of,
+    tree_sha256,
+)
 from .flows.model import digest
 
 STATUSES = ("demonstrated", "failed", "missing", "unresolved", "inconclusive")
@@ -77,7 +84,12 @@ def validate(mapping: dict, inventory: dict) -> None:
             local_path(Path.cwd(), test.split("::")[0])
 
 
-def provenance(root: Path, mapping: dict, inventory: dict) -> dict:
+def provenance(
+    root: Path,
+    mapping: dict,
+    inventory: dict,
+    source_snapshot: SourceSnapshot | None = None,
+) -> dict:
     validate(mapping, inventory)
     source = local_path(root, inventory["derived_from"]["artifact"])
     # Recompute the inventory's hash over the SAME globs discover used. Reading
@@ -85,9 +97,24 @@ def provenance(root: Path, mapping: dict, inventory: dict) -> dict:
     # staleness finding, it is two different questions -- and it made every
     # `capcov outcomes` command unusable on the non-Python targets discover now
     # supports.
-    patterns = source_patterns_of(inventory["derived_from"])
-    if tree_sha256(source, patterns)[0] != inventory["derived_from"]["artifact_sha256"]:
+    # Normalized on both sides: a duplicate or empty glob in a recorded
+    # `source_patterns` is not a staleness finding, and reporting it as one
+    # sends the reader to a re-discover that cannot fix it.
+    patterns = normalise_patterns(source_patterns_of(inventory["derived_from"]))
+    source_snapshot = source_snapshot or snapshot_tree(source, patterns)
+    if (
+        source_snapshot.root != source.resolve()
+        or source_snapshot.patterns != patterns
+        or source_snapshot.digest != inventory["derived_from"]["artifact_sha256"]
+    ):
         raise ValueError("source inventory is stale; re-discover")
+    # When the outcome map declares the exact oracle root as an input, its
+    # source-bound snapshot already contains the digest for every selected
+    # source file. Reuse those bytes' identities here. Files outside the
+    # selected source patterns still take the legacy exact-read path, so this
+    # optimization cannot silently change ``inputs_sha256`` semantics.
+    source_entries = dict(source_snapshot.entries)
+    source_root = source.resolve()
     paths = {}
     inputs = [local_path(root, name) for name in mapping["inputs"]]
     for row in mapping["outcomes"]:
@@ -106,7 +133,16 @@ def provenance(root: Path, mapping: dict, inventory: dict) -> dict:
             if file.is_symlink():
                 raise ValueError(f"symlink evidence input: {file}")
             if file.is_file():
-                paths[file.relative_to(root).as_posix()] = hashlib.sha256(
+                relative = file.relative_to(root).as_posix()
+                file_digest = None
+                if path.resolve() == source_root and source_entries:
+                    try:
+                        file_digest = source_entries.get(
+                            file.resolve().relative_to(source_root).as_posix()
+                        )
+                    except ValueError:
+                        file_digest = None
+                paths[relative] = file_digest or hashlib.sha256(
                     file.read_bytes()
                 ).hexdigest()
     return {
@@ -185,9 +221,13 @@ def execute(
     selection: list[str],
     timeout: int,
 ) -> dict:
+    phase_started = time.perf_counter_ns()
     if timeout <= 0:
         raise ValueError("timeout must be positive")
-    before = provenance(root, mapping, inventory)
+    source = local_path(root, inventory["derived_from"]["artifact"])
+    patterns = normalise_patterns(source_patterns_of(inventory["derived_from"]))
+    source_snapshot = snapshot_tree(source, patterns)
+    before = provenance(root, mapping, inventory, source_snapshot)
     expected = sorted({t for row in mapping["outcomes"] for t in row.get("tests", [])})
     if not expected and not selection:
         raise ValueError("no mapped tests to execute")
@@ -229,7 +269,8 @@ def execute(
         )
         if output.exists() and run.get("nonce") != nonce:
             raise ValueError("pytest evidence nonce mismatch")
-        if provenance(root, mapping, inventory) != before:
+        verified_snapshot = source_snapshot.verify()
+        if provenance(root, mapping, inventory, verified_snapshot) != before:
             raise ValueError(
                 "source, tests, or declared inputs changed during execution"
             )
@@ -240,6 +281,13 @@ def execute(
             "exit_code": exit_code,
             "command": command,
             "nonce": nonce,
+            "timing": {
+                "observe_ms": min(
+                    max(0, (time.perf_counter_ns() - phase_started) // 1_000_000),
+                    86_400_000,
+                ),
+                "source_verification": verified_snapshot.verification,
+            },
         }
 
 
@@ -300,7 +348,12 @@ def main(argv: list[str]) -> int:
                 )
             # One host-callable acceptance operation: execute the whole map and
             # decide against the required set, never accept a supplied receipt.
-            report = reconcile(mapping, inventory, run, provenance(root, mapping, inventory))
+            # `current` must be derived independently -- passing run["provenance"]
+            # here makes reconcile's staleness check compare a value to itself,
+            # and stops covering the window between execute() and the decision.
+            report = reconcile(
+                mapping, inventory, run, provenance(root, mapping, inventory)
+            )
         else:
             current = provenance(root, mapping, inventory)
             report = reconcile(mapping, inventory, read(args.run), current)

@@ -70,6 +70,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -82,6 +83,7 @@ from .probe_registry import (
     ENV_TARGET,
     FreshnessGuard,
     observed_carriers,
+    source_provenance_from_env,
 )
 
 # HTTP verb -> CRUD: the SAME weak-but-declared map the browser probe uses.
@@ -402,6 +404,9 @@ def observe(
     har_paths: list[Path | str],
     nonce: str | None = None,
     only: str | None = None,
+    source_patterns: tuple[str, ...] = ("**/*.py",),
+    source_snapshot=None,
+    source_provenance: dict | None = None,
 ) -> dict:
     """Project the named HAR files and write the ``observed`` artifact.
 
@@ -412,6 +417,7 @@ def observe(
     being read. ``only`` is accepted for the env contract and unused: a HAR is
     one recorded run, there is no inner loop to scope.
     """
+    phase_started = time.perf_counter_ns()
     source = Path(source_root)
     out_path = Path(out)
     target_dir = Path(target)
@@ -435,24 +441,36 @@ def observe(
         )
     hars = {p: json.loads(Path(p).read_text()) for p in given}
 
-    guard = FreshnessGuard(out_path, source)
+    guard = FreshnessGuard(
+        out_path, source, patterns=source_patterns, snapshot=source_snapshot
+    )
     run_nonce = guard.begin(nonce)
     result = project_har(hars, surfaces, _strip_prefixes(target_dir))
     guard.verify({"nonce": run_nonce, **result})
 
-    tree_hash, files = artifacts.tree_sha256(source)
     body = {
         "bindings": result["bindings"],
         "exercises": len(hars),
         "requests": result["requests"],
         **observed_carriers(excluded_surfaces=[], unresolved=result["unresolved"]),
     }
+    body["timing"] = {
+        "observe_ms": min(
+            max(0, (time.perf_counter_ns() - phase_started) // 1_000_000),
+            86_400_000,
+        ),
+        "source_verification": guard.verification,
+    }
+    if source_provenance is not None:
+        derived_from = {**source_provenance, "extractor": "capcov har-probe"}
+    else:
+        derived_from = guard.snapshot.provenance(
+            os.path.basename(str(source)), "capcov har-probe"
+        )
     artifacts.write(
         out_path,
         "observed",
-        artifacts.provenance(
-            os.path.basename(str(source)), tree_hash, "capcov har-probe", files
-        ),
+        derived_from,
         body,
     )
     return artifacts.read(out_path, "observed")
@@ -480,6 +498,7 @@ def main(argv: list[str] | None = None) -> int:
         print("capcov har-probe: name at least one .har file after --", file=sys.stderr)
         return 2
     try:
+        source_snapshot, source_provenance = source_provenance_from_env(source_root)
         observe(
             source_root=source_root,
             out=out,
@@ -487,6 +506,13 @@ def main(argv: list[str] | None = None) -> int:
             har_paths=har_paths,
             nonce=os.environ.get(ENV_NONCE),
             only=os.environ.get(ENV_ONLY),
+            source_patterns=(
+                source_snapshot.patterns
+                if source_snapshot is not None
+                else ("**/*.py",)
+            ),
+            source_snapshot=source_snapshot,
+            source_provenance=source_provenance,
         )
     except (ValueError, OSError) as error:
         print(f"capcov har-probe: {error}", file=sys.stderr)

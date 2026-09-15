@@ -28,6 +28,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 from .. import artifacts
@@ -39,6 +40,7 @@ from .probe_registry import (
     ENV_TARGET,
     FreshnessGuard,
     observed_carriers,
+    source_provenance_from_env,
 )
 
 # Pipeline effect -> the CRUD operation reconcile speaks. Weak-but-declared, the
@@ -115,6 +117,9 @@ def observe(
     nonce: str | None = None,
     only: str | None = None,
     target: Path | str | None = None,
+    source_patterns: tuple[str, ...] = ("**/*.py",),
+    source_snapshot=None,
+    source_provenance: dict | None = None,
 ) -> dict:
     """Run the (stub) pipeline under the freshness guard and emit ``observed``.
 
@@ -123,16 +128,18 @@ def observe(
     verify it, then write the final ``observed`` artifact. The nonce lives in the
     private evidence; the observed schema has no nonce field.
     """
+    phase_started = time.perf_counter_ns()
     source = Path(source_root)
     out_path = Path(out)
-    guard = FreshnessGuard(out_path, source)
+    guard = FreshnessGuard(
+        out_path, source, patterns=source_patterns, snapshot=source_snapshot
+    )
     run_nonce = guard.begin(nonce)
     with tempfile.TemporaryDirectory(prefix="capcov-load-") as directory:
         evidence = Path(directory) / "run.json"
         _drive_pipeline(evidence, run_nonce, only)
         run = guard.verify_output(evidence)
 
-    tree_hash, files = artifacts.tree_sha256(source)
     bindings = list(run.get("bindings", []))
     body = {
         "bindings": bindings,
@@ -141,13 +148,27 @@ def observe(
             excluded_surfaces=run.get("excluded_surfaces"),
             unresolved=run.get("unresolved"),
         ),
+        "timing": {
+            "observe_ms": min(
+                max(0, (time.perf_counter_ns() - phase_started) // 1_000_000),
+                86_400_000,
+            ),
+            "source_verification": guard.verification,
+        },
     }
+    if source_provenance is not None:
+        derived_from = {
+            **source_provenance,
+            "extractor": "capcov load-probe (stub)",
+        }
+    else:
+        derived_from = guard.snapshot.provenance(
+            os.path.basename(str(source)), "capcov load-probe (stub)"
+        )
     artifacts.write(
         out_path,
         "observed",
-        artifacts.provenance(
-            os.path.basename(str(source)), tree_hash, "capcov load-probe (stub)", files
-        ),
+        derived_from,
         body,
     )
     return artifacts.read(out_path, "observed")
@@ -169,12 +190,20 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     try:
+        source_snapshot, source_provenance = source_provenance_from_env(source_root)
         observe(
             source_root=source_root,
             out=out,
             nonce=os.environ.get(ENV_NONCE),
             only=os.environ.get(ENV_ONLY),
             target=os.environ.get(ENV_TARGET),
+            source_patterns=(
+                source_snapshot.patterns
+                if source_snapshot is not None
+                else ("**/*.py",)
+            ),
+            source_snapshot=source_snapshot,
+            source_provenance=source_provenance,
         )
     except (ValueError, OSError) as error:
         print(f"capcov load-probe: {error}", file=sys.stderr)

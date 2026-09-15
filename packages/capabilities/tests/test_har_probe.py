@@ -1,6 +1,6 @@
 """The `har` probe: runtime bindings harvested from an existing browser run.
 
-the target system and Leap have no Python test suite to hook, but both already run
+Many targets have no Python test suite to hook, but already run
 Playwright suites that can record a HAR. This probe projects those requests
 onto the static surfaces so a route that a real session reached lands in
 `both` and one nobody reached stays `static_only` -- the split that would have
