@@ -28,12 +28,16 @@ except ImportError:  # unittest discover -s imports this directory as top-level
     from static_rules import go_app
 
 # sha256 of the canonical exported bundle of the golden (facts, evidence,
-# declarations, metadata; no claims, no rules).  It is reproducible across
-# machines because scip_index.project_root is canonicalized (item 3) and the
-# golden carries no host path; a change here is a change of exporter output or
-# of the golden and must be explained in section 29.
-EXPORTED_BUNDLE_DIGEST = "53dcade7ef62635161c9f825fbdee012d2511bdf23e3f7470cdb3b636426decc"
+# declarations, metadata minus the run receipts; no claims, no rules).  It is
+# reproducible across machines because scip_index.project_root is canonicalized
+# (item 3), the golden carries no host path, and the index identity is the
+# static-relations-v1 content digest; a change here is a change of exporter
+# output or of the golden and must be explained in section 29.
+EXPORTED_BUNDLE_DIGEST = "585240159f4abfa9eb96a778abaa1bbba4ab95553f79e7163901f5f91ca1a49d"
 EXPORTED_FACT_COUNT = 210
+# The golden's static-relations-v1 identity (metadata index_digest, every
+# fact's index column, the <index12> of every evidence id).
+GOLDEN_INDEX = "0360df877c99d8259f7f7f24cdca357afa64c4be9b27a739e1e78bb94c564320"
 
 IX = go_app.index_digest()
 EXPECTED_REACHES = {(IX, go_app.GET_JOB, dst) for dst in (
@@ -90,12 +94,19 @@ class GoAppDifferentialTest(unittest.TestCase):
         self.assertEqual(scip_facts.bundle_digest(self.exported.bundle), EXPORTED_BUNDLE_DIGEST)
         meta = dict(self.exported.bundle.metadata)
         self.assertEqual(meta["index_digest"], IX)
-        self.assertEqual(meta["index_digest_kind"], "json")
+        self.assertEqual(IX, GOLDEN_INDEX)
+        self.assertEqual(meta["index_digest_kind"], scip_facts.INDEX_IDENTITY)
+        # the file receipt is carried, reported, and is not the identity
+        self.assertEqual(meta["index_file_digest"], go_app.json_file_digest())
+        self.assertEqual(meta["index_file_digest_kind"], "json")
+        self.assertNotEqual(meta["index_file_digest"], IX)
+        self.assertTrue(any(meta["index_file_digest"] in m and "receipt" in m for m in self.exported.messages))
         self.assertEqual(meta["line_frame"], "1-based")
         # the golden has no project_root (canonicalize.jq drops it); the fact is empty, not a host path
         [[_, _, _, project_root, kind]] = [[t.value for t in f.terms][1:] for f in self.exported.bundle.facts
                                           if f.relation == "scip_index"]
-        self.assertEqual((project_root, kind), ("", "json"))
+        self.assertEqual((project_root, kind), ("", scip_facts.INDEX_IDENTITY))
+        self.assertTrue(all(record.id.split(":")[1] == IX[:12] for record in self.exported.bundle.evidence))
 
     def test_kernels_agree_on_every_relation_and_claim(self) -> None:
         result = self.result_or_fail()
@@ -195,13 +206,16 @@ class GoAppDifferentialTest(unittest.TestCase):
             for key in ("surfaces", "entities", "op_sites"):
                 ast[key] = list(reversed(ast[key]))
             with self.subTest(seed=seed):
-                # canonical JSON of the raw index is order-sensitive, so the
-                # index digest is pinned to the golden's bytes: the permuted
-                # index is exported under the golden's identity.
-                bundle, exported = go_app.go_app_bundle(raw, ast=ast, index=IX)
+                # The permuted raw index is a different JSON document (a
+                # different file receipt); the identity, the evidence ids and
+                # the bundle digest come from the exported relations and agree.
+                bundle, exported = go_app.go_app_bundle(raw, ast=ast, file_digest="f" * 64)
                 self.assertEqual(exported.status, scip_facts.STATUS_COMPLETE, exported.messages)
-                self.assertEqual(digest(bundle), digest(self.bundle))
+                meta = dict(exported.bundle.metadata)
+                self.assertEqual((meta["index_digest"], meta["index_file_digest"]), (IX, "f" * 64))
+                self.assertEqual({r.id for r in exported.bundle.evidence}, {r.id for r in self.exported.bundle.evidence})
                 self.assertEqual(scip_facts.bundle_digest(exported.bundle), EXPORTED_BUNDLE_DIGEST)
+                self.assertEqual(scip_facts.bundle_digest(bundle), scip_facts.bundle_digest(self.bundle))
                 self.assertEqual(run_python(bundle).canonical_digest, result.python.canonical_digest)
 
 

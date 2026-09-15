@@ -61,26 +61,6 @@ def _rows(bundle, relation):
     return sorted([t.value for t in f.terms][1:] for f in bundle.facts if f.relation == relation)
 
 
-def _identity_free(bundle):
-    """The bundle's facts, evidence and metadata with the index identity blanked.
-
-    Evidence ids embed ``row12 = sha256([relation, row])`` and the row carries
-    the index, so ids are re-keyed to the identity-free row they attest and
-    ``depends_on`` is rewritten through the same map (``external:`` ids keep
-    their content part; only the index prefix is blanked).
-    """
-    index = dict(bundle.metadata)["index_digest"]
-    blank = lambda text: text.replace(index, "<ix>").replace(index[:12], "<ix12>")  # noqa: E731
-    facts = sorted(blank(canonical_json(fact)) for fact in bundle.facts)
-    key_of = {record.id: blank(canonical_json(record.atom)) for record in bundle.evidence}
-    evidence = sorted(
-        canonical_json([key_of[record.id], record.source, record.kind,
-                        sorted(key_of.get(dep, blank(dep)) for dep in record.depends_on)])
-        for record in bundle.evidence)
-    metadata = {key: value for key, value in bundle.metadata if key != "index_digest"}
-    return facts, evidence, canonical_json(metadata)
-
-
 @unittest.skipUnless(_HAVE_TOOLS, "needs scip-go, the scip CLI and go on PATH")
 class LiveGoExportTest(unittest.TestCase):
     @classmethod
@@ -101,9 +81,13 @@ class LiveGoExportTest(unittest.TestCase):
     def test_the_transient_index_is_removed_after_hashing(self) -> None:
         self.assertFalse((self.root / runner._INDEX_FILENAME).exists())
         meta = dict(self.result.bundle.metadata)
-        self.assertEqual(meta["index_digest_kind"], "binary")
+        # the hashed bytes are the run receipt; the identity is the exported relations
+        self.assertEqual(meta["index_file_digest_kind"], "binary")
+        self.assertRegex(meta["index_file_digest"], r"^[0-9a-f]{64}$")
+        self.assertEqual(meta["index_digest_kind"], scip_facts.INDEX_IDENTITY)
         self.assertRegex(meta["index_digest"], r"^[0-9a-f]{64}$")
-        self.assertEqual(_rows(self.result.bundle, "scip_index")[0][-1], "binary")
+        self.assertNotEqual(meta["index_digest"], meta["index_file_digest"])
+        self.assertEqual(_rows(self.result.bundle, "scip_index")[0][-1], scip_facts.INDEX_IDENTITY)
 
     def test_relation_row_counts_fixed_by_the_source_tree(self) -> None:
         counts = self.result.counts
@@ -169,25 +153,33 @@ class LiveGoExportTest(unittest.TestCase):
         self.assertEqual(_rows(bundle, "static_reachability_closed"), [[]])
         self.assertEqual(_rows(bundle, "static_scope_leak"), [])
 
-    def test_re_indexing_the_same_copy_reproduces_the_facts_modulo_index_identity(self) -> None:
+    def test_re_indexing_the_same_copy_reproduces_the_identity_ids_and_digest(self) -> None:
         # scip-go's per-document ``symbols`` order is Go map iteration order
         # (EXPERIMENT-PLAN section 28), so two indexings of one and the same
-        # copy may write different ``index.scip`` bytes and therefore carry
-        # different binary index digests.  The identity is per run; the facts,
-        # evidence chains and metadata under that identity must be identical.
+        # copy may write different ``index.scip`` bytes.  The identity is the
+        # static-relations-v1 content digest of the exported rows, so the index,
+        # every evidence id and the bundle digest must be identical regardless;
+        # only the file receipt may differ.
         again = scip_facts.export_from_tree(self.root, "go", ast_raw=_ast_raw())
         self.assertEqual(again.status, scip_facts.STATUS_COMPLETE, again.messages)
         self.assertFalse((self.root / runner._INDEX_FILENAME).exists())
-        first, second = _identity_free(self.result.bundle), _identity_free(again.bundle)
-        self.assertEqual(first, second)
-        if dict(again.bundle.metadata)["index_digest"] == dict(self.result.bundle.metadata)["index_digest"]:
-            self.assertEqual(scip_facts.bundle_digest(again.bundle),
-                             scip_facts.bundle_digest(self.result.bundle))
+        first, second = dict(self.result.bundle.metadata), dict(again.bundle.metadata)
+        self.assertEqual(second["index_digest"], first["index_digest"])
+        self.assertEqual({r.id for r in again.bundle.evidence}, {r.id for r in self.result.bundle.evidence})
+        self.assertEqual(sorted(canonical_json(f) for f in again.bundle.facts),
+                         sorted(canonical_json(f) for f in self.result.bundle.facts))
+        self.assertEqual(sorted(canonical_json(e) for e in again.bundle.evidence),
+                         sorted(canonical_json(e) for e in self.result.bundle.evidence))
+        self.assertEqual(scip_facts.bundle_digest(again.bundle), scip_facts.bundle_digest(self.result.bundle))
+        receipts = {k: v for k, v in second.items() if k in scip_facts.RECEIPT_METADATA_KEYS}
+        self.assertEqual(set(receipts), set(scip_facts.RECEIPT_METADATA_KEYS))
+        self.assertEqual({k: v for k, v in second.items() if k not in receipts},
+                         {k: v for k, v in first.items() if k not in receipts})
 
     def test_project_root_fact_is_host_independent(self) -> None:
         [[_, _, _, project_root, kind]] = [[t.value for t in f.terms][1:] for f in self.result.bundle.facts
                                           if f.relation == "scip_index"]
-        self.assertEqual((project_root, kind), ("file:///go_app", "binary"))
+        self.assertEqual((project_root, kind), ("file:///go_app", scip_facts.INDEX_IDENTITY))
         self.assertTrue(any(str(self.root) in message for message in self.result.messages), self.result.messages)
         self.assertNotIn(str(self.root), canonical_json(self.result.bundle))
 

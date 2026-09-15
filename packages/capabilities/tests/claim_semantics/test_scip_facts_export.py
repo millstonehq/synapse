@@ -9,6 +9,7 @@ has to be reproducible), and the tree-sitter side is a small hand-built
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import random
 import unittest
@@ -89,11 +90,12 @@ class _Exported(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.raw = _raw()
         cls.normalized = runner.normalize_scip_json(cls.raw, retain=True)
-        cls.index = runner.json_index_digest(cls.raw)
+        cls.file_digest = runner.json_index_digest(cls.raw)   # the run receipt
         cls.ast_raw = _ast_raw(cls.normalized)
         cls.result = cls.export()
         assert cls.result.status == scip_facts.STATUS_COMPLETE, cls.result.messages
         cls.bundle = cls.result.bundle
+        cls.index = dict(cls.bundle.metadata)["index_digest"]   # static-relations-v1 identity
 
     @classmethod
     def export(cls, normalized=None, ast_raw=None, **kwargs):
@@ -101,7 +103,8 @@ class _Exported(unittest.TestCase):
             normalized if normalized is not None else cls.normalized,
             ast_raw=ast_raw if ast_raw is not None else cls.ast_raw,
             source_root=GO_TREE, language="go",
-            index_digest=cls.index, index_digest_kind="json", **kwargs,
+            index_digest=kwargs.pop("index_digest", cls.file_digest),
+            index_digest_kind=kwargs.pop("index_digest_kind", "json"), **kwargs,
         )
 
 
@@ -220,7 +223,14 @@ class MetadataTest(_Exported):
     def test_metadata_carries_index_digest_tool_info_and_tree_digest(self) -> None:
         meta = dict(self.bundle.metadata)
         self.assertEqual(meta["index_digest"], self.index)
-        self.assertEqual(meta["index_digest_kind"], "json")
+        self.assertRegex(self.index, r"^[0-9a-f]{64}$")
+        self.assertEqual(meta["index_digest_kind"], scip_facts.INDEX_IDENTITY)
+        # the index file digest is a run receipt: carried and reported, not identity
+        self.assertEqual(meta["index_file_digest"], self.file_digest)
+        self.assertEqual(meta["index_file_digest_kind"], "json")
+        self.assertNotEqual(self.index, self.file_digest)
+        self.assertTrue(any(self.file_digest in m and "receipt" in m for m in self.result.messages))
+        self.assertTrue(any(self.index in m for m in self.result.messages))
         self.assertEqual(meta["export_version"], "v1")
         self.assertEqual(meta["exporter"], "capcov.claims.static.scip_facts")
         self.assertEqual(meta["profile"], "slice")
@@ -246,7 +256,7 @@ class MetadataTest(_Exported):
         self.assertEqual(self.raw["metadata"]["project_root"], "file:///tmp/gonest")
         self.assertEqual(
             _rows(self.bundle, "scip_index"),
-            [["scip-go", "0.2.7", "go", "file:///gonest", "json"]],
+            [["scip-go", "0.2.7", "go", "file:///gonest", scip_facts.INDEX_IDENTITY]],
         )
         self.assertTrue(any("file:///tmp/gonest" in m for m in self.result.messages))
         self.assertEqual(scip_facts.canonical_project_root(None), "")
@@ -290,13 +300,62 @@ class DeterminismTest(_Exported):
             self.assertEqual(result.status, scip_facts.STATUS_COMPLETE, result.messages)
             self.assertEqual(digest(result.bundle), reference, f"seed {seed}")
             self.assertEqual(result.counts, self.result.counts)
-            # a permuted dump is a DIFFERENT JSON document, so its json identity
-            # differs; only the exported bundle is permutation-invariant
-            self.assertNotEqual(runner.json_index_digest(shuffled), self.index)
+            # a permuted dump is a DIFFERENT JSON document, so its file receipt
+            # differs; the exported bundle and its identity are permutation-invariant
+            self.assertNotEqual(runner.json_index_digest(shuffled), self.file_digest)
+            self.assertEqual(dict(result.bundle.metadata)["index_digest"], self.index)
 
     def test_exporting_twice_is_bit_for_bit_identical(self) -> None:
         again = self.export()
         self.assertEqual(canonical_json(again.bundle), canonical_json(self.bundle))
+
+    def test_identity_is_the_exported_relations_not_the_index_file(self) -> None:
+        # Section 29 "Identity and context": the index is the static-relations-v1
+        # content digest, computed after the rows are built and before the ids.
+        # A permuted copy of the same normalized index read from a DIFFERENT
+        # index file (different receipt) has the same index, the same evidence
+        # ids and the same bundle digest.
+        rng = random.Random(3)
+        shuffled = copy.deepcopy(self.raw)
+        rng.shuffle(shuffled["documents"])
+        for doc in shuffled["documents"]:
+            rng.shuffle(doc["occurrences"])
+            rng.shuffle(doc["symbols"])
+        normalized = runner.normalize_scip_json(shuffled, retain=True)
+        other_file = hashlib.sha256(b"another index.scip of the same tree").hexdigest()
+        result = self.export(normalized, _ast_raw(normalized), index_digest=other_file, index_digest_kind="binary")
+        self.assertEqual(result.status, scip_facts.STATUS_COMPLETE, result.messages)
+        meta = dict(result.bundle.metadata)
+        self.assertEqual(meta["index_digest"], self.index)
+        self.assertEqual((meta["index_file_digest"], meta["index_file_digest_kind"]), (other_file, "binary"))
+        self.assertEqual({e.id for e in result.bundle.evidence}, {e.id for e in self.bundle.evidence})
+        self.assertEqual(sorted(canonical_json(f) for f in result.bundle.facts),
+                         sorted(canonical_json(f) for f in self.bundle.facts))
+        self.assertEqual(scip_facts.bundle_digest(result.bundle), scip_facts.bundle_digest(self.bundle))
+        # the receipts are the only difference the plain IR digest sees
+        self.assertNotEqual(digest(result.bundle), digest(self.bundle))
+        stripped = lambda b: {k: v for k, v in b.metadata if k not in scip_facts.RECEIPT_METADATA_KEYS}  # noqa: E731
+        self.assertEqual(stripped(result.bundle), stripped(self.bundle))
+        # the recipe is public and recomputable from the rows
+        rows = {}
+        for fact in self.bundle.facts:
+            decl = next(r for r in self.bundle.relations if r.name == fact.relation)
+            rows.setdefault(fact.relation, []).append(
+                [t.value for t, c in zip(fact.terms, decl.columns) if c.name != "index"])
+        self.assertEqual(scip_facts.static_relations_index(rows, (r.name for r in self.bundle.relations)), self.index)
+        self.assertEqual(self.index, hashlib.sha256((
+            "static-relations-v1:" + canonical_json({
+                "relations": sorted(r.name for r in self.bundle.relations),
+                "rows": {rel: sorted(rs, key=canonical_json) for rel, rs in rows.items()}})
+        ).encode()).hexdigest())
+        # and a different content is a different identity, under the same receipt
+        changed = copy.deepcopy(self.normalized)
+        [doc] = [d for d in changed["documents"] if d["path"] == "api/jobs.go"]
+        doc["occurrences"].append(dict(doc["occurrences"][0], start_line=doc["occurrences"][0]["start_line"] + 60))
+        self.assertNotEqual(dict(self.export(changed).bundle.metadata)["index_digest"], self.index)
+        # the assembly placeholder never leaks into an exported bundle
+        self.assertNotIn(scip_facts._PLACEHOLDER_INDEX[:12] + ":", canonical_json(self.bundle))
+        self.assertNotIn(scip_facts._PLACEHOLDER_INDEX, canonical_json(self.bundle))
 
 
 class SliceProfileTest(_Exported):
@@ -651,9 +710,11 @@ class ImpureEntryTest(unittest.TestCase):
             self.assertFalse(index.exists())
         self.assertEqual(result.status, scip_facts.STATUS_COMPLETE, result.messages)
         meta = dict(result.bundle.metadata)
-        self.assertEqual(meta["index_digest"], runner.index_digest_of_bytes(b"fake-index"))
-        self.assertEqual(meta["index_digest_kind"], "binary")
-        self.assertEqual(_rows(result.bundle, "scip_index")[0][-1], "binary")
+        self.assertEqual(meta["index_file_digest"], runner.index_digest_of_bytes(b"fake-index"))
+        self.assertEqual(meta["index_file_digest_kind"], "binary")
+        self.assertEqual(meta["index_digest_kind"], scip_facts.INDEX_IDENTITY)
+        self.assertNotEqual(meta["index_digest"], meta["index_file_digest"])
+        self.assertEqual(_rows(result.bundle, "scip_index")[0][-1], scip_facts.INDEX_IDENTITY)
         # no tree-sitter side and no census: nothing closes references
         self.assertEqual(_rows(result.bundle, "scip_references_closed"), [])
         self.assertEqual(_rows(result.bundle, "route_site"), [])

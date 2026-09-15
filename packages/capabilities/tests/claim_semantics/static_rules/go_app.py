@@ -73,8 +73,25 @@ def normalized(raw: dict | None = None) -> dict:
     return runner.normalize_scip_json(raw if raw is not None else golden_raw(), retain=True)
 
 
-def index_digest(raw: dict | None = None) -> str:
+def json_file_digest(raw: dict | None = None) -> str:
+    """The golden's file receipt: ``sha256("scip-json:" + canonical_json(raw))``."""
     return runner.json_index_digest(raw if raw is not None else golden_raw())
+
+
+_INDEX: dict[str, str] = {}
+
+
+def index_digest(raw: dict | None = None) -> str:
+    """The ``static-relations-v1`` identity of the exported golden (metadata ``index_digest``).
+
+    It is a content digest of the exported relations, so it is the same for a
+    permuted copy of the golden and independent of the file receipt.
+    """
+    if raw is not None:
+        return dict(export(raw).bundle.metadata)["index_digest"]
+    if "golden" not in _INDEX:
+        _INDEX["golden"] = dict(export().bundle.metadata)["index_digest"]
+    return _INDEX["golden"]
 
 
 def ast_raw() -> dict:
@@ -104,19 +121,19 @@ def ast_raw() -> dict:
     }
 
 
-def export(raw: dict | None = None, *, ast: dict | None = None, index: str | None = None,
+def export(raw: dict | None = None, *, ast: dict | None = None, file_digest: str | None = None,
            describes_runs: Iterable[str] = ()) -> scip_facts.ExportResult:
-    """Export ``raw`` (default: the golden) under ``index`` (default: the golden's json digest).
+    """Export ``raw`` (default: the golden); ``file_digest`` is the run receipt.
 
-    ``index`` is explicit so a permuted copy of the golden can be exported
-    under the golden's identity: the JSON index digest is order-sensitive by
-    construction (it hashes the canonical bytes of the committed file), while
-    the exported facts must not be.
+    The receipt defaults to the raw dict's JSON digest, which is order-sensitive
+    by construction (it hashes the canonical bytes of the committed file). The
+    exported identity and evidence ids do not depend on it: they are the
+    ``static-relations-v1`` content digest of the exported rows.
     """
     raw = raw if raw is not None else golden_raw()
     return scip_facts.export_bundle(
         normalized(raw), ast_raw=ast if ast is not None else ast_raw(), source_root=GO_APP,
-        language=LANGUAGE, index_digest=index if index is not None else index_digest(raw),
+        language=LANGUAGE, index_digest=file_digest if file_digest is not None else json_file_digest(raw),
         index_digest_kind=runner.INDEX_DIGEST_JSON, describes_runs=describes_runs,
     )
 
@@ -223,11 +240,11 @@ def claims_for(index: str, *, runtime: bool) -> tuple[Claim, ...]:
     return tuple(claims)
 
 
-def go_app_bundle(raw: dict | None = None, *, ast: dict | None = None, index: str | None = None,
+def go_app_bundle(raw: dict | None = None, *, ast: dict | None = None, file_digest: str | None = None,
                   runtime: bool = True, hops: bool = True,
                   with_claims: bool = True) -> tuple[Bundle, scip_facts.ExportResult]:
     """Exported golden facts + rule pack + claim-time facts (+ hop cross-check) + claims."""
-    exported = export(raw, ast=ast, index=index, describes_runs=(RUN,) if runtime else ())
+    exported = export(raw, ast=ast, file_digest=file_digest, describes_runs=(RUN,) if runtime else ())
     if exported.status != scip_facts.STATUS_COMPLETE:
         raise AssertionError(f"export failed: {exported.status} {exported.messages}")
     pack = pack_bundle()
