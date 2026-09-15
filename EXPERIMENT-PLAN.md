@@ -4689,3 +4689,33 @@ is a superset (same tools plus hyperfine, souffle, shen-go, the sandboxed checks
 `bash -lc` PATH wrapper) pinned at nixpkgs `34ab9907`, to which every recorded Stage 0 result
 binds. The experiment flake is kept; upstream's `.envrc` (`use flake`) therefore loads it.
 Full regression on the merged tree is recorded below when it completes.
+
+### 2026-09-15 close-out of `datalog-kernel-closure` and integration of the SCIP → Datalog wave
+
+`kernel-closure-finalize` ran three Codex-backed attempts on the merged tree (`8adc197`; driver
+gates green on every attempt — final attempt: differential 44.8 s, kernel 7.5 s, regression
+54.0 s — and both reviewers refused each round). The refusals narrowed to wire-format ambiguity
+at the ingestion boundary: round 1, `metadata` and claim/evidence `context` of the wrong JSON
+type leaked `AttributeError`; round 2, evidence accepting `atom` and `relation`/`terms`
+simultaneously, and the `{"values": …}` context wrapper colliding with a legal context key;
+round 3, freeze checks that discarded the frozen result, and the flattened context encoding
+silently reinterpreting pre-existing schema-v1 bytes. The attempt-3 tree was committed as WIP
+(`941ecc5`) and the two round-3 findings were closed by hand in `8a54a04`: values must already
+be frozen (not merely freezable), and the retired `{"values": [[k, v], …]}` wrapper is rejected
+by name rather than reinterpreted, with a genuine `values` key of any other shape still
+accepted. Full suite on that tree: 896 tests OK under nix. Remaining kernel scope is carried by
+`datalog-certificates` per the section 27 ownership table; no further reset of this task.
+
+The SCIP → Datalog wave was delivered by four subagents in isolated worktrees and merged as
+`1a0ed69`: `scip-toolchain` (`2f3b4d8`; scip 0.9.0 and scip-go 0.2.7 pinned, sandboxed
+`scip-go-index-smoke` check, go_app golden `0b5183fc…`, Soufflé in the regression check),
+`scip-fact-export` (`98e695f`; opt-in retention, pure exporter, index provenance),
+`static-rule-pack` (`e6c1845`; 22 derived relations, 27 rules, 13 reviewed cases, Python and
+Soufflé agree on all 30 claims), and the reducer (`821ae51`, `d21b144`; certificates identical
+across engines for 28 conclusions, fixpoint cross-check with zero differences, wheel packaging,
+`mixed-binding-join` validator fix, canonical `project_root`), followed by `a66bafa`
+(`scip_duplicate_definition` guarded by symbol category: 22 bogus go_app rows → 0) and
+`64ee8bb` (static index identity derived from the exported relations; two independent scip-go
+indexings of the same copy now produce identical index, evidence ids, and bundle digest, with
+the index-file digest kept only as a run receipt). Each deliverable's gates were rerun by the
+integrator before merging. The target-go static pilot (section 30) is in progress on that base.

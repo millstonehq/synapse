@@ -33,7 +33,13 @@ except ImportError:  # unittest discover -s imports this directory as top-level
 # (item 3), the golden carries no host path, and the index identity is the
 # static-relations-v1 content digest; a change here is a change of exporter
 # output or of the golden and must be explained in section 29.
-EXPORTED_BUNDLE_DIGEST = "585240159f4abfa9eb96a778abaa1bbba4ab95553f79e7163901f5f91ca1a49d"
+# Digest of the exported go_app bundle's canonical JSON.  It changed once at the
+# merge of the kernel line (8a54a04): Context is now serialised as a flat object
+# instead of the {"values": [...]} dataclass wrapper, which alters every evidence
+# record's canonical bytes.  The static index identity (GOLDEN_INDEX, derived
+# from the exported relations, not from IR serialisation) did not change, nor did
+# the facts, evidence ids, or closure; the sibling tests assert those directly.
+EXPORTED_BUNDLE_DIGEST = "3f5aef11182c7caf50d7a9bfecc5010e04e0af488c44d353bb580c620dbbbbf5"
 EXPORTED_FACT_COUNT = 210
 # The golden's static-relations-v1 identity (metadata index_digest, every
 # fact's index column, the <index12> of every evidence id).
