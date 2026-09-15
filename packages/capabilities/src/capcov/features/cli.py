@@ -8,6 +8,13 @@
                                                 binary: does coverage roll up whole?
     capcov features coverage  model.json obligations.json [--selected a,b,c]
                                                 numeric: the completeness vector
+    capcov features map       model.json mapping.json capabilities.json
+                              [--coverage coverage.json] --out obligations.json
+                              [--report report.json]
+                                                surfaces -> feature obligations
+    capcov features report    model.json obligations.json [--selected a,b,c]
+                              [--format md|csv] [--out FILE]
+                                                completeness vector as Harvey glyphs
 
 ``check`` and ``rollup`` take comma-separated feature ids. ``rollup`` is the yes/no
 gate view (``model.coverage_rollup``); ``coverage`` is the numeric completeness
@@ -23,7 +30,10 @@ import sys
 from pathlib import Path
 
 from . import coverage as coverage_mod
+from . import mapping as mapping_mod
 from . import model as model_mod
+from . import evidence as evidence_mod
+from . import report as report_mod
 
 
 def _ids(value: str) -> set[str]:
@@ -129,6 +139,38 @@ def main(argv: list[str]) -> int:
         help="comma-separated configuration; omit to assess the mandatory skeleton alone",
     )
 
+    mp = sub.add_parser("map", help="project discovered surfaces onto features")
+    mp.add_argument("model")
+    mp.add_argument("mapping", help="JSON: {version: 1, features: {id: {surfaces: [glob], tags: [tag]}}}")
+    mp.add_argument("capabilities", help="capcov discover artifact (capabilities.json)")
+    mp.add_argument("--coverage", default=None, help="capcov reconcile artifact; without it nothing is covered")
+    mp.add_argument("--out", required=True, help="write the {id: {covered, total}} obligations map here")
+    mp.add_argument("--report", default=None, help="write the full projection (unassigned, contested, assurance) here")
+
+    rp = sub.add_parser("report", help="the completeness vector as a Markdown or CSV table with Harvey glyphs")
+    rp.add_argument("model")
+    rp.add_argument("obligations")
+    rp.add_argument(
+        "--selected",
+        default=None,
+        help="comma-separated configuration; omit to assess the mandatory skeleton alone",
+    )
+    rp.add_argument("--format", default="md", choices=["md", "csv"])
+    rp.add_argument("--out", default=None)
+    rec = sub.add_parser("reconcile", help="derive feature coverage from native outcome evidence")
+    rec.add_argument("model")
+    rec.add_argument("--outcomes-map", required=True)
+    rec.add_argument("--inventory", required=True)
+    rec.add_argument("--run")
+    rec.add_argument("--target", default=".")
+    rec.add_argument("--selected", required=True)
+    rec.add_argument("--out", required=True)
+    rec.add_argument("--report-features", help="comma-separated non-overlapping selected frontier")
+    rec.add_argument("--flow-model")
+    rec.add_argument("--flow-plan")
+    rec.add_argument("--flow-inventory")
+    rec.add_argument("--flow-run")
+
     args = parser.parse_args(argv)
     try:
         if args.command == "example":
@@ -141,6 +183,23 @@ def main(argv: list[str]) -> int:
             return 0
 
         model = json.loads(Path(args.model).read_text())
+
+        if args.command == "reconcile":
+            flow_paths = [args.flow_model, args.flow_plan, args.flow_inventory, args.flow_run]
+            if any(flow_paths) and not all(flow_paths):
+                raise ValueError("flow evidence requires model, plan, inventory, and run together")
+            if not args.run and not all(flow_paths):
+                raise ValueError("provide a native pytest run, a raw flow chain, or both")
+            load = lambda path: json.loads(Path(path).read_text())
+            result = evidence_mod.reconcile(
+                model, load(args.outcomes_map), load(args.inventory), load(args.run) if args.run else None,
+                Path(args.target).resolve(), _ids(args.selected),
+                flow_inputs=tuple(load(p) for p in flow_paths) if all(flow_paths) else None,
+                report_features=_ids(args.report_features) if args.report_features else None,
+            )
+            Path(args.out).write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+            print(f"capcov features: complete={result['complete']}; wrote {args.out}")
+            return 0 if result["complete"] else 1
 
         if args.command == "validate":
             model_mod.validate(model)
@@ -163,6 +222,37 @@ def main(argv: list[str]) -> int:
             selected = None if args.selected is None else _ids(args.selected)
             result = coverage_mod.rollup(model, obligations, selected)
             _print_vector(result)
+            return 0
+
+        if args.command == "report":
+            obligations = json.loads(Path(args.obligations).read_text())
+            selected = None if args.selected is None else _ids(args.selected)
+            text = report_mod.render(coverage_mod.rollup(model, obligations, selected), fmt=args.format)
+            if args.out:
+                Path(args.out).write_text(text)
+                print(f"capcov features: wrote {args.out}")
+            else:
+                sys.stdout.write(text)
+            return 0
+
+        if args.command == "map":
+            mapping = json.loads(Path(args.mapping).read_text())
+            capabilities = json.loads(Path(args.capabilities).read_text())
+            coverage = None if args.coverage is None else json.loads(Path(args.coverage).read_text())
+            result = mapping_mod.project(model, mapping, capabilities, coverage)
+            Path(args.out).write_text(json.dumps(result["obligations"], indent=2, sort_keys=True) + "\n")
+            if args.report:
+                Path(args.report).write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+            print(
+                "capcov features map: "
+                f"{result['surfaces_total']} surfaces, {result['assigned']} assigned to "
+                f"{len(result['obligations'])} features, {len(result['unassigned'])} unassigned, "
+                f"{len(result['contested'])} contested; assurance {result['assurance']}, "
+                f"{result['exercised']} exercised; "
+                f"{len(result['unmapped_features'])} unmapped features, "
+                f"{len(result['empty_rules'])} empty rules; "
+                f"discovery excluded {result['excluded_surfaces']}, unresolved {result['unresolved']}"
+            )
             return 0
 
         result = model_mod.coverage_rollup(model, _ids(args.select), _ids(args.covered))

@@ -205,7 +205,9 @@ combined inventory.
 
 The same source read at more than one mount point is namespaced with distinct
 `id_prefix` values, which keeps each mount's surface and branch IDs separate;
-overlapping declarations of the same ID remain an error. An optional `methods`
+overlapping declarations of the same ID remain an error. A `mount` composes a
+router prefix into every path of an entry (one entry per mounted router), so the
+surface id is the path the runtime serves rather than the literal in the file. An optional `methods`
 allowlist records a matched, route-shaped candidate whose verb is outside the set
 under `excluded_surfaces` -- the query saw it and the verb filter dropped it, so
 the narrowed denominator stays legible instead of implied by absence. This is a
@@ -239,7 +241,10 @@ explicit gap. It also retains boundaries for runtime/omitted routes, business
 outcomes, authorization/configurations, schema/reference behavior, server bindings,
 and callbacks/webhooks/extensions. Descriptions, examples, operation IDs and server
 values are not copied into reports. Duplicate JSON members, unsupported versions,
-invalid path/operation shapes and equivalent templated paths fail discovery.
+and invalid path/operation shapes fail discovery. Equivalent templated paths
+(`/{id}` beside `/{optionId}`) do not: every operation is still inventoried and
+the collision is recorded as a `path-shape-collision` boundary carrying both paths,
+since the document does not say which serves a concrete path.
 The supported method and Path Item rules come from the
 [OpenAPI 3.1 specification](https://spec.openapis.org/oas/v3.1.0.html#path-item-object).
 
@@ -321,6 +326,22 @@ SQLite coverage or solve query/receiver analysis.
 
 ## Development and releases
 
+At the repository root, `direnv allow` enters the pinned `flake.nix` shell. It
+provides Python, uv, Go, jq, and git; uv still resolves capcov itself from the
+checked-in lockfile. To exercise capcov against a real non-Python process, run:
+
+```sh
+nix develop --command sh -c \
+  'cd packages/capabilities && uv run --frozen --extra treesitter sh scripts/check-real-go-flow.sh'
+```
+
+That check uses tree-sitter to discover two routes in a Go HTTP server, plans a
+save followed by its prerequisite-bound read, executes each scenario against a
+fresh server process, reconciles the observations, and gates the result. It then
+changes the server to acknowledge without retaining the write and requires the
+gate to name `required-flow-failed: read-saved-note`. The example exemptions
+record the static-analysis boundaries outside this bounded claim.
+
 The existing Synapse CI workflow tests this package, builds its wheel and source
 distribution, and verifies installation from the wheel. No npm workspace wrapper
 or Node installation is required to use the engine. Package versions are
@@ -348,6 +369,31 @@ The engine is distributed under the repository's MIT license, included in both
 Python distribution formats.
 
 ## Scoped outcome coverage with pytest
+
+### Test capcov's own advancement gate
+
+From `packages/capabilities`, run:
+
+```sh
+uv run --frozen --with pytest sh scripts/check-backpressure.sh
+```
+
+The checked-in `capcov.toml` and `capcov.outcomes.json` bind a small set of capcov's
+own acceptance behaviors to exact tests. The script discovers the actual source
+and runs `outcomes check` in disposable copies. Its host creates an `advanced`
+marker only on exit zero. It verifies three executions: a passing baseline, an
+omitted required check, and a source mutant that suppresses required browser-flow
+failures. The negative cases must return 1 and name the intended missing/failed
+outcome; an unrelated error is not a successful fault control. The script verifies
+cleanup and fails if any expectation is unmet. The existing package CI job runs
+this same command before building release artifacts.
+
+This establishes local host enforcement for these capcov obligations. It does not
+qualify every capcov feature, prove resistance to an agent rewriting its protected
+tests/host, or measure autonomous repair/convergence. Ordinary runs retain no JSON
+receipts in the repository; CI retains the terminal command output.
+
+### Bind consumer outcomes
 
 Use `capcov outcomes` to keep business outcomes separate from entity reachability.
 The consumer owns a JSON map of stable capability/outcome IDs to **exact pytest
@@ -387,6 +433,31 @@ product decisions. There are no exemptions which turn such outcomes into passes.
 
 Run from the consumer project:
 
+For an advancement gate, use the single fresh execution-and-check command:
+
+```sh
+capcov outcomes check capcov.outcomes.json --inventory .capcov/inventory.json \
+  --python .venv/bin/python --timeout 180 --out .capcov/outcomes-run.json
+```
+
+First generate the inventory with `capcov discover` as below. `check` always runs
+the union of mapped test IDs, accepts no selection arguments, and returns zero
+only when **every authored outcome is demonstrated** with a clean session. Missing
+bindings, skips, unresolved outcomes, failures, and timeouts prevent acceptance.
+Even an inherited pytest filter that runs a passing subset cannot discharge the
+missing cases. The output is the usual run receipt, suitable for `coverage`.
+Invalid/stale inputs return 2; valid but unqualified execution returns 1.
+
+Have the existing CI/agent host advance only on exit zero. A host that ignores the
+exit code is not enforcing this gate. Keep the accepted map, checker, dependencies,
+and invocation under the host's existing trusted revision/review controls; a
+candidate that can rewrite those controls can bypass them. This command prevents
+accidental old-receipt reuse by executing afresh; it does not sandbox hostile tests
+or authenticate their external observations. It has one bounded execution, not
+an autonomous retry loop. The caller must bound any retries across invocations.
+
+For diagnostic selection or separate report generation, the existing commands remain:
+
 ```sh
 capcov discover --target . --out .capcov/inventory.json
 capcov outcomes run capcov.outcomes.json --inventory .capcov/inventory.json \
@@ -403,6 +474,21 @@ and gate after that failure. `run` returns 1 for unsuccessful/incomplete executi
 1 unless all scoped outcomes are demonstrated and the session is clean. Invalid
 or stale evidence returns 2. Commands after `--` on `run` are pytest selections or
 options; otherwise it runs the union of mapped node IDs.
+
+`run` success is execution success, not acceptance: a passing selection can still
+leave required outcomes missing. Use `check`, or explicitly invoke `gate` after
+`run`, before advancing. Printed success messages from tests do not override the
+pytest setup/call/teardown results collected by the probe.
+
+The browser path now also preserves required scenario failures through
+`observe --probe browser` → `reconcile` → `gate`. A passing scenario on a shared
+route cannot hide a failed/missing scenario. Structural exemptions cannot waive
+these failures. Duplicate scenario IDs and nonzero runner exits are rejected;
+empty, blocked, assertionless, diagnostic, and `--only` executions cannot qualify
+the full plan. Author a separate bounded model to qualify a smaller capability.
+Older browser observation files without required-flow results must be regenerated.
+Browser runners remain trusted assertion observers; this is not proof that an
+arbitrary runner truthfully reports SQL, SMTP, or browser effects.
 
 The report distinguishes `demonstrated`, `failed`, `missing`, `unresolved`, and
 `inconclusive`. It is complete only **within the authored scope and environment**;

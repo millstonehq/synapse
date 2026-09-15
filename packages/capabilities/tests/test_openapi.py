@@ -76,8 +76,7 @@ class OpenAPIInventoryTests(unittest.TestCase):
             with self.subTest(document=document), self.assertRaises(ValueError):
                 derive(json.dumps(document), "api.json")
         for paths in [{"items": {}}, {"/items?q=1": {}}, {"/items": []},
-                      {"/items": {"GET": {}}}, {"/items": {"get": None}},
-                      {"/items/{id}": {}, "/items/{name}": {}}]:
+                      {"/items": {"GET": {}}}, {"/items": {"get": None}}]:
             with self.subTest(paths=paths), self.assertRaises(ValueError):
                 self.inventory(paths)
         with self.assertRaisesRegex(ValueError, "duplicate JSON member"):
