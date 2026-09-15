@@ -105,10 +105,36 @@ core. Declare them exactly like a consumer-local plugin:
     name = "laravel-routes"
     plugin = "capcov_contrib.laravel_routes:discover"
     globs = ["routes/**/*.php", "app/**/Routes/**/*.php"]   # default
+    mounts = [
+      { glob = "routes/api.php", prefix = "/api" },
+    ]
 
 `laravel_routes` composes nested `Route::group` / `Route::prefix()->group()`
-prefixes into each route's path, reads `[C::class, 'm']`, `'C@m'`,
-`['uses' => 'C@m']` and closures, expands `resource`/`apiResource` (honouring
-`only`/`except`), and names what it cannot read: `dynamic-route`,
-`dynamic-prefix`, `no-surfaces` unresolved entries and duplicate declarations
-under `excluded_surfaces`. Requires the `treesitter` extra.
+prefixes (array and fluent forms, including a fluent verb such as
+`Route::middleware(...)->prefix(...)->get(...)`) into each route's path, reads
+`[C::class, 'm']`, `'C@m'`, `['uses' => 'C@m']`, an invokable `C::class`
+(`C@__invoke`) and closures, expands `resource`/`apiResource` (honouring
+`only`/`except` in array or variadic form), and names what it cannot read:
+`dynamic-route`, `dynamic-prefix`, `no-surfaces` unresolved entries and
+duplicate declarations under `excluded_surfaces`. Requires the `treesitter`
+extra.
+
+**Mounts.** The outermost prefix is usually declared OUTSIDE the route file. Stock
+Laravel mounts `routes/api.php` under `/api` (`RouteServiceProvider` up to
+Laravel 10; `apiPrefix` in `bootstrap/app.php` from Laravel 11), and a versioned
+API typically mounts each directory under `/api/<version>` from a provider. The
+reader cannot see those, so declare them in `mounts`: for each file, the FIRST
+matching mount's `prefix` (which must start with `/`) seeds the path; a file
+matching no mount starts from `""`. Without mounts, two versions declaring the
+same relative path collide and the second is reported as a duplicate.
+
+**Not read** (each is named, never guessed): `Route::view`, `Route::redirect`
+and `Route::fallback` declarations; a verb or `group` call on a receiver other
+than the `Route` facade (`$router->get(...)`) -- a `dynamic-route` entry naming
+the receiver, its body not walked; a group whose body is a file include
+(`Route::group([...], base_path('routes/x.php'))`) -- a `dynamic-prefix` entry,
+the included file is read without that prefix only if a glob covers it; a
+nested resource name (`photos.comments`) -- a `dynamic-route` entry. The
+resource route parameter (`{photo}`) is a singularisation heuristic (`ies` ->
+`y`, `es` stripped only after `ss`/`us`/`x`/`ch`/`sh`, else one `s`; `movies` ->
+`movy` is a known miss) and `->parameters([...])` is not read.
