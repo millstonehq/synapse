@@ -95,11 +95,27 @@ The Go milestone may stop honestly when `CAPCOV_GO_FIXTURE_ROOT` is absent. Synt
 Python notification behavior cannot satisfy it.
 
 The active manifest is Datalog-first: semantic contract, adversarial corpus,
-parallel Python-reference and real Souffle kernels, differential shrinking,
-certificates, fresh target-go qualification, and bounded Datalog evaluation. The
-older Shen/specialization chain remains represented only for journal aliasing.
+parallel Python-reference and real Souffle kernels, differential shrinking with
+kernel provenance repair, a pinned SCIP toolchain, the SCIP-facts-to-Datalog
+wave (parallel exporter and rule-pack workers reduced by a static differential),
+certificates, an target-go static path pilot, fresh target-go qualification, and bounded
+Datalog evaluation (EXPERIMENT-PLAN.md sections 27-30). The older
+Shen/specialization chain remains represented only for journal aliasing.
 Legacy tasks are disabled and cannot run or satisfy the independent
 Python-plus-Souffle evidence gate.
+
+Gates that depend on an external binary (`souffle`, `scip`, `scip-go`) are
+fail-closed: they require the tool to resolve under `/nix/store` and reject a
+test run whose output contains `skipped`. Locally the same test modules skip
+when the tool is absent so `unittest discover -s tests` stays honest outside
+`nix develop`; a skip is never accepted as gate evidence.
+
+Tasks that were delivered manually from `codex/*` worktrees before the driver
+ran them are recorded in `events.jsonl` as `task-completed` events carrying
+`manual: true` and `integrated_from` revisions, with `checkpoint` set to the
+manifest realignment commit. That backfill is a human decision recorded in
+EXPERIMENT-PLAN.md section 26; the driver treats it exactly like its own
+checkpoints and will not re-run those tasks.
 
 ## Trust and safety
 

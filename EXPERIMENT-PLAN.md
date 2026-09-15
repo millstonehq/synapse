@@ -1408,3 +1408,357 @@ crashes and moved its own Gate 4 to `shen-sbcl`; therefore the pinned `shen-go` 
 accepted only for the observed Stage 0 smoke, not presumed safe for Stage D. Before Stage D,
 run a bounded representative stress probe and either retain it with evidence or revise the
 pinned runtime. This is an explicit unresolved toolchain risk, not a passed semantic gate.
+
+### 2026-09-14 manifest realignment and SCIP → Datalog waves
+
+The driver journal (`.capcov/pi-workflow/events.jsonl`) shows that only the legacy
+`toolchain` task ever completed through the driver (checkpoint `6ba124e1`). Every Datalog
+deliverable on this branch — the semantic contract, the adversarial corpus, the Python and
+Soufflé kernels, the evidence-policy programs, and the diagnostic output templates — landed
+manually from `codex/*` worktrees and was integrated by hand. The manifest's datalog gates
+and write sets referenced files that were never created (`claims/python/**`,
+`experiments/claim-semantics/souffle/**`, `test_evaluator_python*`, `test_differential*`,
+`test_certificate*`), and Python 3.12's `unittest discover` exits 5 when a pattern matches
+nothing, so those gates would have failed loudly had the driver reached them.
+
+Realignment (this commit, human-owned; `.pi/workflows/**` is outside every task write set):
+
+- Delivered tasks now point at delivered files: `semantic-contract` → `tests/test_claim_ir*.py`
+  + `test_claim_contract_review*.py`; `datalog-corpus` → `test_corpus*.py` + `test_expected_semantics*.py`;
+  `python-reference` → `claims/evaluator.py` and its two test modules; `souffle-kernel` →
+  `claims/souffle.py` and its two test modules, with a fail-closed gate (Soufflé under
+  `/nix/store`, `skipped` output rejected).
+- `datalog-differential` is repurposed as the kernel provenance repair plus differential
+  harness (section 27). `datalog-certificates` now depends on `scip-datalog-differential`.
+- New waves in order: `scip-toolchain` (section 28), `scip-datalog` with parallel
+  `scip-fact-export` and `static-rule-pack` reduced by `scip-datalog-differential` (section 29),
+  and `scip-target-go-pilot` before `datalog-target-go` (section 30). Phantom `experiments/**` globs were
+  removed from later tasks; the `static-rule-pack` worker reintroduces that directory deliberately.
+- `test-capcov-experiment.mjs`, `datalog-runtime-harness.mjs`, and `test-capcov-runtime.mjs`
+  assert the new ordering, delivered artifact paths, `differential-mismatch` classification of
+  the static differential, and that every external-binary gate rejects `skipped`.
+
+Journal backfill (human decision): `datalog-corpus`, `python-reference`, and `souffle-kernel`
+receive `task-completed` events with `manual: true`, `checkpoint` = this realignment commit,
+and `integrated_from` naming the codex worktree revisions (`codex/datalog-corpus@98dfbe7`,
+`codex/datalog-python-kernel@3b36b62`, `codex/datalog-souffle-kernel@ae95676`,
+`codex/datalog-semantic-contract@9a535f6`, `codex/datalog-evidence-policy@d385a81`,
+`codex/datalog-diagnostic-templates@83af766`), plus a `wave-checkpoint` for `datalog-corpus`.
+`semantic-contract` is already satisfied through the `toolchain` alias. These events record
+integration, not review: the two-skeptic review those tasks would have received is deferred to
+the `datalog-differential` reducer, whose acceptance covers the same code. Nothing in this
+subsection is evidence that the kernels are correct.
+
+Known defects carried into section 27 (verified on `026cdfb`): evaluator proof leaves are
+synthesized `fact:<relation>:<row>` ids and never the bundle's `Evidence.id`; `expected.json`
+support leaves have never been checked against evaluator output; the Soufflé `_claim_result`
+hard-wires refutation to false and treats an empty universal domain as complete; the Soufflé
+binary is resolved by bare name with no guard, so both Soufflé test modules error rather than
+skip outside `nix develop` and inside the python-only `capability-regression` check.
+
+## 27. Kernel provenance repair and differential closure
+
+Owner: `datalog-differential` (reducer, wave `datalog-kernels`). Write set: `claims/**`,
+`packages/capabilities/tests/**`, this document.
+
+Required changes:
+
+1. `claims/evaluator.py` `_Engine.seed`: index `bundle.evidence` by `(relation, ground row)`
+   and add one fact `Derivation(kind="fact", leaf_id=<evidence id>)` per matching evidence
+   record (alternative leaves, so revoking one producer's record leaves the other path intact
+   and `Derivation.signature()` distinguishes them). Facts with no evidence keep the legacy
+   `fact:<relation>:<row>` id and are counted in `resources["unattributed_facts"]`. Remove the
+   dead `getattr(fact, "evidence_id", ...)` probe.
+2. `_match_body`: children are one canonical proof per body atom (proof lists are already
+   `sort(key=repr)`), with an `alternatives` count recorded on the derivation; add
+   `ResourceLimits.max_alternatives_per_row` so recursive closure over a service graph cannot
+   exhaust `max_provenance`. Today `leaves` is the union over every alternative path, which
+   would make a closure witness "every edge on every path".
+3. `claims/souffle.py`: `_claim_result` mirrors `evaluator.evaluate_claim` — support and
+   refutation by relation polarity, `verdict(support, refutation)`, `missing_premises`
+   when no row matches, empty `forall` domain → `unresolved`/`inconsistent-premises`/
+   `bounded-history-model`, per-instance `forall` binding by column name. `run_bundle` probes
+   `shutil.which(executable)` and raises `SouffleUnavailable`; an optional `outputs` subset
+   stops a large static bundle echoing every input relation (the row cap counts inputs).
+4. `claims/validation.py`: `mixed-binding-join` (a body with both `binding=static` and
+   `binding=runtime` positive atoms needs a compatibility atom whose targets include one of
+   each and whose payload carries the static `index` and runtime `run` terms),
+   `static-context` (static observation/completeness relations carry `index` unless
+   explicitly context-free like `source_tree_observed`), `evidence-without-fact`.
+5. `claims/differential.py`: `KernelReport`, `run_python`, `run_souffle` (maps
+   `OverflowError`/`TimeoutError` → `resource-exhausted`, `SouffleUnavailable` → a named
+   operational failure, never a crash), `compare` over every relation including primitives
+   and every claim. `claims/shrinker.py`: bounded ddmin over facts plus matching evidence,
+   `max_steps=200`, replay bundle written under `.capcov/differential/<bundle_digest>.json`.
+6. `claims/static/schema_static_v1.json`: the frozen primitive static relation declarations
+   from section 29, so the `scip-datalog` parallel workers consume identical names.
+7. Tests: `tests/claim_semantics/test_differential_kernels.py` (all 14 corpus fixtures agree,
+   shuffled facts give identical digests), `test_shrinker_bundle.py` (an injected
+   comparison-side defect localizes to at most three facts), `test_provenance_leaves.py`
+   (evaluator support/refutation leaves equal `expected.json` and are all `Evidence.id`s),
+   and the Soufflé modules gain `skipUnless(shutil.which("souffle"))` plus one unguarded test
+   that patches `which` to `None` and asserts `SouffleUnavailable`; a negative-polarity claim
+   yields `refuted`; an empty `forall` domain yields `inconsistent-premises`.
+
+Checkpoint record must include: commit, gate commands and exit codes, Soufflé version and
+store path, per-fixture differential result, and which corpus fixtures (if any) changed leaf
+sets under the AND-structured children change and why that is correct.
+
+## 28. Stage 0 addendum — SCIP toolchain
+
+Owner: `scip-toolchain` (single-task wave). Write set: `flake.nix`, `flake.lock`,
+`tests/scip/**`, `packages/capabilities/tests/fixtures/scip_go_app_index.json`, this document.
+
+- Add `scip` and `scip-go` to the devShell `toolPackages` (pinned nixpkgs
+  `34ab99075ac4f7e40cf037eef32cb1c360bb85e9` provides `scip` 0.9.0, `scip-go` 0.2.7,
+  `souffle` 2.5; it does not provide `scip-python`, which is out of scope). Add `pkgs.souffle`
+  and `LC_ALL=C` to the `capability-regression` check so the Soufflé kernel tests run there.
+- New check `scip-go-index-smoke`: copy `tests/fixtures/go_app` (its `go.mod` has no
+  `require`, so the sandbox needs no network), set `HOME`, `GOCACHE`, `GOPATH` under
+  `$TMPDIR`, `GOFLAGS=-mod=mod GOPROXY=off GOTOOLCHAIN=local LC_ALL=C`, run
+  `scip-go --output index.scip`, `scip print --json`, canonicalize with
+  `tests/scip/canonicalize.jq` (drop `metadata.project_root`; sort documents by
+  `relative_path`, occurrences by range and symbol, symbols by symbol), and `diff -u` against
+  the committed golden; record `scip --version` and `sha256(index.scip)` in `$out`.
+- `tests/fixtures/scip_go_nested_symbols.json` indexes module `github.com/example/gonest`,
+  not go_app (`github.com/example/jobsvc`). The golden `scip_go_app_index.json` is a new
+  deliverable produced once under `nix develop` with the same jq script.
+- Re-record Stage 0 evidence here: versions and `/nix/store` paths for `scip`, `scip-go`,
+  `souffle`, `go`, `python`; devShell closure size before and after; the smoke derivation
+  path and index sha256; host and Nix version; `flake.lock` sha (expected unchanged,
+  `d078f9fb…`, which proves nothing about the closure — the store paths and closure size are
+  the evidence). If scip-go output differs across darwin and Linux after canonicalization,
+  change the assertion to sorted symbol set plus per-document occurrence counts and record
+  the nondeterminism explicitly.
+
+## 29. SCIP → Datalog: static observations as claim evidence
+
+Owner: wave `scip-datalog` (`scip-fact-export` and `static-rule-pack` in parallel,
+`scip-datalog-differential` reducer). Hypothesis: SCIP gives Soufflé and the Python kernel a
+large, naturally relational source of real program facts, and the existing evidence
+discipline (typed relations, bounded provenance, completeness witnesses, digests) can be
+preserved for static observations. Falsifier: the two kernels disagree on closure and the
+shrinker cannot localize it; or static facts cannot be joined to runtime evidence without
+weakening context checks; or completeness claims cannot be stated without lying witnesses.
+
+SCIP stays a producer of static observations, never an oracle: a SCIP path cannot prove a
+runtime effect occurred, and a missing SCIP edge may mean incomplete indexer support rather
+than absence. Completeness claims therefore require indexer and language coverage witnesses.
+
+### Identity and context
+
+Every static relation carries exactly one context column `index` (type `digest`,
+`context: true`), whose value is the SCIP index digest: `sha256` of the `index.scip` bytes
+(`digest_kind = binary`) or `sha256("scip-json:" + canonical_json(raw))` for a checked-in JSON
+fixture (`digest_kind = json`). Tree-sitter-side facts (routes, op sites, blind spots) are
+keyed by the same `index`: the exporter binds one tree walk to one index and refuses to export
+unless the language-scoped tree digest matches (`artifacts.tree_sha256` gains per-language
+patterns; today Go and PHP trees hash as empty). Under `validation.py` this means cross-index
+joins need `scip_index_comparable`, negation of any static relation needs a completeness
+relation with `context_indices == ("index",)`, and static/runtime joins need
+`index_describes_run(index, run)` via the new `mixed-binding-join` check.
+
+### Primitive relations (frozen in `claims/static/schema_static_v1.json`)
+
+All `modality=observation`, `binding=static`, `primitive=true`, `context_indices=["index"]`
+unless noted. Types: S symbol, U unsigned, B boolean, D digest, J json.
+
+- Identity: `scip_index(index, indexer:S, indexer_version:S, language:S, project_root:S,
+  digest_kind:S)` finite, nonempty; `scip_index_tree(index, tree_digest:D, file_count:U,
+  pattern:S)`; `scip_index_commit(index, commit:S)` optional; `static_scope(index,
+  scope_kind:S ∈ {all, package_prefix, document_set}, scope_value:S)`;
+  `static_language_covered(index, language:S)`.
+- Documents and symbols: `scip_document(index, path, language, occurrence_count:U,
+  symbol_count:U, enclosing_synthesized:B)`; `static_source_file(index, path, language)` (what
+  should have been indexed); `scip_symbol(index, symbol, kind, category, display_name)`;
+  `scip_symbol_node(index, symbol, node)`; `scip_symbol_unrooted(index, symbol, reason ∈ {local,
+  unknown-scheme, non-node-descriptor, no-package})`; `scip_relationship(index, symbol, related,
+  kind)` when the indexer supplies relationships (scip-go 0.2.7 emits none on the fixtures).
+- Occurrence-derived (raw occurrences are not exported in the slice profile; they are referenced
+  by `external:scip-occurrence:<index12>:<occ12>` evidence ids): `scip_definition_site(index,
+  path, line:U, symbol)`; decoded role relations `scip_generated_site`, `scip_test_site`,
+  `scip_import_site`, `scip_write_site`, `scip_read_site` (same columns);
+  `scip_enclosing(index, symbol, path, start_line, end_line, synthesized:B)`;
+  `static_site_owner(index, path, line, symbol)` (innermost enclosing definition for every
+  route, op, and call site; new `map.site_owners`); `scip_may_reference(index, caller, callee,
+  path, line, occurrence:D, caller_synthesized:B)` from `map.call_edges`, rooted edges only;
+  `scip_module_scope_reference(index, callee, path, line, occurrence)` for `caller is None`;
+  `scip_type_reference(index, referrer, type_symbol, path, line, occurrence)` (new
+  `map.type_references`; constructor calls live here, not in the call graph).
+- Tree-sitter and recognizer side: `route_site(index, surface, path, line, handler_name)`;
+  `route_handler_location(index, surface, path, line)` (from `_node_locations`, the deep
+  binding of record); `route_site_excluded(index, surface, reason)`; `static_op_site(index,
+  path, line, verb, entity)`; `static_entity(index, entity, path, line, table)`;
+  `static_blind_spot(index, path, line, kind, reason)`; `scip_unresolved_site(index, path,
+  line, callee_text, kind)` from `resolve._residue`; `static_unresolved(index, kind, node,
+  path, line)`; consumer-supplied `changed_symbol(index, symbol, change_kind)`; assumption
+  `authz_symbol__accepted(index, symbol)`.
+- Claim-time: `source_tree_observed(tree_digest:D)` (static, no context);
+  `run_built_from_commit(run, commit)` (runtime, context `run`).
+- Completeness (`modality=completeness`, context `index`): `scip_documents_closed(index)`
+  completes `scip_document_path`; `scip_definitions_closed(index, path)` completes the
+  projection `scip_definition_site_at`; `scip_references_closed(index, path)` completes
+  `scip_may_reference` (emitted only when the document is in scope, has occurrences, has no
+  synthesized spans, no residue or blind spots, and no duplicate definitions);
+  `static_route_inventory_closed(index)`; `static_scope_closed(index)` (withheld, with
+  `static_scope_leak(index, symbol, defined_in)` rows, when an in-slice edge lands on
+  first-party code outside the slice); `static_reachability_closed(index)` completes
+  `static_reaches`. Emission conditions are the exporter's audited contract: each witness's
+  `Evidence.source` names the predicate version.
+- Compatibility: `scip_index_comparable(index_a, index_b, basis)`;
+  `index_describes_run(index, run)`.
+
+Evidence ids are `scip:<index12>:<relation>:<row12>` (tree-sitter side `static:`), with
+`row12 = sha256(canonical_json([relation, row]))[:12]`. `Evidence.source` is the producer
+string (`scip-go 0.2.7`, `scip 0.9.0 print --json`, `treesitter-routes go`,
+`capcov.claims.static.scip_facts v1`). `depends_on` chains: an edge depends on its document,
+its reference occurrence, and the caller-definition occurrence; sites depend on the tree
+identity; witnesses depend on their document and the tree identity; `scip_index_commit`
+depends on `external:git-commit:<sha>`. Bundle metadata records export version, index digest,
+scope, producer versions, and profile (`slice` or `full`).
+
+### Runner retention (opt-in, backward compatible)
+
+`normalize_scip_json(doc, *, retain=False)` and `read_scip_index(path, *, retain=False)`
+keep their default output byte-identical (a runner test asserts exact dict equality). With
+`retain=True` they add top-level `metadata` (tool name, version, arguments, project root,
+encoding), `external_symbols`; per document `language` and `enclosing_synthesized`; per
+occurrence the raw `symbol_roles`, decoded `roles`, end position, and a synthesized-span flag;
+per symbol `relationships` and `kind_number`. `read_scip_index` returns `index_digest` and
+`index_digest_kind`; the exporter's impure entry keeps `index.scip` long enough to hash it.
+`_Normalizer.explain(symbol)` returns the node or a reason instead of a silent `None`.
+
+### Rule pack (`experiments/claim-semantics/static/rules-static-v1.json`, raw IR JSON)
+
+Derived relations (`primitive=false`, context `index`): `static_edge`, `static_root`,
+`static_reaches` (recursive, positive), `static_reaches_eq`, `static_route_handler`,
+`static_route_declared_surface` (finite, nonempty; the `forall` domain), `static_op_owner`,
+`static_path_to_storage`, `static_capability_op`, `static_capability` (claim),
+`static_index_current`, `scip_index_stale`, `static_file_unindexed`,
+`scip_duplicate_definition`, `change_reaches` (recursive), `affected_capability` (claim),
+`runtime_route_without_static` (negative claim, context tenant/surface/run/index),
+`static_route_authorized` (claim), `static_route_authorization_gap`,
+`static_route_authorized_closed` (derived completeness).
+
+```text
+static_index_current(IX) :- scip_index_tree(IX,T,_n,_p), source_tree_observed(T).
+scip_index_stale(IX,T,O)  :- scip_index_tree(IX,T,_n,_p), source_tree_observed(O), T != O.
+static_edge(IX,S,D)       :- scip_may_reference(IX,S,D,_p,_l,_o,_s).
+static_root(IX,H)         :- static_route_handler(IX,_s,H).
+static_reaches(IX,R,D)    :- static_root(IX,R), static_edge(IX,R,D).
+static_reaches(IX,R,D)    :- static_reaches(IX,R,M), static_edge(IX,M,D).
+static_route_handler(IX,S,Sym) :- route_handler_location(IX,S,F,L),
+                                  scip_definition_site(IX,F,L,Sym), scip_symbol(IX,Sym,_k,"callable",_d).
+static_op_owner(IX,Sym,E,V)    :- static_op_site(IX,F,L,V,E), static_site_owner(IX,F,L,Sym).
+static_path_to_storage(IX,S,E,V) :- static_route_handler(IX,S,H), static_reaches_eq(IX,H,N),
+                                    static_op_owner(IX,N,E,V).
+static_capability_op(IX,S,E,V)   :- static_path_to_storage(IX,S,E,V), static_index_current(IX).
+runtime_route_without_static(T,S,R,IX) :- runtime_route_observed(T,S,_e,R), index_describes_run(IX,R),
+                                          static_route_inventory_closed(IX), !static_route_declared_surface(IX,S).
+static_route_authorized(IX,S) :- static_route_handler(IX,S,H), static_reaches_eq(IX,H,N),
+                                 authz_symbol__accepted(IX,N), static_index_current(IX).
+static_route_authorization_gap(IX,S) :- static_route_declared_surface(IX,S),
+                                        static_route_authorized_closed(IX), !static_route_authorized(IX,S).
+```
+
+Validation consequences already verified against `validation.py`: negating a relation with
+unbound extra columns is `unsafe-negation`, so negations go through projections and
+`completes` points at the projection; `forall` claims need the domain declared `finite` and
+`nonempty` (an empty route inventory yields `inconsistent-premises`, which is correct);
+digest inequality comparisons are allowed. Only `static_reaches` and `change_reaches` are
+recursive and neither SCC contains negation or aggregation. The IR has no arithmetic, so hop
+counts are not in the rule pack.
+
+### Certificates for both engines
+
+Soufflé computes relations only. `claims/static/certificate.py` re-derives a ground
+certificate from relation rows: fact rows map to evidence ids; derived rows unify against
+rules in canonical order, enumerate body instantiations over the rows (negated atoms checked
+absent, comparisons re-evaluated), and recurse with `max_depth=64`, `max_nodes=10_000`. For the
+recursive relations a BFS over `static_edge` from the root yields the shortest path and
+exactly k ground step applications (k ≤ 64, matching `fixpoint.distances(max_hops)`), else
+`truncated: true`. The same extractor runs over the Python kernel's rows, so certificates are
+engine-independent and replayable by the Stage C checker without search. `souffle --provenance`
+was rejected (interactive, Soufflé-only, incompatible with the any/all helper lowering), as was
+a hop-column encoding for every root (`roots × reach × 65` rows against the 100k cap); a
+`static_reaches_within(index, root, dst, hops)` relation over a finite `hop_succ(0..64)` is
+kept only in the go_app differential bundle to cross-check the extractor's k.
+
+### Bounds and slicing
+
+Soufflé counts every relation's rows, inputs included, against 100k rows and 16 MiB.
+go_app is about 150 input rows; a 50k-occurrence service is about 120k rows unsliced and
+20–35k with a package-prefix slice. Raw occurrences are never exported in the slice profile;
+`scip_unresolved_site` and `static_blind_spot` are exported but the full call-site census is
+summarized by the per-document completeness witnesses; `static_scope` is an explicit fact;
+witnesses are emitted only for in-scope documents; `profile=full` is permitted only for a
+`document_set` scope of at most 50 documents. Positive reachability stays derivable in a
+slice; negatives become `unresolved` with a visible missing premise, never silently true.
+
+### Adversarial static cases (`experiments/claim-semantics/static/cases/`)
+
+| # | case | seeded facts | reviewed expectation |
+|---|---|---|---|
+| 01 | unresolved symbol | edge to `local 3`, `scip_symbol_unrooted`, no `scip_symbol_node` | symbol-level capability supported; node-level unresolved with missing premise `scip_symbol_node` and discrepancy `unrooted-symbol` |
+| 02 | incomplete indexer | `static_source_file` without `scip_document`; `static_reachability_closed` withheld | positive supported; `static_file_unindexed` derived; negative gap claim unresolved; a variant with a seeded lying witness is labelled as a seeded fault |
+| 03 | dynamic dispatch | `static_blind_spot(interface_dispatch)` on the path | positive supported (over-approximation is the safe direction); negative unresolved because `scip_references_closed` is withheld; discrepancy `blind-spot-on-path` |
+| 04 | generated code | handler defined in `scip_generated_site` | `forall` supported plus discrepancy `handler-in-generated-code`; `generated_code_in_scope__accepted` clears it, `__rejected` yields out-of-scope |
+| 05 | stale index | `scip_index_tree(IX,T1)`, `source_tree_observed(T2)` | unresolved / `stale` via a diagnostic on `scip_index_stale`; missing premise `static_index_current` |
+| 06 | synthesized enclosing (scip-php) | `enclosing_synthesized=true`, edges `caller_synthesized=true` | supported plus discrepancy `caller-attribution-synthesized`; every completeness witness withheld so negatives stay unresolved |
+| 07 | constructor as type reference | `scip_type_reference` to `Job#`, no edge | capability supported through the op owner; `static_reaches(GetJob, Job#)` unresolved and documented |
+| 08 | module-scope reference | `handle(...)` at package scope | route → handler supported; "init reaches storage" unresolved (no root symbol) |
+| 09 | duplicate definitions | two `scip_definition_site` rows for one symbol | supported plus discrepancy `ambiguous-definition`; negatives unresolved |
+
+### Cross-check against the current resolver
+
+On the go_app golden index, `static_capability_op(index, surface, entity, verb)` must equal
+the capabilities `core.fixpoint.bind` derives from `resolve.calls_graph(map.call_edges(...),
+language="go")` (stdlib path; the tree-sitter `cli discover --resolver scip` comparison is
+skip-guarded and not a gate). Expected chain: `api/Handler#GetJob().` → `service/Service#Fetch().`
+→ `jobs/Repo#Get().` and `Repo#Write().`, ops `read` on `jobs` and `create` on `audit_logs`. Any
+difference outside an enumerated set of legitimate differences is a `differential-mismatch`.
+The corpus adapter's premise syntax cannot express recursion, so static fixtures carry facts,
+evidence, and claims in corpus style and rules as raw IR JSON through
+`tests/claim_semantics/static_rules/adapter.py`.
+
+### Stop conditions for this wave
+
+Kernel disagreement the shrinker cannot localize within 200 steps or after three `wave-repair`
+events blocks the wave with the replay bundle. A static-versus-fixpoint difference outside the
+enumerated set is a mismatch, not a pass. `resource-exhausted` on the bounded slice is reported,
+never fixed by raising limits silently. A golden mismatch across machines changes the assertion
+basis explicitly. A bundle whose `index_digest` differs from the index actually evaluated is
+`stale`. The go_app pilot is never described as target-go evidence.
+
+## 30. target-go static path pilot
+
+Owner: `scip-target-go-pilot` (reducer; blocks when `CAPCOV_GO_FIXTURE_ROOT` is absent).
+
+Target checkout (observed 2026-09-14): `/Users/dev/fg/target-go`, module
+`git.internal.example/org/target-go`, `go 1.25.0` (pinned Go 1.27 with
+`GOTOOLCHAIN=local` suffices), HEAD `7e339e0` with two dirty files, 53 `require` lines and a
+`go.sum`, no `vendor/`, and nested `.worktrees/*` checkouts that must be excluded from the tree
+digest, the index, and the slice (index a `git archive HEAD` copy). scip-go needs the module
+cache (`GOFLAGS=-mod=mod`, `GOMODCACHE` recorded; network is allowed in `nix develop` and pinned
+by `go.sum`; the sandboxed nix check is not used for target-go). Candidate path: a route in
+`internal/httpserver/server.go` to `internal/pilot/{dispatch,notifications}.go`
+(route → notification) or to SQL inside `internal/pilot`. Prior related work exists in the
+`notification-capcov-bind` worktree; inspect it before choosing the route, do not copy code.
+
+Acceptance a mocked index cannot satisfy: the test itself runs pinned scip-go (store path
+asserted) on the archived copy; `index_digest` is the sha256 of the bytes it wrote;
+`tool_info.name == "scip-go"`; the go.mod module path equals the package prefix of every rooted
+symbol; target-go commit and dirty state are recorded in bundle metadata and here (no target-go source
+is committed). The slice is the import closure of the chosen route's package within
+`ExportLimits` (500 documents, 200k occurrences); exceeding it is `resource-exhausted`,
+reported rather than narrowed silently. Route → SQL and route → notification
+`static_capability_op` rows must be identical in both engines with replayable certificates;
+where the tree-sitter route query does not cover target-go's router, the route handler is a
+labelled assumption fact. The negative control (a route known not to reach the sender) is
+`unresolved`, never `refuted`, because no call-graph completeness witness exists. A runtime
+join happens only through `index_describes_run` when a retained target-go receipt exists;
+otherwise the record says "static half only". Rooted-edge coverage below 0.9 or any
+`deep-unresolved` on the route closure records the result as UNKNOWN.
+
+If the fixture is absent the driver emits `task-blocked`; record BLOCKED here and keep the
+go_app pilot as the delivered static evidence without calling it target-go.
