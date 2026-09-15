@@ -82,6 +82,27 @@ class StaticRulePackTests(unittest.TestCase):
                          {"static_capability", "affected_capability", "runtime_route_without_static",
                           "static_route_authorized"})
 
+    def test_duplicate_definition_rules_are_guarded_by_the_symbol_category(self) -> None:
+        # Package symbols (descriptor ending in "/") are defined in every file of
+        # a Go package and `local N` symbols are file-scoped; both have category
+        # "other", the same class the exporter excludes when deciding whether to
+        # withhold scip_definitions_closed / scip_references_closed.
+        rules = [rule for rule in self.pack["rules"] if rule["head"]["relation"] == "scip_duplicate_definition"]
+        self.assertEqual(len(rules), 2)
+        for rule in rules:
+            with self.subTest(rule=rule["name"]):
+                atoms = [atom for atom in rule["body"] if "relation" in atom]
+                self.assertEqual([atom["relation"] for atom in atoms],
+                                 ["scip_definition_site", "scip_definition_site", "scip_symbol"])
+                symbol_var = atoms[0]["terms"][3]["variable"]
+                self.assertEqual(atoms[1]["terms"][3], {"variable": symbol_var})
+                self.assertEqual(atoms[2]["terms"][1], {"variable": symbol_var})
+                category_var = atoms[2]["terms"][3]["variable"]
+                guards = [atom["comparison"] for atom in rule["body"] if "comparison" in atom
+                          and atom["comparison"]["left"] == {"variable": category_var}]
+                self.assertEqual(guards, [{"left": {"variable": category_var}, "operator": "!=",
+                                           "right": {"type": "symbol", "value": "other"}}])
+
     def test_pack_validates_alone_with_no_issues(self) -> None:
         bundle = pack_bundle(self.pack)
         self.assertEqual(validate_bundle(bundle), ())
@@ -123,6 +144,7 @@ class StaticCaseTests(unittest.TestCase):
         self.assertIn("02-incomplete-indexer-lying-witness", variants)
         self.assertIn("04-generated-code-accepted", variants)
         self.assertIn("04-generated-code-rejected", variants)
+        self.assertIn("09-duplicate-definitions-package-symbol", variants)
 
     def test_case_conventions(self) -> None:
         for path in self.paths:
@@ -293,6 +315,11 @@ class StaticCaseTests(unittest.TestCase):
         self.assertEqual(table["07-constructor-as-type-reference"]["claims"]["claim-reaches-job-type"]["semantic_verdict"], "unresolved")
         self.assertEqual(table["08-module-scope-reference"]["claims"]["claim-init-reaches-storage"]["semantic_verdict"], "unresolved")
         self.assertEqual(table["09-duplicate-definitions"]["claims"]["claim-cap-jobs-read"]["discrepancies"][0]["kind"], "ambiguous-definition")
+        variant = table["09-duplicate-definitions-package-symbol"]["claims"]
+        self.assertEqual(variant["claim-duplicate"]["semantic_verdict"], "unresolved")
+        self.assertEqual(variant["claim-duplicate"]["missing_premises"][0]["relation"], "scip_symbol")
+        self.assertEqual(variant["claim-cap-jobs-read"]["discrepancies"], [])
+        self.assertEqual(variant["claim-authz-gap"]["semantic_verdict"], "supported")
 
 
 if __name__ == "__main__":

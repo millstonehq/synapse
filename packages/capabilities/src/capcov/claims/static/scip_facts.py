@@ -507,9 +507,12 @@ def export_bundle(
             def_paths.setdefault(symbol, set()).add(path)
             def_occurrence_ids.setdefault(symbol, set()).add(
                 occurrence_external_id(index_digest, occurrence_digest(path, occ)))
-    # A symbol defined at two distinct sites is ambiguous (case 09). Namespace
-    # (package) symbols are excluded: scip-go defines the package symbol in every
-    # file of the package, which is the language, not an ambiguity.
+    # A symbol defined at two distinct sites is ambiguous (case 09). Category
+    # "other" is excluded: scip-go defines the namespace (package) symbol in
+    # every file of the package and ``local N`` symbols are file-scoped, which is
+    # the language, not an ambiguity. The rule pack's scip_duplicate_definition
+    # applies the same predicate (scip_symbol category != "other"), so the
+    # witness policy here and the derived relation agree.
     duplicate_symbols = {
         symbol for symbol, sites in def_sites.items()
         if len(sites) > 1 and _symbol_category(symbol, table) != "other"

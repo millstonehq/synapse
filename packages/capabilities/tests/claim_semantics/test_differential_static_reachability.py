@@ -131,6 +131,27 @@ class GoAppDifferentialTest(unittest.TestCase):
         self.assertEqual(relations["scip_index_stale"], ())
         self.assertEqual(set(relations["static_index_current"]), {(IX,)})
 
+    def test_no_duplicate_definition_is_derived_on_go_app(self) -> None:
+        # scip-go emits a definition of the package symbol in every file of a
+        # package and `local N` symbols are file-scoped, so both repeat across
+        # documents without being ambiguous.  The guarded rules (scip_symbol
+        # category != "other") derive nothing on go_app (22 bogus rows before the
+        # guard), and every document keeps its scip_references_closed witness.
+        result = self.result_or_fail()
+        for report in (result.python, result.souffle):
+            relations = dict(report.relations)
+            with self.subTest(kernel=report.backend):
+                self.assertEqual(relations["scip_duplicate_definition"], ())
+                self.assertEqual(len(relations["scip_references_closed"]), 5)
+                self.assertEqual(len(relations["static_reachability_closed"]), 1)
+        repeated = {}
+        for fact in self.exported.bundle.facts:
+            if fact.relation == "scip_definition_site":
+                _, path, _, symbol = (t.value for t in fact.terms)
+                repeated.setdefault(symbol, set()).add(path)
+        repeated = {s for s, paths in repeated.items() if len(paths) > 1}
+        self.assertTrue(repeated and all(s.startswith("local ") or s.endswith("/") for s in repeated), sorted(repeated))
+
     def test_claim_verdicts_in_both_kernels(self) -> None:
         result = self.result_or_fail()
         for report in (result.python, result.souffle):

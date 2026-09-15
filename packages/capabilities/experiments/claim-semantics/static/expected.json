@@ -865,12 +865,14 @@
           "operational_status": "complete",
           "support_leaves": [
             "scip:8c2d198c5948:scip_definition_site:45be2630c94d",
-            "scip:8c2d198c5948:scip_definition_site:a913d40a8b39"
+            "scip:8c2d198c5948:scip_definition_site:a913d40a8b39",
+            "scip:8c2d198c5948:scip_symbol:b87c0b7fbf06"
           ],
           "refutation_leaves": [],
           "observed_leaves": [
             "scip:8c2d198c5948:scip_definition_site:45be2630c94d",
-            "scip:8c2d198c5948:scip_definition_site:a913d40a8b39"
+            "scip:8c2d198c5948:scip_definition_site:a913d40a8b39",
+            "scip:8c2d198c5948:scip_symbol:b87c0b7fbf06"
           ],
           "forbidden_leaves": [],
           "discrepancies": [],
@@ -895,6 +897,83 @@
               "reason": "withheld: duplicate definitions of Handler#GetJob"
             }
           ]
+        }
+      }
+    },
+    "09-duplicate-definitions-package-symbol": {
+      "claims": {
+        "claim-cap-jobs-read": {
+          "semantic_verdict": "supported",
+          "operational_status": "complete",
+          "support_leaves": [
+            "scip:c034889fbc50:scip_definition_site:bba5b0524d33",
+            "scip:c034889fbc50:scip_index:5fcd17b19df9",
+            "scip:c034889fbc50:scip_index_tree:42f51304332b",
+            "scip:c034889fbc50:scip_may_reference:53433c2f04e0",
+            "scip:c034889fbc50:scip_may_reference:80c3612898ab",
+            "scip:c034889fbc50:scip_symbol:bcf6d2961639",
+            "static:c034889fbc50:route_handler_location:deef42d6da33",
+            "static:c034889fbc50:static_op_site:b2fc49fdda23",
+            "static:c034889fbc50:static_site_owner:887a87fee7f9",
+            "static:claim-time:source_tree_observed:46d1b09a1177"
+          ],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "scip:c034889fbc50:scip_definition_site:bba5b0524d33",
+            "scip:c034889fbc50:scip_index:5fcd17b19df9",
+            "scip:c034889fbc50:scip_index_tree:42f51304332b",
+            "scip:c034889fbc50:scip_may_reference:53433c2f04e0",
+            "scip:c034889fbc50:scip_may_reference:80c3612898ab",
+            "scip:c034889fbc50:scip_symbol:bcf6d2961639",
+            "static:c034889fbc50:route_handler_location:deef42d6da33",
+            "static:c034889fbc50:static_op_site:b2fc49fdda23",
+            "static:c034889fbc50:static_site_owner:887a87fee7f9",
+            "static:claim-time:source_tree_observed:46d1b09a1177"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": []
+        },
+        "claim-duplicate": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "complete",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "scip:c034889fbc50:scip_definition_site:80c5d815a1d2",
+            "scip:c034889fbc50:scip_definition_site:af33a662a773",
+            "scip:c034889fbc50:scip_symbol:992014134886"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "scip_symbol",
+              "reason": "package symbol api/ has category other: scip-go defines the package symbol in every file of the package; only callable, type and term symbols can be duplicate definitions"
+            }
+          ]
+        },
+        "claim-authz-gap": {
+          "semantic_verdict": "supported",
+          "operational_status": "complete",
+          "support_leaves": [
+            "scip:c034889fbc50:scip_index_tree:42f51304332b",
+            "static:c034889fbc50:route_site:9713ef57f88a",
+            "static:c034889fbc50:static_reachability_closed:24260f368327",
+            "static:c034889fbc50:static_route_inventory_closed:b20ca0264775",
+            "static:claim-time:source_tree_observed:46d1b09a1177"
+          ],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "scip:c034889fbc50:scip_index_tree:42f51304332b",
+            "static:c034889fbc50:route_site:9713ef57f88a",
+            "static:c034889fbc50:static_reachability_closed:24260f368327",
+            "static:c034889fbc50:static_route_inventory_closed:b20ca0264775",
+            "static:claim-time:source_tree_observed:46d1b09a1177"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": []
         }
       }
     }

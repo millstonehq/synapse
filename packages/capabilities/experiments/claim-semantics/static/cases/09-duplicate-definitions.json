@@ -12,7 +12,7 @@
     "index": "8c2d198c59483cedb430b1a48d84ed6604d1576972119a40bd3c826aea42b43e"
   },
   "review_notes": [
-    "GetJob is defined at api/jobs.go:10 and again at api/jobs_legacy.go:22 (a build-tagged copy). scip_duplicate_definition derives for the pair.",
+    "GetJob is defined at api/jobs.go:10 and again at api/jobs_legacy.go:22 (a build-tagged copy). scip_duplicate_definition derives for the pair because scip_symbol classifies GetJob as callable; the category guard (category != other) is why the scip_symbol row is a leaf of the duplicate proof.",
     "route_handler_location binds the route to api/jobs.go:10, so static_route_handler has exactly one proof and the capability is supported, with the discrepancy ambiguous-definition.",
     "scip_references_closed and static_reachability_closed are withheld for an index with duplicate definitions, so the gap claim is unresolved."
   ],
@@ -1352,12 +1352,14 @@
         "operational_status": "complete",
         "support_leaves": [
           "scip:8c2d198c5948:scip_definition_site:45be2630c94d",
-          "scip:8c2d198c5948:scip_definition_site:a913d40a8b39"
+          "scip:8c2d198c5948:scip_definition_site:a913d40a8b39",
+          "scip:8c2d198c5948:scip_symbol:b87c0b7fbf06"
         ],
         "refutation_leaves": [],
         "observed_leaves": [
           "scip:8c2d198c5948:scip_definition_site:45be2630c94d",
-          "scip:8c2d198c5948:scip_definition_site:a913d40a8b39"
+          "scip:8c2d198c5948:scip_definition_site:a913d40a8b39",
+          "scip:8c2d198c5948:scip_symbol:b87c0b7fbf06"
         ],
         "forbidden_leaves": [],
         "discrepancies": [],

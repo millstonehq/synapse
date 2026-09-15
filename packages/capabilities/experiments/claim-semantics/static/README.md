@@ -6,7 +6,8 @@ verdicts a reviewer can decide from the facts and the rules alone.
 
 * `rules-static-v1.json` - the rule pack in raw IR JSON wire form.
 * `cases/NN-*.json` - one positive control (`00`) and the nine adversarial
-  shapes of section 29 (`01`..`09`), with labelled variants for `02` and `04`.
+  shapes of section 29 (`01`..`09`), with labelled variants for `02`, `04`
+  and `09`.
 * `expected.json` - the per-claim review tables duplicated from every case.
 
 The corpus adapter in `tests/claim_semantics/adapter.py` cannot express
@@ -62,8 +63,10 @@ scip_index_stale(IX,T,O)        :- scip_index_tree(IX,T,_,_), source_tree_observ
 static_capability_op(IX,S,E,V)  :- static_path_to_storage(IX,S,E,V), static_index_current(IX).
 static_capability(IX,S,E,V)     :- static_capability_op(IX,S,E,V), scip_index(IX,_,_,_,_,_).
 static_file_unindexed(IX,P)     :- static_source_file(IX,P,_), scip_documents_closed(IX), !scip_document_path(IX,P).
-scip_duplicate_definition(IX,Sym,PA,LA,PB,LB) :- scip_definition_site(IX,PA,LA,Sym), scip_definition_site(IX,PB,LB,Sym), PA != PB.
-scip_duplicate_definition(IX,Sym,PA,LA,PB,LB) :- scip_definition_site(IX,PA,LA,Sym), scip_definition_site(IX,PB,LB,Sym), LA != LB.
+scip_duplicate_definition(IX,Sym,PA,LA,PB,LB) :- scip_definition_site(IX,PA,LA,Sym), scip_definition_site(IX,PB,LB,Sym),
+                                   scip_symbol(IX,Sym,_,Cat,_), Cat != "other", PA != PB.
+scip_duplicate_definition(IX,Sym,PA,LA,PB,LB) :- scip_definition_site(IX,PA,LA,Sym), scip_definition_site(IX,PB,LB,Sym),
+                                   scip_symbol(IX,Sym,_,Cat,_), Cat != "other", LA != LB.
 change_reaches(IX,C,U)          :- changed_symbol(IX,C,_), static_edge(IX,U,C).
 change_reaches(IX,C,U)          :- change_reaches(IX,C,M), static_edge(IX,U,M).
 affected_capability(IX,S,C)     :- static_route_handler(IX,S,C), changed_symbol(IX,C,_), static_index_current(IX).
@@ -211,3 +214,4 @@ document and the tree.  `Evidence.source` is the producer string.
 | 07 constructor as type reference | `scip_type_reference(Repo#Get, models/Job#)`, no edge | capability supported through the op owner; `static_reaches(GetJob, Job#)` unresolved |
 | 08 module-scope reference | `handle(...)` and `Repo#Seed` referenced at package scope | route -> handler supported; `static_op_owner(Seed)` supported; "init reaches storage" unresolved |
 | 09 duplicate definitions | two `scip_definition_site` rows for `Handler#GetJob` | capability supported with `ambiguous-definition`; `scip_duplicate_definition` supported; gap unresolved |
+| 09 package-symbol variant (`09-duplicate-definitions-package-symbol`) | `Handler#GetJob` defined once; the package symbol `api/` (category `other`) defined in `api/jobs.go:1` and `api/jobs_legacy.go:1`; every `scip_references_closed` witness and `static_reachability_closed` present | `scip_duplicate_definition` empty (claim unresolved, missing premise `scip_symbol`); capability supported with no discrepancy; gap supported, i.e. the witnesses are not withheld for a package symbol |
