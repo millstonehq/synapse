@@ -295,19 +295,23 @@ def build_deep_dict(
                     "source": {"file": record["file"], "line": record["line"]},
                 }
             )
-        surfaces.append(
-            {
-                "id": record["id"],
-                "kind": "http",
-                "method": record.get("method"),
-                "path": record.get("path"),
-                "handler": handler_node,
-                "handler_symbol": record.get("handler"),
-                "file": record.get("file"),
-                "line": record.get("line"),
-                "mounted": True,
-            }
-        )
+        surface = {
+            "id": record["id"],
+            "kind": "http",
+            "method": record.get("method"),
+            "path": record.get("path"),
+            "handler": handler_node,
+            "handler_symbol": record.get("handler"),
+            "file": record.get("file"),
+            "line": record.get("line"),
+            "mounted": True,
+        }
+        # A plugin reader that carries the document's grouping is not stripped of
+        # it on the deep path.
+        for key in ("tags", "summary"):
+            if record.get(key):
+                surface[key] = record[key]
+        surfaces.append(surface)
 
     # Data-access sites: attributed to the enclosing function node. `_direct` binds
     # the entity to that node (hop-0 touch); `_ops` records the CRUD verb the
