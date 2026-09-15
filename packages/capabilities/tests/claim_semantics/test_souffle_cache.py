@@ -6,7 +6,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from capcov.claims import Atom, Bundle, Column, Constant, RelationDecl
+from capcov.claims import Atom, Column, Constant, RelationDecl
+from tests.claim_fixtures import Bundle  # attributed fixture bundles
 from capcov.claims import souffle
 
 

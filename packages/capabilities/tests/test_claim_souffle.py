@@ -5,10 +5,11 @@ from unittest.mock import patch
 
 sys.path.insert(0, "packages/capabilities/src")
 
-from capcov.claims import (Atom, Bundle, Claim, Column, Constant, Context,
+from capcov.claims import (Atom, Claim, Column, Constant, Context,
                            DiagnosticRule, Evidence, EvidenceMapping, Modality,
                            OutputTemplate, RelationDecl, Rule, TemplateValue,
                            TypeName, Variable, Aggregation, validate_bundle)
+from tests.claim_fixtures import Bundle  # attributed fixture bundles
 from capcov.claims.evaluator import evaluate as evaluate_python
 from capcov.claims.souffle import (MAX_OUTPUT_BYTES, SouffleUnavailable,
                                    run_bundle, translate_bundle)

@@ -478,11 +478,13 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
         if key is not None and key not in fact_keys:
             issues.append(ValidationIssue(
                 "evidence-without-fact", str(record.id), f"evidence[{i}]"))
-    if bundle.evidence:
-        for i, fact in enumerate(bundle.facts):
-            key = _ground_atom_key(fact)
-            if key is not None and key not in evidence_keys:
-                issues.append(ValidationIssue("fact-without-evidence", "evidence-bearing bundles require attribution", f"facts[{i}]"))
+    # Attribution is unconditional: a fact-bearing bundle with an empty
+    # evidence tuple used to validate with zero issues, which bypassed
+    # ``evidence-producer`` (and every other evidence check) entirely.
+    for i, fact in enumerate(bundle.facts):
+        key = _ground_atom_key(fact)
+        if key is not None and key not in evidence_keys:
+            issues.append(ValidationIssue("fact-without-evidence", "every fact requires an evidence record", f"facts[{i}]"))
     for i, rule in enumerate(bundle.rules):
         if isinstance(rule, Rule): _validate_rule(rule, relations, issues, f"rules[{i}]")
         else: issues.append(ValidationIssue("rule-type", "expected Rule", f"rules[{i}]"))

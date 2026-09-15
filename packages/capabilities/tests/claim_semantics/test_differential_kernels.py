@@ -9,9 +9,10 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from capcov.claims import (Atom, Bundle, Claim, Column, Constant, Context, DiagnosticRule,
+from capcov.claims import (Atom, Claim, Column, Constant, Context, DiagnosticRule,
                            Evidence, EvidenceMapping, RelationDecl, Rule, Variable,
                            bundle_from_json, canonical_json, digest, validate_bundle)
+from tests.claim_fixtures import Bundle, with_facts  # attributed fixture bundles
 from capcov.claims.differential import (COMPARABLE_CLAIM_FIELDS, DifferentialMismatch,
                                        KernelClaim, KernelReport, _missing, compare,
                                        reports_match, run_python, run_souffle)
@@ -385,25 +386,25 @@ class DifferentialCorpusTests(unittest.TestCase):
 
     def test_variable_valued_mapping_conjunction_is_a_real_relational_join(self):
         unrelated = mixed_mapping_bundle()
-        unrelated = replace(
-            unrelated,
-            claims=(Claim("mixed_claim",
-                          (Variable("index"), Variable("run"), Constant("v")),
-                          id="mixed"),),
-            facts=(Atom("static_seen", (Constant("index-a", "digest"), Constant("v"))),
-                   Atom("runtime_seen", (Constant("run-b"), Constant("v"))),
-                   Atom("index_describes_run",
-                        (Constant("index-c", "digest"), Constant("run-d")))))
+        unrelated = with_facts(
+            replace(unrelated,
+                    claims=(Claim("mixed_claim",
+                                  (Variable("index"), Variable("run"), Constant("v")),
+                                  id="mixed"),)),
+            (Atom("static_seen", (Constant("index-a", "digest"), Constant("v"))),
+             Atom("runtime_seen", (Constant("run-b"), Constant("v"))),
+             Atom("index_describes_run",
+                  (Constant("index-c", "digest"), Constant("run-d")))))
         self.assertEqual(validate_bundle(unrelated), ())
         result = compare(unrelated, shrink=False)
         self.assertEqual(result.python.claims[0].semantic, "unresolved")
         self.assertEqual(result.souffle.claims[0].semantic, "unresolved")
 
-        joined = replace(
+        joined = with_facts(
             unrelated,
-            facts=(*unrelated.facts,
-                   Atom("index_describes_run",
-                        (Constant("index-a", "digest"), Constant("run-b")))))
+            (*unrelated.facts,
+             Atom("index_describes_run",
+                  (Constant("index-a", "digest"), Constant("run-b")))))
         self.assertEqual(compare(joined, shrink=False).python.claims[0].semantic,
                          "supported")
 
@@ -478,8 +479,7 @@ class DifferentialCorpusTests(unittest.TestCase):
                          claims=(Claim("pair", (Variable("x"), Variable("x")), id="same"),))
         result = compare(unequal, shrink=False)
         self.assertEqual(result.python.claims[0].semantic, "unresolved")
-        equal = replace(unequal,
-                        facts=(Atom("pair_source", (Constant("a"), Constant("a"))),))
+        equal = with_facts(unequal, (Atom("pair_source", (Constant("a"), Constant("a"))),))
         self.assertEqual(compare(equal, shrink=False).python.claims[0].semantic, "supported")
 
     def test_repeated_variables_are_unified_through_evidence_mapping(self):
@@ -494,8 +494,7 @@ class DifferentialCorpusTests(unittest.TestCase):
                          claims=(claim,), mappings=(mapping,))
         self.assertEqual(compare(unequal, shrink=False).python.claims[0].semantic,
                          "unresolved")
-        equal = replace(unequal,
-                        facts=(Atom("mapped_source", (Constant("a"), Constant("a"))),))
+        equal = with_facts(unequal, (Atom("mapped_source", (Constant("a"), Constant("a"))),))
         self.assertEqual(compare(equal, shrink=False).python.claims[0].semantic,
                          "supported")
 

@@ -3,9 +3,10 @@ from __future__ import annotations
 import unittest
 
 from capcov.claims import (
-    Atom, Bundle, Claim, Column, Comparison, Constant, RelationDecl, Rule,
+    Atom, Claim, Column, Comparison, Constant, RelationDecl, Rule,
     TypeName, Variable,
 )
+from tests.claim_fixtures import Bundle  # attributed fixture bundles
 from capcov.claims.evaluator import (
     EvaluationReport, ResourceLimits, _Engine,
 )
