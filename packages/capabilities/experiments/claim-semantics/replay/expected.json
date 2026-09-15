@@ -1,0 +1,706 @@
+{
+  "schema_version": 1,
+  "description": "Per-claim reviewed expectations duplicated from each replay case",
+  "rule_pack": "rules-replay-v1",
+  "evaluation_basis_by_quantifier": {
+    "exists": "derivational",
+    "forall": "bounded-history-model"
+  },
+  "cases": {
+    "00-positive-control": {
+      "claims": {
+        "claim-qualified-close": {
+          "semantic_verdict": "supported",
+          "operational_status": "complete",
+          "support_leaves": [
+            "go:6b91e6f218c0:go_post_state:8cd0fcfad011",
+            "mut:6b91e6f218c0:mutant:48053510584a",
+            "php:6b91e6f218c0:php_post_state:61c03708afcd",
+            "php:claim-time:op_declared:a23b0d956caa",
+            "replay:6b91e6f218c0:go_effects_closed:741c700022f7",
+            "replay:6b91e6f218c0:index_describes_replay:6da538f7902a",
+            "replay:6b91e6f218c0:model_admissible_closed:e42e24b4af61",
+            "replay:6b91e6f218c0:model_describes_run:30e5416af7e4",
+            "replay:6b91e6f218c0:model_writes_closed:6425563e0740",
+            "replay:6b91e6f218c0:mutant_kills_closed:5ec55c452bcf",
+            "replay:6b91e6f218c0:mutants_closed:d76a11a716ff",
+            "replay:6b91e6f218c0:php_effects_closed:c69d8dda2898",
+            "replay:6b91e6f218c0:replay_request:e1b3e116da62",
+            "replay:6b91e6f218c0:replay_requests_closed:acc922ba3952",
+            "replay:6b91e6f218c0:replay_run:ad8057bded65",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:6b91e6f218c0:model_admissible:390a5bcaf435"
+          ],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "go:6b91e6f218c0:go_post_state:8cd0fcfad011",
+            "mut:6b91e6f218c0:mutant:48053510584a",
+            "php:6b91e6f218c0:php_post_state:61c03708afcd",
+            "php:claim-time:op_declared:a23b0d956caa",
+            "replay:6b91e6f218c0:go_effects_closed:741c700022f7",
+            "replay:6b91e6f218c0:index_describes_replay:6da538f7902a",
+            "replay:6b91e6f218c0:model_admissible_closed:e42e24b4af61",
+            "replay:6b91e6f218c0:model_describes_run:30e5416af7e4",
+            "replay:6b91e6f218c0:model_writes_closed:6425563e0740",
+            "replay:6b91e6f218c0:mutant_kills_closed:5ec55c452bcf",
+            "replay:6b91e6f218c0:mutants_closed:d76a11a716ff",
+            "replay:6b91e6f218c0:php_effects_closed:c69d8dda2898",
+            "replay:6b91e6f218c0:replay_request:e1b3e116da62",
+            "replay:6b91e6f218c0:replay_requests_closed:acc922ba3952",
+            "replay:6b91e6f218c0:replay_run:ad8057bded65",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:6b91e6f218c0:model_admissible:390a5bcaf435"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": []
+        },
+        "claim-qualified-create": {
+          "semantic_verdict": "supported",
+          "operational_status": "complete",
+          "support_leaves": [
+            "go:6b91e6f218c0:go_post_state:b10fe6120345",
+            "mut:6b91e6f218c0:mutant:dcabe2e5666c",
+            "php:6b91e6f218c0:php_post_state:cb69b5673861",
+            "php:claim-time:op_declared:f80177ad9367",
+            "replay:6b91e6f218c0:go_effects_closed:741c700022f7",
+            "replay:6b91e6f218c0:index_describes_replay:6da538f7902a",
+            "replay:6b91e6f218c0:model_admissible_closed:e42e24b4af61",
+            "replay:6b91e6f218c0:model_describes_run:30e5416af7e4",
+            "replay:6b91e6f218c0:model_writes_closed:0b12b0ac957d",
+            "replay:6b91e6f218c0:mutant_kills_closed:5ec55c452bcf",
+            "replay:6b91e6f218c0:mutants_closed:e0260c65efbe",
+            "replay:6b91e6f218c0:php_effects_closed:c69d8dda2898",
+            "replay:6b91e6f218c0:replay_request:b67ffd90fbf2",
+            "replay:6b91e6f218c0:replay_requests_closed:acc922ba3952",
+            "replay:6b91e6f218c0:replay_run:ad8057bded65",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:6b91e6f218c0:model_admissible:bbd809734048"
+          ],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "go:6b91e6f218c0:go_post_state:b10fe6120345",
+            "mut:6b91e6f218c0:mutant:dcabe2e5666c",
+            "php:6b91e6f218c0:php_post_state:cb69b5673861",
+            "php:claim-time:op_declared:f80177ad9367",
+            "replay:6b91e6f218c0:go_effects_closed:741c700022f7",
+            "replay:6b91e6f218c0:index_describes_replay:6da538f7902a",
+            "replay:6b91e6f218c0:model_admissible_closed:e42e24b4af61",
+            "replay:6b91e6f218c0:model_describes_run:30e5416af7e4",
+            "replay:6b91e6f218c0:model_writes_closed:0b12b0ac957d",
+            "replay:6b91e6f218c0:mutant_kills_closed:5ec55c452bcf",
+            "replay:6b91e6f218c0:mutants_closed:e0260c65efbe",
+            "replay:6b91e6f218c0:php_effects_closed:c69d8dda2898",
+            "replay:6b91e6f218c0:replay_request:b67ffd90fbf2",
+            "replay:6b91e6f218c0:replay_requests_closed:acc922ba3952",
+            "replay:6b91e6f218c0:replay_run:ad8057bded65",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:6b91e6f218c0:model_admissible:bbd809734048"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": []
+        }
+      }
+    },
+    "01-planted-disagreement": {
+      "claims": {
+        "claim-qualified-close": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "complete",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "php:9a49871811f0:php_post_state:bf4fa2a7dfa8",
+            "replay:9a49871811f0:model_describes_run:30e5416af7e4",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "php_model_agree",
+              "reason": "the PHP post-state of req-2 lies outside the model's admissible set for issues.close"
+            }
+          ]
+        },
+        "claim-qualified-create": {
+          "semantic_verdict": "supported",
+          "operational_status": "complete",
+          "support_leaves": [
+            "go:9a49871811f0:go_post_state:b10fe6120345",
+            "mut:9a49871811f0:mutant:dcabe2e5666c",
+            "php:9a49871811f0:php_post_state:cb69b5673861",
+            "php:claim-time:op_declared:f80177ad9367",
+            "replay:9a49871811f0:go_effects_closed:741c700022f7",
+            "replay:9a49871811f0:index_describes_replay:6da538f7902a",
+            "replay:9a49871811f0:model_admissible_closed:e42e24b4af61",
+            "replay:9a49871811f0:model_describes_run:30e5416af7e4",
+            "replay:9a49871811f0:model_writes_closed:0b12b0ac957d",
+            "replay:9a49871811f0:mutant_kills_closed:5ec55c452bcf",
+            "replay:9a49871811f0:mutants_closed:e0260c65efbe",
+            "replay:9a49871811f0:php_effects_closed:c69d8dda2898",
+            "replay:9a49871811f0:replay_request:b67ffd90fbf2",
+            "replay:9a49871811f0:replay_requests_closed:acc922ba3952",
+            "replay:9a49871811f0:replay_run:ad8057bded65",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:9a49871811f0:model_admissible:bbd809734048"
+          ],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "go:9a49871811f0:go_post_state:b10fe6120345",
+            "mut:9a49871811f0:mutant:dcabe2e5666c",
+            "php:9a49871811f0:php_post_state:cb69b5673861",
+            "php:claim-time:op_declared:f80177ad9367",
+            "replay:9a49871811f0:go_effects_closed:741c700022f7",
+            "replay:9a49871811f0:index_describes_replay:6da538f7902a",
+            "replay:9a49871811f0:model_admissible_closed:e42e24b4af61",
+            "replay:9a49871811f0:model_describes_run:30e5416af7e4",
+            "replay:9a49871811f0:model_writes_closed:0b12b0ac957d",
+            "replay:9a49871811f0:mutant_kills_closed:5ec55c452bcf",
+            "replay:9a49871811f0:mutants_closed:e0260c65efbe",
+            "replay:9a49871811f0:php_effects_closed:c69d8dda2898",
+            "replay:9a49871811f0:replay_request:b67ffd90fbf2",
+            "replay:9a49871811f0:replay_requests_closed:acc922ba3952",
+            "replay:9a49871811f0:replay_run:ad8057bded65",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:9a49871811f0:model_admissible:bbd809734048"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": []
+        },
+        "claim-php-disagrees-req-2": {
+          "semantic_verdict": "supported",
+          "operational_status": "complete",
+          "support_leaves": [
+            "php:9a49871811f0:php_post_state:bf4fa2a7dfa8",
+            "replay:9a49871811f0:model_admissible_closed:e42e24b4af61",
+            "replay:9a49871811f0:model_describes_run:30e5416af7e4"
+          ],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "php:9a49871811f0:php_post_state:bf4fa2a7dfa8",
+            "replay:9a49871811f0:model_admissible_closed:e42e24b4af61",
+            "replay:9a49871811f0:model_describes_run:30e5416af7e4"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [
+            {
+              "kind": "php-state-outside-model",
+              "req": "req-2"
+            }
+          ],
+          "missing_premises": []
+        }
+      }
+    },
+    "02-planted-undeclared-write": {
+      "claims": {
+        "claim-qualified-close": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "complete",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "go:57c8f51e8884:go_effect:7b9df5f1c2d2",
+            "replay:57c8f51e8884:model_describes_run:30e5416af7e4",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "model_writes",
+              "reason": "Go wrote table audit_log for issues.close, which the model's closed write set does not declare"
+            }
+          ]
+        },
+        "claim-qualified-create": {
+          "semantic_verdict": "supported",
+          "operational_status": "complete",
+          "support_leaves": [
+            "go:57c8f51e8884:go_post_state:b10fe6120345",
+            "mut:57c8f51e8884:mutant:dcabe2e5666c",
+            "php:57c8f51e8884:php_post_state:cb69b5673861",
+            "php:claim-time:op_declared:f80177ad9367",
+            "replay:57c8f51e8884:go_effects_closed:741c700022f7",
+            "replay:57c8f51e8884:index_describes_replay:6da538f7902a",
+            "replay:57c8f51e8884:model_admissible_closed:e42e24b4af61",
+            "replay:57c8f51e8884:model_describes_run:30e5416af7e4",
+            "replay:57c8f51e8884:model_writes_closed:0b12b0ac957d",
+            "replay:57c8f51e8884:mutant_kills_closed:5ec55c452bcf",
+            "replay:57c8f51e8884:mutants_closed:e0260c65efbe",
+            "replay:57c8f51e8884:php_effects_closed:c69d8dda2898",
+            "replay:57c8f51e8884:replay_request:b67ffd90fbf2",
+            "replay:57c8f51e8884:replay_requests_closed:acc922ba3952",
+            "replay:57c8f51e8884:replay_run:ad8057bded65",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:57c8f51e8884:model_admissible:bbd809734048"
+          ],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "go:57c8f51e8884:go_post_state:b10fe6120345",
+            "mut:57c8f51e8884:mutant:dcabe2e5666c",
+            "php:57c8f51e8884:php_post_state:cb69b5673861",
+            "php:claim-time:op_declared:f80177ad9367",
+            "replay:57c8f51e8884:go_effects_closed:741c700022f7",
+            "replay:57c8f51e8884:index_describes_replay:6da538f7902a",
+            "replay:57c8f51e8884:model_admissible_closed:e42e24b4af61",
+            "replay:57c8f51e8884:model_describes_run:30e5416af7e4",
+            "replay:57c8f51e8884:model_writes_closed:0b12b0ac957d",
+            "replay:57c8f51e8884:mutant_kills_closed:5ec55c452bcf",
+            "replay:57c8f51e8884:mutants_closed:e0260c65efbe",
+            "replay:57c8f51e8884:php_effects_closed:c69d8dda2898",
+            "replay:57c8f51e8884:replay_request:b67ffd90fbf2",
+            "replay:57c8f51e8884:replay_requests_closed:acc922ba3952",
+            "replay:57c8f51e8884:replay_run:ad8057bded65",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:57c8f51e8884:model_admissible:bbd809734048"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": []
+        },
+        "claim-undeclared-audit-log": {
+          "semantic_verdict": "supported",
+          "operational_status": "complete",
+          "support_leaves": [
+            "go:57c8f51e8884:go_effect:7b9df5f1c2d2",
+            "replay:57c8f51e8884:model_describes_run:30e5416af7e4",
+            "replay:57c8f51e8884:model_writes_closed:6425563e0740",
+            "replay:57c8f51e8884:replay_request:e1b3e116da62"
+          ],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "go:57c8f51e8884:go_effect:7b9df5f1c2d2",
+            "replay:57c8f51e8884:model_describes_run:30e5416af7e4",
+            "replay:57c8f51e8884:model_writes_closed:6425563e0740",
+            "replay:57c8f51e8884:replay_request:e1b3e116da62"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [
+            {
+              "kind": "undeclared-table",
+              "table": "audit_log"
+            }
+          ],
+          "missing_premises": []
+        }
+      }
+    },
+    "03-surviving-mutant": {
+      "claims": {
+        "claim-qualified-close": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "complete",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "mut:36185b1c81aa:mutant:48053510584a",
+            "replay:36185b1c81aa:model_describes_run:30e5416af7e4",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "mutant_killed",
+              "reason": "mutant m-2 of issues.close was never killed by a replayed request"
+            }
+          ]
+        },
+        "claim-qualified-create": {
+          "semantic_verdict": "supported",
+          "operational_status": "complete",
+          "support_leaves": [
+            "go:36185b1c81aa:go_post_state:b10fe6120345",
+            "mut:36185b1c81aa:mutant:dcabe2e5666c",
+            "php:36185b1c81aa:php_post_state:cb69b5673861",
+            "php:claim-time:op_declared:f80177ad9367",
+            "replay:36185b1c81aa:go_effects_closed:741c700022f7",
+            "replay:36185b1c81aa:index_describes_replay:6da538f7902a",
+            "replay:36185b1c81aa:model_admissible_closed:e42e24b4af61",
+            "replay:36185b1c81aa:model_describes_run:30e5416af7e4",
+            "replay:36185b1c81aa:model_writes_closed:0b12b0ac957d",
+            "replay:36185b1c81aa:mutant_kills_closed:5ec55c452bcf",
+            "replay:36185b1c81aa:mutants_closed:e0260c65efbe",
+            "replay:36185b1c81aa:php_effects_closed:c69d8dda2898",
+            "replay:36185b1c81aa:replay_request:b67ffd90fbf2",
+            "replay:36185b1c81aa:replay_requests_closed:acc922ba3952",
+            "replay:36185b1c81aa:replay_run:ad8057bded65",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:36185b1c81aa:model_admissible:bbd809734048"
+          ],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "go:36185b1c81aa:go_post_state:b10fe6120345",
+            "mut:36185b1c81aa:mutant:dcabe2e5666c",
+            "php:36185b1c81aa:php_post_state:cb69b5673861",
+            "php:claim-time:op_declared:f80177ad9367",
+            "replay:36185b1c81aa:go_effects_closed:741c700022f7",
+            "replay:36185b1c81aa:index_describes_replay:6da538f7902a",
+            "replay:36185b1c81aa:model_admissible_closed:e42e24b4af61",
+            "replay:36185b1c81aa:model_describes_run:30e5416af7e4",
+            "replay:36185b1c81aa:model_writes_closed:0b12b0ac957d",
+            "replay:36185b1c81aa:mutant_kills_closed:5ec55c452bcf",
+            "replay:36185b1c81aa:mutants_closed:e0260c65efbe",
+            "replay:36185b1c81aa:php_effects_closed:c69d8dda2898",
+            "replay:36185b1c81aa:replay_request:b67ffd90fbf2",
+            "replay:36185b1c81aa:replay_requests_closed:acc922ba3952",
+            "replay:36185b1c81aa:replay_run:ad8057bded65",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:36185b1c81aa:model_admissible:bbd809734048"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": []
+        },
+        "claim-m2-survives": {
+          "semantic_verdict": "supported",
+          "operational_status": "complete",
+          "support_leaves": [
+            "mut:36185b1c81aa:mutant:48053510584a",
+            "replay:36185b1c81aa:model_describes_run:30e5416af7e4",
+            "replay:36185b1c81aa:mutant_kills_closed:5ec55c452bcf",
+            "replay:36185b1c81aa:mutants_closed:d76a11a716ff"
+          ],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "mut:36185b1c81aa:mutant:48053510584a",
+            "replay:36185b1c81aa:model_describes_run:30e5416af7e4",
+            "replay:36185b1c81aa:mutant_kills_closed:5ec55c452bcf",
+            "replay:36185b1c81aa:mutants_closed:d76a11a716ff"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [
+            {
+              "kind": "mutant-not-killed",
+              "mutant": "m-2"
+            }
+          ],
+          "missing_premises": []
+        }
+      }
+    },
+    "04-missing-model-witness": {
+      "claims": {
+        "claim-qualified-close": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "complete",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "model_describes_run",
+              "reason": "no model_describes_run witness binds the receipt's model to the run"
+            }
+          ]
+        },
+        "claim-qualified-create": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "complete",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "model_describes_run",
+              "reason": "no model_describes_run witness binds the receipt's model to the run"
+            }
+          ]
+        },
+        "claim-php-agrees-req-1": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "complete",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "model_describes_run",
+              "reason": "no model_describes_run witness binds the receipt's model to the run"
+            }
+          ]
+        }
+      }
+    },
+    "05-missing-snapshot-witness": {
+      "claims": {
+        "claim-qualified-close": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "complete",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "replay:6b91e6f218c0:model_describes_run:30e5416af7e4",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "replay_run_current",
+              "reason": "the run's snapshot digest was not observed, so replay_run_current does not hold"
+            }
+          ]
+        },
+        "claim-qualified-create": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "complete",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "replay:6b91e6f218c0:model_describes_run:30e5416af7e4",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "replay_run_current",
+              "reason": "the run's snapshot digest was not observed, so replay_run_current does not hold"
+            }
+          ]
+        }
+      }
+    },
+    "06-stale-replay": {
+      "claims": {
+        "claim-qualified-close": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "stale",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "replay:6b91e6f218c0:model_describes_run:30e5416af7e4",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:2c36174f502d",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "replay_run_current",
+              "reason": "the observed nonce differs from the run's nonce, so the replay is stale rather than current"
+            }
+          ]
+        },
+        "claim-qualified-create": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "stale",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "replay:6b91e6f218c0:model_describes_run:30e5416af7e4",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:2c36174f502d",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "replay_run_current",
+              "reason": "the observed nonce differs from the run's nonce, so the replay is stale rather than current"
+            }
+          ]
+        },
+        "claim-run-stale": {
+          "semantic_verdict": "supported",
+          "operational_status": "complete",
+          "support_leaves": [
+            "replay:6b91e6f218c0:replay_run:ad8057bded65",
+            "reviewer:claim-time:run_nonce_observed:2c36174f502d"
+          ],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "replay:6b91e6f218c0:replay_run:ad8057bded65",
+            "reviewer:claim-time:run_nonce_observed:2c36174f502d"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": []
+        }
+      }
+    },
+    "08-lying-closure": {
+      "claims": {
+        "claim-qualified-close": {
+          "semantic_verdict": "supported",
+          "operational_status": "complete",
+          "support_leaves": [
+            "go:3efff7e2e7c0:go_post_state:8cd0fcfad011",
+            "mut:3efff7e2e7c0:mutant:48053510584a",
+            "php:3efff7e2e7c0:php_post_state:61c03708afcd",
+            "php:claim-time:op_declared:a23b0d956caa",
+            "replay:3efff7e2e7c0:go_effects_closed:741c700022f7",
+            "replay:3efff7e2e7c0:index_describes_replay:6da538f7902a",
+            "replay:3efff7e2e7c0:model_admissible_closed:e42e24b4af61",
+            "replay:3efff7e2e7c0:model_describes_run:30e5416af7e4",
+            "replay:3efff7e2e7c0:model_writes_closed:6425563e0740",
+            "replay:3efff7e2e7c0:mutant_kills_closed:5ec55c452bcf",
+            "replay:3efff7e2e7c0:mutants_closed:d76a11a716ff",
+            "replay:3efff7e2e7c0:php_effects_closed:c69d8dda2898",
+            "replay:3efff7e2e7c0:replay_request:e1b3e116da62",
+            "replay:3efff7e2e7c0:replay_requests_closed:acc922ba3952",
+            "replay:3efff7e2e7c0:replay_run:ad8057bded65",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:3efff7e2e7c0:model_admissible:390a5bcaf435"
+          ],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "go:3efff7e2e7c0:go_post_state:8cd0fcfad011",
+            "mut:3efff7e2e7c0:mutant:48053510584a",
+            "php:3efff7e2e7c0:php_post_state:61c03708afcd",
+            "php:claim-time:op_declared:a23b0d956caa",
+            "replay:3efff7e2e7c0:go_effects_closed:741c700022f7",
+            "replay:3efff7e2e7c0:index_describes_replay:6da538f7902a",
+            "replay:3efff7e2e7c0:model_admissible_closed:e42e24b4af61",
+            "replay:3efff7e2e7c0:model_describes_run:30e5416af7e4",
+            "replay:3efff7e2e7c0:model_writes_closed:6425563e0740",
+            "replay:3efff7e2e7c0:mutant_kills_closed:5ec55c452bcf",
+            "replay:3efff7e2e7c0:mutants_closed:d76a11a716ff",
+            "replay:3efff7e2e7c0:php_effects_closed:c69d8dda2898",
+            "replay:3efff7e2e7c0:replay_request:e1b3e116da62",
+            "replay:3efff7e2e7c0:replay_requests_closed:acc922ba3952",
+            "replay:3efff7e2e7c0:replay_run:ad8057bded65",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:3efff7e2e7c0:model_admissible:390a5bcaf435"
+          ],
+          "forbidden_leaves": [
+            "replay:3efff7e2e7c0:mutant_kills_closed:5ec55c452bcf"
+          ],
+          "discrepancies": [],
+          "missing_premises": []
+        },
+        "claim-qualified-create": {
+          "semantic_verdict": "supported",
+          "operational_status": "complete",
+          "support_leaves": [
+            "go:3efff7e2e7c0:go_post_state:b10fe6120345",
+            "mut:3efff7e2e7c0:mutant:dcabe2e5666c",
+            "php:3efff7e2e7c0:php_post_state:cb69b5673861",
+            "php:claim-time:op_declared:f80177ad9367",
+            "replay:3efff7e2e7c0:go_effects_closed:741c700022f7",
+            "replay:3efff7e2e7c0:index_describes_replay:6da538f7902a",
+            "replay:3efff7e2e7c0:model_admissible_closed:e42e24b4af61",
+            "replay:3efff7e2e7c0:model_describes_run:30e5416af7e4",
+            "replay:3efff7e2e7c0:model_writes_closed:0b12b0ac957d",
+            "replay:3efff7e2e7c0:mutant_kills_closed:5ec55c452bcf",
+            "replay:3efff7e2e7c0:mutants_closed:e0260c65efbe",
+            "replay:3efff7e2e7c0:php_effects_closed:c69d8dda2898",
+            "replay:3efff7e2e7c0:replay_request:b67ffd90fbf2",
+            "replay:3efff7e2e7c0:replay_requests_closed:acc922ba3952",
+            "replay:3efff7e2e7c0:replay_run:ad8057bded65",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:3efff7e2e7c0:model_admissible:bbd809734048"
+          ],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "go:3efff7e2e7c0:go_post_state:b10fe6120345",
+            "mut:3efff7e2e7c0:mutant:dcabe2e5666c",
+            "php:3efff7e2e7c0:php_post_state:cb69b5673861",
+            "php:claim-time:op_declared:f80177ad9367",
+            "replay:3efff7e2e7c0:go_effects_closed:741c700022f7",
+            "replay:3efff7e2e7c0:index_describes_replay:6da538f7902a",
+            "replay:3efff7e2e7c0:model_admissible_closed:e42e24b4af61",
+            "replay:3efff7e2e7c0:model_describes_run:30e5416af7e4",
+            "replay:3efff7e2e7c0:model_writes_closed:0b12b0ac957d",
+            "replay:3efff7e2e7c0:mutant_kills_closed:5ec55c452bcf",
+            "replay:3efff7e2e7c0:mutants_closed:e0260c65efbe",
+            "replay:3efff7e2e7c0:php_effects_closed:c69d8dda2898",
+            "replay:3efff7e2e7c0:replay_request:b67ffd90fbf2",
+            "replay:3efff7e2e7c0:replay_requests_closed:acc922ba3952",
+            "replay:3efff7e2e7c0:replay_run:ad8057bded65",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:3efff7e2e7c0:model_admissible:bbd809734048"
+          ],
+          "forbidden_leaves": [
+            "replay:3efff7e2e7c0:mutant_kills_closed:5ec55c452bcf"
+          ],
+          "discrepancies": [],
+          "missing_premises": []
+        },
+        "claim-kill-outside-corpus": {
+          "semantic_verdict": "supported",
+          "operational_status": "complete",
+          "support_leaves": [
+            "mut:3efff7e2e7c0:mutant_killed:6c2d4b9b4cf1",
+            "replay:3efff7e2e7c0:mutant_kills_closed:5ec55c452bcf",
+            "replay:3efff7e2e7c0:replay_requests_closed:acc922ba3952"
+          ],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "mut:3efff7e2e7c0:mutant_killed:6c2d4b9b4cf1",
+            "replay:3efff7e2e7c0:mutant_kills_closed:5ec55c452bcf",
+            "replay:3efff7e2e7c0:replay_requests_closed:acc922ba3952"
+          ],
+          "forbidden_leaves": [
+            "replay:3efff7e2e7c0:mutant_kills_closed:5ec55c452bcf"
+          ],
+          "discrepancies": [
+            {
+              "kind": "kill-outside-replayed-requests",
+              "mutant": "m-1",
+              "req": "req-9"
+            }
+          ],
+          "missing_premises": []
+        }
+      }
+    }
+  }
+}
