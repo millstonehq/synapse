@@ -1,0 +1,25 @@
+{
+  "rows": [
+    {
+      "op": "issues.create",
+      "req": "req-1",
+      "route": "POST /api/issues",
+      "run": "run-fixture-1",
+      "tenant": "tenant-a"
+    },
+    {
+      "op": "issues.close",
+      "req": "req-2",
+      "route": "POST /api/issues/{id}/close",
+      "run": "run-fixture-1",
+      "tenant": "tenant-a"
+    },
+    {
+      "op": "issues.create",
+      "req": "req-3",
+      "route": "POST /api/issues",
+      "run": "run-fixture-1",
+      "tenant": "tenant-b"
+    }
+  ]
+}
