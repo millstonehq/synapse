@@ -138,6 +138,7 @@ def main(argv: list[str]) -> int:
     rec.add_argument("--target", default=".")
     rec.add_argument("--selected", required=True)
     rec.add_argument("--out", required=True)
+    rec.add_argument("--report-features", help="comma-separated non-overlapping selected frontier")
     rec.add_argument("--flow-model")
     rec.add_argument("--flow-plan")
     rec.add_argument("--flow-inventory")
@@ -167,6 +168,7 @@ def main(argv: list[str]) -> int:
                 model, load(args.outcomes_map), load(args.inventory), load(args.run) if args.run else None,
                 Path(args.target).resolve(), _ids(args.selected),
                 flow_inputs=tuple(load(p) for p in flow_paths) if all(flow_paths) else None,
+                report_features=_ids(args.report_features) if args.report_features else None,
             )
             Path(args.out).write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
             print(f"capcov features: complete={result['complete']}; wrote {args.out}")

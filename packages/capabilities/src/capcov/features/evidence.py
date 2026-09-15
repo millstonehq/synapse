@@ -33,6 +33,7 @@ def reconcile(
     selected: set[str],
     *,
     flow_inputs: tuple[dict, dict, dict, dict] | None = None,
+    report_features: set[str] | None = None,
 ) -> dict:
     """Reconcile native pytest/browser evidence into feature-owned outcome sets.
 
@@ -55,7 +56,10 @@ def reconcile(
     current = outcomes.provenance(root, outcome_map, inventory)
     if run is None:
         pytest_report = {
-            "rows": [{**row, "status": "missing"} for row in outcome_map["outcomes"]],
+            "rows": [
+                {**row, "status": "unresolved" if row["policy"] == "unresolved" else "missing"}
+                for row in outcome_map["outcomes"]
+            ],
             "run_errors": [], "complete": False,
         }
         native_reports = []
@@ -92,9 +96,17 @@ def reconcile(
         by_scenario = {row["id"]: row for row in fr.get("scenarios", [])}
         for scenario in plan.get("scenarios", []):
             actual = by_scenario.get(scenario["id"], {})
-            if actual.get("status") != "passed":
+            required = [
+                f"{index}:{step['transition']}:{command['id']}"
+                for index, step in enumerate(scenario["steps"])
+                for command in step["commands"] if command.get("op") == "assert"
+            ]
+            if (actual.get("status") != "passed"
+                    or actual.get("assertions") != required
+                    or any(f"missing surface evidence: {scenario['id']}" in failure
+                           for failure in flow_report.get("failures", []))):
                 continue
-            attested = set(actual.get("assertions", []))
+            attested = set(required)
             for index, step in enumerate(scenario["steps"]):
                 for command in step["commands"]:
                     assertion = f"{index}:{step['transition']}:{command.get('id')}"
@@ -155,20 +167,62 @@ def reconcile(
         obligations[fid] = {"covered": covered_count, "total": total}
 
     vector = coverage.rollup(model, obligations, selected)
-    for row in vector["tree_rows"]:
-        fid = row["feature"]
+    rows_by_id = {row["feature"]: row for row in vector["tree_rows"]}
+    model_children: dict[str, list[str]] = {}
+    for feature in model["features"]:
+        if feature["id"] != model["root"]:
+            model_children.setdefault(feature["parent"], []).append(feature["id"])
+    def augment(fid: str) -> tuple[set[str], set[str], set[str]]:
+        row = rows_by_id[fid]
+        rolled_owned, rolled_demo = set(owned[fid]), set(demonstrated[fid])
+        rolled_gaps = {"<no-outcome-defined>"} if fid in missing_leaf_outcomes else set()
+        for child in model_children.get(fid, []):
+            if rows_by_id[child]["status"] in ("required", "selected"):
+                child_owned, child_demo, child_gaps = augment(child)
+                rolled_owned |= child_owned
+                rolled_demo |= child_demo
+                rolled_gaps |= {f"{child}:{gap}" for gap in child_gaps}
         row["own_outcome_ids"] = sorted(owned[fid])
         row["demonstrated_outcome_ids"] = sorted(demonstrated[fid])
+        row["rolled_outcome_ids"] = sorted(rolled_owned)
+        row["rolled_demonstrated_outcome_ids"] = sorted(rolled_demo)
         row["missing_required_outcomes"] = sorted(set(owned[fid]) - set(demonstrated[fid]))
         if fid in missing_leaf_outcomes:
             row["missing_required_outcomes"].append("<no-outcome-defined>")
+        row["rolled_acceptance_gaps"] = sorted((rolled_owned - rolled_demo) | rolled_gaps)
         row["acceptance_status"] = (
-            "missing"
-            if row["covered"] == 0 and (row["total"] or row["missing_required_outcomes"])
-            else "demonstrated"
-            if row["covered"] == row["total"] and not row["missing_required_outcomes"]
+            "not-selected" if row["status"] not in ("required", "selected")
+            else "missing" if not rolled_demo and row["rolled_acceptance_gaps"]
+            else "demonstrated" if not row["rolled_acceptance_gaps"]
             else "partial"
         )
+        return rolled_owned, rolled_demo, rolled_gaps
+    augment(model["root"])
+    for row in vector["tree_rows"]:
+        fid = row["feature"]
+        if "acceptance_status" not in row:
+            row["acceptance_status"] = "not-selected"
+
+    frontier = set(report_features or {
+        fid for fid in selected if fid not in selected_parents
+    })
+    if not frontier <= selected:
+        raise ValueError(f"report features must be selected: {sorted(frontier - selected)}")
+    idx = {f["id"]: f for f in model["features"]}
+    for fid in frontier:
+        parent = idx[fid].get("parent")
+        while parent is not None:
+            if parent in frontier:
+                raise ValueError(f"report features overlap ancestor and descendant: {parent}, {fid}")
+            parent = idx[parent].get("parent")
+    covered_by_frontier: set[str] = set()
+    for fid in frontier:
+        cur = fid
+        while cur is not None:
+            covered_by_frontier.add(cur)
+            cur = idx[cur].get("parent")
+    outside_frontier = sorted(selected - covered_by_frontier)
+    frontier_rows = [rows_by_id[fid] for fid in sorted(frontier)]
 
     referenced = {ref for row in outcome_map["outcomes"] for ref in row["source_refs"]}
     discovered = {surface["id"] for surface in inventory.get("surfaces", [])}
@@ -208,6 +262,12 @@ def reconcile(
         "unknown_discovery": unknown_discovery,
         "unresolved_discovery": unresolved_discovery,
         "excluded_discovery": excluded_discovery,
+        "report_frontier": sorted(frontier),
+        "required_features_outside_frontier": outside_frontier,
+        "capability_summary": {
+            status: sum(row["acceptance_status"] == status for row in frontier_rows)
+            for status in ("demonstrated", "partial", "missing")
+        },
         **vector,
         "behavioral_complete": behavioral_complete,
         "discovery_accounted": discovery_accounted,
