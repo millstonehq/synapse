@@ -201,7 +201,24 @@ class LaravelUnresolvedIdTests(unittest.TestCase):
         self.assertEqual(len(dynamic), 2)
         self.assertEqual(len({u["id"] for u in dynamic}), 2)
         for u in dynamic:
-            self.assertEqual(u["id"], f"laravel-routes:{u['file']}:{u['line']}:dynamic-route")
+            self.assertEqual(
+                u["id"],
+                f"laravel-routes:{u['file']}:{u['line']}:{u['column']}:dynamic-route",
+            )
+
+    def test_two_limits_on_one_line_still_get_distinct_gate_ids(self) -> None:
+        source = "<?php\nRoute::get($a, 'C@a'); Route::get($b, 'C@b');\n"
+        core = _core_from({"routes/api.php": source}, {"globs": ["routes/*.php"]})
+        dynamic = [u for u in core["unresolved"] if u["kind"] == "dynamic-route"]
+        self.assertEqual([u["line"] for u in dynamic], [2, 2])
+        self.assertEqual(len({u["id"] for u in dynamic}), 2)
+
+    def test_a_one_line_group_and_the_route_in_it_do_not_share_an_id(self) -> None:
+        source = "<?php\nRoute::prefix($t)->group(function () { Route::get('x', 'C@x'); });\n"
+        core = _core_from({"routes/api.php": source}, {"globs": ["routes/*.php"]})
+        entries = [u for u in core["unresolved"] if u["kind"] == "dynamic-prefix"]
+        self.assertEqual(len(entries), 2)
+        self.assertEqual(len({u["id"] for u in entries}), 2)
 
     def test_no_surfaces_entry_stays_id_less(self) -> None:
         core = _core_from({}, {"globs": ["routes/*.php"]})
@@ -267,6 +284,36 @@ class LaravelFluentAndReceiverTests(unittest.TestCase):
         self.assertEqual(_ids(core), set())
         entry = next(u for u in core["unresolved"] if u["kind"] == "dynamic-route")
         self.assertIn("$router", entry["reason"])
+
+    def test_non_facade_group_with_non_literal_attributes_is_named_not_walked(self) -> None:
+        # The shape gate must not let a group whose prefix the reader never saw
+        # leak the routes inside it at an unprefixed path.
+        source = (
+            "<?php\n$router->group($attrs, function () use ($router) {\n"
+            "    Route::get('in', 'C@in');\n});\n"
+        )
+        core = _core_from({"routes/api.php": source}, {"globs": ["routes/*.php"]})
+        self.assertEqual(_ids(core), set())
+        entry = next(u for u in core["unresolved"] if u["kind"] == "dynamic-route")
+        self.assertIn("$router", entry["reason"])
+
+    def test_non_facade_verb_with_a_non_literal_path_is_still_named(self) -> None:
+        # The facade twin `Route::get($path, ...)` is named; so is this.
+        source = "<?php\n$router->get($path, 'C@i');\n"
+        core = _core_from({"routes/api.php": source}, {"globs": ["routes/*.php"]})
+        self.assertEqual(_ids(core), set())
+        entry = next(u for u in core["unresolved"] if u["kind"] == "dynamic-route")
+        self.assertIn("$router", entry["reason"])
+
+    def test_cache_get_with_a_plain_default_is_not_a_fabricated_limit(self) -> None:
+        # Two arguments, neither a literal path nor a handler: ordinary PHP.
+        source = (
+            "<?php\n$value = $cache->get($key, $fallback);\n"
+            "Route::get('real', 'C@real');\n"
+        )
+        core = _core_from({"routes/api.php": source}, {"globs": ["routes/*.php"]})
+        self.assertEqual(_ids(core), {"http:GET /real"})
+        self.assertEqual(core["unresolved"], [])
 
     def test_non_facade_router_group_is_unresolved_and_its_body_is_not_guessed(self) -> None:
         source = (
