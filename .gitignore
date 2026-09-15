@@ -215,3 +215,6 @@ settings.local.json
 # Generation artifacts (ephemeral, used by synapse generate)
 .synapse-generate/
 titles.json
+
+# Local review/agent worktrees (e.g. .worktrees/pr49-<sha>); never part of the tree.
+.worktrees/
