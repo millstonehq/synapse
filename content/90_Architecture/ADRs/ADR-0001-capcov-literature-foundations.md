@@ -5,7 +5,7 @@ title: capcov's literature foundations
 status: accepted
 owner: cpb
 created: '2026-09-13T00:00:00.000Z'
-updated: '2026-09-13T00:00:00.000Z'
+updated: '2026-09-15T00:00:00.000Z'
 tags:
   - adr
   - capabilities
