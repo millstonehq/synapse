@@ -2,3 +2,4 @@ include capcov.toml capcov.outcomes.json uv.lock
 recursive-include scripts *.sh
 recursive-include tests *.py *.patch
 recursive-include src/capcov/claims/static *.json
+recursive-include src/capcov/claims/replay *.json
