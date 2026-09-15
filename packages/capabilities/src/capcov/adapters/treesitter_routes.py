@@ -134,6 +134,8 @@ def discover(
                 "file": obligation["source"]["file"],
                 "line": obligation["source"]["line"],
                 "module": obligation["source"]["file"],
+                "tags": obligation.get("tags"),
+                "summary": obligation.get("summary"),
             }
         )
     unresolved = project_flows_unresolved(inventory, NAME)

@@ -197,6 +197,8 @@ def build_core_dict(
                 "file": record.get("file"),
                 "line": record.get("line"),
                 "mounted": True,
+                **({"tags": record["tags"]} if record.get("tags") else {}),
+                **({"summary": record["summary"]} if record.get("summary") else {}),
             }
         )
         direct[root] = {sid}
