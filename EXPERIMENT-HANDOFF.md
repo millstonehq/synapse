@@ -88,6 +88,13 @@ gate commands must use `PYTHONPATH="$PWD/src"` (absolute) because upstream tests
    runtime-route/index claim through `index_describes_run`. The independent static certificate
    still proves handler -> `Tx.ExecContext`; do not describe the two certificates as one
    end-to-end proof. Next, promote the receipt producer in target-go and add producer authority.
+   The causal-trace follow-up records ordered route entry, `ChangeSubscription` entry, successful
+   SQL operations, transaction commit and route completion for one request. Both kernels derive
+   `runtime_route_reaches_sql_on_index` only when the run, request, transaction, surface and index
+   witnesses agree. Those primitive relations admit only the `target-go-runtime-trace-v2` producer
+   class. This closes the runtime route-to-SQL caveat for this pilot. Python still owns strict
+   ingestion, IR validation and certificate construction; retire it as an evaluator only after an
+   independent ground-certificate checker exists.
 2. `datalog-certificates`: ground checker + why/why-not, and enforce producer-class authority.
 3. Decide whether the claims package goes to upstream `main` as an opt-in package PR.
 4. Wire `capcov/cas.py` into a consumer or drop it; it currently has no caller.

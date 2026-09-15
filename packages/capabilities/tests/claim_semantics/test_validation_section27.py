@@ -13,6 +13,20 @@ def codes(bundle): return {issue.code for issue in validate_bundle(bundle)}
 
 
 class Section27ValidationTests(unittest.TestCase):
+    def test_primitive_relation_rejects_an_unauthorized_producer_class(self):
+        relation = RelationDecl("runtime_sql_executed", (Column("run", "symbol", True),),
+                                producer_classes=("target-go-runtime-trace-v2",),
+                                context_indices=("run",))
+        atom = Atom("runtime_sql_executed", (Constant("run-1", "symbol"),))
+        unauthorized = Bundle((relation,), facts=(atom,), evidence=(
+            Evidence("event", atom, Context.from_mapping({"run": "run-1"}),
+                     source="receipt", kind="generic-json"),))
+        self.assertIn("producer-authority", codes(unauthorized))
+        authorized = Bundle((relation,), facts=(atom,), evidence=(
+            Evidence("event", atom, Context.from_mapping({"run": "run-1"}),
+                     source="receipt", kind="target-go-runtime-trace-v2"),))
+        self.assertNotIn("producer-authority", codes(authorized))
+
     def test_evidence_and_facts_correspond_exactly(self):
         relation = RelationDecl("seen", (Column("x", "symbol"),))
         atom = Atom("seen", (Constant("x"),))

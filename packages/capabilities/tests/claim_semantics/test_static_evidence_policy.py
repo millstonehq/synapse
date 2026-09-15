@@ -174,7 +174,7 @@ class StaticEvidencePolicyTest(unittest.TestCase):
         self.assertEqual({decl.name for decl in exported.bundle.relations} & {d.name for d in pack.relations}
                          - {d.name for d in pack.relations if d.primitive},
                          {"scip_document_path", "scip_definition_site_at", "static_route_declared_surface",
-                          "static_reaches"})
+                          "static_reaches", "runtime_route_reaches_sql_on_index"})
 
 
 if __name__ == "__main__":

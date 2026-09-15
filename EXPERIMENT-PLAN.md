@@ -4949,6 +4949,22 @@ is a superset (same tools plus hyperfine, souffle, shen-go, the sandboxed checks
 binds. The experiment flake is kept; upstream's `.envrc` (`use flake`) therefore loads it.
 Full regression on the merged tree is recorded below when it completes.
 
+### 2026-09-15 target-go causal runtime trace follow-up
+
+The recipient-link fixture now emits schema `capcov-target-go-runtime-route/v2` from target-go commit
+`01fe913`: one request identity is preserved across route entry, entry into `ChangeSubscription`,
+two successful transaction SQL operations, commit and route completion. CapCov imports those as
+typed runtime facts, rejects evidence whose producer class is not `target-go-runtime-trace-v2`, joins
+the run to the exact SCIP index, and derives `runtime_route_reaches_sql_on_index` in Python and
+Soufflé. The real fixture gate passed 10 tests in 302.9 seconds (index 19.3 s, differential compare
+185.8 s); the validation/export policy gate passed 68 tests. Missing or mismatched causal
+identities remain unresolved rather than being inferred from terminal database state.
+
+Soufflé can become the sole derivation engine after the deferred ground checker independently
+validates its certificates. Python remains in the trusted path today for receipt parsing, schema
+and producer-authority validation, claim folding and certificate construction; deleting that code
+before the checker exists would reduce, not improve, independent assurance.
+
 ### 2026-09-15 close-out of `datalog-kernel-closure` and integration of the SCIP → Datalog wave
 
 `kernel-closure-finalize` ran three Codex-backed attempts on the merged tree (`8adc197`; driver
