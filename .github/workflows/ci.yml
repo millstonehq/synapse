@@ -57,7 +57,7 @@ jobs:
       - name: Install build tooling
         run: python -m pip install uv
       - name: Test the standalone engine
-        run: nix develop ../.. --no-update-lock-file --command bash -lc 'cd packages/capabilities && PYTHONPATH=src uv run --frozen python -m unittest discover -s tests -t .'
+        run: nix develop ../.. --no-update-lock-file --command bash -lc 'PYTHONPATH=src uv run --frozen python -m unittest discover -s tests -t .'
       - name: Verify capcov blocks false advancement
         timeout-minutes: 8
         run: uv run --frozen --with pytest sh scripts/check-backpressure.sh
@@ -72,7 +72,7 @@ jobs:
         run: |
           uv venv /tmp/capabilities-install
           uv pip install --python /tmp/capabilities-install/bin/python dist/*.whl
-          nix develop ../.. --no-update-lock-file --command bash -lc 'cd packages/capabilities && /tmp/capabilities-install/bin/python -m unittest discover -s tests -t .'
+          nix develop ../.. --no-update-lock-file --command bash -lc '/tmp/capabilities-install/bin/python -m unittest discover -s tests -t .'
           /tmp/capabilities-install/bin/capcov --help
           /tmp/capabilities-install/bin/capcov flows --help
           /tmp/capabilities-install/bin/synapse-capabilities --help
