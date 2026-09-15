@@ -3446,6 +3446,421 @@ projection by `datalog-certificates`. Producer/kernel output is evidence, not au
 ownership is not execution evidence. No Shen, SCIP, external execution, receipt, certificate,
 real-Go, Linux, performance recommendation, production CLI behavior, or checkpoint is claimed.
 
+### 2026-09-15 restarted finalizer qualification after post-WIP integration
+
+This implementer continuation began from the clean committed branch at HEAD
+`8adc19709d49e95737ecaa4dbda15fd84ab609df`. That HEAD includes the later indexed/memoized
+evaluator, semi-naive fixpoint, Soufflé translation cache, upstream `bdb67b8`, and the gate-command
+repair that makes `PYTHONPATH` absolute. The only new semantic-closure edit routes eleven
+previously boundary-only, canonical invalid Bundles through blocking `compare()`: the nine
+mixed-binding mutants, the indexless static declaration, and the mapping-to-decoy claim. Their
+shared helper asserts the ordered `("invalid-input", "invalid-input")` pair, blocking mismatch,
+real replay file, byte-identical canonical replay contents, digest identity after strict reload,
+and `replay_reproduced`. The established central counts remain exactly 19 valid, 12 invalid, and
+five exhausted cases; the five structurally noncanonical graphs remain constructor rejections.
+
+The integration parent and artifacts are unchanged. Live SHA-256 checks again produced, in
+manifest order:
+
+1. `claims-20260914185300567-kernel-closure-1.patch`:
+   `c823f18e1f5375d128f17d3554c63d81daaa03339741cf42a8339941b7bcaebf`;
+2. `claims-20260914185300567-differential-closure-1.patch`:
+   `86b8fbb458b9a17d2cb683ff174d9df2215804fa273b0f5feeb0b8e626b75ab8`.
+
+They were not reapplied to the current branch. This exact Nix command instead replayed each full
+artifact, in that order, inside a disposable archive of the recorded integration parent; it used
+no worker commit and did not read or mutate a worker worktree:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'set -eu; root=$PWD; git_path=$(command -v git); case "$git_path" in /nix/store/*) ;; *) echo "unpinned git=$git_path" >&2; exit 1;; esac; tmp=$(mktemp -d); trap '\''rm -rf "$tmp"'\'' EXIT; git archive 7b5e8ab52f291b964f6c41c0b566b5e57d9b04a9 | tar -x -C "$tmp"; cd "$tmp"; git apply --check "$root/.capcov/pi-workflow/patches/claims-20260914185300567-kernel-closure-1.patch"; git apply "$root/.capcov/pi-workflow/patches/claims-20260914185300567-kernel-closure-1.patch"; git apply --check "$root/.capcov/pi-workflow/patches/claims-20260914185300567-differential-closure-1.patch"; git apply "$root/.capcov/pi-workflow/patches/claims-20260914185300567-differential-closure-1.patch"; test -f packages/capabilities/tests/claim_semantics/test_kernel_closure.py; printf "integration_parent=%s\ngit=%s\nmanifest_order=kernel-closure,differential-closure\nforward_replay=ok\n" 7b5e8ab52f291b964f6c41c0b566b5e57d9b04a9 "$git_path"'
+```
+
+Implementer result: exit 0 in 6.718s. It printed pinned Git
+`/nix/store/yqw09igi72yxpgy3d1b25vbh5l8rx227-git-2.55.0/bin/git`,
+`integration_parent=7b5e8ab52f291b964f6c41c0b566b5e57d9b04a9`, the manifest order, and
+`forward_replay=ok`.
+
+The exact dependency `kernel-closure-tests` command from the live manifest was:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'command -v souffle && set -eu; for c in souffle; do p=$(command -v "$c"); case "$p" in /nix/store/*) ;; *) echo "unpinned $c=$p" >&2; exit 1;; esac; done; cd packages/capabilities && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_provenance*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_validation_section27*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_kernel_closure*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_python_evaluator*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_evidence_policy*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_python_evaluator*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_ir*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_contract_review*.py'\'' -t . && out=$(PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_souffle_evaluator*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac && out=$(PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_souffle*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac'
+```
+
+Implementer result: exit 0. The ten discoveries ran 13, 21, 25, 1, 16, 11, 13, 23, 2,
+and 33 tests in 0.415s, 0.048s, 2.094s, 0.075s, 0.352s, 0.010s, 0.005s, 0.004s,
+0.202s, and 5.060s; all were `OK`. The tool-reported wall time was 27.387s. Both focused
+Soufflé discoveries returned `rc=0` and the gate's skip guards did not fire.
+
+The exact dependency `differential-closure-tests` command and the byte-identical finalizer
+`differential-tests` command were run separately:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'command -v souffle && set -eu; for c in souffle; do p=$(command -v "$c"); case "$p" in /nix/store/*) ;; *) echo "unpinned $c=$p" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_differential*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_shrinker*.py'\'' -t .'
+```
+
+Implementer dependency result: exit 0; 31 differential tests ran in 57.735s and 13 shrinker
+tests in 7.914s, all `OK`, with `rc=0` and no focused skip. Implementer finalizer result: exit
+0; the same 31 and 13 tests ran in 134.483s and 14.713s, all `OK`, with `rc=0` and no
+focused skip. Nix reported temporary contention with another input-fetch process during the
+second run; the pinned shell opened and the real test result, rather than the wait, is recorded.
+
+The exact finalizer `kernel-tests` command was:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'command -v souffle && set -eu; for c in souffle; do p=$(command -v "$c"); case "$p" in /nix/store/*) ;; *) echo "unpinned $c=$p" >&2; exit 1;; esac; done; cd packages/capabilities && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_python_evaluator*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_python_evaluator*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_provenance*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_kernel_closure*.py'\'' -t . && out=$(PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_souffle_evaluator*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac && out=$(PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_souffle*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac'
+```
+
+Implementer result: exit 0. The six discoveries ran 1, 11, 13, 25, 2, and 33 tests in
+4.769s, 0.025s, 0.263s, 41.757s, 0.665s, and 8.300s. All were `OK`; the guarded focused
+Soufflé commands returned `rc=0` without a skip.
+
+The exact finalizer regression command was:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'cd packages/capabilities && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -t .'
+```
+
+Implementer result: exit 0, `Ran 884 tests in 133.353s`, `OK (skipped=125)`. This includes
+the post-finalizer evaluator-index and Soufflé-cache modules, and the two moving-`origin/main`
+compatibility tests that failed the prior attempt now pass. The 125 broad-suite skips are
+optional tool/platform cases and are not used as Soufflé evidence; the focused gates above
+resolved the real pinned executable and rejected skips.
+
+The two post-WIP performance modules were also selected explicitly with this command:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'set -eu; cd packages/capabilities; PYTHONPATH="$PWD/src" python -m unittest tests.claim_semantics.test_evaluator_index; out=$(PYTHONPATH="$PWD/src" python -m unittest tests.claim_semantics.test_souffle_cache 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac'
+```
+
+Implementer result: exit 0; three evaluator-index tests ran in 0.027s and four Soufflé-cache
+tests in 0.156s, all `OK`; the cache discovery returned `rc=0` without a skip.
+
+The corrected supplemental 14-fixture oracle used the same Python payload printed in the
+immediately preceding finalizer record, with every `PYTHONPATH=src` changed to
+`PYTHONPATH="$PWD/src"`. It resolved Soufflé to
+`/nix/store/hjf84h92h4ynbbn9sg9q1biyr25r617i-souffle-2.5/bin/souffle`, observed Python
+3.12.14, and exited 0 in 6.574s. Its 14 output rows reproduced exactly the 14 relation counts,
+full report digests, and claim results in the preceding table. The script asserted the exact
+14-file count, every declared relation on both sides, claim key/index, every
+`COMPARABLE_CLAIM_FIELDS` field, and the independent `expected.json` verdict/status/basis/
+missing-premise oracle. A first supplemental wrapper attempt exited 2 before Python executed
+because the outer orchestration shell expanded `$()` and `$PWD`; it is not presented as a test
+result or hidden as a semantic failure.
+
+`corpus/expected.json` remains SHA-256
+`9c448aacb3b714a68ae532df6c7ff022425565fa64ee275bea9cb2caeee9139c`; the fresh corpus
+differential and provenance discoveries are green. No reviewed corpus byte, verdict/status/basis/
+missing-premise oracle, or leaf oracle changed.
+
+These are implementer observations only. The driver's `gate-result` events for this attempt, if
+admitted, remain the authoritative gate evidence, and only the driver may append a checkpoint hash
+in `task-completed`; neither is recorded or promised here. The semantic limits and deferred owners
+remain unchanged: Soufflé independently computes relational closure, while claim folding,
+diagnostics, mappings, and output rendering remain Python-mediated. CLI, Linux execution,
+performance evaluation, and recommendation are owned by `datalog-evaluation`; installed-wheel
+static-schema inclusion and provenance extraction are owned by `scip-datalog-differential`;
+ground checking, producer authority, and generic causal projection are owned by
+`datalog-certificates`. Producer/kernel output remains evidence, not authority. No Shen, external
+execution, receipt, certificate, real-Go, Linux, production CLI behavior, or checkpoint is claimed.
+
+### 2026-09-15 ingestion-boundary repair (`kernel-closure-finalize`, attempt 2)
+
+This implementer continuation began at HEAD
+`8adc19709d49e95737ecaa4dbda15fd84ab609df`. It preserved the pre-existing dirty plan record and
+the eleven-adversary `test_differential_kernels.py` change described immediately above. The two
+dependency artifacts were not reapplied to the evolved working tree. Their SHA-256 values were
+rechecked in manifest order as
+`c823f18e1f5375d128f17d3554c63d81daaa03339741cf42a8339941b7bcaebf` for
+`claims-20260914185300567-kernel-closure-1.patch`, then
+`86b8fbb458b9a17d2cb683ff174d9df2215804fa273b0f5feeb0b8e626b75ab8` for
+`claims-20260914185300567-differential-closure-1.patch`. The integration parent remains
+`7b5e8ab52f291b964f6c41c0b566b5e57d9b04a9`, which is an ancestor of this HEAD. A targeted
+archive containing every pre-existing path touched by the patches replayed both complete
+artifacts in that order; `test_kernel_closure.py` was created by the first patch. The command
+used pinned Git and neither read nor mutated a worker worktree:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'set -eu; root=$PWD; git_path=$(command -v git); case "$git_path" in /nix/store/*) ;; *) echo "unpinned git=$git_path" >&2; exit 1;; esac; tmp=$(mktemp -d); trap '\''rm -rf "$tmp"'\'' EXIT; git archive 7b5e8ab52f291b964f6c41c0b566b5e57d9b04a9 packages/capabilities/src/capcov/claims/evaluator.py packages/capabilities/src/capcov/claims/output.py packages/capabilities/src/capcov/claims/validation.py packages/capabilities/tests/claim_semantics/test_provenance_leaves.py packages/capabilities/src/capcov/claims/shrinker.py packages/capabilities/tests/claim_semantics/test_shrinker_bundle.py | tar -x -C "$tmp"; cd "$tmp"; git apply --check "$root/.capcov/pi-workflow/patches/claims-20260914185300567-kernel-closure-1.patch"; git apply "$root/.capcov/pi-workflow/patches/claims-20260914185300567-kernel-closure-1.patch"; git apply --check "$root/.capcov/pi-workflow/patches/claims-20260914185300567-differential-closure-1.patch"; git apply "$root/.capcov/pi-workflow/patches/claims-20260914185300567-differential-closure-1.patch"; test -f packages/capabilities/tests/claim_semantics/test_kernel_closure.py; printf "integration_parent=%s\ngit=%s\nmanifest_order=kernel-closure,differential-closure\nforward_replay=ok\n" 7b5e8ab52f291b964f6c41c0b566b5e57d9b04a9 "$git_path"'
+```
+
+Implementer result: exit 0. It printed pinned Git
+`/nix/store/yqw09igi72yxpgy3d1b25vbh5l8rx227-git-2.55.0/bin/git`, the stated parent,
+`manifest_order=kernel-closure,differential-closure`, and `forward_replay=ok`.
+
+The rejected attempt's public-ingestion failure was reproduced and repaired before the gates.
+`Context.from_mapping` now explicitly requires a Mapping. Schema-v1 ingestion distinguishes an
+absent object/array field from a present `null`, `false`, `0`, empty string, or wrong container.
+Wire objects and their exact canonical pair-list forms remain accepted for context, metadata,
+diagnostic predicates, and output fields. Every top-level and nested array is checked before tuple
+conversion, so values such as `relations=""`, `claims={}`, `columns=""`, and
+`producer_classes="ab"` can no longer become empty or character-wise collections. No broad
+`AttributeError` catch was added: producer-controlled shape errors raise `TypeError`/`ValueError`
+at their parser boundary and become exact `BundleIngestionError` values with
+`operational_failure="invalid-input"`; unrelated implementation defects remain visible.
+`validate=False` retains these structural checks for strict replay reloads. Canonical but
+semantic-invalid Bundles still traverse the blocking differential and persist canonical replay.
+
+`test_claim_ir.py` covers malformed metadata, diagnostic policy, claim/evidence context,
+diagnostic predicate, and output fields as both decoded mappings and JSON text under both
+validation modes. It also covers wrong top-level/nested array containers and positive absent,
+empty wire-object, canonical-context, canonical-metadata, and canonical round-trip controls. A
+120-probe Nix-shell diagnostic over the six object-shaped boundaries exited 0: every invalid
+shape produced the exact named ingestion failure and the three intentionally valid empty
+canonical pair lists remained valid. The first focused unit run exited 1 because the newly added
+positive control omitted the already-required non-empty evidence source; the test fixture was
+corrected rather than weakening validation. The rerun over `test_claim_ir`,
+`test_evidence_policy`, `test_kernel_closure`, and `test_shrinker_bundle` exited 0 with 70 tests
+in 21.292s.
+
+The exact dependency `kernel-closure-tests` command from the live manifest was:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'command -v souffle && set -eu; for c in souffle; do p=$(command -v "$c"); case "$p" in /nix/store/*) ;; *) echo "unpinned $c=$p" >&2; exit 1;; esac; done; cd packages/capabilities && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_provenance*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_validation_section27*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_kernel_closure*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_python_evaluator*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_evidence_policy*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_python_evaluator*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_ir*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_contract_review*.py'\'' -t . && out=$(PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_souffle_evaluator*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac && out=$(PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_souffle*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac'
+```
+
+Implementer result: exit 0. The ten discoveries ran 13, 21, 25, 1, 16, 11, 16, 23, 2,
+and 33 tests in 0.539s, 0.084s, 13.928s, 0.246s, 1.363s, 0.034s, 0.030s, 0.015s,
+1.486s, and 45.994s. All 161 tests were `OK`; both focused Soufflé discoveries returned
+`rc=0`, and the skip guards did not fire.
+
+The exact dependency `differential-closure-tests` and byte-identical finalizer
+`differential-tests` command were executed separately:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'command -v souffle && set -eu; for c in souffle; do p=$(command -v "$c"); case "$p" in /nix/store/*) ;; *) echo "unpinned $c=$p" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_differential*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_shrinker*.py'\'' -t .'
+```
+
+Implementer dependency result: exit 0; 31 differential tests ran in 116.313s and 13 shrinker
+tests in 21.564s, all `OK`, with `rc=0` and no focused skip. Implementer finalizer result: exit
+0; the same 31 and 13 tests ran in 92.803s and 19.152s, all `OK`, with `rc=0` and no focused
+skip.
+
+The exact finalizer `kernel-tests` command was:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'command -v souffle && set -eu; for c in souffle; do p=$(command -v "$c"); case "$p" in /nix/store/*) ;; *) echo "unpinned $c=$p" >&2; exit 1;; esac; done; cd packages/capabilities && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_python_evaluator*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_python_evaluator*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_provenance*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_kernel_closure*.py'\'' -t . && out=$(PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_souffle_evaluator*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac && out=$(PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_souffle*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac'
+```
+
+Implementer result: exit 0. The six discoveries ran 1, 11, 13, 25, 2, and 33 tests in
+0.368s, 0.040s, 0.364s, 2.791s, 0.764s, and 6.145s. All 85 tests were `OK`; both focused
+Soufflé commands returned `rc=0` without a skip.
+
+The exact finalizer regression command was:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'cd packages/capabilities && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -t .'
+```
+
+Implementer result: exit 0, `Ran 887 tests in 200.979s`, `OK (skipped=125)`. The 125 broad
+optional-tool/platform skips are not Soufflé evidence; every focused gate above resolved the
+real pinned executable and rejected skips.
+
+The exact supplemental 14-fixture oracle command was:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'set -eu; p=$(command -v souffle); printf "path=%s\n" "$p"; case "$p" in /nix/store/*) ;; *) exit 1;; esac; souffle --version 2>&1; python --version; cd packages/capabilities; PYTHONPATH="$PWD/src" python - <<'\''PY'\''
+import json
+from pathlib import Path
+from tests.claim_semantics.adapter import load_fixture
+from capcov.claims import canonical_json
+from capcov.claims.differential import COMPARABLE_CLAIM_FIELDS, compare
+root = Path("tests/claim_semantics/corpus")
+expected_document = json.loads((root / "expected.json").read_text(encoding="utf-8"))
+expected = expected_document["cases"]
+paths = sorted(root.glob("[0-9][0-9]-*.json"))
+assert len(paths) == 14, len(paths)
+for path in paths:
+    bundle = load_fixture(path)
+    result = compare(bundle, shrink=False)
+    assert result.matched
+    names = tuple(decl.name for decl in bundle.relations)
+    assert tuple(name for name, _ in result.python.relations) == names
+    assert result.python.relations == result.souffle.relations
+    assert len(result.python.claims) == len(bundle.claims) == len(result.souffle.claims)
+    for declared, left, right in zip(bundle.claims, result.python.claims, result.souffle.claims):
+        assert left.key == right.key and left.index == right.index
+        for field in COMPARABLE_CLAIM_FIELDS:
+            assert getattr(left, field) == getattr(right, field), (path, left.key, field)
+        oracle = expected[path.stem]["claims"][declared.id]
+        assert left.semantic == oracle["semantic_verdict"]
+        assert left.operational == oracle["operational_status"]
+        assert left.basis == expected_document["evaluation_basis_by_quantifier"][declared.quantifier.value]
+        assert left.missing_premises == tuple(sorted(canonical_json(item) for item in oracle["missing_premises"]))
+    claims = ";".join(f"{claim.key}={claim.semantic}/{claim.operational}/{claim.basis}/missing:{len(claim.missing_premises)}" for claim in result.python.claims)
+    print(path.stem, len(result.python.relations), result.python.canonical_digest, claims)
+PY'
+```
+
+It exited 0 in 21.680s. It resolved Soufflé to
+`/nix/store/hjf84h92h4ynbbn9sg9q1biyr25r617i-souffle-2.5/bin/souffle` and Python 3.12.14.
+All fourteen output rows were byte-for-byte the relation counts, canonical report digests, and
+claim results recorded in the preceding table. The executable's banner again left `Version:`
+blank; the immutable Nix store path identifies the packaged version without inventing a banner
+value. The command asserted exactly 14 fixtures, every declared relation and payload, claim
+key/index, all four `COMPARABLE_CLAIM_FIELDS`, and the independent reviewed `expected.json`
+verdict/status/basis/missing-premise oracle.
+
+Final `git diff --check` passed and the corpus is unchanged. These are implementer observations,
+not authoritative admission evidence. The driver must supply fresh `gate-result` events if this
+attempt is admitted, and only the driver may append a checkpoint hash in `task-completed`; neither
+is recorded or promised here. Limits and deferred ownership remain exactly as in the section-27
+table: Soufflé independently establishes relational closure, while claim folding, diagnostics,
+mappings, and missing-premise rendering remain Python-mediated. CLI and Linux execution belong to
+`datalog-evaluation`; installed-wheel static-schema inclusion belongs to
+`scip-datalog-differential`; ground checking, producer authority, and generic causal projection
+belong to `datalog-certificates`. Producer/kernel output remains evidence, not authority. No Shen,
+SCIP, external execution, receipt, certificate, real-Go, Linux, performance recommendation,
+production CLI behavior, or checkpoint is claimed.
+
+### 2026-09-15 trust-boundary finalizer (`kernel-closure-finalize`, attempt 3)
+
+This sole-root reducer continued from the rejected attempt-2 dirty tree at HEAD
+`8adc19709d49e95737ecaa4dbda15fd84ab609df`. It did not commit, reset, stash, checkout, merge,
+consume a worker commit, or read or mutate a worker worktree. The integration parent remains
+`7b5e8ab52f291b964f6c41c0b566b5e57d9b04a9`; `git merge-base --is-ancestor
+d1550e4d49401a0e8fa8cdd813fb2fd7bbd00765 7b5e8ab52f291b964f6c41c0b566b5e57d9b04a9`
+exited 0. The two dependency artifacts were already integrated in manifest order, so they were
+not applied a second time to the evolved tree. Fresh `shasum -a 256` output, in that order, was:
+
+1. `claims-20260914185300567-kernel-closure-1.patch`:
+   `c823f18e1f5375d128f17d3554c63d81daaa03339741cf42a8339941b7bcaebf`;
+2. `claims-20260914185300567-differential-closure-1.patch`:
+   `86b8fbb458b9a17d2cb683ff174d9df2215804fa273b0f5feeb0b8e626b75ab8`.
+
+The patch headers name old blobs `d3f7364`, `7f00861`, `8bde9e1`, `ae222f6`, `fb0cd9c`, and
+`69ecaaf`; fresh `git rev-parse 7b5e8ab52f291b964f6c41c0b566b5e57d9b04a9:<path>` calls
+returned those exact full blob prefixes for all six pre-existing paths, and the first artifact's
+new `test_kernel_closure.py` path was absent at that parent. Because the artifacts touch disjoint
+paths, this verifies their clean forward base and manifest ordering without reapplying them or
+creating a worker-derived tree. Current-tree forward and reverse checks are not claimed: later
+review repairs intentionally changed artifact-owned paths.
+
+The attempt-2 reviewer findings were reproduced before repair: a mixed Evidence object selected
+`atom.relation="trusted"` while silently discarding `relation="decoy"`; the legal wire contexts
+`{"values":"producer-context"}`, `{"values":[]}`, and
+`{"values":[["tenant","x"]]}` respectively failed, became empty, and changed keys; and direct
+`Bundle(schema_version=True)` and `Bundle(schema_version=1.0)` both constructed. The repair now:
+
+- requires exactly one Evidence atom representation: canonical `atom`, or wire `relation` plus
+  optional `terms`; matching and conflicting duplicates fail with named `invalid-input` under
+  Mapping/JSON ingestion and `validate=False/True`;
+- gives Context one injective representation, the same flat object on the wire and in canonical
+  JSON. The legal key `values` remains legal for scalar, empty-array, and pair-list-shaped values;
+  claim and evidence contexts preserve semantics and digest on canonical reload;
+- recursively verifies the canonical frozen pairs inside Claim and Evidence Contexts, every
+  DiagnosticPolicy string field, and every TemplateValue payload before a Bundle can exist.
+  TemplateValue copies mappings/lists into immutable values at construction, while rendering
+  converts constants back to ordinary JSON shapes so observable output is unchanged;
+- requires the schema version to be an actual non-Boolean integer equal to 1 at both ingestion and
+  direct Bundle construction. Missing, `true`, `1.0`, `"1"`, and `null` are rejected;
+- checks every `_sequence_field` consumer, including atom/evidence terms, rule body, aggregation
+  group-by, relation index/target arrays, mapping indices/bindings, diagnostic indices, and every
+  output evidence array; and
+- expands the central adversarial registry from 12 to 23 canonical invalid Bundles by adding the
+  nine mixed-binding mutants, the indexless static declaration, and the mapping-to-decoy claim.
+  It also registers 14 constructor-rejected recursive graphs: the prior five plus Claim/Evidence
+  Context internals, all six DiagnosticPolicy fields, and TemplateValue payload mutation. The five
+  exhausted Bundles remain in the blocking differential. Identical named `invalid-input` or
+  `resource-exhausted` reports remain blocking results with strict replay, never agreement.
+
+An initial focused run exposed that immutable template arrays were being returned as tuples at the
+rendering boundary. That run exited 1 with two `test_evidence_policy` failures. The implementation
+was repaired to thaw template constants only at rendering; the internal immutability assertion was
+updated to expect a tuple. A subsequent focused command over `test_claim_ir`,
+`test_claim_contract_review`, `test_evidence_policy`, and
+`test_differential_adversarial_matrix` exited 0: 64 tests ran in 10.062s.
+
+The exact dependency `kernel-closure-tests` command was:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'command -v souffle && set -eu; for c in souffle; do p=$(command -v "$c"); case "$p" in /nix/store/*) ;; *) echo "unpinned $c=$p" >&2; exit 1;; esac; done; cd packages/capabilities && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_provenance*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_validation_section27*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_kernel_closure*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_python_evaluator*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_evidence_policy*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_python_evaluator*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_ir*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_contract_review*.py'\'' -t . && out=$(PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_souffle_evaluator*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac && out=$(PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_souffle*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac'
+```
+
+Implementer result: exit 0. The ten discoveries ran 13, 21, 25, 1, 16, 11, 21, 23, 2,
+and 33 tests in 0.346s, 0.015s, 7.226s, 0.253s, 1.102s, 0.032s, 0.049s, 0.011s,
+0.474s, and 11.707s. All 166 tests were `OK`; both focused Soufflé commands returned
+`rc=0`, and neither skip guard fired.
+
+The exact dependency `differential-closure-tests` command and the byte-identical finalizer
+`differential-tests` command were each executed as a separate process:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'command -v souffle && set -eu; for c in souffle; do p=$(command -v "$c"); case "$p" in /nix/store/*) ;; *) echo "unpinned $c=$p" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_differential*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_shrinker*.py'\'' -t .'
+```
+
+Implementer dependency result: exit 0; 31 differential tests ran in 172.611s and 13 shrinker
+tests in 19.152s, all `OK`, with `rc=0` and no focused skip. Implementer finalizer result: exit
+0; the independent invocation ran the same 31 and 13 tests in 93.879s and 14.403s, all `OK`,
+again with `rc=0` and no focused skip.
+
+The exact finalizer `kernel-tests` command was:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'command -v souffle && set -eu; for c in souffle; do p=$(command -v "$c"); case "$p" in /nix/store/*) ;; *) echo "unpinned $c=$p" >&2; exit 1;; esac; done; cd packages/capabilities && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_python_evaluator*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_python_evaluator*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_provenance*.py'\'' -t . && PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_kernel_closure*.py'\'' -t . && out=$(PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p '\''test_souffle_evaluator*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac && out=$(PYTHONPATH="$PWD/src" python -m unittest discover -s tests -p '\''test_claim_souffle*.py'\'' -t . 2>&1; echo rc=$?); printf '\''%s\n'\'' "$out"; case "$out" in *skipped*) echo '\''skipped tests are not evidence'\'' >&2; exit 1;; esac; case "$out" in *rc=0*) ;; *) exit 1;; esac'
+```
+
+Implementer result: exit 0. The six discoveries ran 1, 11, 13, 25, 2, and 33 tests in
+0.237s, 0.026s, 0.252s, 2.395s, 0.391s, and 5.362s. All 85 tests were `OK`; both focused
+Soufflé commands returned `rc=0` and neither skip guard fired.
+
+The exact finalizer `regression` command was:
+
+```sh
+nix develop --no-update-lock-file --command bash -lc 'cd packages/capabilities && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -t .'
+```
+
+Implementer result: exit 0, `Ran 892 tests in 102.970s`, `OK (skipped=125)`. Those 125
+optional-tool/platform skips are not Soufflé evidence. The focused gates above resolved the real
+pinned executable and rejected any skip.
+
+The supplemental 14-fixture oracle was the exact command and 31-line Python body recorded in the
+attempt-2 section above (the block beginning `nix develop --no-update-lock-file --command bash -lc
+'set -eu; p=$(command -v souffle)`). It was executed again, not copied as stale evidence.
+Implementer result: exit 0. It resolved Soufflé to
+`/nix/store/hjf84h92h4ynbbn9sg9q1biyr25r617i-souffle-2.5/bin/souffle` and Python 3.12.14;
+the executable's banner again printed a blank value after `Version:`. All 14 fixtures matched on
+every relation and claim field and satisfied the independent reviewed `expected.json` assertions.
+The report digests were, in fixture order:
+
+| fixture | relations | report digest |
+|---|---:|---|
+| 01-correlated-positive | 51 | `b8dff89a3a46448425fc2964ee0f687d7256797576b0e9e3338aef51b096472e` |
+| 02-surface-mismatch | 51 | `50b3d20617546a30c9d43fb8022ad9fccdbd9424ea76cef7937b107b195a07d4` |
+| 03-post-without-creation | 51 | `dbe4b81c5c09637ca7cecda2464e67b9b2fce428b5b0cea806146fbd0d56ff5f` |
+| 04-authorization-polarity | 51 | `80909bf03217a43a5fde19c83d19a136bff799df1e49126e0ab983a06a8214c2` |
+| 05-wrong-event-email | 51 | `01027fa9dfb1d53b46e743088d7526909b08a308cb9b75dc7f4170371e86eedb` |
+| 06-context-contamination | 51 | `e5ab74db0791c24170b551c15250bd371662518bd924d1e86be8ba8128ada7f9` |
+| 07-shared-mistaken-assumption | 51 | `bad57767c10e8b173ececbc63bb587a62bbc6cc8470786041eb6b555324987a0` |
+| 08-rejection-versus-missing | 51 | `00ecc41d396887ae9062a3a1be41d1520467d72d7a5845347f40a2954518c387` |
+| 09-support-and-refutation | 51 | `fff1921eb4d63a325e7b9fd630e8a2e5a57360ed2909b671b72469f88a76bdd2` |
+| 10-revoked-assumption-alternative | 51 | `ce16e1617483fa669a05b8b18ce4f9f0ddd84eed972f4f205b58866069f3cc6d` |
+| 11-compatible-history-sets | 52 | `7cc9b29dd5fb2efaecc92f4fab1072bbeddf92b0fcd4b5b1506926fbe41aa378` |
+| 12-unexpected-runtime-surface | 51 | `e9ea27ebf410d2103d876cdd61b7f67fef03c3b000c89a2332e1d253b18d81d0` |
+| 13-acceptance-sql-ack-failure | 51 | `6773e22a599444967bff3ef84c095026e68d369731bbb5c272e75c58fda66a2e` |
+| 14-bounded-no-resend | 51 | `a0f542b53bcb8e66ca1001ac233c5cd10aeafbcda085145f1a809d437d0f6f91` |
+
+`packages/capabilities/tests/claim_semantics/corpus/expected.json` remains byte-unchanged at
+SHA-256 `9c448aacb3b714a68ae532df6c7ff022425565fa64ee275bea9cb2caeee9139c`; no corpus file changed.
+The report digests changed because canonical Context JSON is intentionally now flat and injective,
+not because a reviewed verdict/status/basis/missing-premise oracle changed. Scalar `values`
+contexts pass semantic validation in both ingestion modes. Empty-array and pair-list-shaped
+`values` contexts are canonical and digest-preserving under strict `validate=False` reload, but are
+not executable relation contexts because schema-v1 deliberately excludes `json-metadata-only`
+from kernel field types; this is a recorded type-system limit, not a claimed semantic execution.
+
+Final `git diff --check` passed, and all seven modified paths are inside the declared write set.
+These are implementer observations only. The driver's fresh `gate-result` events for attempt 3 are
+the authoritative gate evidence if admitted, and only the driver may append a checkpoint hash in
+`task-completed`; neither is recorded or promised here. The deferred ownership table above is
+unchanged: CLI, Linux execution, performance evaluation, and recommendation belong to
+`datalog-evaluation`; installed-wheel static-schema inclusion and provenance extraction belong to
+`scip-datalog-differential`; ground checking, producer authority, and generic causal projection
+belong to `datalog-certificates`. Soufflé independently establishes relational closure only;
+claim folding, diagnostics, mappings, output semantics, and missing-premise rendering remain
+Python-mediated. Producer and kernel output remain evidence, not authority. No Shen, SCIP,
+external execution, receipt, certificate, real-Go, Linux, production CLI behavior, performance
+recommendation, authoritative gate event, or checkpoint is claimed.
+
 ## 28. Stage 0 addendum — SCIP toolchain
 
 Owner: `scip-toolchain` (single-task wave). Write set: `flake.nix`, `flake.lock`,

@@ -117,7 +117,10 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
         fixture = json.loads((ROOT / "02-surface-mismatch.json").read_text())
         bundle = load_fixture(ROOT / "02-surface-mismatch.json")
         discrepancy = next(o for o in bundle.outputs if o.kind.value == "discrepancy")
-        self.assertEqual(dict(discrepancy.fields)["surfaces"].value, ["route-a", "route-b"])
+        self.assertEqual(
+            dict(discrepancy.fields)["surfaces"].value,
+            ("route-a", "route-b"),
+        )
         self.assertEqual(set(discrepancy.requires_all_evidence), {"fact-route-a-static", "fact-route-b-runtime"})
         mutated = bundle_payload(fixture)
         mutated["outputs"][2]["requires_all_evidence"] = ["unrelated-evidence"]
