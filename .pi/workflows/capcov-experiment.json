@@ -51,7 +51,7 @@
         "Typed finite relations, context identity, verdicts, operational states, and completeness rules are explicit."
       ],
       "gates": [
-        {"name": "contract-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_ir*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_contract_review*.py' -t ."]}
+        {"name": "contract-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -p 'test_claim_ir*.py' -t . && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -p 'test_claim_contract_review*.py' -t ."]}
       ]
     },
     {
@@ -69,7 +69,7 @@
         "All required positive, negative, incomplete, contradictory, stale, and out-of-scope cases have reviewable expected relations."
       ],
       "gates": [
-        {"name": "corpus-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_corpus*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_expected_semantics*.py' -t ."]}
+        {"name": "corpus-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_corpus*.py' -t . && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_expected_semantics*.py' -t ."]}
       ]
     },
     {
@@ -89,7 +89,7 @@
         "A deterministic bounded fixed-point oracle emits normalized relations, provenance, verdicts, and resource status."
       ],
       "gates": [
-        {"name": "python-kernel-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_python_evaluator*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_python_evaluator*.py' -t ."]}
+        {"name": "python-kernel-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_python_evaluator*.py' -t . && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -p 'test_claim_python_evaluator*.py' -t ."]}
       ]
     },
     {
@@ -109,7 +109,7 @@
         "Canonical relations compile and execute in real Souffle with bounded subprocesses and normalized output."
       ],
       "gates": [
-        {"name": "souffle-kernel-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_souffle_evaluator*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && out=$(PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_souffle*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]}
+        {"name": "souffle-kernel-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_souffle_evaluator*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && out=$(PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -p 'test_claim_souffle*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]}
       ]
     },
     {
@@ -144,7 +144,7 @@
         "Reviewed corpus fixtures stay byte-stable except for justified semantic additions recorded in EXPERIMENT-PLAN.md section 27."
       ],
       "gates": [
-        {"name": "kernel-closure-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_provenance*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_validation_section27*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_kernel_closure*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_python_evaluator*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_evidence_policy*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_python_evaluator*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_ir*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_contract_review*.py' -t . && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_souffle_evaluator*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && out=$(PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_souffle*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]}
+        {"name": "kernel-closure-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_provenance*.py' -t . && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_validation_section27*.py' -t . && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_kernel_closure*.py' -t . && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_python_evaluator*.py' -t . && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_evidence_policy*.py' -t . && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -p 'test_claim_python_evaluator*.py' -t . && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -p 'test_claim_ir*.py' -t . && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -p 'test_claim_contract_review*.py' -t . && out=$(PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_souffle_evaluator*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && out=$(PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -p 'test_claim_souffle*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]}
       ]
     },
     {
@@ -167,7 +167,7 @@
         "Every operational or semantic disagreement blocks admission with a replay bundle; shrink_truncated is reported honestly when the 200-step bound is hit."
       ],
       "gates": [
-        {"name": "differential-closure-tests", "failureKind": "differential-mismatch", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_differential*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_shrinker*.py' -t ."]}
+        {"name": "differential-closure-tests", "failureKind": "differential-mismatch", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_differential*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_shrinker*.py' -t ."]}
       ]
     },
     {
@@ -190,9 +190,9 @@
         "The four findings left open when kernel-closure-integrate was retired are closed with tests: DiagnosticRule scalar fields (when_missing, required, message) are type-checked at ingestion; bundle_from_json converts RecursionError on deeply nested input into the named invalid-input error; every malformed nested-IR adversary either is rejected at dataclass construction or traverses compare() with the documented blocking result; output._joint_environments rejects, rather than discards, a failed mapping constraint when the same evidence is also relevant through a diagnostic or proof path."
       ],
       "gates": [
-        {"name": "differential-tests", "failureKind": "differential-mismatch", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_differential*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_shrinker*.py' -t ."]},
-        {"name": "kernel-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_python_evaluator*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_python_evaluator*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_provenance*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_kernel_closure*.py' -t . && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_souffle_evaluator*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && out=$(PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_souffle*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]},
-        {"name": "regression", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]}
+        {"name": "differential-tests", "failureKind": "differential-mismatch", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_differential*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_shrinker*.py' -t ."]},
+        {"name": "kernel-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_python_evaluator*.py' -t . && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -p 'test_claim_python_evaluator*.py' -t . && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_provenance*.py' -t . && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_kernel_closure*.py' -t . && out=$(PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_souffle_evaluator*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && out=$(PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -p 'test_claim_souffle*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]},
+        {"name": "regression", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -t ."]}
       ]
     },
     {
@@ -220,7 +220,7 @@
         {"name": "scip-tools-pinned", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "set -eu; for c in scip scip-go souffle go python; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; scip --version; souffle --version; go version; test \"$(shasum -a 256 flake.lock | cut -d' ' -f1)\" = d078f9fba512323fd35b24afc6a81aa3bb95c63caa1d00acf700e0827f9e6bac"]},
         {"name": "scip-go-index-smoke-develop", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "set -eu; tmp=$(mktemp -d); cp -R packages/capabilities/tests/fixtures/go_app \"$tmp/go_app\"; chmod -R u+w \"$tmp/go_app\"; export HOME=\"$tmp\" GOCACHE=\"$tmp/gocache\" GOPATH=\"$tmp/gopath\" GOFLAGS=-mod=mod GOPROXY=off GOTOOLCHAIN=local LC_ALL=C; (cd \"$tmp/go_app\" && scip-go --output index.scip); scip print --json \"$tmp/go_app/index.scip\" > \"$tmp/raw.json\"; jq -S -f tests/scip/canonicalize.jq \"$tmp/raw.json\" > \"$tmp/canonical.json\"; diff -u packages/capabilities/tests/fixtures/scip_go_app_index.json \"$tmp/canonical.json\"; rm -rf \"$tmp\""]},
         {"name": "all-systems-evaluate", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "nix flake check --all-systems --no-build --no-update-lock-file"]},
-        {"name": "regression", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]}
+        {"name": "regression", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -t ."]}
       ]
     },
     {
@@ -250,8 +250,8 @@
         "A live test indexes a copy of tests/fixtures/go_app with pinned scip-go and reproduces the committed golden and bundle digest."
       ],
       "gates": [
-        {"name": "exporter-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_scip_facts*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests -p 'test_scip_*.py' -t ."]},
-        {"name": "live-scip-go", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "set -eu; for c in scip scip-go go; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_scip_facts_live*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]}
+        {"name": "exporter-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_scip_facts*.py' -t . && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -p 'test_scip_*.py' -t ."]},
+        {"name": "live-scip-go", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "set -eu; for c in scip scip-go go; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_scip_facts_live*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]}
       ]
     },
     {
@@ -273,7 +273,7 @@
         "expected.json duplicates each fixture's expected table and names required support leaves as Evidence ids."
       ],
       "gates": [
-        {"name": "static-corpus-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_static_corpus*.py' -t ."]}
+        {"name": "static-corpus-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_static_corpus*.py' -t ."]}
       ]
     },
     {
@@ -301,11 +301,11 @@
         "claims/static/schema_static_v1.json is included in the built wheel (package data) and loads from an installed distribution."
       ],
       "gates": [
-        {"name": "scip-differential", "failureKind": "differential-mismatch", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_differential_static*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]},
-        {"name": "static-fixpoint-crosscheck", "failureKind": "differential-mismatch", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_static_crosscheck*.py' -t ."]},
-        {"name": "static-adversarial", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_static_adversarial*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]},
-        {"name": "static-evidence-policy", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_static_evidence_policy*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_bounds*.py' -t ."]},
-        {"name": "regression", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]}
+        {"name": "scip-differential", "failureKind": "differential-mismatch", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_differential_static*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]},
+        {"name": "static-fixpoint-crosscheck", "failureKind": "differential-mismatch", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_static_crosscheck*.py' -t ."]},
+        {"name": "static-adversarial", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_static_adversarial*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]},
+        {"name": "static-evidence-policy", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_static_evidence_policy*.py' -t . && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_bounds*.py' -t ."]},
+        {"name": "regression", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -t ."]}
       ]
     },
     {
@@ -325,7 +325,7 @@
         "Static certificates produced by claims/static/certificate.py replay through the ground checker."
       ],
       "gates": [
-        {"name": "certificate-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_certificate*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_mutation*.py' -t ."]}
+        {"name": "certificate-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_certificate*.py' -t . && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_mutation*.py' -t ."]}
       ],
       "admission": {"requiresEvents": ["wave-checkpoint:scip-datalog"]}
     },
@@ -351,7 +351,7 @@
         "Rooted-edge coverage below 0.9 or any deep-unresolved on the route closure records the result as UNKNOWN; the go_app pilot is never described as target-go evidence."
       ],
       "gates": [
-        {"name": "target-go-static-pilot", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "set -eu; test -n \"$CAPCOV_GO_FIXTURE_ROOT\" && test -f \"$CAPCOV_GO_FIXTURE_ROOT/go.mod\"; set -eu; for c in scip scip-go go souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_target_go_static*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]}
+        {"name": "target-go-static-pilot", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "set -eu; test -n \"$CAPCOV_GO_FIXTURE_ROOT\" && test -f \"$CAPCOV_GO_FIXTURE_ROOT/go.mod\"; set -eu; for c in scip scip-go go souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_target_go_static*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]}
       ]
     },
     {
@@ -373,7 +373,7 @@
         "Fresh real Go evidence and a negative control traverse both engines without trusting a receipt verdict."
       ],
       "gates": [
-        {"name": "target-go-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "test -n \"$CAPCOV_GO_FIXTURE_ROOT\" && cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_go_receipt*.py' -t ."]}
+        {"name": "target-go-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "test -n \"$CAPCOV_GO_FIXTURE_ROOT\" && cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_go_receipt*.py' -t ."]}
       ]
     },
     {
@@ -395,7 +395,7 @@
         "The experimental `capcov experiment claims validate|evaluate` commands exist behind the experiment namespace with production commands unchanged, and Linux execution of the claim kernels is demonstrated through the nix CI check or recorded as UNKNOWN."
       ],
       "gates": [
-        {"name": "datalog-evaluation-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_benchmark*.py' -t ."]}
+        {"name": "datalog-evaluation-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -p 'test_benchmark*.py' -t ."]}
       ]
     },
     {
@@ -415,7 +415,7 @@
       ],
       "gates": [
         {"name": "flake-check", "command": ["nix", "develop", "--no-update-lock-file", "--command", "nix", "flake", "check", "--no-update-lock-file"]},
-        {"name": "regression", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]},
+        {"name": "regression", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -t ."]},
         {"name": "shen-smoke", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "set -eu; output=$(shen eval -e '(+ 20 22)'); test \"$output\" = 42; ! shen eval -e '(+ 1' >/dev/null 2>&1"]},
         {"name": "all-systems-evaluate", "command": ["nix", "develop", "--no-update-lock-file", "--command", "nix", "flake", "check", "--all-systems", "--no-build", "--no-update-lock-file"]}
       ]
@@ -436,7 +436,7 @@
         "Corpus schema tests pass."
       ],
       "gates": [
-        {"name": "corpus-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]}
+        {"name": "corpus-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -t ."]}
       ]
     },
     {
@@ -456,8 +456,8 @@
         "Multiple producers remain separately attributable."
       ],
       "gates": [
-        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]},
-        {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]}
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -t ."]},
+        {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -t ."]}
       ]
     },
     {
@@ -478,8 +478,8 @@
         "The feature is reachable only through capcov experiment claims and production commands remain unchanged."
       ],
       "gates": [
-        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]},
-        {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]}
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -t ."]},
+        {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -t ."]}
       ]
     },
     {
@@ -499,8 +499,8 @@
         "Stale digests, substituted leaves, cycles, and scope widening are rejected."
       ],
       "gates": [
-        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]},
-        {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]}
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -t ."]},
+        {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -t ."]}
       ]
     },
     {
@@ -519,8 +519,8 @@
         "Invalidation changes exactly the dependent paths in brute-force checked small cases."
       ],
       "gates": [
-        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]},
-        {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]}
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -t ."]},
+        {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -t ."]}
       ]
     },
     {
@@ -542,8 +542,8 @@
         "No mocked result or Python-precomputed semantic answer is accepted."
       ],
       "gates": [
-        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]},
-        {"name": "shen-differential", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -p 'test_shen*.py' -t ."]}
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -t ."]},
+        {"name": "shen-differential", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -p 'test_shen*.py' -t ."]}
       ]
     },
     {
@@ -564,8 +564,8 @@
         "Interpreter and residual agree on verdicts, explanations, discrepancies, and normalized certificates."
       ],
       "gates": [
-        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]},
-        {"name": "stdlib-residual", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -p 'test_special*.py' -t ."]}
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -t ."]},
+        {"name": "stdlib-residual", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -p 'test_special*.py' -t ."]}
       ]
     },
     {
@@ -585,8 +585,8 @@
         "Defects are test inputs or mutation hooks and cannot silently ship enabled."
       ],
       "gates": [
-        {"name": "mutation-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -p 'test_*mutation*.py' -t ."]},
-        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]}
+        {"name": "mutation-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -p 'test_*mutation*.py' -t ."]},
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -t ."]}
       ]
     },
     {
@@ -606,8 +606,8 @@
         "At least one consumer-owned isolated fixture action is executed and fresh evidence changes a verdict."
       ],
       "gates": [
-        {"name": "experiment-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -p 'test_experiment*.py' -t ."]},
-        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]}
+        {"name": "experiment-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -p 'test_experiment*.py' -t ."]},
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -t ."]}
       ]
     },
     {
@@ -630,8 +630,8 @@
         "No Python notification business behavior or synthetic replacement is accepted."
       ],
       "gates": [
-        {"name": "go-integration", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && test -n \"$CAPCOV_GO_FIXTURE_ROOT\" && PYTHONPATH=src python -m unittest discover -s tests -p 'test_go_receipt*.py' -t ."]},
-        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -t ."]}
+        {"name": "go-integration", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && test -n \"$CAPCOV_GO_FIXTURE_ROOT\" && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -p 'test_go_receipt*.py' -t ."]},
+        {"name": "claim-tests", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests/claim_semantics -t ."]}
       ]
     },
     {
@@ -651,7 +651,7 @@
       ],
       "gates": [
         {"name": "flake-check", "command": ["nix", "develop", "--no-update-lock-file", "--command", "nix", "flake", "check"]},
-        {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]}
+        {"name": "regression", "command": ["nix", "develop", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=\"$PWD/src\" python -m unittest discover -s tests -t ."]}
       ]
     }
   ]
