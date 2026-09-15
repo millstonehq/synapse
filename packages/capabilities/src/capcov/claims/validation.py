@@ -308,15 +308,19 @@ def _structural_issues(bundle: Bundle) -> tuple[ValidationIssue, ...]:
                 or not isinstance(mapping.bindings, tuple)
                 or any(not isinstance(pair, tuple) or len(pair) != 2
                        or not all(isinstance(item, str) for item in pair)
-                       for pair in mapping.bindings)):
+                       for pair in mapping.bindings)
+                or not isinstance(mapping.required, bool)
+                or not isinstance(mapping.allow_out_of_scope, bool)):
             issues.append(ValidationIssue(
-                "mapping-type", "mapping indices/bindings are malformed", path))
+                "mapping-type", "mapping indices/bindings/options are malformed", path))
     for index, diagnostic in enumerate(bundle.diagnostics if isinstance(bundle.diagnostics, tuple) else ()):
         if not isinstance(diagnostic, DiagnosticRule):
             continue
         if (not all(isinstance(value, str) for value in (
                 diagnostic.trigger_relation, diagnostic.operational_status,
-                diagnostic.claim_id))
+                diagnostic.message, diagnostic.claim_id))
+                or not isinstance(diagnostic.when_missing, bool)
+                or not isinstance(diagnostic.required, bool)
                 or not isinstance(diagnostic.context_indices, tuple)
                 or not all(isinstance(item, str)
                            for item in diagnostic.context_indices)):

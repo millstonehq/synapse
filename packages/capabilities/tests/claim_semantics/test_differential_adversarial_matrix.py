@@ -31,7 +31,7 @@ from capcov.claims.differential import (
     run_souffle,
 )
 from capcov.claims.evaluator import ResourceLimits
-from capcov.claims.shrinker import ReplayPersistenceError, _difference_shape
+from capcov.claims.shrinker import _difference_shape
 
 from . import test_differential_kernels as differential_cases
 from . import test_kernel_closure as kernel_cases
@@ -262,7 +262,7 @@ class AdversarialDifferentialMatrixTests(unittest.TestCase):
 
     @staticmethod
     def malformed_nested_bundle(kind):
-        """Build annotation-shaped nested IR that is not canonical replay input."""
+        """Attempt to build a noncanonical recursive IR graph."""
         relation = kernel_cases.relation
         observed = relation(
             "nested_observed", ("value", TypeName.SYMBOL, False))
@@ -344,6 +344,14 @@ class AdversarialDifferentialMatrixTests(unittest.TestCase):
             "repeated-variable-and-scope": outputs.repeated_and_scoped_bundle(),
             "joint-trigger-incompatible": outputs.joint_trigger_bundle("b"),
             "joint-trigger-compatible": outputs.joint_trigger_bundle("a"),
+            "failed-mapping-diagnostic-relevance":
+                outputs.failed_mapping_relevance_bundle("b", "diagnostic"),
+            "same-mapping-diagnostic-relevance":
+                outputs.failed_mapping_relevance_bundle("a", "diagnostic"),
+            "failed-mapping-proof-relevance":
+                outputs.failed_mapping_relevance_bundle("b", "proof"),
+            "same-mapping-proof-relevance":
+                outputs.failed_mapping_relevance_bundle("a", "proof"),
             "json-canonical-proof": kernel.json_proof_bundle(reverse=True),
             "incompatible-exclusion-exists":
                 outputs.exclusion_bundle("b", "exists"),
@@ -362,7 +370,11 @@ class AdversarialDifferentialMatrixTests(unittest.TestCase):
             "base-plus-self-cycle", "late-shorter-proof",
             "variable-output-exists", "variable-output-forall",
             "repeated-variable-and-scope", "joint-trigger-incompatible",
-            "joint-trigger-compatible", "json-canonical-proof",
+            "joint-trigger-compatible",
+            "failed-mapping-diagnostic-relevance",
+            "same-mapping-diagnostic-relevance",
+            "failed-mapping-proof-relevance",
+            "same-mapping-proof-relevance", "json-canonical-proof",
             "incompatible-exclusion-exists", "same-binding-exclusion-exists",
             "incompatible-exclusion-forall", "same-binding-exclusion-forall",
             "typed-compatibility-positive", "typed-compatibility-witness-absent",
@@ -388,6 +400,14 @@ class AdversarialDifferentialMatrixTests(unittest.TestCase):
                         (("v",),))
                     self.assertEqual(result.python.claims[0].semantic,
                                      "supported")
+                elif name == "failed-mapping-diagnostic-relevance":
+                    self.assertEqual(
+                        result.python.claims[0].missing_premises,
+                        ('"claim:mapped_pair_claimed:{}"',))
+                elif name == "same-mapping-diagnostic-relevance":
+                    self.assertEqual(
+                        result.python.claims[0].missing_premises,
+                        ('{"reason":"mapped instance","relation":"mapped_pair_claimed"}',))
 
     def test_invalid_and_exhausted_adversarial_bundle_matrix(self):
         invalid = {
@@ -476,30 +496,16 @@ class AdversarialDifferentialMatrixTests(unittest.TestCase):
                 self.assert_blocking_boundary(
                     name, bundle, pair, python_runner, souffle_runner)
 
-    def test_malformed_nested_ir_is_named_at_each_kernel_boundary(self):
-        # Annotation-shaped dataclasses with arbitrary nested objects are
-        # noncanonical and therefore have no digest/replay contract.  They must
-        # still fail validation totally at each kernel wrapper; catching
-        # AttributeError would hide an implementation bug.
+    def test_malformed_nested_ir_is_rejected_at_bundle_construction(self):
+        # Structurally noncanonical graphs never become Bundles, so every actual
+        # Bundle in this module remains in the valid or blocking compare matrix.
         names = {
             "evidence-atom", "atom-terms", "rule-head", "rule-body",
             "diagnostic-predicate",
         }
         for name in names:
-            with self.subTest(case=name):
-                bundle = self.malformed_nested_bundle(name)
-                left, right = run_python(bundle), run_souffle(bundle)
-                self.assertEqual(
-                    (left.operational_failure, right.operational_failure),
-                    ("invalid-input", "invalid-input"),
-                )
-
-    def test_noncanonical_nested_ir_blocks_without_fabricating_replay(self):
-        bundle = self.malformed_nested_bundle("evidence-atom")
-        with tempfile.TemporaryDirectory() as directory:
-            with self.assertRaises(ReplayPersistenceError):
-                compare(bundle, replay_root=directory, max_steps=1)
-            self.assertEqual(tuple(Path(directory).iterdir()), ())
+            with self.subTest(case=name), self.assertRaises(TypeError):
+                self.malformed_nested_bundle(name)
 
     def test_actual_identical_invalid_failures_still_block_with_asymmetric_payloads(self):
         bundle = kernel_cases.KernelClosureTests.forall_context_alias_bundle()

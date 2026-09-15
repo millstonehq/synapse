@@ -29,28 +29,89 @@ class ClaimIRTests(unittest.TestCase):
                 with self.assertRaises(TypeError):
                     Bundle(**kwargs)
 
-    def test_validation_reports_publicly_constructed_malformed_nested_ir(self):
+    def test_bundle_construction_rejects_malformed_nested_ir(self):
         relation = rel("seen", "value")
         valid_atom = Atom("seen", (Constant("v"),))
         cases = (
-            (Bundle((relation,), evidence=(Evidence(
-                "e", object(), source="producer"),)), "atom-type"),
-            (Bundle((relation,), facts=(Atom("seen", (object(),)),)),
-             "term-type"),
-            (Bundle((relation,), rules=(Rule(
-                object(), (valid_atom,)),)), "atom-type"),
-            (Bundle((relation,), rules=(Rule(
-                valid_atom, (object(),)),)), "atom-type"),
-            (Bundle((relation,), diagnostics=(DiagnosticRule(
-                "seen", "observation", predicate=(object(),)),)),
-             "diagnostic-predicate"),
+            ("evidence-atom", lambda: Bundle(
+                (relation,), evidence=(Evidence(
+                    "e", object(), source="producer"),))),
+            ("atom-terms", lambda: Bundle(
+                (relation,), facts=(Atom("seen", (object(),)),))),
+            ("rule-head", lambda: Bundle(
+                (relation,), rules=(Rule(object(), (valid_atom,)),))),
+            ("rule-body", lambda: Bundle(
+                (relation,), rules=(Rule(valid_atom, (object(),)),))),
+            ("diagnostic-predicate", lambda: Bundle(
+                (relation,), diagnostics=(DiagnosticRule(
+                    "seen", "observation", predicate=(object(),)),))),
         )
-        for bundle, expected in cases:
-            with self.subTest(code=expected):
-                self.assertIn(
-                    expected,
-                    {issue.code for issue in validate_bundle(bundle)},
-                )
+        for name, factory in cases:
+            with self.subTest(case=name), self.assertRaises(TypeError):
+                factory()
+
+    @staticmethod
+    def diagnostic_document(**overrides):
+        diagnostic = {
+            "claim_id": "claim",
+            "trigger_relation": "seen",
+            "effect": "observation",
+            **overrides,
+        }
+        return {
+            "schema_version": 1,
+            "relations": [{"name": "seen", "columns": []}],
+            "claims": [{"id": "claim", "relation": "seen", "terms": []}],
+            "diagnostics": [diagnostic],
+        }
+
+    def test_diagnostic_scalars_are_typed_during_ingestion_in_both_modes(self):
+        for validate in (False, True):
+            with self.subTest(validate=validate, case="valid"):
+                bundle = bundle_from_json(self.diagnostic_document(
+                    when_missing=True, required=False, message="reviewed"),
+                    validate=validate)
+                self.assertTrue(bundle.diagnostics[0].when_missing)
+                self.assertFalse(bundle.diagnostics[0].required)
+                self.assertEqual(bundle.diagnostics[0].message, "reviewed")
+            invalid = {
+                "when_missing": (0, 1, "false", None, [], {}, object()),
+                "required": (0, 1, "true", None, [], {}, object()),
+                "message": (0, 1, False, None, [], {}, object()),
+            }
+            for field, values in invalid.items():
+                for value in values:
+                    with self.subTest(validate=validate, field=field,
+                                      type=type(value).__name__):
+                        with self.assertRaises(BundleIngestionError) as caught:
+                            bundle_from_json(
+                                self.diagnostic_document(**{field: value}),
+                                validate=validate)
+                        self.assertEqual(
+                            caught.exception.operational_failure, "invalid-input")
+
+    def test_deep_json_and_mapping_recursion_are_named_invalid_input(self):
+        deep_json = (
+            '{"schema_version":1,"metadata":{"deep":'
+            + "[" * 2000 + "null" + "]" * 2000 + "}}")
+        nested = None
+        for _ in range(2000):
+            nested = {"next": nested}
+        deep_mapping = {
+            "schema_version": 1,
+            "relations": [],
+            "metadata": {"deep": nested},
+        }
+        for source in (deep_json, deep_mapping):
+            for validate in (False, True):
+                with self.subTest(source=type(source).__name__,
+                                  validate=validate):
+                    with self.assertRaises(BundleIngestionError) as caught:
+                        bundle_from_json(source, validate=validate)
+                    self.assertEqual(
+                        caught.exception.operational_failure, "invalid-input")
+                    self.assertIsInstance(caught.exception.__cause__,
+                                          RecursionError)
 
     def test_malformed_raw_members_have_a_named_ingestion_failure(self):
         for field in ("relations", "evidence", "outputs"):
@@ -108,6 +169,23 @@ class ClaimIRTests(unittest.TestCase):
                 object.__setattr__(target, field, malformed)
                 self.assertIn(
                     expected,
+                    {issue.code for issue in validate_bundle(bundle)},
+                )
+
+    def test_validation_defensively_reports_mutated_diagnostic_scalars(self):
+        for field, malformed in (("when_missing", "false"),
+                                 ("required", 1),
+                                 ("message", [])):
+            with self.subTest(field=field):
+                diagnostic = DiagnosticRule(
+                    "seen", "observation", claim_id="claim")
+                bundle = Bundle(
+                    (rel("seen", "value"),),
+                    claims=(Claim("seen", (Constant("v"),), id="claim"),),
+                    diagnostics=(diagnostic,))
+                object.__setattr__(diagnostic, field, malformed)
+                self.assertIn(
+                    "diagnostic-type",
                     {issue.code for issue in validate_bundle(bundle)},
                 )
 

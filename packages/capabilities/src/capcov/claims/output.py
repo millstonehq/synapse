@@ -127,14 +127,11 @@ def _joint_environments(
         mapping for mapping in bundle.mappings
         if mapping.claim_id == claim.id
         and mapping.evidence_relation == evidence.atom.relation)
-    # Evidence relevant through a diagnostic or proof path has no mapping
-    # variables to constrain.  A row with a viable mapping must, however,
-    # participate in the same environment as every other mapped trigger row.
-    viable_alone = tuple(
-        candidate for mapping in mappings
-        if (candidate := _mapping_environment(
-            bundle, claim, evidence, mapping)) is not None)
-    if not viable_alone:
+    # Evidence relevant only through a diagnostic or proof path has no mapping
+    # variables to constrain.  Once an applicable mapping exists, however, it
+    # is a real constraint: if every mapping fails, this evidence cannot be
+    # silently discarded from the joint trigger environment.
+    if not mappings:
         return _joint_environments(bundle, claim, tuple(rest), environment)
     results = []
     for mapping in mappings:

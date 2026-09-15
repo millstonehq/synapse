@@ -5,12 +5,13 @@ import shutil
 import unittest
 
 from capcov.claims import (
-    Atom, Bundle, Claim, Column, Constant, Context, Evidence, EvidenceMapping,
-    OutputTemplate, RelationDecl, Rule, TemplateValue, TypeName, Variable,
-    bundle_from_json, canonical_json, validate_bundle,
+    Atom, Bundle, Claim, Column, Constant, Context, DiagnosticRule, Evidence,
+    EvidenceMapping, OutputTemplate, RelationDecl, Rule, TemplateValue,
+    TypeName, Variable, bundle_from_json, canonical_json, validate_bundle,
 )
 from capcov.claims.differential import compare, run_python, run_souffle
 from capcov.claims.evaluator import ResourceLimits, evaluate
+from capcov.claims.output import VerifiedProofEvidence, render_outputs
 
 
 def relation(name, *columns, **kwargs):
@@ -372,11 +373,88 @@ class VariableOutputRelevanceTests(unittest.TestCase):
                       Evidence(right_id, right_atom, source="reviewed")),
             claims=(claim,), mappings=mappings, outputs=(output,))
 
+    @staticmethod
+    def failed_mapping_relevance_bundle(value="b", relevance="diagnostic"):
+        observed = relation(
+            "mapped_pair_observed", ("left", TypeName.SYMBOL, False),
+            ("right", TypeName.SYMBOL, False))
+        claimed = relation(
+            "mapped_pair_claimed", ("left", TypeName.SYMBOL, False),
+            ("right", TypeName.SYMBOL, False), modality="claim",
+            primitive=False)
+        atom = Atom(
+            "mapped_pair_observed",
+            (Constant("a", TypeName.SYMBOL),
+             Constant(value, TypeName.SYMBOL)))
+        evidence_id = f"mapped-{value}"
+        claim = Claim(
+            "mapped_pair_claimed", (Variable("same"), Variable("same")),
+            id="mapped-claim")
+        mapping = EvidenceMapping(
+            "mapped_pair_claimed", "mapped_pair_observed", "observation",
+            bindings=(("left", "left"), ("right", "right")),
+            claim_id="mapped-claim")
+        diagnostic = (DiagnosticRule(
+            "mapped_pair_observed", "observation",
+            claim_id="mapped-claim"),) if relevance == "diagnostic" else ()
+        rules = (Rule(
+            Atom("mapped_pair_claimed",
+                 (Variable("left"), Variable("right"))),
+            (Atom("mapped_pair_observed",
+                  (Variable("left"), Variable("right"))),),
+            "proof-relevance"),) if relevance == "proof" else ()
+        output = OutputTemplate(
+            "missing_premise", "mapped-claim",
+            relation="mapped_pair_claimed",
+            fields=(("reason", TemplateValue(value="mapped instance")),),
+            requires_all_evidence=(evidence_id,), when_claim="underived")
+        return Bundle(
+            (observed, claimed), facts=(atom,),
+            evidence=(Evidence(evidence_id, atom, source="reviewed"),),
+            rules=rules, claims=(claim,), mappings=(mapping,),
+            diagnostics=diagnostic, outputs=(output,))
+
     def test_incompatible_joint_output_trigger_keeps_semantic_fallback(self):
         result = evaluate(self.joint_trigger_bundle()).claims[0].result
         self.assertEqual(result.semantic.value, "unresolved")
         self.assertEqual(result.missing_premises,
                          ("claim:same_pair_claimed:{}",))
+
+    def test_failed_mapping_is_not_discarded_for_diagnostic_relevance(self):
+        failed = evaluate(self.failed_mapping_relevance_bundle(
+            "b", "diagnostic")).claims[0].result
+        matched = evaluate(self.failed_mapping_relevance_bundle(
+            "a", "diagnostic")).claims[0].result
+        self.assertEqual(failed.missing_premises,
+                         ("claim:mapped_pair_claimed:{}",))
+        self.assertEqual(
+            matched.missing_premises,
+            ({"relation": "mapped_pair_claimed",
+              "reason": "mapped instance"},))
+
+    def test_failed_mapping_is_not_discarded_for_proof_relevance(self):
+        expected = ({
+            "kind": "missing_premise",
+            "claim_id": "mapped-claim",
+            "relation": "mapped_pair_claimed",
+            "fields": {"reason": "mapped instance"},
+        },)
+        failed = self.failed_mapping_relevance_bundle("b", "proof")
+        matched = self.failed_mapping_relevance_bundle("a", "proof")
+        failed_proof = VerifiedProofEvidence.from_bundle(
+            failed, "mapped-claim", {"mapped-b"})
+        matched_proof = VerifiedProofEvidence.from_bundle(
+            matched, "mapped-claim", {"mapped-a"})
+        self.assertEqual(
+            render_outputs(
+                failed, "mapped-claim", {"mapped-b"}, failed_proof,
+                "underived", {"mapped_pair_claimed"}),
+            ())
+        self.assertEqual(
+            render_outputs(
+                matched, "mapped-claim", {"mapped-a"}, matched_proof,
+                "underived", {"mapped_pair_claimed"}),
+            expected)
 
     def test_python_missing_premise_uses_mapped_variable_evidence(self):
         expected = ({
