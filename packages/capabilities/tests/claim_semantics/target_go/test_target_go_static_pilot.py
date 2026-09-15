@@ -80,6 +80,12 @@ INDEX_TIMEOUT = 20 * 60
 LIMITS = scip_facts.ExportLimits(documents=500, occurrences=200_000, rows=100_000)
 ARTIFACTS = Path(__file__).resolve().parent / "artifacts"
 COMMITTED_RECEIPT = ARTIFACTS / "receipt.json"
+# static-relations-v1 identity of the archived tree under the pinned toolchain,
+# keyed by target-go HEAD.  Established by two cold-cache runs from fresh nix shells
+# (section 30); a warm-cache run must reproduce it byte for byte.
+PINNED_IDENTITY = {
+    "7e339e07dbaafe7e606a20afe644623a1f58228f": "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
+}
 RECORDED_DERIVED = ("static_edge", "static_root", "static_reaches", "static_route_handler", "static_index_current",
                     "scip_index_stale", "static_scope_leak", "static_scope_closed", "scip_references_closed",
                     "static_reachability_closed", "scip_duplicate_definition", "static_file_unindexed")
@@ -257,7 +263,8 @@ class FgGoStaticPilotTest(unittest.TestCase):
                        "index_identity": cls.index, "index_identity_kind": cls.meta["index_digest_kind"],
                        "exported_bundle_digest": scip_facts.bundle_digest(cls.exported.bundle),
                        "tree": dict(cls.meta["tree"]), "messages": list(cls.exported.messages),
-                       "unindexed_files": unindexed},
+                       "unindexed_files": unindexed,
+                       "out_of_tree_documents": [dict(e) for e in cls.meta["out_of_tree_documents"]]},
             "combined": {"bundle_digest": scip_facts.bundle_digest(cls.bundle), "ir_digest": ir_digest(cls.bundle),
                          "rules_digest": rules_digest(cls.bundle), "facts": len(cls.bundle.facts),
                          "rules": len(cls.bundle.rules), "relations": len(cls.bundle.relations)},
@@ -359,7 +366,21 @@ class FgGoStaticPilotTest(unittest.TestCase):
         self.assertEqual(self.meta["profile"], scip_facts.PROFILE_SLICE)
         go_files = sorted(str(p.relative_to(self.archive)) for p in self.archive.rglob("*.go"))
         self.assertEqual(self.exported.counts["static_source_file"], len(go_files))
-        self.assertEqual(self.exported.counts["scip_document"], len(self.normalized["documents"]))
+        # scip-go emits Go's generated _testmain.go for each pkg.test package it
+        # loads, read out of GOCACHE with a path escaping the tree; the exporter
+        # keeps those out of every fact (their path is a per-run value) and
+        # records them as a receipt.  One per .test package in the index.
+        out_of_tree = [dict(entry) for entry in self.meta["out_of_tree_documents"]]
+        test_packages = {pkg for pkg in pilot.document_packages(self.normalized).values()
+                         if pkg and pkg.endswith(".test")}
+        self.assertEqual(len(out_of_tree), len(test_packages))
+        self.assertGreater(len(out_of_tree), 0)
+        self.assertTrue(all(entry["basename"].endswith("-d") for entry in out_of_tree), out_of_tree)
+        self.assertEqual(self.exported.counts["scip_document"],
+                         len(self.normalized["documents"]) - len(out_of_tree))
+        document_paths = [p for _, p, *_ in _rows(self.exported.bundle, "scip_document")]
+        self.assertTrue(all(not p.startswith(("../", "/")) and "/../" not in p for p in document_paths))
+        self.assertTrue(set(document_paths) <= set(go_files))
         # scip-go leaves build-tagged test files out; no production file is unindexed
         self.assertTrue(all(p.endswith("_test.go") for p in self.receipt["export"]["unindexed_files"]),
                         self.receipt["export"]["unindexed_files"])
@@ -467,6 +488,8 @@ class FgGoStaticPilotTest(unittest.TestCase):
         # the static-relations-v1 identity and the receipt-free bundle digest are
         # functions of the archived tree and the indexer, not of this run
         self.assertEqual(self.receipt["export"]["index_identity"], committed["export"]["index_identity"])
+        if self.checkout.head in PINNED_IDENTITY:
+            self.assertEqual(self.receipt["export"]["index_identity"], PINNED_IDENTITY[self.checkout.head])
         self.assertEqual(self.receipt["export"]["exported_bundle_digest"], committed["export"]["exported_bundle_digest"])
         self.assertEqual(self.receipt["export"]["row_counts"], committed["export"]["row_counts"])
         self.assertEqual(self.receipt["combined"]["bundle_digest"], committed["combined"]["bundle_digest"])
@@ -487,6 +510,11 @@ class FgGoStaticPilotTest(unittest.TestCase):
         self.assertNotIn("package pilot", text)
         self.assertNotIn("func (r *Runtime)", text)
         self.assertNotIn(str(self.archive), canonical_json(self.bundle))
+        # no fact or metadata names the Go caches (the _testmain.go documents are
+        # gone from the facts and recorded by basename only)
+        for needle in (self.go_env["GOCACHE"], self.go_env["GOMODCACHE"], "gocache", "gomodcache"):
+            self.assertNotIn(needle, canonical_json(self.bundle))
+        self.assertNotIn("../", canonical_json(self.exported.bundle))
 
 
 if __name__ == "__main__":

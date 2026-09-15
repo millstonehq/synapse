@@ -1,18 +1,18 @@
 {
  "certificates": {
   "claim-route-reaches-change-subscription": {
-   "derivation_sha256": "57c182074567a92a6472395973a30a3155e3f08415a3558c139f92c6ab0572a7",
+   "derivation_sha256": "267bc470a7694c17a4f1efb0227a6d99c6fab7f84a2e68b3d2cdf53c900eadd3",
    "leaves": 3,
    "nodes": 13,
-   "sha256": "1783e30ff467f17fd4c54784f3756e8c81331d23c09be867f8ff102aac069ab7",
+   "sha256": "ea8ce51df9e038f45fd96d87e2553c436ff7cbdf5d13a71ee4b5fcd13bb019f9",
    "steps": 0,
    "truncated": false
   },
   "claim-route-reaches-sql-tx-exec": {
-   "derivation_sha256": "b7081c07aa1a54c984d27318c5006f53968feec2f93dd604bf52d030cb763591",
+   "derivation_sha256": "02bd7b2203e9f3c37a7ea5663b7262eb2b98ead8dc91eee1fc9d708c6180b6f7",
    "leaves": 4,
    "nodes": 173,
-   "sha256": "0b84de480844cac23273c9c26fa2c0a318a5fd9db62fc483e2957a7dd87d4340",
+   "sha256": "3d69d89af0bf5ebdac386e7fe55bbff8bce82443268e04cf7926625e13372793",
    "steps": 1,
    "truncated": false
   }
@@ -33,16 +33,16 @@
   "control-route-reaches-send-due-digests": {
    "basis": "derivational",
    "missing_premises": [
-    "\"claim:static_reaches:{\\\"index\\\":\\\"153c788961ef2eabb7dc0802344b6e45bb886a229cd9bfb3b587d3876c89fa8f\\\"}\""
+    "\"claim:static_reaches:{\\\"index\\\":\\\"0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b\\\"}\""
    ],
    "operational": "complete",
    "semantic": "unresolved"
   }
  },
  "combined": {
-  "bundle_digest": "37caa5b4c58a8c14b131c6d3e2d29df2222a487332177ae58fa0b4c1e555a3b5",
-  "facts": 20628,
-  "ir_digest": "aadfee25a21708a091d911f7cf34704a56a52a7bab583f93a770501aa3e52ef9",
+  "bundle_digest": "413014e24facd45783b79eb3905bafb49773c853ea137e6aee71658ff089e253",
+  "facts": 20619,
+  "ir_digest": "95ec166ef72edd6f419a93f0641432d70f349c67c1cb6daa438eb3723be4406a",
   "relations": 69,
   "rules": 28,
   "rules_digest": "1490a850b07272f5c53a750d7cbc8375fb3538cbd70b03e333c3b87a607160ec"
@@ -62,9 +62,9 @@
   "unrooted_symbols": 115
  },
  "export": {
-  "exported_bundle_digest": "5337832d6c4bada6498bcfc437c15a0ccaa87f030217487d95bb86179f6a0eb4",
-  "facts": 20626,
-  "index_identity": "153c788961ef2eabb7dc0802344b6e45bb886a229cd9bfb3b587d3876c89fa8f",
+  "exported_bundle_digest": "89d2988a92a4f5e17d9eea77002a07b44768c875ce071660c40245d36771e4f0",
+  "facts": 20617,
+  "index_identity": "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
   "index_identity_kind": "static-relations-v1",
   "limits": {
    "documents": 500,
@@ -72,15 +72,54 @@
    "rows": 100000
   },
   "messages": [
-   "scip_index.project_root recorded as 'file:///target-go'; the indexer reported 'file:///private/tmp/nix-shell.Wc0Xx5/capcov-target-go-pilot-kve8mbly/target-go' (host path, not a fact)",
+   "9 document(s) outside the indexed tree are not exported (paths escaping the project root; recorded as metadata out_of_tree_documents)",
+   "scip_index.project_root recorded as 'file:///target-go'; the indexer reported 'file:///private/tmp/nix-shell.pkTq7q/capcov-target-go-pilot-1_plvvgw/target-go' (host path, not a fact)",
    "105 type reference(s) at module scope have no referrer symbol and no section-29 relation; not exported",
-   "index identity 153c788961ef2eabb7dc0802344b6e45bb886a229cd9bfb3b587d3876c89fa8f (static-relations-v1); the index file digest 5128b4ade5b0f3494a9e8f50e4a74377dd3a4f2b9a35eadce6a699fc04819215 (binary) is a run receipt, not identity"
+   "index identity 0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b (static-relations-v1); the index file digest a3141c39c7f04f4e0a120896c12bf3b5c29e0b2a14bf6c01697b82b66496aa25 (binary) is a run receipt, not identity"
+  ],
+  "out_of_tree_documents": [
+   {
+    "basename": "0ff5b09eee553f7ef397fd5a5b798e523389ec0faeeb3ffdc498d041fd60103c-d",
+    "occurrence_count": 67
+   },
+   {
+    "basename": "4a6eb265982f34d63abf4b4b93b30f7343d0cad5221b5583d22f62d69c932958-d",
+    "occurrence_count": 99
+   },
+   {
+    "basename": "523a3925c1f5ee838a9b6b84e32d25e0dae69b86e0faa02f933c7dd797334a00-d",
+    "occurrence_count": 40
+   },
+   {
+    "basename": "671c8d2547a522caee8811e24c6284e7db58ae9511b83c9cfe78324a50863333-d",
+    "occurrence_count": 63
+   },
+   {
+    "basename": "928a46f1816bed04242bd32c9eb0b39b73e9c49b8227e2000b1d5e139a435e17-d",
+    "occurrence_count": 69
+   },
+   {
+    "basename": "d9416117a5a1869cec7e76b4f051d27cc19835e4752ab04efbc7431dfd88d0d1-d",
+    "occurrence_count": 46
+   },
+   {
+    "basename": "db3ba83fd79db33cc3996b5f75392de37d99afc8ca6b80db591897b59bbe5a15-d",
+    "occurrence_count": 43
+   },
+   {
+    "basename": "ecd11509b01f09bd48b9720f0ed22c100131a416ad54a1773d4decd2c40b1336-d",
+    "occurrence_count": 47
+   },
+   {
+    "basename": "febed0acb72541a9b85260650d4084f17a1d074d5e4a259b8b4f18181614ed18-d",
+    "occurrence_count": 45
+   }
   ],
   "profile": "slice",
   "row_counts": {
    "scip_definition_site": 2561,
    "scip_definitions_closed": 54,
-   "scip_document": 105,
+   "scip_document": 96,
    "scip_documents_closed": 1,
    "scip_enclosing": 165,
    "scip_index": 1,
@@ -133,17 +172,17 @@
   ]
  },
  "go_environment": {
-  "GOCACHE": "/private/tmp/claude-502/-Users-reuben-projects-capcov/c86379ac-3730-4798-9c2c-e07fb17cfd66/scratchpad/gocache",
+  "GOCACHE": "/tmp/nix-shell.pkTq7q/capcov-target-go-pilot/gocache",
   "GOFLAGS": "-mod=mod",
-  "GOMODCACHE": "/private/tmp/claude-502/-Users-reuben-projects-capcov/c86379ac-3730-4798-9c2c-e07fb17cfd66/scratchpad/gomodcache",
+  "GOMODCACHE": "/tmp/nix-shell.pkTq7q/capcov-target-go-pilot/gomodcache",
   "GOTOOLCHAIN": "local"
  },
  "index_file": {
-  "bytes": 2330632,
+  "bytes": 2330245,
   "documents": 105,
   "kind": "binary receipt, not identity",
   "occurrences": 28284,
-  "sha256": "5128b4ade5b0f3494a9e8f50e4a74377dd3a4f2b9a35eadce6a699fc04819215",
+  "sha256": "a3141c39c7f04f4e0a120896c12bf3b5c29e0b2a14bf6c01697b82b66496aa25",
   "tool_name": "scip-go",
   "tool_version": "0.2.7"
  },
@@ -163,10 +202,10 @@
    "static_scope_leak": 0
   },
   "matched": true,
-  "python_digest": "67028e7921e8047c56bd3e36a6f1c124cb1961b3f4873bce2ad2747d8e899282",
+  "python_digest": "06daf07b4a6dd63038390e2c055b152856bc3f07b83b12a7dd3e62adb4d4ff16",
   "python_failure": null,
   "replay_path": null,
-  "souffle_digest": "67028e7921e8047c56bd3e36a6f1c124cb1961b3f4873bce2ad2747d8e899282",
+  "souffle_digest": "06daf07b4a6dd63038390e2c055b152856bc3f07b83b12a7dd3e62adb4d4ff16",
   "souffle_failure": null
  },
  "outcome": "supported",
@@ -191,7 +230,7 @@
  },
  "pilot": "EXPERIMENT-PLAN section 30 target-go static path pilot",
  "route": {
-  "assumption_evidence_id": "static:153c788961ef:route_handler_symbol__accepted:735b8569037b",
+  "assumption_evidence_id": "static:0759ccef8fbb:route_handler_symbol__accepted:517419cba2c0",
   "binding": "labelled assumption; no route_site / route_handler_location observation",
   "declared_from": "human-declared from router source: internal/pilot/runtime.go:163 registers GET /api/cloud/notification-unsubscribe/<action>-email -> r.recipientLinks(action); handler defined at internal/pilot/recipient_links.go:13; app mounted at internal/httpserver/server.go:47 and wired at cmd/target-go/main.go:181",
   "handler_symbol": "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks().",
@@ -284,10 +323,10 @@
   "root": "/Users/dev/fg/target-go"
  },
  "timings_seconds": {
-  "compare": 25.3,
-  "export": 2.3,
-  "index": 4.0,
-  "total": 34.2
+  "compare": 80.2,
+  "export": 6.3,
+  "index": 105.5,
+  "total": 216.0
  },
  "tools": {
   "go": {

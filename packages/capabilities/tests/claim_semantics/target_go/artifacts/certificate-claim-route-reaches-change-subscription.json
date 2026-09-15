@@ -4,12 +4,12 @@
   "max_depth": 64,
   "max_nodes": 10000
  },
- "bundle_digest": "aadfee25a21708a091d911f7cf34704a56a52a7bab583f93a770501aa3e52ef9",
+ "bundle_digest": "95ec166ef72edd6f419a93f0641432d70f349c67c1cb6daa438eb3723be4406a",
  "certificate_version": "capcov-static-certificate-v1",
  "conclusion": {
   "relation": "static_reaches",
   "row": [
-   "153c788961ef2eabb7dc0802344b6e45bb886a229cd9bfb3b587d3876c89fa8f",
+   "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
    "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks().",
    "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/legacyissues`/ChangeSubscription()."
   ]
@@ -31,24 +31,24 @@
       "premises": [
        {
         "evidence": [
-         "static:153c788961ef:route_handler_symbol__accepted:735b8569037b"
+         "static:0759ccef8fbb:route_handler_symbol__accepted:517419cba2c0"
         ],
         "kind": "fact",
         "relation": "route_handler_symbol__accepted",
         "row": [
-         "153c788961ef2eabb7dc0802344b6e45bb886a229cd9bfb3b587d3876c89fa8f",
+         "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
          "http:GET /api/cloud/notification-unsubscribe/subscribe-email",
          "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks()."
         ]
        },
        {
         "evidence": [
-         "scip:153c788961ef:scip_symbol:849978fbc764"
+         "scip:0759ccef8fbb:scip_symbol:ac84fe7dafb3"
         ],
         "kind": "fact",
         "relation": "scip_symbol",
         "row": [
-         "153c788961ef2eabb7dc0802344b6e45bb886a229cd9bfb3b587d3876c89fa8f",
+         "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
          "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks().",
          "Method",
          "callable",
@@ -58,7 +58,7 @@
       ],
       "relation": "static_route_handler",
       "row": [
-       "153c788961ef2eabb7dc0802344b6e45bb886a229cd9bfb3b587d3876c89fa8f",
+       "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
        "http:GET /api/cloud/notification-unsubscribe/subscribe-email",
        "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks()."
       ],
@@ -68,7 +68,7 @@
     ],
     "relation": "static_root",
     "row": [
-     "153c788961ef2eabb7dc0802344b6e45bb886a229cd9bfb3b587d3876c89fa8f",
+     "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
      "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks()."
     ],
     "rule": "static_root",
@@ -81,12 +81,12 @@
     "premises": [
      {
       "evidence": [
-       "scip:153c788961ef:scip_may_reference:24c2dfe3cf4f"
+       "scip:0759ccef8fbb:scip_may_reference:795036b39318"
       ],
       "kind": "fact",
       "relation": "scip_may_reference",
       "row": [
-       "153c788961ef2eabb7dc0802344b6e45bb886a229cd9bfb3b587d3876c89fa8f",
+       "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
        "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks().",
        "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/legacyissues`/ChangeSubscription().",
        "internal/pilot/recipient_links.go",
@@ -98,7 +98,7 @@
     ],
     "relation": "static_edge",
     "row": [
-     "153c788961ef2eabb7dc0802344b6e45bb886a229cd9bfb3b587d3876c89fa8f",
+     "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
      "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks().",
      "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/legacyissues`/ChangeSubscription()."
     ],
@@ -108,7 +108,7 @@
   ],
   "relation": "static_reaches",
   "row": [
-   "153c788961ef2eabb7dc0802344b6e45bb886a229cd9bfb3b587d3876c89fa8f",
+   "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
    "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks().",
    "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/legacyissues`/ChangeSubscription()."
   ],
@@ -116,9 +116,9 @@
   "rule_digest": "0979290f9df25c7d9fc4653d22214c4240df122288fecb74b7a2db2c48cf7def"
  },
  "leaves": [
-  "scip:153c788961ef:scip_may_reference:24c2dfe3cf4f",
-  "scip:153c788961ef:scip_symbol:849978fbc764",
-  "static:153c788961ef:route_handler_symbol__accepted:735b8569037b"
+  "scip:0759ccef8fbb:scip_may_reference:795036b39318",
+  "scip:0759ccef8fbb:scip_symbol:ac84fe7dafb3",
+  "static:0759ccef8fbb:route_handler_symbol__accepted:517419cba2c0"
  ],
  "nesting": 3,
  "nodes": 13,
