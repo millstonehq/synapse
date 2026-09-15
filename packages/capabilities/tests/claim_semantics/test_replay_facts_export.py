@@ -566,6 +566,64 @@ class WitnessTest(_Exported):
         self.assertEqual(validate_bundle(unknown.bundle), ())
 
 
+class UniqueObservationTest(_Exported):
+    """One observation per write and per post-state (``UNIQUE_KEYS``)."""
+
+    def test_two_php_effect_rows_for_one_write_with_different_columns_are_invalid_input(self) -> None:
+        def conflicting(document):
+            document = copy.deepcopy(document)
+            document["rows"].append(dict(document["rows"][0], cols_digest="c" * 64))
+            return document
+
+        with _variant(php_effect=conflicting) as root:
+            result = self.export(root)
+        self.assertEqual(result.status, replay_facts.STATUS_INVALID_INPUT, result.messages)
+        self.assertIsNone(result.bundle)
+        [message] = result.messages
+        self.assertIn("php_effect.json: rows[0] and rows[3]", message)
+        self.assertIn("'req': 'req-1'", message)
+        self.assertIn("['cols_digest']", message)
+        self.assertIn("one observation per php_effect key", message)
+
+    def test_every_keyed_relation_is_checked_and_a_verbatim_repeat_is_one_fact(self) -> None:
+        self.assertEqual(set(replay_facts.UNIQUE_KEYS),
+                         {"php_effect", "go_effect", "model_effect", "php_post_state", "go_post_state"})
+        for relation, column, value in (("go_effect", "cols_digest", "d" * 64), ("model_effect", "cols_digest", "d" * 64),
+                                        ("php_post_state", "state_digest", "e" * 64),
+                                        ("go_post_state", "state_digest", "f" * 64)):
+            def conflicting(document, column=column, value=value):
+                document = copy.deepcopy(document)
+                document["rows"].append(dict(document["rows"][1], **{column: value}))
+                return document
+
+            with self.subTest(relation=relation), _variant(**{relation: conflicting}) as root:
+                result = self.export(root)
+                self.assertEqual(result.status, replay_facts.STATUS_INVALID_INPUT, result.messages)
+                self.assertIn(f"one observation per {relation} key", result.messages[0])
+
+        def repeated(document):
+            document = copy.deepcopy(document)
+            document["rows"].append(dict(document["rows"][2]))
+            return document
+
+        with _variant(php_effect=repeated, go_post_state=repeated) as root:
+            result = self.export(root)
+        self.assertEqual(result.status, replay_facts.STATUS_COMPLETE, result.messages)
+        self.assertEqual(len(_rows(result.bundle, "php_effect")), 3)
+        self.assertEqual(len(_rows(result.bundle, "go_post_state")), 3)
+        self.assertEqual(replay_facts.bundle_digest(result.bundle), replay_facts.bundle_digest(self.bundle))
+        # model_admissible is a set: two admissible states for one request coexist
+        def second_state(document):
+            document = copy.deepcopy(document)
+            document["rows"].append(dict(document["rows"][0], state_digest="a" * 64))
+            return document
+
+        with _variant(model_admissible=second_state) as root:
+            result = self.export(root)
+        self.assertEqual(result.status, replay_facts.STATUS_COMPLETE, result.messages)
+        self.assertEqual(len(_rows(result.bundle, "model_admissible")), 4)
+
+
 class ProducerAuthorityTest(_Exported):
     """Step 1's ``evidence-producer`` is the boundary the exporter relies on."""
 

@@ -140,6 +140,20 @@ Design points a reviewer should check:
   request set while `mutant_kills_closed` is asserted.  It is derived *from*
   the lying witness, so its support intersects `forbidden_leaves`.
 
+## One observation per key
+
+The exporter, not the pack, settles duplicate observations: two `php_effect`
+/ `go_effect` / `model_effect` rows sharing `(run, [model,] req, table, kind,
+pk)` with different `cols_digest`, or two `php_post_state` / `go_post_state`
+rows for one `(run, req)` with different `state_digest`, are contradictory
+reports of the same event and make `export_bundle` return `invalid-input`
+naming the key (`replay_facts.UNIQUE_KEYS`).  A pack-side uniqueness
+completeness was rejected because it would let both rows into the fact set
+and leave a rule to choose between them; the judge never carries a
+contradiction it could have refused at ingestion.  A row repeated verbatim is
+one fact, and `model_admissible` stays a set (several admissible states per
+request).
+
 ## Validator findings
 
 None.  The pack validates alone with zero issues (`pack_bundle`), every case
