@@ -544,7 +544,7 @@ def main(argv: list[str] | None = None) -> int:
         "--probe",
         default=None,
         help="runtime-evidence probe: 'pytest' (default, unchanged) | 'browser' | "
-        "'load'. Falls back to [capcov] probe, then pytest.",
+        "'load' | 'har'. Falls back to [capcov] probe, then pytest.",
     )
     o.add_argument(
         "--only",
