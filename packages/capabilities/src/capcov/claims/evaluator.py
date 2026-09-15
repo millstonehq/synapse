@@ -183,6 +183,14 @@ class _Engine:
         self.started = time.monotonic()
         self.relations = {r.name: r for r in bundle.relations}
         self.rows: dict[str, set[Row]] = {name: set() for name in self.relations}
+        # IR values are recursively frozen before evaluation, so even nested
+        # JSON values are safe dictionary keys.  Indexing the values directly
+        # also preserves Python equality semantics (for example, 0 and False)
+        # used by unification instead of substituting a merely lexical key.
+        self._row_indexes: dict[str, tuple[dict[Any, set[Row]], ...]] = {
+            name: tuple({} for _ in declaration.columns)
+            for name, declaration in self.relations.items()
+        }
         self.proofs: dict[str, dict[Row, list[Derivation]]] = {name: {} for name in self.relations}
         # Candidate identities are bounded by max_alternatives_per_row.  Do not
         # retain an unbounded shadow graph merely to count discarded proofs.
@@ -194,6 +202,10 @@ class _Engine:
         self.unattributed_facts = 0
         self.discarded_alternatives = 0
         self.evidence_by_leaf = {record.id: record for record in bundle.evidence}
+        # Private deterministic instrumentation for algorithmic benchmarks.
+        self._candidate_rows_examined = 0
+        self._indexed_atom_matches = 0
+        self._full_scan_atom_matches = 0
 
     def check_limits(self) -> None:
         if self.limits.max_seconds is not None and time.monotonic() - self.started > self.limits.max_seconds:
@@ -251,6 +263,8 @@ class _Engine:
         if self.limits.max_provenance is not None and self.provenance_count >= self.limits.max_provenance:
             raise _LimitReached("evaluation exceeded the provenance limit")
         self.rows[relation].add(row)
+        for position, value in enumerate(row):
+            self._row_indexes[relation][position].setdefault(value, set()).add(row)
         self.proofs[relation][row] = [proof]
         self.proof_path_candidates[relation][row] = {proof.path_key()}
         self.derived_rows += 1
@@ -477,12 +491,40 @@ class _Engine:
             for final_env, rest_proofs, rest_alternatives in self._match_body(rest, next_env, overrides, offset + 1):
                 yield final_env, selected + rest_proofs, discarded + rest_alternatives
 
+    def _candidate_rows(self, atom: Atom, env: Environment,
+                        rows_override: set[Row] | None) -> set[Row]:
+        """Return the indexed candidate intersection, or the full scan set."""
+        constraints = []
+        for position, term in enumerate(atom.terms):
+            if isinstance(term, Constant):
+                constraints.append((position, term.value))
+            elif isinstance(term, Variable) and term.name in env:
+                constraints.append((position, env[term.name]))
+
+        if constraints:
+            self._indexed_atom_matches += 1
+            rows: set[Row] | None = None
+            indexes = self._row_indexes[atom.relation]
+            for position, value in constraints:
+                candidates = indexes[position].get(value, set())
+                rows = set(candidates) if rows is None else rows.intersection(candidates)
+                if not rows:
+                    break
+            rows = rows or set()
+            if rows_override is not None:
+                rows.intersection_update(rows_override)
+        else:
+            self._full_scan_atom_matches += 1
+            rows = self.rows[atom.relation] if rows_override is None else rows_override
+        return rows
+
     def _match_atom(self, atom: Atom, env: Environment, *, positive_only: bool,
                     rows_override: set[Row] | None = None) -> Iterable[tuple[Environment, list[Derivation]]]:
         del positive_only  # reserved for the future explicit negative relation form
         decl = self.relations[atom.relation]
-        rows = self.rows[atom.relation] if rows_override is None else rows_override
+        rows = self._candidate_rows(atom, env, rows_override)
         for row in sorted(rows, key=canonical_json):
+            self._candidate_rows_examined += 1
             next_env = dict(env)
             ok = True
             for term, value in zip(atom.terms, row):
