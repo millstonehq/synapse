@@ -54,8 +54,11 @@ Set `CAPCOV_GO_CACHE_ROOT` to a persistent directory to avoid re-downloading mod
 - Soufflé computes relational closure only; claim folding, quantifiers, diagnostics, and
   missing-premise rendering are shared Python policy, so differential agreement is weak evidence
   for those. Engine-independent certificates exist for closure, not for that policy.
-- Producer-class authority (`RelationDecl.producer_classes`) is declared but not enforced;
-  generic rules may still project away non-context causal columns. Owner: `datalog-certificates`.
+- Producer-class authority (`RelationDecl.producer_classes`) is now enforced at evidence
+  ingestion (`evidence-producer` in `claims/validation.py`: the first token of
+  `Evidence.source` must be one of the relation's declared classes; an empty tuple is
+  unconstrained, so the frozen static schema is unaffected). Generic rules may still project
+  away non-context causal columns. Owner: `datalog-certificates`.
 - Replay minimization is bounded (`max_steps=200`, `shrink_truncated` reported honestly).
 - `scip_references_closed` is emitted only when a tree-sitter call-site census is available;
   tree-sitter is not in the devShell, so on target-go every negative claim stays `unresolved`.

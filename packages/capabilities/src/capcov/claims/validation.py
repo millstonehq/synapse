@@ -444,6 +444,19 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
         if declared and set(context) != set(declared.context_indices):
             issues.append(ValidationIssue("evidence-context", "evidence context must exactly match relation context indices", path))
         if not isinstance(record.source, str) or not record.source: issues.append(ValidationIssue("evidence-source", "evidence source must be a non-empty string", path))
+        elif declared and declared.producer_classes:
+            # Producer-class authority is enforced here, at evidence ingestion,
+            # and nowhere else: every fact is already tied to an evidence record
+            # (``fact-without-evidence``), so this is the single boundary.  The
+            # producer class of a record is the first whitespace-delimited token
+            # of ``Evidence.source`` (``"php target-cloud 1a2b3c"`` -> ``php``).  An
+            # empty ``producer_classes`` tuple leaves the relation unconstrained.
+            producer_class = record.source.split(" ", 1)[0]
+            if producer_class not in declared.producer_classes:
+                issues.append(ValidationIssue(
+                    "evidence-producer",
+                    f"{record.atom.relation!r} admits {declared.producer_classes}, got {record.source!r}",
+                    path))
         if not isinstance(record.kind, str) or not record.kind: issues.append(ValidationIssue("evidence-kind", "evidence kind must be a non-empty string", path))
         if declared:
             names = [c.name for c in declared.columns]
