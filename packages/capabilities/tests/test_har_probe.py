@@ -17,13 +17,23 @@ from pathlib import Path
 
 from capcov.probes import har_probe
 from capcov.probes.har_probe import (
+    candidates_indexed,
     index_surfaces,
-    match_indexed,
-    match_surface,
     observe,
     project_har,
     template_regex,
 )
+
+
+def _match(method: str, path: str, surfaces: list[dict]) -> str | None:
+    """Test-local one-shot matcher: the surface a request reached, or None.
+
+    The probe indexes the inventory once and calls `candidates_indexed`
+    directly; nothing in production wants a per-call index rebuild. This
+    convenience lives here so a template test reads as one assertion.
+    """
+    candidates = candidates_indexed(method, path, index_surfaces(surfaces))
+    return candidates[0] if len(candidates) == 1 else None
 
 
 SURFACES = [
@@ -48,46 +58,65 @@ class TemplateTests(unittest.TestCase):
 
     def test_literal_beats_template_when_both_match(self) -> None:
         surfaces = SURFACES + [{"id": "http:GET /api/jobs/new", "method": "GET", "path": "/api/jobs/new"}]
-        self.assertEqual(match_surface("GET", "/api/jobs/new", surfaces), "http:GET /api/jobs/new")
-        self.assertEqual(match_surface("GET", "/api/jobs/7", surfaces), "http:GET /api/jobs/{id}")
+        self.assertEqual(_match("GET", "/api/jobs/new", surfaces), "http:GET /api/jobs/new")
+        self.assertEqual(_match("GET", "/api/jobs/7", surfaces), "http:GET /api/jobs/{id}")
 
     def test_method_must_match(self) -> None:
-        self.assertIsNone(match_surface("PUT", "/api/jobs/7", SURFACES))
+        self.assertIsNone(_match("PUT", "/api/jobs/7", SURFACES))
 
     def test_trailing_slash_is_ignored_on_both_sides(self) -> None:
-        self.assertEqual(match_surface("GET", "/api/jobs/", SURFACES), "http:GET /api/jobs")
-        self.assertEqual(match_surface("GET", "/api/jobs/7/", SURFACES), "http:GET /api/jobs/{id}")
+        self.assertEqual(_match("GET", "/api/jobs/", SURFACES), "http:GET /api/jobs")
+        self.assertEqual(_match("GET", "/api/jobs/7/", SURFACES), "http:GET /api/jobs/{id}")
         surfaces = [{"id": "http:GET /api/jobs/", "method": "GET", "path": "/api/jobs/"}]
-        self.assertEqual(match_surface("GET", "/api/jobs", surfaces), "http:GET /api/jobs/")
+        self.assertEqual(_match("GET", "/api/jobs", surfaces), "http:GET /api/jobs/")
 
     def test_slashless_surface_path_matches_rooted_request(self) -> None:
         surfaces = [{"id": "http:GET admin/tows", "method": "GET", "path": "admin/tows"}]
-        self.assertEqual(match_surface("GET", "/admin/tows", surfaces), "http:GET admin/tows")
+        self.assertEqual(_match("GET", "/admin/tows", surfaces), "http:GET admin/tows")
 
 
 class IndexTests(unittest.TestCase):
-    def test_indexed_matching_agrees_with_the_unindexed_path(self) -> None:
+    def test_the_index_resolves_each_request_to_the_named_surface(self) -> None:
+        # Literal expectations, not a function compared with itself: dropping a
+        # template from the index has to make this fail.
         surfaces = SURFACES + [
             {"id": "http:GET /api/jobs/new", "method": "GET", "path": "/api/jobs/new"},
             {"id": "http:GET admin/tows", "method": "GET", "path": "admin/tows"},
         ]
         index = index_surfaces(surfaces)
-        for method, path in [
-            ("GET", "/api/jobs"), ("GET", "/api/jobs/new"), ("GET", "/api/jobs/7"),
-            ("GET", "/api/jobs/7/"), ("POST", "/api/jobs/7/close"), ("DELETE", "/api/jobs/7"),
-            ("PUT", "/api/jobs/7"), ("GET", "/admin/tows"), ("GET", "/nowhere"),
-        ]:
+        expected = {
+            ("GET", "/api/jobs"): ["http:GET /api/jobs"],
+            ("GET", "/api/jobs/new"): ["http:GET /api/jobs/new"],
+            ("GET", "/api/jobs/7"): ["http:GET /api/jobs/{id}"],
+            ("GET", "/api/jobs/7/"): ["http:GET /api/jobs/{id}"],
+            ("POST", "/api/jobs/7/close"): ["http:POST /api/jobs/:id/close"],
+            ("DELETE", "/api/jobs/7"): ["http:DELETE /api/jobs/{id}"],
+            ("PUT", "/api/jobs/7"): [],
+            ("GET", "/admin/tows"): ["http:GET admin/tows"],
+            ("GET", "/nowhere"): [],
+        }
+        for (method, path), ids in expected.items():
             with self.subTest(method=method, path=path):
-                self.assertEqual(
-                    match_indexed(method, path, index), match_surface(method, path, surfaces)
-                )
+                self.assertEqual(candidates_indexed(method, path, index), ids)
+
+    def test_a_dropped_template_is_visible_to_this_oracle(self) -> None:
+        # The guard on the guard: the previous form of the test above compared
+        # `match_indexed` with `match_surface`, which was the same function, so
+        # an index that lost every template still reported zero disagreements.
+        surfaces = SURFACES
+        crippled = (index_surfaces(surfaces)[0], [])
+        self.assertEqual(candidates_indexed("GET", "/api/jobs/7", crippled), [])
+        self.assertEqual(
+            candidates_indexed("GET", "/api/jobs/7", index_surfaces(surfaces)),
+            ["http:GET /api/jobs/{id}"],
+        )
 
     def test_index_normalises_missing_slash_and_splits_literals_from_templates(self) -> None:
         literals, templates = index_surfaces(
             [{"id": "a", "method": "get", "path": "admin/tows"},
              {"id": "b", "method": "GET", "path": "/admin/tows/{id}"}]
         )
-        self.assertEqual(literals, {("GET", "/admin/tows"): "a"})
+        self.assertEqual(literals, {("GET", "/admin/tows"): ["a"]})
         self.assertEqual([(m, sid) for m, _, sid in templates], [("GET", "b")])
 
     def test_repeated_requests_hit_the_memo_not_the_index(self) -> None:
@@ -170,7 +199,7 @@ class ProjectTests(unittest.TestCase):
         self.assertEqual(entry["kind"], "unmatched-requests")
         self.assertEqual(entry["count"], 1)
         self.assertEqual(entry["samples"], ["GET cdn.example.com/font.woff2"])
-        self.assertEqual(entry["non_http"], 3)
+        self.assertEqual(entry["non_http"], {"about": 1, "blob": 1, "data": 1})
 
     def test_ambiguous_template_hits_are_reported_not_bound(self) -> None:
         surfaces = [
@@ -184,19 +213,97 @@ class ProjectTests(unittest.TestCase):
         self.assertEqual(entry["kind"], "ambiguous-match")
         self.assertFalse(entry["gating"])
         self.assertEqual(entry["count"], 1)
-        self.assertEqual(entry["samples"], ["GET /x/zones -> [http:GET /x/{a}, http:GET /{regionCode}/zones]"])
+        self.assertEqual(
+            entry["samples"],
+            ["GET app.example.com/x/zones -> [http:GET /x/{a}, http:GET /{regionCode}/zones]"],
+        )
 
-    def test_head_options_and_unknown_verbs_bind_nothing(self) -> None:
-        surfaces = SURFACES + [{"id": "http:HEAD /api/jobs", "method": "HEAD", "path": "/api/jobs"}]
+    def test_non_crud_verbs_bind_the_surface_and_claim_no_operation(self) -> None:
+        # The browser probe's actual rule (browser_probe._crud_for_surface): bind
+        # the surface the request reached, claim no operation for a verb outside
+        # the CRUD map. Refusing to bind would leave a declared HEAD route in
+        # `static_only` forever -- an "unexplained-static_only" no test can close,
+        # because the only way to exercise a HEAD route is to send HEAD.
+        surfaces = SURFACES + [
+            {"id": "http:HEAD /api/jobs", "method": "HEAD", "path": "/api/jobs"},
+            {"id": "http:OPTIONS /api/jobs", "method": "OPTIONS", "path": "/api/jobs"},
+        ]
         har = _har([("HEAD", "/api/jobs"), ("OPTIONS", "/api/jobs"), ("PROPFIND", "/api/jobs"), ("GET", "/api/jobs")])
         result = project_har({"a.har": har}, surfaces, strip_prefixes=[])
-        self.assertEqual([b["surface"] for b in result["bindings"]], ["http:GET /api/jobs"])
-        self.assertEqual(result["bindings"][0]["operations"], ["read"])
+        by_surface = {b["surface"]: b for b in result["bindings"]}
+        self.assertEqual(
+            sorted(by_surface),
+            ["http:GET /api/jobs", "http:HEAD /api/jobs", "http:OPTIONS /api/jobs"],
+        )
+        self.assertEqual(by_surface["http:HEAD /api/jobs"]["operations"], [])
+        self.assertEqual(by_surface["http:HEAD /api/jobs"]["entity"], "http:HEAD /api/jobs")
+        self.assertEqual(by_surface["http:HEAD /api/jobs"]["tests"], ["a.har"])
+        self.assertEqual(by_surface["http:OPTIONS /api/jobs"]["operations"], [])
+        self.assertEqual(by_surface["http:GET /api/jobs"]["operations"], ["read"])
         kinds = {e["kind"]: e for e in result["unresolved"]}
-        self.assertEqual(set(kinds), {"non-binding-verbs"})
+        self.assertEqual(set(kinds), {"non-binding-verbs", "unmatched-requests"})
         self.assertFalse(kinds["non-binding-verbs"]["gating"])
-        self.assertEqual(kinds["non-binding-verbs"]["count"], 3)
-        self.assertIn("HEAD app.example.com/api/jobs", kinds["non-binding-verbs"]["samples"])
+        self.assertEqual(kinds["non-binding-verbs"]["count"], 2)
+        self.assertEqual(
+            kinds["non-binding-verbs"]["samples"],
+            ["HEAD app.example.com/api/jobs", "OPTIONS app.example.com/api/jobs"],
+        )
+        # A non-CRUD verb that matched nothing is still unmatched, not a bound verb.
+        self.assertEqual(
+            kinds["unmatched-requests"]["samples"], ["PROPFIND app.example.com/api/jobs"]
+        )
+
+    def test_a_non_crud_verb_matching_no_surface_falls_through_to_unmatched(self) -> None:
+        har = _har([("HEAD", "/static/app.js")])
+        result = project_har({"a.har": har}, SURFACES, strip_prefixes=[])
+        self.assertEqual(result["bindings"], [])
+        kinds = {e["kind"]: e for e in result["unresolved"]}
+        self.assertEqual(set(kinds), {"unmatched-requests"})
+        self.assertEqual(kinds["unmatched-requests"]["samples"], ["HEAD app.example.com/static/app.js"])
+
+    def test_colliding_literal_surfaces_bind_nothing_and_are_named(self) -> None:
+        # `admin/tows` and `/admin/tows` normalise onto one key. Keeping the
+        # first silently made the second unbindable forever.
+        surfaces = [
+            {"id": "http:GET admin/tows", "method": "GET", "path": "admin/tows"},
+            {"id": "http:GET /admin/tows", "method": "GET", "path": "/admin/tows"},
+        ]
+        result = project_har({"a.har": _har([("GET", "/admin/tows")])}, surfaces, strip_prefixes=[])
+        self.assertEqual(result["bindings"], [])
+        kinds = {e["kind"]: e for e in result["unresolved"]}
+        self.assertEqual(set(kinds), {"ambiguous-match", "colliding-surfaces"})
+        self.assertEqual(
+            kinds["ambiguous-match"]["samples"],
+            ["GET app.example.com/admin/tows -> [http:GET admin/tows, http:GET /admin/tows]"],
+        )
+        self.assertFalse(kinds["colliding-surfaces"]["gating"])
+        self.assertEqual(
+            kinds["colliding-surfaces"]["samples"],
+            ["GET /admin/tows -> [http:GET admin/tows, http:GET /admin/tows]"],
+        )
+
+    def test_trailing_slash_collision_is_named_not_dropped(self) -> None:
+        surfaces = [
+            {"id": "http:GET /jobs", "method": "GET", "path": "/jobs"},
+            {"id": "http:GET /jobs/", "method": "GET", "path": "/jobs/"},
+        ]
+        result = project_har({"a.har": _har([("GET", "/jobs")])}, surfaces, strip_prefixes=[])
+        self.assertEqual(result["bindings"], [])
+        kinds = {e["kind"]: e for e in result["unresolved"]}
+        self.assertEqual(set(kinds), {"ambiguous-match", "colliding-surfaces"})
+        self.assertEqual(kinds["colliding-surfaces"]["count"], 1)
+        self.assertEqual(
+            kinds["colliding-surfaces"]["samples"],
+            ["GET /jobs -> [http:GET /jobs, http:GET /jobs/]"],
+        )
+
+    def test_a_collision_no_request_reached_is_still_named(self) -> None:
+        surfaces = [
+            {"id": "http:GET /jobs", "method": "GET", "path": "/jobs"},
+            {"id": "http:GET /jobs/", "method": "GET", "path": "/jobs/"},
+        ]
+        result = project_har({"a.har": _har([])}, surfaces, strip_prefixes=[])
+        self.assertEqual([e["kind"] for e in result["unresolved"]], ["colliding-surfaces"])
 
     def test_entries_without_url_or_method_never_reach_the_root_surface(self) -> None:
         surfaces = SURFACES + [{"id": "http:GET /", "method": "GET", "path": "/"}]
@@ -255,6 +362,18 @@ class ObserveTests(unittest.TestCase):
                         nonce="n1", har_paths=[root / "run.har"])
             self.assertFalse((root / "observed.json").exists())
         self.assertIn("capcov.capabilities.json", str(caught.exception))
+
+    def test_observe_refuses_the_same_har_path_named_twice(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "src").mkdir()
+            (root / "capcov.capabilities.json").write_text(json.dumps({"surfaces": SURFACES}))
+            (root / "run.har").write_text(json.dumps(_har([("GET", "/api/jobs")])))
+            with self.assertRaises(ValueError) as caught:
+                observe(source_root=root / "src", target=root, out=root / "observed.json",
+                        nonce="n1", har_paths=[root / "run.har", root / "run.har"])
+            self.assertFalse((root / "observed.json").exists())
+        self.assertIn("run.har", str(caught.exception))
 
     def test_observe_refuses_two_hars_with_one_basename(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
