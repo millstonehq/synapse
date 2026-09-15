@@ -8,6 +8,10 @@
                                                 binary: does coverage roll up whole?
     capcov features coverage  model.json obligations.json [--selected a,b,c]
                                                 numeric: the completeness vector
+    capcov features map       model.json mapping.json capabilities.json
+                              [--coverage coverage.json] --out obligations.json
+                              [--report report.json]
+                                                surfaces -> feature obligations
 
 ``check`` and ``rollup`` take comma-separated feature ids. ``rollup`` is the yes/no
 gate view (``model.coverage_rollup``); ``coverage`` is the numeric completeness
@@ -23,6 +27,7 @@ import sys
 from pathlib import Path
 
 from . import coverage as coverage_mod
+from . import mapping as mapping_mod
 from . import model as model_mod
 
 
@@ -129,6 +134,14 @@ def main(argv: list[str]) -> int:
         help="comma-separated configuration; omit to assess the mandatory skeleton alone",
     )
 
+    mp = sub.add_parser("map", help="project discovered surfaces onto features")
+    mp.add_argument("model")
+    mp.add_argument("mapping", help="JSON: {version: 1, features: {id: {surfaces: [glob], tags: [tag]}}}")
+    mp.add_argument("capabilities", help="capcov discover artifact (capabilities.json)")
+    mp.add_argument("--coverage", default=None, help="capcov reconcile artifact; without it nothing is covered")
+    mp.add_argument("--out", required=True, help="write the {id: {covered, total}} obligations map here")
+    mp.add_argument("--report", default=None, help="write the full projection (unassigned, contested, assurance) here")
+
     args = parser.parse_args(argv)
     try:
         if args.command == "example":
@@ -163,6 +176,23 @@ def main(argv: list[str]) -> int:
             selected = None if args.selected is None else _ids(args.selected)
             result = coverage_mod.rollup(model, obligations, selected)
             _print_vector(result)
+            return 0
+
+        if args.command == "map":
+            mapping = json.loads(Path(args.mapping).read_text())
+            capabilities = json.loads(Path(args.capabilities).read_text())
+            coverage = None if args.coverage is None else json.loads(Path(args.coverage).read_text())
+            result = mapping_mod.project(model, mapping, capabilities, coverage)
+            Path(args.out).write_text(json.dumps(result["obligations"], indent=2, sort_keys=True) + "\n")
+            if args.report:
+                Path(args.report).write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+            print(
+                "capcov features map: "
+                f"{result['surfaces_total']} surfaces, {result['assigned']} assigned to "
+                f"{len(result['obligations'])} features, {len(result['unassigned'])} unassigned, "
+                f"{len(result['contested'])} contested; assurance {result['assurance']}; "
+                f"discovery excluded {result['excluded_surfaces']}, unresolved {result['unresolved']}"
+            )
             return 0
 
         result = model_mod.coverage_rollup(model, _ids(args.select), _ids(args.covered))

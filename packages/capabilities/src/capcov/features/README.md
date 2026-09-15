@@ -210,3 +210,26 @@ binary view — whether a configuration's coverage rolls up whole. `coverage` re
 `feature-obligations.json` (a map `id -> {covered, total}`) and prints the numeric
 completeness vector from `coverage.py::rollup`; omit `--selected` to assess the
 mandatory skeleton alone, leaving every optional and group choice *unassessed*.
+
+## Deriving the obligations map: `capcov features map`
+
+`features coverage` consumes `{feature_id: {covered, total}}`. `features map`
+derives it from discovery instead of a hand-written file:
+
+    capcov features map model.json mapping.json capabilities.json \
+        [--coverage coverage.json] --out obligations.json [--report report.json]
+
+`mapping.json` says which surfaces each feature claims, by id glob or by tag:
+
+    {"version": 1, "features": {
+       "contacts": {"surfaces": ["http:* /contacts", "http:* /contacts/*"]},
+       "billing":  {"tags": ["Billing"]}}}
+
+`total` is the number of discovered surfaces a feature claims. `covered` is how
+many of those a reconciliation saw reached at runtime; **without `--coverage`
+every `covered` is zero and the report says `assurance: static-only`** -- a
+declared route is not an exercised one. The report also lists `unassigned`
+surfaces (no feature claims them: assign or name why not) and `contested`
+surfaces (several features claim them: resolve the overlap), and forwards
+discovery's `excluded_surfaces` and `unresolved` counts so the denominator is
+never read narrower than it is.
