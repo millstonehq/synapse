@@ -232,11 +232,7 @@ def gate(coverage: dict, exemptions_path: Path | None) -> list[Failure]:
 
 
 def _explain(row: dict) -> str:
-    # The three failing cells are the Software Reflexion Model's labels (Murphy,
-    # Notkin & Sullivan 1995; see reconcile.py and ADR-0001): static_only is the
-    # coverage gap (structure converges, evidence missing), runtime_only is a
-    # divergence (present, not declared), neither is an absence (declared, not
-    # present) -- dead.
+    # Reflexion-inspired structural categories, not behavioral or dead-code proof.
     if row["cell"] == "static_only":
         return (
             f"reachable from {', '.join(row['static_surfaces'][:3])}"
@@ -250,6 +246,6 @@ def _explain(row: dict) -> str:
             "or the access is dynamic -- check the blind-spot list."
         )
     return (
-        "declared in the schema and neither reachable nor observed. Dead. "
-        "Remove it, or say what still needs it."
+        "declared in the schema but neither statically reached nor observed in this scope. "
+        "Investigate discovery or execution gaps, or record a justified disposition."
     )

@@ -69,18 +69,16 @@ when the host exposes those measurements.
 
 ## Select work across the whole system
 
-Before selecting an implementation wave, establish or refresh the work-unit view
-required by SKILL.md using [the native-artifact mapping](work-units.md). Reuse the
-existing consumer/ledger, capcov IDs and evidence. Show independently acceptable
-outcomes across the product, implementation/evidence states and unknown areas.
-Timebox the coarse first pass and refine detailed contracts while implementing.
+Before selecting an implementation wave, establish or refresh the feature/outcome
+view required by SKILL.md using [capability and evidence accounting](capability-evidence.md).
+Reuse the existing consumer and native evidence-derived reports. Show capabilities,
+acceptance gaps and unknown areas across the product; timebox the coarse first pass.
 
-Link each assignment to its work-unit ID, native obligation/transition references
-and observable acceptance condition. Multiple workers or internal steps serving
-one outcome do not create additional completed units. At integration, update
-scoped evidence and remaining work, then compare missing outcomes across families.
-Keep counts and estimates in consistent units; preserve uncertainty and record
-splits/merges without claiming them as new throughput.
+Link assignments to feature/outcome IDs, source references and observable acceptance
+conditions. Multiple workers or steps serving one outcome do not create additional
+completions. At integration, update scoped evidence and compare missing capabilities
+across families. Keep counts and estimates in consistent units; retain uncertainty
+and record splits/merges without claiming new throughput.
 
 Track separately for each family: implementation state, local behavioral evidence,
 deployed evidence, remaining requirements, dependencies, assigned owner and effort

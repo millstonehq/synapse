@@ -9,8 +9,8 @@ then PROJECTS the surface-only browser world onto the entity-centric four-cell
 Three moving parts:
 
 1. **The planner, internalized.** ``flows.model.plan`` (EFSM/STRIPS BFS, one
-   shortest-prerequisite scenario per transition -- the Chow all-transitions
-   criterion) is called IN-PROCESS, read-only. It stops being a public pipeline
+   shortest-prerequisite scenario per reachable transition, within the state
+   budget; not Chow's conformance method) is called IN-PROCESS, read-only. It stops being a public pipeline
    stage; ``blocked`` / ``states_explored`` become internal reachability
    accounting carried as provenance.
 

@@ -38,26 +38,26 @@ A capability is rebuilt when its e2e rows are green **against a real running ins
 
 ## Establish implementation breadth before choosing a pilot
 
-For a multi-capability replacement, first produce or refresh a **coarse work-unit
-view derived from capcov's existing inventory and flow catalog** in the maintained
-consumer/ledger. Read [deriving implementation work units](references/work-units.md)
-before this first pass or when revising the denominator. “Operation” elsewhere in
-this skill means a caller-visible behavior; it does not introduce a capcov object
-or mean that each CRUD label, route, obligation or transition is a deliverable.
+For a multi-capability replacement, produce or refresh a coarse **feature model
+linked to native outcome obligations and source discovery**. Read
+[capability and evidence accounting](references/capability-evidence.md) before the
+first pass or a denominator change. Features identify product capabilities;
+outcomes identify their acceptance requirements. Do not introduce an Operation
+or WorkUnit object to count deliverables. CRUD operations and individual flow
+transitions are not automatically business capabilities.
 
-Reuse native IDs and evidence, with explicit grouping into independently acceptable
-outcomes. Retain unmapped obligations and unknown boundaries across the product.
+Reuse the maintained consumer, native IDs and engine evidence-derived reports.
+Keep unmapped source findings and unknown areas across the product visible.
 A pilot-only gate or family sketch is insufficient for breadth-first scheduling.
 If this view is missing, establish it before another implementation wave.
 
-Bound the coarse first pass to one normal planning iteration. Stop with known work
-units, named unknown areas, a provisional count/range and the next independent
-assignments. Refine behavioral contracts while implementing; do not block on
-perfect discovery or build a new inventory engine. Update at integration checkpoints.
-Report implementation and demonstration separately, with environment and evidence
-limits. Forecast from comparable newly completed units and measured runtime,
-including explicit integration/release work. Distinguish elapsed wall time,
-accounted goal time and summed worker time; pre-existing work is not new throughput.
+Bound the coarse first pass to one normal planning iteration. Retain a provisional
+feature decomposition and unresolved acceptance requirements, then implement the
+next independent capabilities. Refine contracts progressively rather than blocking
+on perfect discovery. Report implementation declarations and demonstrated outcomes
+separately, with context and scope. Forecast from comparable newly demonstrated
+capabilities and measured runtime; keep integration/release work explicit. Do not
+count both parents and their descendants, or treat regrouping as new throughput.
 
 ## Map the capability — the flow model, four fields per step
 
