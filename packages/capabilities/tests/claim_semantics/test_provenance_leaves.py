@@ -336,13 +336,20 @@ class CorpusProvenanceTests(unittest.TestCase):
                          ("domain-a", "domain-b", "domain-closed",
                           "source-a", "source-b"))
 
-    def test_legacy_fact_ids_are_limited_to_evidence_less_bundles(self):
+    def test_evidence_less_bundles_are_rejected_and_legacy_fact_ids_need_the_validation_bypass(self):
         relation = RelationDecl("seen", (Column("x", "symbol"),))
         bundle = Bundle((relation,), facts=(Atom("seen", (Constant("v"),)),),
                         claims=(Claim("seen", (Constant("v"),)),))
+        # attribution is unconditional: the public evaluator fails closed
         report = evaluate(bundle)
-        self.assertEqual(report.claims[0].result.support, ('fact:seen:["v"]',))
-        self.assertEqual(dict(report.resources)["unattributed_facts"], 1)
+        self.assertEqual(report.status.value, "invalid-input")
+        self.assertIn("fact-without-evidence", report.message)
+        self.assertEqual(report.claims[0].result.support, ())
+        # the fallback leaf id exists only for an engine run without validation
+        engine = _Engine(bundle, ResourceLimits())
+        engine.run()
+        self.assertEqual(engine.evaluate_claim(0, bundle.claims[0]).result.support, ('fact:seen:["v"]',))
+        self.assertEqual(engine.unattributed_facts, 1)
 
     def test_positive_rule_premises_cannot_be_bypassed_by_support_mappings(self):
         for name in ("01-correlated-positive.json", "14-bounded-no-resend.json"):

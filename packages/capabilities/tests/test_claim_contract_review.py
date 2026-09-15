@@ -5,9 +5,10 @@ import unittest
 
 sys.path.insert(0, "packages/capabilities/src")
 
-from capcov.claims import (Aggregation, Atom, Bundle, Claim, Column, Comparison,
+from capcov.claims import (Aggregation, Atom, Claim, Column, Comparison,
     Constant, Context, Modality, RelationDecl, Rule, TypeName, Variable,
     bundle_from_json, canonical_json, validate_bundle)
+from tests.claim_fixtures import Bundle  # attributed fixture bundles
 
 
 def R(name, cols, **kw):
