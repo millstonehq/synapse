@@ -384,6 +384,9 @@ def _discover_from_config(config: dict, base: Path, config_name: str) -> dict:
             if fn_query or entity_query or op_query:
                 deep_configured = True
             id_prefix = adapter.get("id_prefix", "http:")
+            # A router mounted at a prefix serves prefix + literal; the file only
+            # says the literal. Composed per adapter entry, joined by one slash.
+            mount = str(adapter.get("mount", "")).rstrip("/")
             strip_suffixes = adapter.get("strip_suffixes", ["{$}"])
             branch_nodes = set(adapter.get("branch_nodes", _DEFAULT_BRANCH_NODES))
             exception_nodes = set(
@@ -448,6 +451,8 @@ def _discover_from_config(config: dict, base: Path, config_name: str) -> dict:
                         )
                         continue
                     route, verb = _route_from_literal(node.text.decode(), strip_suffixes)
+                    if mount:
+                        route = mount + ("" if route.startswith("/") else "/") + route
                     effective_method = method or verb
                     if (
                         methods_allow is not None

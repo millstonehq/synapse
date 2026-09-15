@@ -39,6 +39,7 @@ _ENGINE_KEYS = (
     "globs",
     "files",
     "id_prefix",
+    "mount",
     "strip_suffixes",
     "branch_nodes",
     "exception_nodes",
