@@ -1889,6 +1889,36 @@ study and final recommendation remain future `datalog-evaluation` work. No Shen,
 execution, receipt, certificate, specialization, real-Go, Linux execution, or driver checkpoint
 commit is claimed.
 
+### Scope boundary and deferred findings for `datalog-differential`
+
+Three driver attempts on 2026-09-15 passed every gate and were refused by both reviewers.
+Several findings are in scope and must be closed here: conjunctive claim mappings that combine
+indexless static support with runtime support without an `index/run` witness; a refuted
+universal whose refutation leaves omit the domain-member and closure evidence; `static-context`
+enforcement with an explicit allowlist rather than a silent skip. Other findings restate
+decisions this plan already made or belong to later tasks; they are recorded here so a
+reviewer can see the decision instead of inferring neglect:
+
+- **Soufflé-side provenance.** Soufflé computes relational closure; claim folding, quantifier
+  expansion, diagnostics, and leaf reporting are Python. This checkpoint compares closure plus
+  verdict, operational status, basis, and missing premises. Engine-independent certificates
+  that make provenance comparable across kernels are section 29's bounded backward-chaining
+  extractor, owned by `scip-datalog-differential`, and the ground checker is `datalog-certificates`.
+- **Bounded replay minimization.** The plan's discipline (sections 17 and 25) is bounded search
+  with honest truncation. A replay produced after `max_steps=200` carries `shrink_truncated=true`
+  and is a reproducer, not a proven one-minimal bundle. Unconditional minimality is not required.
+- **Producer-class authority** (`RelationDecl.producer_classes` is declared but not enforced)
+  and **causal-identity projection in generic rules** (a rule may omit a non-context causal
+  column such as `event` or `attempt`) are pre-existing plan-level gaps from section 13. They
+  are owned by `datalog-certificates` (authority checks over rule forms) and must be closed
+  before any static/runtime correspondence claim in section 29 is admitted as evidence.
+- **Experimental CLI** (section 16) and **performance evaluation** (section 22) are owned by
+  later tasks; `capcov/cli.py` is outside this task's write set.
+
+The task's `planSections` were narrowed to section 27 so reviewers evaluate the task against
+its own specification; the acceptance statements were reworded to match the bounded-shrink
+design. The reviewers' finding lists from all three attempts are retained in the journal.
+
 ## 28. Stage 0 addendum — SCIP toolchain
 
 Owner: `scip-toolchain` (single-task wave). Write set: `flake.nix`, `flake.lock`,

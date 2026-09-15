@@ -114,7 +114,7 @@
     {
       "id": "datalog-differential",
       "title": "Repair kernel provenance and differentially compare kernels",
-      "planSections": ["16", "22", "27"],
+      "planSections": ["27"],
       "dependsOn": ["python-reference", "souffle-kernel"],
       "wave": "datalog-kernels",
       "role": "reducer",
@@ -126,8 +126,10 @@
       "acceptance": [
         "Evaluator proof leaves are the bundle's Evidence ids (legacy fact ids only for evidence-less bundles) and expected.json support/refutation leaves are asserted against evaluator output for every corpus case.",
         "The Souffle backend is polarity-aware (supported/refuted/unresolved/conflicting), treats an empty universal domain as inconsistent-premises, and fails closed with a named error when the binary is absent.",
-        "Both engines agree on canonical results for every corpus case; any disagreement yields a minimized replay bundle and blocks admission.",
-        "claims/static/schema_static_v1.json freezes the primitive static relation declarations from EXPERIMENT-PLAN.md section 29 so the scip-datalog wave's parallel workers share one schema."
+        "Both engines agree on relational closure and on every claim's semantic verdict, operational status, basis, and missing premises for every corpus case; any disagreement blocks admission and yields a replay bundle minimized by bounded delta debugging (max_steps=200), with shrink_truncated reported honestly when the bound is hit.",
+        "Static/runtime joins require an index/run compatibility witness in rule bodies and in conjunctive claim mappings; static-context is enforced for indexed static relations with an explicit allowlist for context-free ones.",
+        "claims/static/schema_static_v1.json freezes the primitive static relation declarations from EXPERIMENT-PLAN.md section 29 so the scip-datalog wave's parallel workers share one schema.",
+        "Findings outside this task's scope (Souffle-side provenance, producer-class authority, causal-identity projection in generic rules, the experimental CLI, and the section 22 evaluation) are recorded as deferred in EXPERIMENT-PLAN.md section 27 with the task that owns each, not silently dropped."
       ],
       "gates": [
         {"name": "differential-tests", "failureKind": "differential-mismatch", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_differential*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_shrinker*.py' -t ."]},
