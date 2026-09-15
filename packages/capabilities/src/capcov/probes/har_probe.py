@@ -32,15 +32,27 @@ What the matcher models, and what it does not:
 * A literal path beats a template. Two templates that both match one request
   (`/x/{a}` and `/{region}/zones` for `/x/zones`) bind nothing: the request is
   reported as `ambiguous-match`, because guessing would credit one route with
-  evidence that may belong to the other.
+  evidence that may belong to the other. Two LITERALS that normalise onto one
+  key (`admin/tows` beside `/admin/tows`, `/jobs` beside `/jobs/`) are the same
+  ambiguity and get the same treatment, plus a `colliding-surfaces` entry
+  naming the inventory defect itself -- keeping the first would make the second
+  unbindable forever and read `static_only` with no cause on record.
 * Matching uses the URL path only. `[capcov] har_strip_prefixes` removes a
   deployment mount before matching, and strips only `prefix + "/"`: a prefix of
   `/v2` does not touch `/v2beta/...`.
-* HEAD, OPTIONS and verbs outside the CRUD map bind nothing (the browser
-  probe's rule); they are counted as `non-binding-verbs`. Non-http(s) URLs
-  (`data:`, `blob:`, `about:`) are counted in the `unmatched-requests` entry as
-  `non_http`. An entry with no URL or no method is `malformed-entries`. Nothing
-  reaches the `/` surface by accident.
+* HEAD, OPTIONS and verbs outside the CRUD map BIND the surface they reached
+  and claim no operation -- the browser probe's rule (`_crud_for_surface`
+  returns `[]` for such a verb AFTER the surface is bound). The verbs are named
+  under `non-binding-verbs`, which reports the missing operation, not a missing
+  binding. Refusing the binding instead would leave a declared `HEAD` route in
+  `static_only` however hard the run hammered it, and the gate would demand a
+  test that cannot exist: the only way to exercise a HEAD route is to send
+  HEAD. A non-CRUD verb that matches no surface is `unmatched-requests` like
+  any other. Non-http(s) URLs (`data:`, `blob:`, `about:`) are counted per
+  scheme in the `unmatched-requests` entry as `non_http`, so a `wss:` upgrade
+  of the target's own socket route is legible as something other than an
+  inline image. An entry with no URL or no method is `malformed-entries`.
+  Nothing reaches the `/` surface by accident.
 
 The static inventory is ``<target>/capcov.capabilities.json`` unless
 ``[capcov] har_surfaces`` in ``capcov.toml`` names another file. The tree hash
@@ -74,7 +86,8 @@ from .probe_registry import (
 
 # HTTP verb -> CRUD: the SAME weak-but-declared map the browser probe uses.
 # Verbs outside the set (HEAD, OPTIONS, PROPFIND, a typo) claim no operation
-# rather than guess one; they are counted, not bound.
+# rather than guess one -- but they still bind the surface they reached, which
+# is the browser probe's rule at browser_probe._crud_for_surface.
 VERB_TO_OP = {
     "GET": "read",
     "POST": "create",
@@ -94,9 +107,12 @@ SAMPLE_LIMIT = 25
 # The URL schemes a request can carry and still be a route the target served.
 HTTP_SCHEMES = ("http", "https")
 
-# The index `index_surfaces` builds: exact literals keyed by (METHOD, path), and
-# the templated surfaces with their regex compiled once.
-Index = tuple[dict[tuple[str, str], str], list[tuple[str, "re.Pattern[str]", str]]]
+# The index `index_surfaces` builds: exact literals keyed by (METHOD, path) --
+# a LIST, because two declarations can normalise onto one key -- and the
+# templated surfaces with their regex compiled once.
+Index = tuple[
+    dict[tuple[str, str], list[str]], list[tuple[str, "re.Pattern[str]", str]]
+]
 
 
 def template_regex(path: str) -> re.Pattern[str]:
@@ -123,9 +139,11 @@ def index_surfaces(surfaces: list[dict]) -> Index:
 
     A surface path is normalised as the matcher normalises a request path (a
     missing leading slash is added, a trailing slash dropped), so the two sides
-    compare on the same footing.
+    compare on the same footing. That normalisation is exactly what lets two
+    declarations land on one key, so a key holds a LIST in declaration order:
+    keeping only the first would make the rest unbindable and silently wrong.
     """
-    literals: dict[tuple[str, str], str] = {}
+    literals: dict[tuple[str, str], list[str]] = {}
     templates: list[tuple[str, re.Pattern[str], str]] = []
     for surface in surfaces:
         method = (surface.get("method") or "").upper()
@@ -133,42 +151,45 @@ def index_surfaces(surfaces: list[dict]) -> Index:
         if _PARAM.search(spath):
             templates.append((method, template_regex(spath), surface["id"]))
         else:
-            literals.setdefault((method, spath), surface["id"])
+            literals.setdefault((method, spath), []).append(surface["id"])
     return literals, templates
+
+
+def colliding_literals(index: Index) -> list[str]:
+    """`METHOD path -> [ids]` for every literal key more than one surface claims.
+
+    A static-inventory defect, not a runtime one: no request can ever tell the
+    colliding surfaces apart, so none of them can bind. Named here so the cause
+    is on record even when the run never reached the path at all.
+    """
+    literals, _ = index
+    return [
+        f"{method} {path} -> [{', '.join(ids)}]"
+        for (method, path), ids in sorted(literals.items())
+        if len(ids) > 1
+    ]
 
 
 def candidates_indexed(method: str, path: str, index: Index) -> list[str]:
     """Every surface id a request could be: one literal, or all matching templates.
 
-    A literal hit is definitive and returns alone. Otherwise every template that
-    matches is returned, in inventory order, so the caller can tell one hit from
-    an ambiguity instead of silently taking the first.
+    A literal hit beats every template and returns alone -- unless several
+    surfaces claim that one literal key, in which case all of them are returned
+    and the request reads ambiguous. Otherwise every template that matches is
+    returned, in inventory order, so the caller can tell one hit from an
+    ambiguity instead of silently taking the first.
     """
     literals, templates = index
     method = method.upper()
     path = _normalise_path(path)
     literal = literals.get((method, path))
-    if literal is not None:
-        return [literal]
+    if literal:
+        return list(literal)
     return [
         sid
         for template_method, pattern, sid in templates
         if template_method == method and pattern.fullmatch(path)
     ]
-
-
-def match_indexed(method: str, path: str, index: Index) -> str | None:
-    """The surface id a request reached, or None when none or several match."""
-    candidates = candidates_indexed(method, path, index)
-    return candidates[0] if len(candidates) == 1 else None
-
-
-def match_surface(method: str, path: str, surfaces: list[dict]) -> str | None:
-    """One-shot form of `match_indexed`: build the index and delegate.
-
-    Convenient for a single lookup; `project_har` builds the index once instead.
-    """
-    return match_indexed(method, path, index_surfaces(surfaces))
 
 
 def _request_path(path: str, strip_prefixes: list[str]) -> str:
@@ -232,10 +253,13 @@ def project_har(
     """`{given_path: har_document}` -> `{bindings, unresolved, requests}`.
 
     One binding per surface reached, its ``tests`` the HAR basenames that
-    reached it. Every entry is counted in ``requests``; what did not bind is
-    grouped into non-gating ``unresolved`` entries by cause: matched no surface
-    (with non-http URLs counted alongside), matched several, a verb outside the
-    CRUD map, or an entry with no method or URL.
+    reached it. A surface is bound by the request that reached it whatever the
+    verb; the verb only decides whether an OPERATION is claimed. Every entry is
+    counted in ``requests``; what did not bind is grouped into non-gating
+    ``unresolved`` entries by cause: matched no surface (with non-http URLs
+    counted per scheme alongside), matched several, or an entry with no method
+    or URL. A verb outside the CRUD map is named too, as the missing operation
+    it is, and so is a literal key several surfaces claim.
     """
     labels = _labels(hars)
     index = index_surfaces(surfaces)
@@ -245,7 +269,7 @@ def project_har(
     ambiguous: list[str] = []
     non_binding: list[str] = []
     malformed: list[str] = []
-    non_http = 0
+    non_http: dict[str, int] = {}
     requests = 0
     for given in sorted(hars):
         label = labels[given]
@@ -258,14 +282,12 @@ def project_har(
                 malformed.append(f"{label}#{position}")
                 continue
             parts = urlsplit(url)
-            if parts.scheme and parts.scheme.lower() not in HTTP_SCHEMES:
-                non_http += 1
+            scheme = parts.scheme.lower()
+            if scheme and scheme not in HTTP_SCHEMES:
+                non_http[scheme] = non_http.get(scheme, 0) + 1
                 continue
             host = parts.netloc
             path = _request_path(parts.path, strip_prefixes)
-            if method not in VERB_TO_OP:
-                non_binding.append(_sample(method, host, path))
-                continue
             key = (method, path)
             if key not in memo:
                 memo[key] = candidates_indexed(method, path, index)
@@ -274,10 +296,20 @@ def project_har(
                 unmatched.append(_sample(method, host, path))
                 continue
             if len(candidates) > 1:
-                ambiguous.append(f"{method} {path} -> [{', '.join(candidates)}]")
+                ambiguous.append(
+                    f"{_sample(method, host, path)} -> [{', '.join(candidates)}]"
+                )
                 continue
+            # The verb is decided BELOW the match, so the surface binds either
+            # way: a HEAD route a run actually hammered lands in `both` with no
+            # operation claimed, instead of `static_only` with a test demanded
+            # that no test could ever satisfy.
             row = rows.setdefault(candidates[0], {"operations": set(), "tests": set()})
-            row["operations"].add(VERB_TO_OP[method])
+            op = VERB_TO_OP.get(method)
+            if op:
+                row["operations"].add(op)
+            else:
+                non_binding.append(_sample(method, host, path))
             row["tests"].add(label)
 
     bindings = [
@@ -296,8 +328,9 @@ def project_har(
                 "unmatched-requests",
                 unmatched,
                 "requests in the run matched no static surface (assets, third-party, "
-                "or routes discovery missed); non_http counts data:/blob:/about: URLs",
-                non_http=non_http,
+                "or routes discovery missed); non_http counts non-http(s) URLs "
+                "(data:, blob:, about:, wss:) per scheme",
+                non_http=dict(sorted(non_http.items())),
             )
         )
     if ambiguous:
@@ -305,8 +338,20 @@ def project_har(
             _unresolved_entry(
                 "ambiguous-match",
                 ambiguous,
-                "more than one templated surface matched; nothing bound rather than "
+                "more than one surface matched -- several templates, or literal "
+                "paths that normalise onto one key; nothing bound rather than "
                 "credit the wrong route",
+            )
+        )
+    collisions = colliding_literals(index)
+    if collisions:
+        unresolved.append(
+            _unresolved_entry(
+                "colliding-surfaces",
+                collisions,
+                "two or more static surfaces normalise onto one METHOD + path, so "
+                "no request can tell them apart and none of them can bind; fix the "
+                "inventory (a leading or trailing slash) rather than the run",
             )
         )
     if non_binding:
@@ -314,8 +359,9 @@ def project_har(
             _unresolved_entry(
                 "non-binding-verbs",
                 non_binding,
-                "HEAD, OPTIONS and verbs outside the CRUD map claim no operation "
-                "and bind nothing",
+                "HEAD, OPTIONS and verbs outside the CRUD map bound the surface "
+                "they reached with NO operation claimed; the request is evidence "
+                "the route ran, not evidence of what it did",
             )
         )
     if malformed:
@@ -378,7 +424,16 @@ def observe(
     surfaces = json.loads(surfaces_file.read_text()).get("surfaces", [])
     if not har_paths:
         raise ValueError("name at least one .har file after `--`")
-    hars = {str(p): json.loads(Path(p).read_text()) for p in har_paths}
+    given = [str(p) for p in har_paths]
+    repeated = sorted({p for p in given if given.count(p) > 1})
+    if repeated:
+        # The dict below would fold the repeat and under-report `exercises`,
+        # the quiet opposite of the loud basename-clash rule in `_labels`.
+        raise ValueError(
+            "the same HAR path was named more than once and would be counted "
+            f"as one exercise: {', '.join(repeated)}"
+        )
+    hars = {p: json.loads(Path(p).read_text()) for p in given}
 
     guard = FreshnessGuard(out_path, source)
     run_nonce = guard.begin(nonce)
