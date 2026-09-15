@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable
 
 from .ir import (Bundle, Claim, Constant, Evidence, EvidenceMapping,
-                 OutputKind, OutputTemplate, Variable)
+                 OutputKind, OutputTemplate, Variable, canonical_dict)
 
 
 @dataclass(frozen=True)
@@ -290,7 +290,10 @@ def render_outputs(bundle: Bundle, claim_id: str, active_evidence: set[str] | fr
                 claim_values = {column.name: term.value for column, term in zip(relation.columns, claim.terms) if isinstance(term, Constant)}
         for name, template in output.fields:
             if template.source == "constant":
-                value = template.value
+                # Template constants are frozen on entry so producer-owned
+                # lists and mappings cannot mutate a Bundle after hashing.
+                # Render their ordinary JSON shape at the public boundary.
+                value = canonical_dict(template.value)
             elif template.source == "claim":
                 value = claim_values.get(template.column)
             else:

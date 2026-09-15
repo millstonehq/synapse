@@ -13,8 +13,10 @@ from capcov.claims import (
     Claim,
     Constant,
     Context,
+    DiagnosticPolicy,
     DiagnosticRule,
     Evidence,
+    EvidenceMapping,
     OutputTemplate,
     Rule,
     TemplateValue,
@@ -285,7 +287,62 @@ class AdversarialDifferentialMatrixTests(unittest.TestCase):
             return Bundle((observed,), diagnostics=(DiagnosticRule(
                 "nested_observed", "observation",
                 predicate=(object(),)),))
+        if kind in {"claim-context", "evidence-context"}:
+            context = Context.from_mapping({"tenant": "t"})
+            object.__setattr__(context, "values", (("tenant", []),))
+            if kind == "claim-context":
+                return Bundle((observed,), claims=(Claim(
+                    "nested_observed", (Constant("v"),), context,
+                    id="nested-claim"),))
+            return Bundle(
+                (observed,), facts=(valid_atom,), evidence=(Evidence(
+                    "nested-evidence", valid_atom, context,
+                    source="producer"),))
+        if kind.startswith("diagnostic-policy-"):
+            field = kind.removeprefix("diagnostic-policy-")
+            policy = DiagnosticPolicy()
+            object.__setattr__(policy, field, object())
+            return Bundle((observed,), diagnostic_policy=policy)
+        if kind == "template-value":
+            template = TemplateValue(value={"nested": [1]})
+            object.__setattr__(template, "value", [1])
+            return Bundle((observed,), outputs=(OutputTemplate(
+                "missing_premise", "nested-claim",
+                fields=(("payload", template),)),))
         raise AssertionError(kind)
+
+    @staticmethod
+    def legacy_indexless_static_bundle():
+        claimed = differential_cases.R(
+            "legacy_claim", ("tenant", "symbol"), modality="claim")
+        static = differential_cases.R(
+            "static_route_exists", ("tenant", "symbol", True),
+            ("surface", "symbol", True), binding="static",
+            context_indices=("tenant", "surface"))
+        return Bundle(
+            (claimed, static),
+            claims=(Claim(
+                "legacy_claim", (Constant("t"),), id="legacy"),))
+
+    @staticmethod
+    def mapping_relation_decoy_bundle():
+        actual = differential_cases.R(
+            "actual_claim", ("x", "symbol"), ("event", "symbol"),
+            modality="claim")
+        decoy = differential_cases.R(
+            "decoy_claim", ("x", "symbol"), modality="claim")
+        observed = differential_cases.R(
+            "observed_event", ("x", "symbol"), ("event", "symbol"))
+        mapping = EvidenceMapping(
+            "decoy_claim", "observed_event", "support",
+            bindings=(("x", "x"),), claim_id="actual")
+        return Bundle(
+            (actual, decoy, observed),
+            facts=(Atom("observed_event", (
+                Constant("v"), Constant("event-b"))),),
+            claims=(Claim(
+                "actual_claim", (Constant("v"), Constant("event-a")),
+                id="actual"),), mappings=(mapping,))
 
     def assert_complete_agreement(self, name, bundle):
         result = compare(bundle, shrink=False)
@@ -410,6 +467,36 @@ class AdversarialDifferentialMatrixTests(unittest.TestCase):
                         ('{"reason":"mapped instance","relation":"mapped_pair_claimed"}',))
 
     def test_invalid_and_exhausted_adversarial_bundle_matrix(self):
+        mixed_binding_invalid = {
+            "mixed-binding-declaration-only":
+                differential_cases.mixed_mapping_bundle(
+                    include_witness=False),
+            "mixed-binding-wrong-targets":
+                differential_cases.mixed_mapping_bundle(
+                    witness_targets=("static_seen", "decoy_seen")),
+            "mixed-binding-wrong-witness-payload":
+                differential_cases.mixed_mapping_bundle(
+                    witness_payload=("index",)),
+            "mixed-binding-static-index-unbound":
+                differential_cases.mixed_mapping_bundle(
+                    static_bindings=(("value", "value"),)),
+            "mixed-binding-runtime-run-unbound":
+                differential_cases.mixed_mapping_bundle(
+                    runtime_bindings=(("value", "value"),)),
+            "mixed-binding-witness-index-unbound":
+                differential_cases.mixed_mapping_bundle(
+                    witness_bindings=(("run", "run"),)),
+            "mixed-binding-witness-run-unbound":
+                differential_cases.mixed_mapping_bundle(
+                    witness_bindings=(("index", "index"),)),
+            "mixed-binding-swapped-witness-bindings":
+                differential_cases.mixed_mapping_bundle(
+                    witness_bindings=(
+                        ("index", "run"), ("run", "index"))),
+            "mixed-binding-observation-only-witness":
+                differential_cases.mixed_mapping_bundle(
+                    witness_effect="observation"),
+        }
         invalid = {
             "forall-context-alias":
                 kernel_cases.KernelClosureTests.forall_context_alias_bundle(),
@@ -429,8 +516,13 @@ class AdversarialDifferentialMatrixTests(unittest.TestCase):
             "malformed-relation-declaration": self.malformed_bundle("relation"),
             "malformed-evidence-record": self.malformed_bundle("evidence"),
             "malformed-output-field": self.malformed_bundle("output"),
+            "legacy-indexless-static":
+                self.legacy_indexless_static_bundle(),
+            "mapping-relation-decoy":
+                self.mapping_relation_decoy_bundle(),
+            **mixed_binding_invalid,
         }
-        self.assertEqual(set(invalid), {
+        expected_invalid = {
             "forall-context-alias", "typed-witness-wrong-index",
             "typed-witness-wrong-run", "typed-witness-untyped",
             "runtime-context-witness-wrong-types",
@@ -440,7 +532,10 @@ class AdversarialDifferentialMatrixTests(unittest.TestCase):
             "multidimensional-duplicated-witness",
             "malformed-relation-declaration", "malformed-evidence-record",
             "malformed-output-field",
-        })
+            "legacy-indexless-static", "mapping-relation-decoy",
+            *mixed_binding_invalid,
+        }
+        self.assertEqual(set(invalid), expected_invalid)
         for name, bundle in invalid.items():
             with self.subTest(case=name):
                 self.assert_blocking_boundary(
@@ -501,7 +596,13 @@ class AdversarialDifferentialMatrixTests(unittest.TestCase):
         # Bundle in this module remains in the valid or blocking compare matrix.
         names = {
             "evidence-atom", "atom-terms", "rule-head", "rule-body",
-            "diagnostic-predicate",
+            "diagnostic-predicate", "claim-context", "evidence-context",
+            "diagnostic-policy-missing_premises",
+            "diagnostic-policy-inconsistent_premises",
+            "diagnostic-policy-out_of_scope",
+            "diagnostic-policy-forbidden_evidence",
+            "diagnostic-policy-revocation",
+            "diagnostic-policy-completeness", "template-value",
         }
         for name in names:
             with self.subTest(case=name), self.assertRaises(TypeError):

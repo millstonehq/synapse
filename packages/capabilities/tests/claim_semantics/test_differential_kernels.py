@@ -196,6 +196,27 @@ class DifferentialBoundaryTests(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which("souffle"), "souffle runtime is unavailable")
 class DifferentialCorpusTests(unittest.TestCase):
+    def assert_invalid_bundle_blocks(self, name, bundle):
+        """Require canonical semantic-invalid inputs to traverse the differential."""
+        expected_bytes = (canonical_json(bundle) + "\n").encode("utf-8")
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(DifferentialMismatch, msg=name) as caught:
+                compare(bundle, replay_root=directory, max_steps=1)
+            result = caught.exception.result
+            self.assertEqual(
+                (result.python.operational_failure,
+                 result.souffle.operational_failure),
+                ("invalid-input", "invalid-input"), name)
+            self.assertFalse(result.matched, name)
+            self.assertTrue(result.replay_reproduced, name)
+            replay = Path(result.replay_path)
+            self.assertTrue(replay.is_file(), name)
+            self.assertEqual(replay.read_bytes(), expected_bytes, name)
+            reloaded = bundle_from_json(
+                replay.read_text(encoding="utf-8"), validate=False)
+            self.assertEqual(digest(reloaded), digest(bundle), name)
+            return result
+
     def test_every_relation_and_claim_agrees_for_every_fixture(self):
         expected_document = json.loads(
             (ROOT / "expected.json").read_text(encoding="utf-8"))
@@ -301,11 +322,8 @@ class DifferentialCorpusTests(unittest.TestCase):
             with self.subTest(mutant=name):
                 self.assertIn("mixed-binding-join",
                               {issue.code for issue in validate_bundle(mutant)})
-                python = run_python(mutant)
-                souffle = run_souffle(mutant)
-                self.assertEqual(python.operational_failure, "invalid-input")
-                self.assertEqual(souffle.operational_failure, "invalid-input")
-                self.assertEqual(python.claims[0].semantic, "unresolved")
+                result = self.assert_invalid_bundle_blocks(name, mutant)
+                self.assertEqual(result.python.claims[0].semantic, "unresolved")
 
     def test_legacy_indexless_static_observations_are_rejected(self):
         claimed = R("legacy_claim", ("tenant", "symbol"), modality="claim")
@@ -315,8 +333,7 @@ class DifferentialCorpusTests(unittest.TestCase):
         bundle = Bundle((claimed, static),
                         claims=(Claim("legacy_claim", (Constant("t"),), id="legacy"),))
         self.assertIn("static-context", {issue.code for issue in validate_bundle(bundle)})
-        self.assertEqual(run_python(bundle).operational_failure, "invalid-input")
-        self.assertEqual(run_souffle(bundle).operational_failure, "invalid-input")
+        self.assert_invalid_bundle_blocks("legacy-indexless-static", bundle)
 
     def test_corpus_mismatch_and_shared_revocation_have_discriminating_controls(self):
         surface = load_fixture(ROOT / "02-surface-mismatch.json")
@@ -404,9 +421,9 @@ class DifferentialCorpusTests(unittest.TestCase):
                           id="actual"),), mappings=(mapping,))
         self.assertIn("mapping-claim-relation",
                       {issue.code for issue in validate_bundle(bundle)})
-        self.assertEqual(run_python(bundle).operational_failure, "invalid-input")
-        self.assertEqual(run_souffle(bundle).operational_failure, "invalid-input")
-        self.assertEqual(run_python(bundle).claims[0].semantic, "unresolved")
+        result = self.assert_invalid_bundle_blocks(
+            "mapping-relation-decoy", bundle)
+        self.assertEqual(result.python.claims[0].semantic, "unresolved")
 
     def test_tsv_control_characters_are_reversibly_encoded(self):
         seen = R("seen_tsv", ("x", "symbol"))
