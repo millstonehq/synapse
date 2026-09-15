@@ -149,7 +149,11 @@ def main(argv: list[str]) -> int:
     rp = sub.add_parser("report", help="the completeness vector as a Markdown or CSV table with Harvey glyphs")
     rp.add_argument("model")
     rp.add_argument("obligations")
-    rp.add_argument("--selected", default=None)
+    rp.add_argument(
+        "--selected",
+        default=None,
+        help="comma-separated configuration; omit to assess the mandatory skeleton alone",
+    )
     rp.add_argument("--format", default="md", choices=["md", "csv"])
     rp.add_argument("--out", default=None)
 
