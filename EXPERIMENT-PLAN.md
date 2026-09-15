@@ -3562,3 +3562,27 @@ further narrow task; restrict the fail-closed contract to the raw-ingestion boun
 (`bundle_from_json`) and treat programmatic construction of malformed dataclasses as out of
 contract, then close the three remaining concrete defects in one narrow task; or advance to
 `scip-toolchain` with the kernel as-is and the open findings carried by `datalog-certificates`.
+
+### 2026-09-15 duration analysis and Codex backend trial
+
+Driver log accounting for the 2026-09-15 runs (04:16–13:10 UTC, about 9 h wall): 15 implementer
+runs averaging 20.8 min (311 min), 32 scout runs averaging 5.4 min (174 min, two in parallel),
+26 reviewer runs averaging 5.3 min (137 min), 43 gate runs totalling 35 min, plus 22 min of
+parallel-worker time. Busy time 11.3 h, about 9.9 h wall after scout parallelism. Cost drivers,
+in order: (1) every attempt re-runs two scouts and two reviewers even when the tree changed by a
+few hundred lines, so a review round costs about 45–60 min regardless of patch size; (2) 13
+review rounds, of which 3 were spent on acceptance statements the human wrote that no implementer
+could satisfy and 2 on infrastructure (a 30-minute timeout, a collected devShell); (3) 8 human
+interventions each requiring a stop, a commit, a `manifest-checkpoint`, and a relaunch; (4) the
+reviewers examine the whole kernel each round, so a large task accrues findings faster than one
+implementer can close them. The remedies already applied: 90-minute agent budget, GC-rooted
+devShell, detached launch, satisfiable acceptance wording, task splitting. Not yet applied:
+reusing scout output across attempts, scoping reviewers to the patch, and capping review
+rounds per task in the manifest.
+
+Codex backend trial: the driver gained `CAPCOV_AGENT_BACKEND=codex` (`codex exec` with
+`--ephemeral --json -o`, prompt on stdin, read-only sandbox for scouts and reviewers, unsandboxed
+writer as with Pi). The exhausted `kernel-closure-integrate` is retired and replaced by
+`kernel-closure-finalize`, whose acceptance adds the four findings left open, so the comparison
+is: same tree, same gates, same reviewer lenses, different agent runtime. Codex results are
+labelled `backend=codex` on every `agent-start` line in `driver.log`.

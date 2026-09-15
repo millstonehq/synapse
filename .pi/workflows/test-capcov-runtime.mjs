@@ -34,13 +34,13 @@ const modern = config.tasks.filter((task) => !config.legacyTaskIds.includes(task
 assert.ok(modern.every((task) => task.gates.every((gate) => gate.failureKind)), "modern gates classify failures in the manifest");
 assert.ok(modern.every((task) => task.gates.every((gate) => gate.command.slice(0, 2).join(" ") === "nix develop")), "modern gates use the pinned Nix environment");
 assert.match(config.tasks.find((task) => task.id === "souffle-kernel").gates[0].command.join(" "), /command -v souffle/);
-assert.match(config.tasks.find((task) => task.id === "kernel-closure-integrate").gates[0].command.join(" "), /test_differential/);
+assert.match(config.tasks.find((task) => task.id === "kernel-closure-finalize").gates[0].command.join(" "), /test_differential/);
 const scipDifferential = config.tasks.find((task) => task.id === "scip-datalog-differential");
 assert.equal(scipDifferential.gates[0].failureKind, "differential-mismatch");
 assert.match(scipDifferential.gates[0].command.join(" "), /test_differential_static/);
 assert.match(config.tasks.find((task) => task.id === "scip-toolchain").gates.map((gate) => gate.command.join(" ")).join("\n"), /scip-go/);
 assert.match(config.tasks.find((task) => task.id === "scip-target-go-pilot").gates[0].command.join(" "), /CAPCOV_GO_FIXTURE_ROOT/);
-for (const id of ["souffle-kernel", "kernel-closure", "differential-closure", "kernel-closure-integrate", "scip-datalog-differential", "scip-fact-export", "scip-target-go-pilot"]) {
+for (const id of ["souffle-kernel", "kernel-closure", "differential-closure", "kernel-closure-finalize", "scip-datalog-differential", "scip-fact-export", "scip-target-go-pilot"]) {
   const joined = config.tasks.find((task) => task.id === id).gates.map((gate) => gate.command.join(" ")).join("\n");
   assert.match(joined, /skipped/, `${id} gates reject skipped tests instead of passing on them`);
 }

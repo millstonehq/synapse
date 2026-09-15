@@ -275,6 +275,20 @@ function assistantTextFromEvent(event: any, current: string): string {
   return final;
 }
 
+function codexFinalText(jsonLines: string): string {
+  // Fallback when the -o file is missing: last agent_message item in the JSONL stream.
+  let final = "";
+  for (const line of jsonLines.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const event = JSON.parse(line);
+      const item = event.item ?? event;
+      if ((event.type === "item.completed" || event.type === "item.updated") && item?.type === "agent_message" && typeof item.text === "string") final = item.text;
+    } catch { /* ignore */ }
+  }
+  return final;
+}
+
 function parseObject(text: string): Record<string, any> | undefined {
   const candidates = [text.trim()];
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -302,16 +316,41 @@ async function runAgent(options: {
   signal: AbortSignal;
   label: string;
 }): Promise<AgentResult> {
-  const args = ["--mode", "json", "-p", "--no-session", "--no-extensions", "--no-skills", "--no-prompt-templates"];
-  if (options.model) args.push("--model", options.model);
-  if (options.thinking) args.push("--thinking", options.thinking);
-  args.push("--tools", options.writable ? "read,bash,edit,write" : "read");
-  args.push(options.prompt);
-  const invocation = getPiInvocation(args);
-  await appendLog(options.root, `agent-start label=${options.label} command=${invocation.command} timeoutMs=${options.timeoutMs}`);
+  // Agent backend: `pi` (default) or `codex` (OpenAI Codex CLI, `codex exec`).
+  // Selected by CAPCOV_AGENT_BACKEND so the same manifest, gates, reviewers,
+  // write-set enforcement, and journal apply to either implementer runtime.
+  const backend = process.env.CAPCOV_AGENT_BACKEND === "codex" ? "codex" : "pi";
+  let invocation: { command: string; args: string[] };
+  let lastMessageFile: string | undefined;
+  if (backend === "codex") {
+    lastMessageFile = path.join(os.tmpdir(), `capcov-codex-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.txt`);
+    const codexModel = process.env.CAPCOV_CODEX_MODEL || (options.model?.includes("/") ? options.model.split("/").pop()! : options.model) || "gpt-5.6-sol";
+    const effort = process.env.CAPCOV_CODEX_REASONING || (options.thinking && options.thinking !== "off" ? options.thinking : "high");
+    const args = ["exec", "--ephemeral", "--skip-git-repo-check", "--color", "never", "--json",
+      "-C", options.cwd ?? options.root, "-m", codexModel,
+      "-c", `model_reasoning_effort="${effort}"`, "-c", `approval_policy="never"`, "-c", "shell_environment_policy.inherit=all",
+      "-o", lastMessageFile];
+    // Read-only scouts and reviewers stay inside Codex's read-only sandbox. The
+    // writer runs unsandboxed, exactly like the Pi writer's bash tool: the
+    // driver, not the agent runtime, enforces write sets, HEAD stability, gates,
+    // and review; the worker worktree is the isolation boundary for parallel tasks.
+    if (options.writable) args.push("--dangerously-bypass-approvals-and-sandbox");
+    else args.push("--sandbox", "read-only");
+    args.push("-");
+    invocation = { command: process.env.CAPCOV_CODEX_BIN || "codex", args };
+  } else {
+    const args = ["--mode", "json", "-p", "--no-session", "--no-extensions", "--no-skills", "--no-prompt-templates"];
+    if (options.model) args.push("--model", options.model);
+    if (options.thinking) args.push("--thinking", options.thinking);
+    args.push("--tools", options.writable ? "read,bash,edit,write" : "read");
+    args.push(options.prompt);
+    invocation = getPiInvocation(args);
+  }
+  await appendLog(options.root, `agent-start label=${options.label} backend=${backend} command=${invocation.command} timeoutMs=${options.timeoutMs}`);
   if (options.signal.aborted) return { code: 130, output: "", rawOutput: "", stderr: "cancelled before spawn", timedOut: false };
   return await new Promise<AgentResult>((resolve) => {
-    const child = spawn(invocation.command, invocation.args, { cwd: options.cwd ?? options.root, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(invocation.command, invocation.args, { cwd: options.cwd ?? options.root, stdio: [backend === "codex" ? "pipe" : "ignore", "pipe", "pipe"] });
+    if (backend === "codex" && child.stdin) { child.stdin.write(options.prompt); child.stdin.end(); }
     let stdout = "";
     let stderr = "";
     let jsonLine = "";
@@ -346,8 +385,13 @@ async function runAgent(options: {
         try { streamedFinal = assistantTextFromEvent(JSON.parse(jsonLine), streamedFinal); }
         catch { /* a truncated or non-event final line is diagnostic-only */ }
       }
-      const output = streamedFinal || finalAssistantText(stdout);
-      void appendLog(options.root, `agent-end label=${options.label} code=${code ?? 1} timedOut=${timedOut} stdoutBytes=${stdoutBytes} stderrBytes=${stderrBytes} parsed=${Boolean(parseObject(output))}`)
+      let output = streamedFinal || finalAssistantText(stdout);
+      if (backend === "codex") {
+        // Codex writes the final agent message to -o; the JSONL stream is diagnostic.
+        try { output = fs.readFileSync(lastMessageFile!, "utf8"); } catch { output = codexFinalText(stdout); }
+        try { fs.unlinkSync(lastMessageFile!); } catch { /* best effort */ }
+      }
+      void appendLog(options.root, `agent-end label=${options.label} backend=${backend} code=${code ?? 1} timedOut=${timedOut} stdoutBytes=${stdoutBytes} stderrBytes=${stderrBytes} parsed=${Boolean(parseObject(output))}`)
         .finally(() => resolve({ code: code ?? 1, output, rawOutput: stdout, stderr, parsed: parseObject(output), timedOut }));
     });
   });

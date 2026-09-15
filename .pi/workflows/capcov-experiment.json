@@ -14,7 +14,7 @@
     {"id": "semantic-contract", "title": "Datalog semantic contract", "maxParallel": 1, "pauseAfter": true, "reducer": "semantic-contract"},
     {"id": "datalog-corpus", "title": "Adversarial Datalog corpus", "maxParallel": 1, "pauseAfter": true, "reducer": "datalog-corpus"},
     {"id": "datalog-kernels", "title": "Independent Python and Souffle kernels (delivered manually; reducer retired)", "maxParallel": 2, "pauseAfter": true},
-    {"id": "datalog-kernel-closure", "title": "Kernel provenance closure and differential", "maxParallel": 2, "pauseAfter": true, "reducer": "kernel-closure-integrate"},
+    {"id": "datalog-kernel-closure", "title": "Kernel provenance closure and differential", "maxParallel": 2, "pauseAfter": true, "reducer": "kernel-closure-finalize"},
     {"id": "scip-toolchain", "title": "Pinned SCIP toolchain and go_app golden index", "maxParallel": 1, "pauseAfter": true, "reducer": "scip-toolchain"},
     {"id": "scip-datalog", "title": "SCIP facts to Datalog static claims", "maxParallel": 2, "pauseAfter": true, "reducer": "scip-datalog-differential"},
     {"id": "datalog-certificates", "title": "Engine-independent certificates", "maxParallel": 1, "pauseAfter": true, "reducer": "datalog-certificates"},
@@ -171,8 +171,8 @@
       ]
     },
     {
-      "id": "kernel-closure-integrate",
-      "title": "Integrate the kernel closure and re-verify the differential",
+      "id": "kernel-closure-finalize",
+      "title": "Finalize the kernel closure: boundary totality and differential agreement",
       "planSections": ["27"],
       "dependsOn": ["kernel-closure", "differential-closure"],
       "wave": "datalog-kernel-closure",
@@ -186,7 +186,8 @@
         "Both parallel patches apply cleanly in manifest order and every gate of the retired datalog-differential task passes on the integrated tree.",
         "Both engines agree on relational closure and on every claim's semantic verdict, operational status, basis, and missing premises for all 14 corpus cases. Every adversarial kernel bundle is run through the differential: valid bundles must agree on the same fields; bundles built to exercise a fail-closed boundary (resource bounds, invalid input) must either agree on an identical named operational failure or produce a blocking mismatch, per a documented cross-kernel report contract for invalid and exhausted input that is itself tested.",
         "EXPERIMENT-PLAN.md section 27 records the integration parent commit, the applied patch digests, the exact gate commands, the implementer's own run summaries (test counts, exit codes, timings labelled as the implementer's runs), and the Souffle store path. The authoritative gate outputs are the driver's gate-result journal events for the accepted attempt, and the driver appends the checkpoint commit hash in its task-completed event after review; the implementer never records or promises either.",
-        "Every deferred item in section 27 names its owning task (the experimental CLI and Linux execution belong to datalog-evaluation; installed-wheel inclusion of the static schema belongs to scip-datalog-differential); nothing is left unowned."
+        "Every deferred item in section 27 names its owning task (the experimental CLI and Linux execution belong to datalog-evaluation; installed-wheel inclusion of the static schema belongs to scip-datalog-differential); nothing is left unowned.",
+        "The four findings left open when kernel-closure-integrate was retired are closed with tests: DiagnosticRule scalar fields (when_missing, required, message) are type-checked at ingestion; bundle_from_json converts RecursionError on deeply nested input into the named invalid-input error; every malformed nested-IR adversary either is rejected at dataclass construction or traverses compare() with the documented blocking result; output._joint_environments rejects, rather than discards, a failed mapping constraint when the same evidence is also relevant through a diagnostic or proof path."
       ],
       "gates": [
         {"name": "differential-tests", "failureKind": "differential-mismatch", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_differential*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_shrinker*.py' -t ."]},
@@ -198,7 +199,7 @@
       "id": "scip-toolchain",
       "title": "Pin scip and scip-go and commit the go_app golden index",
       "planSections": ["14", "28"],
-      "dependsOn": ["kernel-closure-integrate"],
+      "dependsOn": ["kernel-closure-finalize"],
       "wave": "scip-toolchain",
       "role": "reducer",
       "writeSet": [

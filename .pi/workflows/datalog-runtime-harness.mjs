@@ -6,7 +6,7 @@ const index = process.argv.indexOf("--task");
 const task = index >= 0 ? process.argv[index + 1] : undefined;
 const dryRun = process.argv.includes("--dry-run");
 assert.ok(task, "--task is required");
-const expected = new Set(["semantic-contract", "datalog-corpus", "python-reference", "souffle-kernel", "kernel-closure", "differential-closure", "kernel-closure-integrate", "scip-toolchain", "scip-fact-export", "static-rule-pack", "scip-datalog-differential", "datalog-certificates", "scip-target-go-pilot", "datalog-target-go", "datalog-evaluation"]);
+const expected = new Set(["semantic-contract", "datalog-corpus", "python-reference", "souffle-kernel", "kernel-closure", "differential-closure", "kernel-closure-finalize", "scip-toolchain", "scip-fact-export", "static-rule-pack", "scip-datalog-differential", "datalog-certificates", "scip-target-go-pilot", "datalog-target-go", "datalog-evaluation"]);
 assert.ok(expected.has(task), `unknown Datalog gate task: ${task}`);
 assert.ok(fs.existsSync(".pi/workflows/capcov-experiment.json"), "workflow manifest is present");
 const artifacts = {
@@ -16,7 +16,7 @@ const artifacts = {
   "souffle-kernel": ["packages/capabilities/src/capcov/claims/souffle.py"],
   "kernel-closure": ["packages/capabilities/src/capcov/claims/evaluator.py"],
   "differential-closure": ["packages/capabilities/src/capcov/claims/shrinker.py"],
-  "kernel-closure-integrate": ["packages/capabilities/src/capcov/claims/differential.py"],
+  "kernel-closure-finalize": ["packages/capabilities/src/capcov/claims/differential.py"],
   "scip-toolchain": ["packages/capabilities/tests/fixtures/scip_go_app_index.json", "tests/scip/canonicalize.jq"],
   "scip-fact-export": ["packages/capabilities/src/capcov/claims/static/scip_facts.py"],
   "static-rule-pack": ["packages/capabilities/experiments/claim-semantics/static"],
