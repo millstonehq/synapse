@@ -570,11 +570,23 @@ class WitnessTest(_Exported):
         self.assertEqual(validate_bundle(bundle), ())
 
     def test_package_symbols_defined_per_file_are_not_duplicates(self) -> None:
-        # scip-go defines the package symbol in every file of internal/jobs;
-        # that is the language, not an ambiguous definition.
-        closed = {p for [p] in _rows(self.bundle, "scip_definitions_closed")}
-        self.assertIn("internal/jobs/repo.go", closed)
-        self.assertIn("internal/jobs/service.go", closed)
+        # scip-go defines the package symbol in every file of internal/jobs and
+        # `local N` symbols are file-scoped, so both repeat across documents;
+        # that is the language, not an ambiguous definition.  The exporter's
+        # predicate (category != "other") is the one the rule pack's
+        # scip_duplicate_definition applies, so neither withholds a witness.
+        repeated = {}
+        for path, _, symbol in _rows(self.bundle, "scip_definition_site"):
+            repeated.setdefault(symbol, set()).add(path)
+        repeated = {s: sorted(p) for s, p in repeated.items() if len(p) > 1}
+        self.assertTrue(any(s.endswith("/") for s in repeated), repeated)
+        self.assertTrue(any(s.startswith("local ") for s in repeated), repeated)
+        categories = {s: c for s, _, c, _ in _rows(self.bundle, "scip_symbol")}
+        self.assertEqual({categories[s] for s in repeated}, {"other"})
+        documents = {p for p, *_ in _rows(self.bundle, "scip_document")}
+        self.assertEqual({p for [p] in _rows(self.bundle, "scip_definitions_closed")}, documents)
+        self.assertEqual({p for [p] in _rows(self.bundle, "scip_references_closed")}, documents)
+        self.assertEqual(_rows(self.bundle, "static_reachability_closed"), [[]])
 
     def test_route_inventory_is_withheld_when_the_adapter_degraded(self) -> None:
         ast_raw = _ast_raw(self.normalized, unresolved=[

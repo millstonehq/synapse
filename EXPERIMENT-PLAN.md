@@ -3738,7 +3738,18 @@ static_route_authorized(IX,S) :- static_route_handler(IX,S,H), static_reaches_eq
                                  authz_symbol__accepted(IX,N), static_index_current(IX).
 static_route_authorization_gap(IX,S) :- static_route_declared_surface(IX,S),
                                         static_route_authorized_closed(IX), !static_route_authorized(IX,S).
+scip_duplicate_definition(IX,Sym,PA,LA,PB,LB) :- scip_definition_site(IX,PA,LA,Sym), scip_definition_site(IX,PB,LB,Sym),
+                                                 scip_symbol(IX,Sym,_k,Cat,_d), Cat != "other", PA != PB.
+scip_duplicate_definition(IX,Sym,PA,LA,PB,LB) :- scip_definition_site(IX,PA,LA,Sym), scip_definition_site(IX,PB,LB,Sym),
+                                                 scip_symbol(IX,Sym,_k,Cat,_d), Cat != "other", LA != LB.
 ```
+
+The category guard on `scip_duplicate_definition` is the exporter's own predicate
+(`_symbol_category(symbol) != "other"`, `scip_facts.py`): namespace (package) symbols, whose
+descriptor ends in `/`, are defined by scip-go in every file of the package, and `local N`
+symbols are file-scoped, so neither is an ambiguous definition; only `callable`, `type` and
+`term` symbols can be. A guard on `scip_symbol_unrooted(IX,Sym,"local")` was not used because
+negating it would need a completeness witness the exporter does not emit.
 
 Validation consequences already verified against `validation.py`: negating a relation with
 unbound extra columns is `unsafe-negation`, so negations go through projections and
@@ -3787,6 +3798,7 @@ slice; negatives become `unresolved` with a visible missing premise, never silen
 | 07 | constructor as type reference | `scip_type_reference` to `Job#`, no edge | capability supported through the op owner; `static_reaches(GetJob, Job#)` unresolved and documented |
 | 08 | module-scope reference | `handle(...)` at package scope | route → handler supported; "init reaches storage" unresolved (no root symbol) |
 | 09 | duplicate definitions | two `scip_definition_site` rows for one symbol | supported plus discrepancy `ambiguous-definition`; negatives unresolved |
+| 09 (variant `-package-symbol`) | package symbol defined per file | `Handler#GetJob` defined once; the package symbol `api/` (category `other`) defined in two files; every reference witness present | `scip_duplicate_definition` empty, claim unresolved with missing premise `scip_symbol`; no discrepancy; the negative gap claim resolves (`supported`) because the witnesses are not withheld |
 
 ### Cross-check against the current resolver
 
@@ -3904,15 +3916,20 @@ ast_raw lists. Exported row counts: `scip_definition_site` 38, `scip_read_site` 
 section-29 relation and are not exported. Combined differential bundle (exporter + pack +
 `source_tree_observed` + two `runtime_route_observed` rows + `hop_succ(1..63→2..64)` /
 `static_reaches_within` cross-check + 7 claims): digest
-`8b94be89cd0a5faeb46e6fefd9be7f9dba17fbcc4a1c0d285375ce534628e3d2`, 276 facts, 29 rules, 70
-relations; rules digest `128f22fb26d732307015e2ab18d8f3f0f658d15fdea1920e8df4d81edc7a692b`;
-rule pack file sha256 `87959f38701f492b1bef8d5df8d37662a8a5e96496cb871ef09bfb117b46f8f2`.
-Soufflé program digest `f54bd921c6e97797fa00b5e29e15c6bcc75bfabbf63e85f0d116032b13b944e1`, output
-digest `71637edcb4e31a75158f608cb136e779be97f934cb61f871d62a7d6f577ab2a4`, Soufflé evidence
-digest `4f24b0bb3098c9cbce15608e7aea65fca08bb44e999b21cf44c32e96bd9443d6`, runtime `souffle-2.5`,
-1.0 s; kernel report canonical digest (equal for Python and Soufflé)
-`4588948e537b3129c9553225f0e69a99be55ac0123c554a56d057a234ba1ec55`. Closure: 368 rows over all
-relations (Python `derived_rows` 368, `provenance_nodes` 399, 0 unattributed facts, 0 discarded
+`20e2ed9be861fe642afa4f1848e5a7951bf76a1d8c273cc59c157d73a641da71`, 276 facts, 29 rules, 70
+relations; rules digest `3c7c80822404fc2ef221b91edd209db7ea8e73a40122a9f9764be20398a4d36c`;
+rule pack file sha256 `141867ba8aac496db62e52a9b27b3e2be55881f8886249c7f80d4474e8dafe66` (these
+three, the Soufflé digests, the kernel report digest and the closure counts below were recomputed
+after the duplicate-definition guard recorded at the end of this section; the reducer run at
+parent 7b1a65e had bundle `8b94be89…`, rules `128f22fb…`, pack `87959f38…`, program `f54bd921…`,
+output `71637edc…`, evidence `4f24b0bb…`, report `4588948e…`, 368 rows / 399 provenance nodes,
+and 22 `scip_duplicate_definition` rows). Soufflé program digest
+`9832600f50fe8cea420d7587efd6ae9de7361e57d7f7e2135ba7805f18129b4e`, output digest
+`0203dbdf127e4f3e33c417deab08523afe12de0cbd570684770a2efdefb28984`, Soufflé evidence digest
+`ad9b29a98aeab16601189bc618a5920119edf22551e97d0c5f91b765766a46cf`, runtime `souffle-2.5`; kernel
+report canonical digest (equal for Python and Soufflé)
+`39b9c5ff2d3163ff7822184412af4c16b990758899bc7dfb965239cdcebb6629`. Closure: 346 rows over all
+relations (Python `derived_rows` 346, `provenance_nodes` 357, 0 unattributed facts, 0 discarded
 alternatives); derived rows of note: `static_edge` 7, `static_root` 1, `static_reaches` 5
 (GetJob → Fetch, Repo.Get, Repo.Write, DB.First, DB.Create), `static_reaches_eq` 6,
 `static_reaches_within` 5 (hops 1/2/2/3/3), `static_route_handler` 1, `static_op_owner` 2,
@@ -3921,7 +3938,8 @@ alternatives); derived rows of note: `static_edge` 7, `static_root` 1, `static_r
 `static_index_current` 1, `scip_index_stale` 0, `runtime_route_without_static` 1
 (`tenant-a`, `http:POST /jobs`, run-1), `static_route_authorized` 0,
 `static_route_authorization_gap` 1, `scip_document_path` 5, `scip_definition_site_at` 27,
-`scip_duplicate_definition` 22 (see limits). Claims, identical in both kernels:
+`scip_duplicate_definition` 0 (22 before the guard; see the record at the end of this section). Claims,
+identical in both kernels:
 `claim-cap-jobs-read` and `claim-cap-audit-create` supported (10 leaves each:
 `scip_definition_site`, `scip_index`, `scip_index_tree`, 2× `scip_may_reference`, `scip_symbol`,
 `route_handler_location`, `static_op_site`, `static_site_owner`, claim-time
@@ -3930,8 +3948,8 @@ alternatives); derived rows of note: `static_edge` 7, `static_root` 1, `static_r
 (bounded-history-model; domain closed, member unproven), `claim-runtime-route-gap` refuted
 (leaves `runtime:` + `static:` — `runtime_route_observed`, `index_describes_run`,
 `static_route_inventory_closed`). Certificates from Python rows and from Soufflé rows are
-identical for every conclusion (5 in go_app: steps 0/1/1/1/1, nodes 7/72/70/37/37; 23 across the
-13 static cases), `recheck` accepts them against both closures with no unchecked negation, their
+identical for every conclusion (5 in go_app: steps 0/1/1/1/1, nodes 7/72/70/37/37; 25 across the
+14 static cases), `recheck` accepts them against both closures with no unchecked negation, their
 leaves equal the Python evaluator's support/refutation leaves for every `exists` claim in go_app,
 `steps+1` equals both `static_reaches_within.hops` and `fixpoint.distances`, and a substituted
 leaf, row, conclusion, rule or a negated row smuggled into the closure is rejected; a foreign
@@ -4000,12 +4018,11 @@ raised.
   facts, evidence chains and metadata modulo the index identity (re-keyed by attested row) and
   equality of digests only when the identities coincide; the reproducible identity is the JSON
   golden's. A canonical identity for binary indexes would be a scheme change to this section.
-- `scip_duplicate_definition` over-approximates: on go_app it has 22 rows, all `local N` symbols
-  (document-scoped, so "the same" symbol legitimately defined in several files) and the package
-  symbol scip-go defines in every file, whereas the exporter's own duplicate check excludes
-  `other`-category symbols when deciding to withhold `scip_definitions_closed`. No claim in go_app
-  or the cases depends on those rows; the fix is to join `scip_symbol_node(IX,Sym,_)` in both
-  duplicate rules, which changes case 09's reviewed leaf set and was not done here.
+- `scip_duplicate_definition` over-approximated (fixed, see the record below): on go_app it had 22
+  rows, all `local N` symbols, and on a multi-file Go package it would also fire on the package
+  symbol scip-go defines in every file, so `scip_references_closed` would have been withheld for
+  nearly every package of a real service (target-go) and every negative claim left unresolved for a
+  wrong reason.
 - `certificate.py` handles linear recursion only (one SCC atom per body, which is all the pack
   has); a non-linear recursive rule raises `CertificateError`. `forall` claims are certified per
   domain member; the closure witness and domain rows the evaluator adds to a universal's support
@@ -4015,6 +4032,37 @@ raised.
 - The `scip-differential` and `static-adversarial` tests fail rather than skip without Soufflé;
   `test_static_corpus_evaluation`'s Soufflé class still skips (unchanged, outside the gate).
 - Linux remains evaluation-only; every run above is aarch64-darwin.
+
+### Duplicate-definition guard (2026-09-15, follow-up on branch `scip-datalog/fan-in`)
+
+Both `scip_duplicate_definition` rules now join `scip_symbol(IX,Sym,_,Cat,_)` and require
+`Cat != "other"` (positive join plus a constant comparison; the IR supports both in either
+kernel and `validation.py` accepts it without a completeness witness, which a negated
+`scip_symbol_unrooted(IX,Sym,"local")` guard would have needed). This is the exporter's own
+predicate for withholding `scip_definitions_closed` / `scip_references_closed`
+(`_symbol_category != "other"`, which already covered both the namespace and the `local`
+class), so the derived relation and the witness policy agree; the pack README documents the
+guard. Effects: go_app `scip_duplicate_definition` 22 → 0 rows (all 22 were `local 0..3`), the
+five `scip_references_closed` witnesses and `static_reachability_closed` are unchanged, closure
+368 → 346 rows, and the identities above were recomputed (the exported bundle digest
+`53dcade7…` is unchanged because the exporter did not change). Reviewed expectations: case 09's
+verdicts are unchanged; `claim-duplicate`'s support and observed leaf sets gain the callable's
+`scip_symbol:b87c0b7fbf06` row, because the guard is now part of the proof (the leaf-set change
+the previous limit predicted). New variant `09-duplicate-definitions-package-symbol`: `GetJob`
+defined once, the package symbol `api/` (`kind Package`, category `other`,
+`scip_symbol_unrooted(non-node-descriptor)`) defined in `api/jobs.go:1` and
+`api/jobs_legacy.go:1`, all six `scip_references_closed` witnesses and
+`static_reachability_closed` present — `scip_duplicate_definition` is empty in both kernels,
+`claim-duplicate` is unresolved with missing premise `scip_symbol`, the capability has no
+`ambiguous-definition` discrepancy, and the negative gap claim resolves (`supported`) instead of
+being withheld. Tests: `test_differential_static_reachability` asserts zero duplicate rows and
+five reference witnesses in both kernels on the golden and that the only repeated definitions
+are `local` or package symbols; `test_static_adversarial_both_engines` asserts the two callable
+rows in 09 and the empty relation plus six witnesses in the variant, in both kernels;
+`test_static_corpus_schema` asserts the guard's shape in both rules and the variant's table;
+`test_scip_facts_export` asserts the gonest fixture's repeated definitions (`local 0..2` and the
+`internal/jobs` package symbol) are all category `other` and withhold no witness. Certificates:
+25 across the 14 static cases (was 23 across 13).
 
 ## 30. target-go static path pilot
 

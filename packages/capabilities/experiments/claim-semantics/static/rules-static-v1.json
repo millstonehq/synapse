@@ -3187,6 +3187,38 @@
           ]
         },
         {
+          "relation": "scip_symbol",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Sym"
+            },
+            {
+              "variable": "Kind"
+            },
+            {
+              "variable": "Cat"
+            },
+            {
+              "variable": "Display"
+            }
+          ]
+        },
+        {
+          "comparison": {
+            "left": {
+              "variable": "Cat"
+            },
+            "operator": "!=",
+            "right": {
+              "type": "symbol",
+              "value": "other"
+            }
+          }
+        },
+        {
           "comparison": {
             "left": {
               "variable": "PA"
@@ -3258,6 +3290,38 @@
               "variable": "Sym"
             }
           ]
+        },
+        {
+          "relation": "scip_symbol",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Sym"
+            },
+            {
+              "variable": "Kind"
+            },
+            {
+              "variable": "Cat"
+            },
+            {
+              "variable": "Display"
+            }
+          ]
+        },
+        {
+          "comparison": {
+            "left": {
+              "variable": "Cat"
+            },
+            "operator": "!=",
+            "right": {
+              "type": "symbol",
+              "value": "other"
+            }
+          }
         },
         {
           "comparison": {

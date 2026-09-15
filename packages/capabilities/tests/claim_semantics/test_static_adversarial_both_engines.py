@@ -93,6 +93,27 @@ class AdversarialCasesInBothEngines(unittest.TestCase):
                     self.assertEqual(sorted(entry.result.support), table["support_leaves"])
                     self.assertEqual(sorted(entry.result.refutation), table["refutation_leaves"])
 
+    def test_duplicate_definitions_need_an_entity_category_in_both_kernels(self) -> None:
+        self.assertTrue(self.results, "no differential results; is souffle on PATH?")
+        get_job = "scip-go gomod github.com/example/jobsvc . api/Handler#GetJob()."
+        _, callable_case = self.results["09-duplicate-definitions"]
+        _, package_case = self.results["09-duplicate-definitions-package-symbol"]
+        for report in (callable_case.python, callable_case.souffle):
+            rows = dict(report.relations)["scip_duplicate_definition"]
+            with self.subTest(case="09-duplicate-definitions", kernel=report.backend):
+                self.assertEqual({row[1] for row in rows}, {get_job})
+                self.assertEqual({(row[2], row[4]) for row in rows},
+                                 {("api/jobs.go", "api/jobs_legacy.go"), ("api/jobs_legacy.go", "api/jobs.go")})
+                self.assertEqual(dict(report.relations)["scip_references_closed"], ())
+        for report in (package_case.python, package_case.souffle):
+            relations = dict(report.relations)
+            with self.subTest(case="09-duplicate-definitions-package-symbol", kernel=report.backend):
+                # the package symbol api/ is defined in two files but has category other
+                self.assertEqual(relations["scip_duplicate_definition"], ())
+                self.assertEqual(len(relations["scip_references_closed"]), 6)
+                self.assertEqual(len(relations["static_route_authorized_closed"]), 1)
+                self.assertEqual(len(relations["static_route_authorization_gap"]), 1)
+
     def test_certificates_from_both_closures_agree_on_every_derived_claim_row(self) -> None:
         self.assertTrue(self.results, "no differential results; is souffle on PATH?")
         certified = 0
