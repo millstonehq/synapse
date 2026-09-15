@@ -12,6 +12,9 @@
                               [--coverage coverage.json] --out obligations.json
                               [--report report.json]
                                                 surfaces -> feature obligations
+    capcov features report    model.json obligations.json [--selected a,b,c]
+                              [--format md|csv] [--out FILE]
+                                                completeness vector as Harvey glyphs
 
 ``check`` and ``rollup`` take comma-separated feature ids. ``rollup`` is the yes/no
 gate view (``model.coverage_rollup``); ``coverage`` is the numeric completeness
@@ -29,6 +32,7 @@ from pathlib import Path
 from . import coverage as coverage_mod
 from . import mapping as mapping_mod
 from . import model as model_mod
+from . import report as report_mod
 
 
 def _ids(value: str) -> set[str]:
@@ -142,6 +146,13 @@ def main(argv: list[str]) -> int:
     mp.add_argument("--out", required=True, help="write the {id: {covered, total}} obligations map here")
     mp.add_argument("--report", default=None, help="write the full projection (unassigned, contested, assurance) here")
 
+    rp = sub.add_parser("report", help="the completeness vector as a Markdown or CSV table with Harvey glyphs")
+    rp.add_argument("model")
+    rp.add_argument("obligations")
+    rp.add_argument("--selected", default=None)
+    rp.add_argument("--format", default="md", choices=["md", "csv"])
+    rp.add_argument("--out", default=None)
+
     args = parser.parse_args(argv)
     try:
         if args.command == "example":
@@ -176,6 +187,17 @@ def main(argv: list[str]) -> int:
             selected = None if args.selected is None else _ids(args.selected)
             result = coverage_mod.rollup(model, obligations, selected)
             _print_vector(result)
+            return 0
+
+        if args.command == "report":
+            obligations = json.loads(Path(args.obligations).read_text())
+            selected = None if args.selected is None else _ids(args.selected)
+            text = report_mod.render(coverage_mod.rollup(model, obligations, selected), fmt=args.format)
+            if args.out:
+                Path(args.out).write_text(text)
+                print(f"capcov features: wrote {args.out}")
+            else:
+                sys.stdout.write(text)
             return 0
 
         if args.command == "map":
