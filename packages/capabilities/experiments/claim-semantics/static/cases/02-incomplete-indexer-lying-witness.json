@@ -88,28 +88,6 @@
       }
     },
     {
-      "id": "static:694d1ff6509c:static_source_tree_observed:dbf48cd04fb8",
-      "kind": "fact",
-      "relation": "static_source_tree_observed",
-      "arg_order": [
-        "index",
-        "tree_digest"
-      ],
-      "args": [
-        "694d1ff6509c1d18098156da8741fbb1f8424814ffaf22e1d1850125c48564f2",
-        "f6390e37c8ac021378ca19a6b2389526397f0fa1a6d46b6cd6ebef61ae3aa75a"
-      ],
-      "context": {
-        "index": "694d1ff6509c1d18098156da8741fbb1f8424814ffaf22e1d1850125c48564f2"
-      },
-      "source": "reviewer claim-time observation",
-      "provenance": {
-        "depends_on": [
-          "static:claim-time:source_tree_observed:d7018c1dd0e0"
-        ]
-      }
-    },
-    {
       "id": "static:694d1ff6509c:static_language_covered:3333e75c429f",
       "kind": "fact",
       "relation": "static_language_covered",
@@ -1392,7 +1370,7 @@
           "static:694d1ff6509c:route_handler_location:9d83888f5323",
           "static:694d1ff6509c:static_op_site:05d2226cb62f",
           "static:694d1ff6509c:static_site_owner:f38f7fd240df",
-          "static:694d1ff6509c:static_source_tree_observed:dbf48cd04fb8"
+          "static:claim-time:source_tree_observed:d7018c1dd0e0"
         ],
         "refutation_leaves": [],
         "observed_leaves": [
@@ -1405,7 +1383,7 @@
           "static:694d1ff6509c:route_handler_location:9d83888f5323",
           "static:694d1ff6509c:static_op_site:05d2226cb62f",
           "static:694d1ff6509c:static_site_owner:f38f7fd240df",
-          "static:694d1ff6509c:static_source_tree_observed:dbf48cd04fb8"
+          "static:claim-time:source_tree_observed:d7018c1dd0e0"
         ],
         "forbidden_leaves": [],
         "discrepancies": [],
@@ -1435,7 +1413,7 @@
           "static:694d1ff6509c:route_site:3c04acc77e37",
           "static:694d1ff6509c:static_reachability_closed:e7a8366ba5bf",
           "static:694d1ff6509c:static_route_inventory_closed:33e66f89d3f5",
-          "static:694d1ff6509c:static_source_tree_observed:dbf48cd04fb8"
+          "static:claim-time:source_tree_observed:d7018c1dd0e0"
         ],
         "refutation_leaves": [],
         "observed_leaves": [
@@ -1444,7 +1422,7 @@
           "static:694d1ff6509c:static_reachability_closed:e7a8366ba5bf",
           "static:694d1ff6509c:static_route_inventory_closed:33e66f89d3f5",
           "static:694d1ff6509c:static_source_file:425dfac83e23",
-          "static:694d1ff6509c:static_source_tree_observed:dbf48cd04fb8"
+          "static:claim-time:source_tree_observed:d7018c1dd0e0"
         ],
         "forbidden_leaves": [
           "static:694d1ff6509c:static_reachability_closed:e7a8366ba5bf"

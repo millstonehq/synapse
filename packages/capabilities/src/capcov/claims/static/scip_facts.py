@@ -127,30 +127,43 @@ _RELATIONSHIP_KINDS = (
     ("is_definition", "definition"),
 )
 
-# Derived relations the frozen primitive schema points at (completeness
-# ``completes`` targets and compatibility targets). They are declared here as
-# stubs -- primitive=False, no rules -- only so the frozen declarations resolve
-# under validation; the rule pack (rules-static-v1.json) supplies their rules.
+# Relations the frozen primitive schema points at but does not declare: the
+# ``completes`` targets of the completeness witnesses (derived projections and
+# ``static_reaches``), the ``forall`` domain ``static_route_declared_surface``
+# and the runtime primitive ``runtime_route_observed`` named by
+# ``index_describes_run``.  They are declared here as rule-less stubs only so an
+# exported bundle validates on its own; the rule pack
+# (``experiments/claim-semantics/static/rules-static-v1.json``) owns their rules
+# and declares them again, byte-identically.  ``combine.combine`` merges the two
+# declaration sets by name and refuses a non-identical duplicate, so the stubs
+# never widen or narrow what the pack says (section 29, reconciliation item 2).
+# ``scip_definition_site_at`` is the (index, path, line) projection the
+# per-document witness ``scip_definitions_closed`` closes.
 _DERIVED_TARGET_DECLS = (
     RelationDecl("scip_document_path",
                  (Column("index", "digest", True), Column("path", "symbol")),
-                 binding="static", primitive=False, context_indices=("index",)),
+                 modality="derived", binding="static", primitive=False,
+                 context_indices=("index",)),
     RelationDecl("scip_definition_site_at",
-                 (Column("index", "digest", True), Column("path", "symbol")),
-                 binding="static", primitive=False, context_indices=("index",)),
+                 (Column("index", "digest", True), Column("path", "symbol"),
+                  Column("line", "unsigned")),
+                 modality="derived", binding="static", primitive=False,
+                 context_indices=("index",)),
     RelationDecl("static_route_declared_surface",
                  (Column("index", "digest", True), Column("surface", "symbol")),
-                 binding="static", primitive=False, finite=True, nonempty=True,
-                 context_indices=("index",)),
+                 modality="derived", binding="static", primitive=False, finite=True,
+                 nonempty=True, context_indices=("index",)),
     RelationDecl("static_reaches",
                  (Column("index", "digest", True), Column("src", "symbol"),
                   Column("dst", "symbol")),
-                 binding="static", primitive=False, context_indices=("index",)),
+                 modality="derived", binding="static", primitive=False,
+                 context_indices=("index",)),
     RelationDecl("runtime_route_observed",
                  (Column("tenant", "symbol", True), Column("surface", "symbol", True),
                   Column("event", "symbol", True), Column("run", "symbol", True)),
                  context_indices=("tenant", "surface", "event", "run")),
 )
+STUB_RELATIONS = frozenset(decl.name for decl in _DERIVED_TARGET_DECLS)
 
 
 # ---------------------------------------------------------------------------
@@ -259,6 +272,30 @@ def static_relations() -> tuple[RelationDecl, ...]:
     """The frozen primitive declarations plus the derived-target stubs."""
     frozen = tuple(_relation_from_json(item) for item in load_static_schema()["relations"])
     return frozen + _DERIVED_TARGET_DECLS
+
+
+def primitive_relations() -> tuple[RelationDecl, ...]:
+    """The frozen primitive declarations alone (what the exporter produces rows for)."""
+    return tuple(_relation_from_json(item) for item in load_static_schema()["relations"])
+
+
+def canonical_project_root(reported: Any) -> str:
+    """The host-independent ``scip_index.project_root`` value.
+
+    Indexers report the project root as an absolute ``file://`` URI of the
+    directory they ran in, which differs per machine and per copy and would make
+    the bundle digest of one and the same index unreproducible.  The fact keeps
+    only ``file:///<basename>`` of that directory (or ``""`` when the index
+    carries no root, as the canonicalized JSON golden does); the reported value
+    is surfaced in ``ExportResult.messages`` instead (section 29, item 3).
+    """
+    if not isinstance(reported, str) or not reported:
+        return ""
+    path = reported
+    if "://" in path:
+        path = path.split("://", 1)[1]
+    basename = path.rstrip("/").rsplit("/", 1)[-1]
+    return f"file:///{basename}" if basename else ""
 
 
 def _relation_from_json(raw: dict) -> RelationDecl:
@@ -425,9 +462,13 @@ def export_bundle(
     to_node = resolve.normalizer(language)
 
     # --- identity rows -------------------------------------------------------
+    project_root = canonical_project_root(meta.get("project_root"))
+    if meta.get("project_root") and project_root != meta.get("project_root"):
+        messages.append(f"scip_index.project_root recorded as {project_root!r}; the indexer "
+                        f"reported {meta.get('project_root')!r} (host path, not a fact)")
     index_eid = facts.add("scip_index", {
         **ix, "indexer": indexer, "indexer_version": indexer_version,
-        "language": language, "project_root": meta.get("project_root") or "",
+        "language": language, "project_root": project_root,
         "digest_kind": index_digest_kind,
     }, source=indexer_source)
     tree_eid = facts.add("scip_index_tree", {
@@ -956,6 +997,6 @@ __all__ = [
     "STATUS_COMPLETE", "STATUS_RESOURCE_EXHAUSTED", "STATUS_INVALID_INPUT", "STATUS_STALE",
     "PROFILE_SLICE", "PROFILE_FULL", "Scope", "ExportLimits", "ExportResult",
     "ExportInputError", "evidence_id", "row_digest", "occurrence_digest",
-    "occurrence_external_id", "static_relations", "export_bundle", "export_from_tree",
-    "bundle_digest",
+    "occurrence_external_id", "static_relations", "primitive_relations", "STUB_RELATIONS",
+    "canonical_project_root", "export_bundle", "export_from_tree", "bundle_digest",
 ]

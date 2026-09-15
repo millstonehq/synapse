@@ -12,7 +12,7 @@
     "index": "bf7c3d393f11de1a79d0d36ba9eb27b38adf761e48454765cdb080fe2ca7bc11"
   },
   "review_notes": [
-    "scip_index_tree carries T1 and static_source_tree_observed carries T2 != T1, so scip_index_stale derives and static_index_current does not.",
+    "scip_index_tree carries T1 and source_tree_observed carries T2 != T1, so scip_index_stale derives and static_index_current does not.",
     "static_path_to_storage still derives (it is a fact about the index), but static_capability requires static_index_current: unresolved with missing premise static_index_current.",
     "The diagnostic on scip_index_stale sets the operational status to stale."
   ],
@@ -85,28 +85,6 @@
       "source": "reviewer claim-time observation",
       "provenance": {
         "depends_on": []
-      }
-    },
-    {
-      "id": "static:bf7c3d393f11:static_source_tree_observed:dbf6fdcd11e1",
-      "kind": "fact",
-      "relation": "static_source_tree_observed",
-      "arg_order": [
-        "index",
-        "tree_digest"
-      ],
-      "args": [
-        "bf7c3d393f11de1a79d0d36ba9eb27b38adf761e48454765cdb080fe2ca7bc11",
-        "fae48afcefba2a425aa23fc9c7fbced5cdbbf0377fb2a8f685146fd5508293b8"
-      ],
-      "context": {
-        "index": "bf7c3d393f11de1a79d0d36ba9eb27b38adf761e48454765cdb080fe2ca7bc11"
-      },
-      "source": "reviewer claim-time observation",
-      "provenance": {
-        "depends_on": [
-          "static:claim-time:source_tree_observed:e3c6dc91ffb2"
-        ]
       }
     },
     {
@@ -1493,7 +1471,6 @@
           "static:bf7c3d393f11:route_handler_location:46cffa380072",
           "static:bf7c3d393f11:static_op_site:a368560e94a6",
           "static:bf7c3d393f11:static_site_owner:ce2797a9a32e",
-          "static:bf7c3d393f11:static_source_tree_observed:dbf6fdcd11e1",
           "static:claim-time:source_tree_observed:e3c6dc91ffb2"
         ],
         "forbidden_leaves": [],

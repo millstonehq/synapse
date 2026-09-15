@@ -88,28 +88,6 @@
       }
     },
     {
-      "id": "static:b1c077e07fbf:static_source_tree_observed:faa1e6bee07f",
-      "kind": "fact",
-      "relation": "static_source_tree_observed",
-      "arg_order": [
-        "index",
-        "tree_digest"
-      ],
-      "args": [
-        "b1c077e07fbfd4726bea0ce52743c53f7f36ff572fd682e9d997260bd2eaab29",
-        "48a36ca0a76bd60f0977b561f3daf4516c70431447544d5ea531ad1d9cd208bc"
-      ],
-      "context": {
-        "index": "b1c077e07fbfd4726bea0ce52743c53f7f36ff572fd682e9d997260bd2eaab29"
-      },
-      "source": "reviewer claim-time observation",
-      "provenance": {
-        "depends_on": [
-          "static:claim-time:source_tree_observed:10289e4e9bc5"
-        ]
-      }
-    },
-    {
       "id": "static:b1c077e07fbf:static_language_covered:cdadd9111677",
       "kind": "fact",
       "relation": "static_language_covered",
@@ -1508,7 +1486,7 @@
           "static:b1c077e07fbf:route_handler_location:53053053b1e3",
           "static:b1c077e07fbf:route_site:44515257e332",
           "static:b1c077e07fbf:static_route_inventory_closed:7b474de95c06",
-          "static:b1c077e07fbf:static_source_tree_observed:faa1e6bee07f"
+          "static:claim-time:source_tree_observed:10289e4e9bc5"
         ],
         "refutation_leaves": [],
         "observed_leaves": [
@@ -1522,7 +1500,7 @@
           "static:b1c077e07fbf:route_handler_location:53053053b1e3",
           "static:b1c077e07fbf:route_site:44515257e332",
           "static:b1c077e07fbf:static_route_inventory_closed:7b474de95c06",
-          "static:b1c077e07fbf:static_source_tree_observed:faa1e6bee07f"
+          "static:claim-time:source_tree_observed:10289e4e9bc5"
         ],
         "forbidden_leaves": [],
         "discrepancies": [],

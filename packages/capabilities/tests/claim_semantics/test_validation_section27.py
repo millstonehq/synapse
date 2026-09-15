@@ -89,6 +89,35 @@ class Section27ValidationTests(unittest.TestCase):
         self.assertNotIn("static-context", codes(bundle))
         self.assertIn("mixed-binding-join", codes(bundle))
 
+    def test_context_free_static_join_is_flagged_only_when_runtime_evidence_is_read(self):
+        # Section 29: static_index_current(IX) :- scip_index_tree(IX,T,_,_), source_tree_observed(T).
+        # A static-only body may read the context-free claim-time observation; the
+        # index/run witness is owed only when the same body reads runtime evidence.
+        tree = RelationDecl("scip_index_tree",
+                            (Column("index", "digest", True), Column("tree_digest", "digest")),
+                            binding="static", context_indices=("index",))
+        observed = RelationDecl("source_tree_observed", (Column("tree_digest", "digest"),),
+                                binding="static")
+        current = RelationDecl("static_index_current", (Column("index", "digest", True),),
+                               modality="derived", binding="static", primitive=False,
+                               context_indices=("index",))
+        static_only = Rule(Atom("static_index_current", (Variable("ix"),)),
+                           (Atom("scip_index_tree", (Variable("ix"), Variable("t"))),
+                            Atom("source_tree_observed", (Variable("t"),))))
+        self.assertEqual(validate_bundle(Bundle((tree, observed, current), rules=(static_only,))), ())
+        runtime = RelationDecl("run_tree_seen",
+                               (Column("run", "symbol", True), Column("tree_digest", "digest")),
+                               context_indices=("run",))
+        mixed_out = RelationDecl("current_for_run",
+                                 (Column("index", "digest", True), Column("run", "symbol", True)),
+                                 modality="derived", primitive=False, context_indices=("index", "run"))
+        mixed = Rule(Atom("current_for_run", (Variable("ix"), Variable("run"))),
+                     (Atom("scip_index_tree", (Variable("ix"), Variable("t"))),
+                      Atom("source_tree_observed", (Variable("t"),)),
+                      Atom("run_tree_seen", (Variable("run"), Variable("t")))))
+        self.assertIn("mixed-binding-join",
+                      codes(Bundle((tree, observed, runtime, mixed_out), rules=(mixed,))))
+
     def test_mapping_claim_relation_must_match_the_claim_selected_by_id(self):
         actual = RelationDecl("actual_claim",
                               (Column("x", "symbol"), Column("event", "symbol")),

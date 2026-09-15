@@ -966,6 +966,12 @@ def _validate_context_joins(rule, relations, issues, path):
     for static_atom, static_decl, static_effective in static_atoms:
         static_names = [c.name for c in static_decl.columns]
         if "index" not in static_names:
+            # A context-free static relation (the frozen source_tree_observed)
+            # may join indexed static relations freely; only a body that also
+            # reads runtime evidence needs the index/run witness, and then the
+            # context-free atom cannot supply the index side of it.
+            if not runtime_atoms:
+                continue
             issues.append(ValidationIssue(
                 "mixed-binding-join",
                 "context-free static relations cannot join runtime evidence without an index/run witness",

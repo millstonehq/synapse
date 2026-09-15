@@ -14,15 +14,22 @@ and evidence keyed by that index's digest.
 
 from __future__ import annotations
 
+from importlib import resources
 import json
 from pathlib import Path
 
-SCHEMA_PATH = Path(__file__).resolve().parent / "schema_static_v1.json"
+SCHEMA_NAME = "schema_static_v1.json"
+SCHEMA_PATH = Path(__file__).resolve().parent / SCHEMA_NAME
 
 
 def load_static_schema() -> dict:
-    """The frozen static schema document (``{"schema_version", "relations", ...}``)."""
-    return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    """The frozen static schema document (``{"schema_version", "relations", ...}``).
+
+    Read through ``importlib.resources`` so the same code works from a source
+    checkout and from an installed wheel, where the JSON travels as package
+    data (``[tool.setuptools.package-data]`` in ``pyproject.toml``).
+    """
+    return json.loads(resources.files(__name__).joinpath(SCHEMA_NAME).read_text(encoding="utf-8"))
 
 
-__all__ = ["SCHEMA_PATH", "load_static_schema"]
+__all__ = ["SCHEMA_NAME", "SCHEMA_PATH", "load_static_schema"]
