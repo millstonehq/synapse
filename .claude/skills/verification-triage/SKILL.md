@@ -36,6 +36,42 @@ ends; the orchestrator compares further depth against other capability gaps.
 
 A capability is rebuilt when its e2e rows are green **against a real running instance** AND each row has a check that **fails when its guard is removed** (`GOAL.md`'s rule). The capcov gate is a **floor** that proves you *mapped* the capability — never that it *works*. Its denominator is the model's edge, not the system's. The moment you read gate-green as "done", you have built a false-green machine: the credential config scopes discovery to three routes with ~65 excluded, and the gate is designed to exit red (`test/browser/models/prove.py`, `expected=1`, "Coverage remains incomplete"). Certify against the territory, never the map.
 
+## Establish implementation breadth before choosing a pilot
+
+For a multi-capability replacement, first produce or refresh a **coarse,
+source-grounded operation inventory** in the existing consumer/ledger. Reuse it
+on resumption and reconcile changes. If work began without it, fill this planning
+gap before assigning another implementation wave. A family-level sketch or a
+pilot-only gate is insufficient for breadth-first scheduling or forecasting.
+
+Start from existing discovery and incumbent entry points: HTTP and legacy client
+actions, commands, schedules, workers, hooks and external effects. Group aliases
+and variants by caller-visible operation, retaining source links and unresolved
+dynamic boundaries. Routes, files, tests and helpers are not operation counts.
+Attach background effects to their operation unless they have a distinct contract.
+
+Retain for each operation: stable ID, family, incumbent source, one-sentence
+observable acceptance condition, candidate implementation pointer/state,
+demonstrated evidence/environment, dependencies, and remaining functionality,
+semantics or verification gaps. Reuse IDs; record grouping/splitting changes.
+Keep required downstream effects and explicit release gates visible without
+requiring a whole-family release audit for each local development checkpoint.
+
+Bound the first pass to one normal planning iteration. Stop with known operations
+across the product, named unknown areas, a provisional count/range, and the next
+independent operations selected. Begin implementation from that view; refine
+contracts progressively. Do not block on exhaustive discovery, perfect dynamic
+resolution, or a new inventory engine. Assign further discovery only where it
+changes an implementation or acceptance decision.
+
+Report implementation and demonstration counts separately in these consistent
+operation units. Unknown boundaries are not zero remaining work. Forecast using
+comparable newly completed operations and recorded runtime, coarse complexity
+bands, and explicit integration/release work. Distinguish elapsed wall time,
+accounted goal time and summed parallel worker time; never mix them or credit
+pre-existing work as new throughput. Use provisional ranges with named assumptions
+when inputs are incomplete. Update this view at integration checkpoints.
+
 ## Map the capability — the flow model, four fields per step
 
 **Discovery is automatic; the model is authored, and authoring is progressive — never a prerequisite for starting.** `discover` derives the surface/entity obligations from the code on its own. The flow model (`tools/axon/capcov/credential-acquisition.model.json`) is the *behavior* layer you author on top to make outcomes checkable: you begin from auto-discovery and fill the model in as you go. A human clarifies ambiguous semantics; a human does not hand-author the map before discovery can run.
@@ -49,7 +85,7 @@ A transition is **ready to prove** (not "allowed to exist") when all four are fi
 
 Within an assigned capability, scenario order falls out of the fact machine: `plan` walks `requires`/`adds` from `initial` and generates the scenarios. Take the shortest path to the headline outcome first, then branch **refusal and security paths ahead of happy-path variants** (a wrong refusal is costlier than a missing convenience).
 
-You map one capability's surfaces at a time, not the system. But **filtering a route out of THIS capability's run does not make it "outside the product."** A scoped-out surface must be **accounted globally** — assigned to some other capability's gate, or listed as explicitly unresolved in a global denominator. "Correctly absent from this gate" is a per-run fact, never a product-completeness claim; the excluded set is a ledger to reconcile, not a set to forget.
+Deep behavioral modeling proceeds one capability at a time after the coarse whole-product inventory. But **filtering a route out of THIS capability's run does not make it "outside the product."** A scoped-out surface must be **accounted globally** — assigned to some other capability's gate, or listed as explicitly unresolved in a global denominator. "Correctly absent from this gate" is a per-run fact, never a product-completeness claim; the excluded set is a ledger to reconcile, not a set to forget.
 
 ## The check must DETECT WRONG BEHAVIOR, not reproduce right behavior
 

@@ -69,10 +69,16 @@ when the host exposes those measurements.
 
 ## Select work across the whole system
 
-Start with the existing inventory/ledger and a coarse capability-family view.
-Unknown families remain visible. Fill gaps progressively; completing an exhaustive
-inventory is not a prerequisite to starting implementation. Reuse the project's
-capcov consumer and progress artifact, rather than introducing a competing ledger.
+Before selecting an implementation wave, establish or refresh the source-grounded
+operation inventory required by SKILL.md. Reuse the existing consumer/ledger and
+stable IDs. Show operations, acceptance conditions, implementation/evidence states
+and unknown areas across the product; a family sketch alone is insufficient.
+Timebox the coarse first pass and refine detailed contracts while implementing.
+
+Choose assignments from this view and link each to its operation ID and observable
+acceptance condition. At integration, update evidence and remaining work, then
+compare the next missing operations across families. Keep counts and runtime-based
+estimates in consistent units, preserving uncertainty and inventory revisions.
 
 Track separately for each family: implementation state, local behavioral evidence,
 deployed evidence, remaining requirements, dependencies, assigned owner and effort
