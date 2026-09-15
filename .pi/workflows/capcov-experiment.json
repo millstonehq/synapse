@@ -13,7 +13,8 @@
   "waves": [
     {"id": "semantic-contract", "title": "Datalog semantic contract", "maxParallel": 1, "pauseAfter": true, "reducer": "semantic-contract"},
     {"id": "datalog-corpus", "title": "Adversarial Datalog corpus", "maxParallel": 1, "pauseAfter": true, "reducer": "datalog-corpus"},
-    {"id": "datalog-kernels", "title": "Independent Python and Souffle kernels with provenance repair", "maxParallel": 2, "pauseAfter": true, "reducer": "datalog-differential"},
+    {"id": "datalog-kernels", "title": "Independent Python and Souffle kernels (delivered manually; reducer retired)", "maxParallel": 2, "pauseAfter": true},
+    {"id": "datalog-kernel-closure", "title": "Kernel provenance closure and differential", "maxParallel": 2, "pauseAfter": true, "reducer": "kernel-closure-integrate"},
     {"id": "scip-toolchain", "title": "Pinned SCIP toolchain and go_app golden index", "maxParallel": 1, "pauseAfter": true, "reducer": "scip-toolchain"},
     {"id": "scip-datalog", "title": "SCIP facts to Datalog static claims", "maxParallel": 2, "pauseAfter": true, "reducer": "scip-datalog-differential"},
     {"id": "datalog-certificates", "title": "Engine-independent certificates", "maxParallel": 1, "pauseAfter": true, "reducer": "datalog-certificates"},
@@ -112,11 +113,69 @@
       ]
     },
     {
-      "id": "datalog-differential",
-      "title": "Repair kernel provenance and differentially compare kernels",
+      "id": "kernel-closure",
+      "title": "Close the open kernel semantics findings",
       "planSections": ["27"],
       "dependsOn": ["python-reference", "souffle-kernel"],
-      "wave": "datalog-kernels",
+      "wave": "datalog-kernel-closure",
+      "role": "parallel",
+      "worktree": ".capcov/pi-workflow/worktrees/kernel-closure",
+      "writeSet": [
+        "packages/capabilities/src/capcov/claims/evaluator.py",
+        "packages/capabilities/src/capcov/claims/souffle.py",
+        "packages/capabilities/src/capcov/claims/validation.py",
+        "packages/capabilities/src/capcov/claims/output.py",
+        "packages/capabilities/src/capcov/claims/ir.py",
+        "packages/capabilities/tests/claim_semantics/test_provenance*.py",
+        "packages/capabilities/tests/claim_semantics/test_validation_section27.py",
+        "packages/capabilities/tests/claim_semantics/test_python_evaluator.py",
+        "packages/capabilities/tests/claim_semantics/test_souffle_evaluator.py",
+        "packages/capabilities/tests/claim_semantics/test_evidence_policy.py",
+        "packages/capabilities/tests/claim_semantics/test_kernel_closure*.py",
+        "packages/capabilities/tests/test_claim_python_evaluator.py",
+        "packages/capabilities/tests/test_claim_souffle.py",
+        "packages/capabilities/tests/test_claim_ir.py",
+        "packages/capabilities/tests/test_claim_contract_review.py"
+      ],
+      "acceptance": [
+        "Valid positive cycles reach a stable fixed point without proof-tree growth; any bound hit yields a named operational report, never a raw exception.",
+        "Output relevance unifies variable-valued and universally quantified claims with mapped evidence, so missing-premise triggers evaluate correctly in both kernels.",
+        "Compatibility witnesses for mixed static/runtime rules are type-checked against the target index and run columns; untyped literals cannot forge a witness.",
+        "Reviewed corpus fixtures stay byte-stable except for justified semantic additions recorded in EXPERIMENT-PLAN.md section 27."
+      ],
+      "gates": [
+        {"name": "kernel-closure-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_provenance*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_validation_section27*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_kernel_closure*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_python_evaluator*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_evidence_policy*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_python_evaluator*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_ir*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_contract_review*.py' -t . && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_souffle_evaluator*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && out=$(PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_souffle*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]}
+      ]
+    },
+    {
+      "id": "differential-closure",
+      "title": "Close the open differential and shrinker findings",
+      "planSections": ["27"],
+      "dependsOn": ["python-reference", "souffle-kernel"],
+      "wave": "datalog-kernel-closure",
+      "role": "parallel",
+      "worktree": ".capcov/pi-workflow/worktrees/differential-closure",
+      "writeSet": [
+        "packages/capabilities/src/capcov/claims/differential.py",
+        "packages/capabilities/src/capcov/claims/shrinker.py",
+        "packages/capabilities/tests/claim_semantics/test_differential*.py",
+        "packages/capabilities/tests/claim_semantics/test_shrinker*.py"
+      ],
+      "acceptance": [
+        "The shrinker reduces only facts and their matching evidence; relations, rules, claims, mappings, diagnostics, and outputs are byte-for-byte unchanged in every replay bundle, with a test asserting it.",
+        "A minimized replay preserves the original disagreement's exact left/right values, not merely the differing field names; a mismatch that disappears on the shrinker's baseline rerun is persisted as the original disagreement rather than raising.",
+        "Every operational or semantic disagreement blocks admission with a replay bundle; shrink_truncated is reported honestly when the 200-step bound is hit."
+      ],
+      "gates": [
+        {"name": "differential-closure-tests", "failureKind": "differential-mismatch", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_differential*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_shrinker*.py' -t ."]}
+      ]
+    },
+    {
+      "id": "kernel-closure-integrate",
+      "title": "Integrate the kernel closure and re-verify the differential",
+      "planSections": ["27"],
+      "dependsOn": ["kernel-closure", "differential-closure"],
+      "wave": "datalog-kernel-closure",
       "role": "reducer",
       "writeSet": [
         "packages/capabilities/src/capcov/claims/**",
@@ -124,16 +183,13 @@
         "EXPERIMENT-PLAN.md"
       ],
       "acceptance": [
-        "Evaluator proof leaves are the bundle's Evidence ids (legacy fact ids only for evidence-less bundles) and expected.json support/refutation leaves are asserted against evaluator output for every corpus case.",
-        "The Souffle backend is polarity-aware (supported/refuted/unresolved/conflicting), treats an empty universal domain as inconsistent-premises, and fails closed with a named error when the binary is absent.",
-        "Both engines agree on relational closure and on every claim's semantic verdict, operational status, basis, and missing premises for every corpus case; any disagreement blocks admission and yields a replay bundle minimized by bounded delta debugging (max_steps=200), with shrink_truncated reported honestly when the bound is hit.",
-        "Static/runtime joins require an index/run compatibility witness in rule bodies and in conjunctive claim mappings; static-context is enforced for indexed static relations with an explicit allowlist for context-free ones.",
-        "claims/static/schema_static_v1.json freezes the primitive static relation declarations from EXPERIMENT-PLAN.md section 29 so the scip-datalog wave's parallel workers share one schema.",
-        "Findings outside this task's scope (Souffle-side provenance, producer-class authority, causal-identity projection in generic rules, the experimental CLI, and the section 22 evaluation) are recorded as deferred in EXPERIMENT-PLAN.md section 27 with the task that owns each, not silently dropped."
+        "Both parallel patches apply cleanly in manifest order and every gate of the retired datalog-differential task passes on the integrated tree.",
+        "Both engines agree on relational closure and on every claim's semantic verdict, operational status, basis, and missing premises for all 14 corpus cases and the adversarial kernel tests.",
+        "EXPERIMENT-PLAN.md section 27 records the closure evidence (commit, gate outputs, Souffle store path) and the remaining deferred items with their owning tasks."
       ],
       "gates": [
         {"name": "differential-tests", "failureKind": "differential-mismatch", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_differential*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_shrinker*.py' -t ."]},
-        {"name": "kernel-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_python_evaluator*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_python_evaluator*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_provenance*.py' -t . && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_souffle_evaluator*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && out=$(PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_souffle*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]},
+        {"name": "kernel-tests", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "command -v souffle && set -eu; for c in souffle; do p=$(command -v \"$c\"); case \"$p\" in /nix/store/*) ;; *) echo \"unpinned $c=$p\" >&2; exit 1;; esac; done; cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_python_evaluator*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_python_evaluator*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_provenance*.py' -t . && PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_kernel_closure*.py' -t . && out=$(PYTHONPATH=src python -m unittest discover -s tests/claim_semantics -p 'test_souffle_evaluator*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac && out=$(PYTHONPATH=src python -m unittest discover -s tests -p 'test_claim_souffle*.py' -t . 2>&1; echo rc=$?); printf '%s\\n' \"$out\"; case \"$out\" in *skipped*) echo 'skipped tests are not evidence' >&2; exit 1;; esac; case \"$out\" in *rc=0*) ;; *) exit 1;; esac"]},
         {"name": "regression", "failureKind": "gate-failure", "command": ["nix", "develop", "--no-update-lock-file", "--command", "bash", "-lc", "cd packages/capabilities && PYTHONPATH=src python -m unittest discover -s tests -t ."]}
       ]
     },
@@ -141,7 +197,7 @@
       "id": "scip-toolchain",
       "title": "Pin scip and scip-go and commit the go_app golden index",
       "planSections": ["14", "28"],
-      "dependsOn": ["datalog-differential"],
+      "dependsOn": ["kernel-closure-integrate"],
       "wave": "scip-toolchain",
       "role": "reducer",
       "writeSet": [

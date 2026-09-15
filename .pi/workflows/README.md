@@ -127,6 +127,14 @@ human must carry a `reason` naming the infrastructure failure (timeout
 misconfiguration, host kill) that consumed the attempts; it is never used after
 a gate or review failure.
 
+When a task exhausts its attempts with every gate green but reviews still open, the
+human may commit the working tree as explicitly unapproved work in progress and journal a
+`human-checkpoint` event whose `checkpoint` is that commit. Resume accepts it as the
+expected HEAD so later patches are incremental. It is not review approval, completes no
+task, satisfies no admission requirement, and must be recorded in EXPERIMENT-PLAN.md with
+the findings that remain open. The remaining scope is then split into new task ids with
+fresh attempt budgets rather than resetting the exhausted task again.
+
 Tasks that were delivered manually from `codex/*` worktrees before the driver
 ran them are recorded in `events.jsonl` as `task-completed` events carrying
 `manual: true` and `integrated_from` revisions, with `checkpoint` set to the

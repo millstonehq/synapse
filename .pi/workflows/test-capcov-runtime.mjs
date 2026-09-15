@@ -27,20 +27,20 @@ assert.equal(fs.existsSync(worker), false, "worker worktree is removed after cap
 const harness = execFileSync("node", [".pi/workflows/datalog-runtime-harness.mjs", "--task", "semantic-contract", "--dry-run"], { cwd: process.cwd(), encoding: "utf8" });
 assert.match(harness, /semantic-contract/);
 const source = fs.readFileSync(new URL("../extensions/capcov-experiment.ts", import.meta.url), "utf8");
-for (const marker of ["task-fanout-completed", "fanout-patch-applied", "wave-checkpoint", "latestSmoke", "wave-repair", "manifest-checkpoint"]) assert.match(source, new RegExp(marker));
+for (const marker of ["task-fanout-completed", "fanout-patch-applied", "wave-checkpoint", "latestSmoke", "wave-repair", "manifest-checkpoint", "human-checkpoint"]) assert.match(source, new RegExp(marker));
 assert.match(source, /function nextTask[\s\S]*return undefined;/);
 const config = JSON.parse(fs.readFileSync(new URL("./capcov-experiment.json", import.meta.url), "utf8"));
 const modern = config.tasks.filter((task) => !config.legacyTaskIds.includes(task.id));
 assert.ok(modern.every((task) => task.gates.every((gate) => gate.failureKind)), "modern gates classify failures in the manifest");
 assert.ok(modern.every((task) => task.gates.every((gate) => gate.command.slice(0, 2).join(" ") === "nix develop")), "modern gates use the pinned Nix environment");
 assert.match(config.tasks.find((task) => task.id === "souffle-kernel").gates[0].command.join(" "), /command -v souffle/);
-assert.match(config.tasks.find((task) => task.id === "datalog-differential").gates[0].command.join(" "), /test_differential/);
+assert.match(config.tasks.find((task) => task.id === "kernel-closure-integrate").gates[0].command.join(" "), /test_differential/);
 const scipDifferential = config.tasks.find((task) => task.id === "scip-datalog-differential");
 assert.equal(scipDifferential.gates[0].failureKind, "differential-mismatch");
 assert.match(scipDifferential.gates[0].command.join(" "), /test_differential_static/);
 assert.match(config.tasks.find((task) => task.id === "scip-toolchain").gates.map((gate) => gate.command.join(" ")).join("\n"), /scip-go/);
 assert.match(config.tasks.find((task) => task.id === "scip-target-go-pilot").gates[0].command.join(" "), /CAPCOV_GO_FIXTURE_ROOT/);
-for (const id of ["souffle-kernel", "datalog-differential", "scip-datalog-differential", "scip-fact-export", "scip-target-go-pilot"]) {
+for (const id of ["souffle-kernel", "kernel-closure", "differential-closure", "kernel-closure-integrate", "scip-datalog-differential", "scip-fact-export", "scip-target-go-pilot"]) {
   const joined = config.tasks.find((task) => task.id === id).gates.map((gate) => gate.command.join(" ")).join("\n");
   assert.match(joined, /skipped/, `${id} gates reject skipped tests instead of passing on them`);
 }
