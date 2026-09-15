@@ -4,7 +4,7 @@
    "derivation_sha256": "267bc470a7694c17a4f1efb0227a6d99c6fab7f84a2e68b3d2cdf53c900eadd3",
    "leaves": 3,
    "nodes": 13,
-   "sha256": "ea8ce51df9e038f45fd96d87e2553c436ff7cbdf5d13a71ee4b5fcd13bb019f9",
+   "sha256": "b91c5fed12aadd9414fa66b68a84c1a4aa70ce051bd3a32d111303c1076f55e9",
    "steps": 0,
    "truncated": false
   },
@@ -12,7 +12,7 @@
    "derivation_sha256": "02bd7b2203e9f3c37a7ea5663b7262eb2b98ead8dc91eee1fc9d708c6180b6f7",
    "leaves": 4,
    "nodes": 173,
-   "sha256": "3d69d89af0bf5ebdac386e7fe55bbff8bce82443268e04cf7926625e13372793",
+   "sha256": "45a0a19307486364ba1bb3f03ea073191901d5e2e44c13f7e43cd4da73e4839b",
    "steps": 1,
    "truncated": false
   }
@@ -40,9 +40,9 @@
   }
  },
  "combined": {
-  "bundle_digest": "413014e24facd45783b79eb3905bafb49773c853ea137e6aee71658ff089e253",
+  "bundle_digest": "9de9168116247a55c96a7ba4c0dc4be579650a95de48dd2037fd8759b914b590",
   "facts": 20619,
-  "ir_digest": "95ec166ef72edd6f419a93f0641432d70f349c67c1cb6daa438eb3723be4406a",
+  "ir_digest": "d1b1a82d598b4b1592836a6668f527eb4ec1a9781824e55f22318d5fa9676bdb",
   "relations": 69,
   "rules": 28,
   "rules_digest": "1490a850b07272f5c53a750d7cbc8375fb3538cbd70b03e333c3b87a607160ec"
@@ -62,7 +62,7 @@
   "unrooted_symbols": 115
  },
  "export": {
-  "exported_bundle_digest": "89d2988a92a4f5e17d9eea77002a07b44768c875ce071660c40245d36771e4f0",
+  "exported_bundle_digest": "65f829656a8f1f674bd96f204ea2b438c93e0a47bfdf24cb9fb09f72197fa7aa",
   "facts": 20617,
   "index_identity": "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
   "index_identity_kind": "static-relations-v1",
@@ -73,9 +73,9 @@
   },
   "messages": [
    "9 document(s) outside the indexed tree are not exported (paths escaping the project root; recorded as metadata out_of_tree_documents)",
-   "scip_index.project_root recorded as 'file:///fg-go'; the indexer reported 'file:///private/tmp/nix-shell.pkTq7q/capcov-fg-go-pilot-1_plvvgw/fg-go' (host path, not a fact)",
+   "scip_index.project_root recorded as 'file:///fg-go'; the indexer reported 'file:///private/tmp/nix-shell.ODRmIJ/capcov-fg-go-pilot-uis1cwa7/fg-go' (host path, not a fact)",
    "105 type reference(s) at module scope have no referrer symbol and no section-29 relation; not exported",
-   "index identity 0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b (static-relations-v1); the index file digest a3141c39c7f04f4e0a120896c12bf3b5c29e0b2a14bf6c01697b82b66496aa25 (binary) is a run receipt, not identity"
+   "index identity 0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b (static-relations-v1); the index file digest 9ae3abaa56da66f01b8cf29a70424c6cf9d52deaa761814399b1fb995b7ef3f7 (binary) is a run receipt, not identity"
   ],
   "out_of_tree_documents": [
    {
@@ -172,9 +172,9 @@
   ]
  },
  "go_environment": {
-  "GOCACHE": "/tmp/nix-shell.pkTq7q/capcov-fg-go-pilot/gocache",
+  "GOCACHE": "/tmp/nix-shell.ODRmIJ/capcov-fg-go-pilot/gocache",
   "GOFLAGS": "-mod=mod",
-  "GOMODCACHE": "/tmp/nix-shell.pkTq7q/capcov-fg-go-pilot/gomodcache",
+  "GOMODCACHE": "/tmp/nix-shell.ODRmIJ/capcov-fg-go-pilot/gomodcache",
   "GOTOOLCHAIN": "local"
  },
  "index_file": {
@@ -182,7 +182,7 @@
   "documents": 105,
   "kind": "binary receipt, not identity",
   "occurrences": 28284,
-  "sha256": "a3141c39c7f04f4e0a120896c12bf3b5c29e0b2a14bf6c01697b82b66496aa25",
+  "sha256": "9ae3abaa56da66f01b8cf29a70424c6cf9d52deaa761814399b1fb995b7ef3f7",
   "tool_name": "scip-go",
   "tool_version": "0.2.7"
  },
@@ -323,10 +323,10 @@
   "root": "/Users/reuben/fg/fg-go"
  },
  "timings_seconds": {
-  "compare": 80.2,
-  "export": 6.3,
-  "index": 105.5,
-  "total": 216.0
+  "compare": 24.1,
+  "export": 2.4,
+  "index": 32.2,
+  "total": 62.8
  },
  "tools": {
   "go": {
