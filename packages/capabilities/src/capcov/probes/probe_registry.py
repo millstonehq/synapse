@@ -3,8 +3,8 @@
 A probe is not a Python ABC. It is a process (or an in-process driver) bound to a
 fixed env contract and a single artifact: it runs the target's own exercises,
 observes what they actually touched, and writes one ``observed`` artifact. The
-default ``pytest`` probe is exactly today's behaviour; ``browser`` and ``load``
-are the other two reality-side observers.
+default ``pytest`` probe is exactly today's behaviour; ``browser``, ``load`` and
+``har`` are the other reality-side observers.
 
 This module is the sibling of ``capcov.adapters``. The adapter registry names the
 static (declared) readers; this registry names the runtime (actual) observers.
@@ -41,6 +41,7 @@ REGISTRY = {
     "pytest": "capcov.probes.pytest_probe",
     "browser": "capcov.probes.browser_probe",
     "load": "capcov.probes.load_probe",
+    "har": "capcov.probes.har_probe",
 }
 
 # The unified observe env contract (design §1.3). `cmd_observe` sets these; every
