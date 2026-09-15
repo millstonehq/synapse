@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Iterable
 
 from .ir import Bundle, Claim, Constant, Evidence, EvidenceMapping, OutputKind, OutputTemplate
 
@@ -92,14 +92,27 @@ def _relevant(bundle: Bundle, claim_id: str, evidence_id: str, proof: set[str]) 
     return False
 
 
-def _triggered(output: OutputTemplate, relevant: set[str], claim_state: str | None) -> bool:
+def relevant_evidence_ids(bundle: Bundle, claim_id: str,
+                          active_evidence: set[str] | frozenset[str],
+                          proof_evidence: set[str] | frozenset[str] = frozenset()) -> set[str]:
+    """Return active Evidence ids scoped to one claim's causal declarations."""
+    proof = set(proof_evidence)
+    return {evidence_id for evidence_id in active_evidence
+            if _relevant(bundle, claim_id, evidence_id, proof)}
+
+
+def output_triggered(output: OutputTemplate, relevant: set[str],
+                     claim_state: str | Iterable[str] | None) -> bool:
+    """Apply every declarative output condition to a reviewed evidence set."""
     if not set(output.requires_all_evidence).issubset(relevant):
         return False
     if output.requires_any_evidence and not set(output.requires_any_evidence) & relevant:
         return False
     if set(output.excludes_evidence) & relevant:
         return False
-    return output.when_claim in (None, "always") or output.when_claim == claim_state
+    states = ({claim_state} if isinstance(claim_state, str)
+              else set(claim_state or ()))
+    return output.when_claim in (None, "always") or output.when_claim in states
 
 
 def render_outputs(bundle: Bundle, claim_id: str, active_evidence: set[str] | frozenset[str], proof_evidence: VerifiedProofEvidence | None = None, claim_state: str | None = None, missing_relations: set[str] | frozenset[str] = frozenset()) -> tuple[dict[str, Any], ...]:
@@ -113,10 +126,10 @@ def render_outputs(bundle: Bundle, claim_id: str, active_evidence: set[str] | fr
     if proof_evidence and not proof_evidence.leaf_ids.issubset(known_ids):
         raise ValueError("proof contains unknown evidence leaves")
     proof = set(proof_evidence.leaf_ids) if proof_evidence else set()
-    relevant = {evidence_id for evidence_id in active if _relevant(bundle, claim_id, evidence_id, proof)}
+    relevant = relevant_evidence_ids(bundle, claim_id, active, proof)
     rendered = []
     for output in bundle.outputs:
-        if output.claim_id != claim_id or not _triggered(output, relevant, claim_state):
+        if output.claim_id != claim_id or not output_triggered(output, relevant, claim_state):
             continue
         if output.evidence_id and output.evidence_id not in relevant:
             continue

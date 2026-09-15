@@ -16,7 +16,7 @@
     "operation": "read"
   },
   "rules": [],
-  "outputs": [{"kind":"observed","claim_id":"claim-explicit-denial","evidence_id":"fact-explicit-rejection"},{"kind":"observed","claim_id":"claim-missing-denial","evidence_id":"fact-missing"},{"kind":"forbidden","claim_id":"claim-missing-denial","evidence_id":"fact-missing"}],
+  "outputs": [{"kind":"observed","claim_id":"claim-explicit-denial","evidence_id":"fact-explicit-rejection"},{"kind":"observed","claim_id":"claim-missing-denial","evidence_id":"fact-missing"},{"kind":"forbidden","claim_id":"claim-missing-denial","evidence_id":"fact-missing"},{"kind":"missing_premise","claim_id":"claim-missing-denial","relation":"authorization_rejected","fields":{"reason":{"value":"no explicit rejection for the claimed actor"}}}],
   "claims": [
     {
       "id": "claim-explicit-denial",
@@ -225,7 +225,12 @@
           "fact-missing"
         ],
         "discrepancies": [],
-        "missing_premises": []
+        "missing_premises": [
+          {
+            "relation": "authorization_rejected",
+            "reason": "no explicit rejection for the claimed actor"
+          }
+        ]
       }
     }
   },

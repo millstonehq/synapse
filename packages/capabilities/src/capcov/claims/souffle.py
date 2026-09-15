@@ -7,7 +7,7 @@ does not read corpus expectations or call another evaluator.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import hashlib
 import os
 from pathlib import Path
@@ -15,17 +15,29 @@ import shutil
 import subprocess
 import tempfile
 import time
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
-from .ir import (Atom, Bundle, Comparison, Constant, Rule, Term, TypeName,
-                 Variable, canonical_json, digest)
+from .ir import (Atom, Bundle, Comparison, Constant, OutputKind, Rule, Term,
+                 TypeName, Variable, canonical_dict, canonical_json, digest)
+from .output import output_triggered, relevant_evidence_ids
 from .validation import assert_valid
-from .verdicts import EvaluationResult, OperationalStatus, SemanticVerdict, verdict
+from .verdicts import EvaluationBasis, EvaluationResult, OperationalStatus, SemanticVerdict, verdict
 
 
 MAX_SECONDS = 30.0
 MAX_ROWS = 100_000
 MAX_OUTPUT_BYTES = 16 * 1024 * 1024
+MAX_PROCESSES = 64
+
+
+class SouffleUnavailable(RuntimeError):
+    """The requested Souffle executable could not be resolved or started."""
+
+
+@dataclass
+class _ExecutionBudget:
+    deadline: float
+    remaining_processes: int
 
 
 @dataclass(frozen=True)
@@ -34,6 +46,7 @@ class SouffleProgram:
     program: str
     facts: Mapping[str, str]
     program_digest: str
+    outputs: tuple[str, ...]
     runtime: str = "souffle-2.5"
 
 
@@ -80,27 +93,45 @@ def _stype(type_name: TypeName) -> str:
     raise ValueError(f"Souffle cannot represent {type_name.value}")
 
 
+def _symbol_text(value: Any, type_name: TypeName | None) -> str:
+    return canonical_json(value) if type_name is TypeName.JSON_METADATA_ONLY else str(value)
+
+
+def _encode_symbol(value: Any, type_name: TypeName | None) -> str:
+    """Use one reversible, TSV-safe representation in facts and rules.
+
+    Hexadecimal UTF-8 preserves equality and Unicode scalar ordering while
+    avoiding Souffle's file delimiters, quotes, and control-character grammar.
+    """
+    return "x" + _symbol_text(value, type_name).encode("utf-8").hex()
+
+
+def _decode_symbol(value: str) -> str:
+    if not value.startswith("x"):
+        raise ValueError("malformed encoded Souffle symbol")
+    try:
+        return bytes.fromhex(value[1:]).decode("utf-8")
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise ValueError("malformed encoded Souffle symbol") from exc
+
+
 def _quote(value: Any, type_name: TypeName | None = None) -> str:
-    if type_name is TypeName.BOOLEAN:
+    if type_name is TypeName.BOOLEAN or (type_name is None and isinstance(value, bool)):
         return "1" if value else "0"
-    if type_name in {TypeName.INTEGER, TypeName.UNSIGNED, TypeName.TIMESTAMP}:
+    if (type_name in {TypeName.INTEGER, TypeName.UNSIGNED, TypeName.TIMESTAMP}
+            or (type_name is None and isinstance(value, int))):
         return str(int(value))
-    # Souffle string literals use C-style escapes.  json's string escaping is
-    # compatible for the canonical symbol values used by the IR.
     import json
-    return json.dumps(canonical_json(value) if type_name is TypeName.JSON_METADATA_ONLY else str(value), ensure_ascii=False)
+    return json.dumps(_encode_symbol(value, type_name), ensure_ascii=False)
 
 
 def _fact_field(value: Any, type_name: TypeName) -> str:
-    """Serialize one TSV fact field (symbols are unquoted in Souffle facts)."""
+    """Serialize one TSV fact field using the rule literal encoding."""
     if type_name is TypeName.BOOLEAN:
         return "1" if value else "0"
     if type_name in {TypeName.INTEGER, TypeName.UNSIGNED, TypeName.TIMESTAMP}:
         return str(int(value))
-    text = canonical_json(value) if type_name is TypeName.JSON_METADATA_ONLY else str(value)
-    if any(ch in text for ch in "\t\r\n"):
-        raise ValueError("symbol values containing TSV control characters are unsupported")
-    return text
+    return _encode_symbol(value, type_name)
 
 
 def _term(term: Term, columns, index: int, variable_aliases=None) -> str:
@@ -127,10 +158,29 @@ def _comparison(c: Comparison, variable_aliases=None) -> str:
     return f"{simple(c.left)} {c.operator} {simple(c.right)}"
 
 
-def translate_bundle(bundle: Bundle) -> SouffleProgram:
+def translate_bundle(bundle: Bundle, *, outputs: Iterable[str] | None = None) -> SouffleProgram:
     """Translate a validated bundle into deterministic Souffle source/facts."""
     assert_valid(bundle)
     relation_map = {r.name: r for r in bundle.relations}
+    requested_outputs = set(relation_map if outputs is None else outputs)
+    unknown_outputs = requested_outputs - set(relation_map)
+    if unknown_outputs:
+        raise ValueError(f"unknown Souffle output relations: {sorted(unknown_outputs)}")
+    # Claim folding may need a derived claim/domain/diagnostic/mapping relation
+    # even when the caller omits it from the payload subset.  Primitive rows
+    # are reconstructed from facts; only derived semantic inputs must be
+    # emitted internally.
+    semantic_names = {claim.relation for claim in bundle.claims}
+    domains = {claim.domain for claim in bundle.claims if claim.domain}
+    semantic_names.update(domains)
+    semantic_names.update(decl.name for decl in bundle.relations
+                          if decl.modality.value == "completeness"
+                          and decl.completes in domains)
+    semantic_names.update(mapping.evidence_relation for mapping in bundle.mappings)
+    semantic_names.update(diagnostic.trigger_relation for diagnostic in bundle.diagnostics)
+    requested_outputs.update(name for name in semantic_names
+                             if name is not None and not relation_map[name].primitive)
+    output_names = tuple(sorted(requested_outputs))
     relation_aliases = _aliases([r.name for r in bundle.relations])
     column_aliases = {r.name: _aliases([c.name for c in r.columns]) for r in bundle.relations}
     lines = ["// Generated by capcov.claims.souffle; do not edit."]
@@ -140,12 +190,11 @@ def translate_bundle(bundle: Bundle) -> SouffleProgram:
     for relation in bundle.relations:
         fields = ", ".join(f"{column_aliases[relation.name][c.name]}:{_stype(c.type)}" for c in relation.columns)
         lines.append(f".decl {relation_aliases[relation.name]}({fields})")
-    # Every relation has an input file.  This keeps primitive and derived
-    # relations on the same deterministic representation and permits a later
-    # producer to add facts without regenerating declarations.
     for relation in bundle.relations:
-        lines.append(f'.input {relation_aliases[relation.name]}(IO=file, filename="facts/{relation_aliases[relation.name]}.facts")')
-        lines.append(f'.output {relation_aliases[relation.name]}(IO=file, filename="outputs/{relation_aliases[relation.name]}.csv")')
+        if relation.primitive:
+            lines.append(f'.input {relation_aliases[relation.name]}(IO=file, filename="facts/{relation_aliases[relation.name]}.facts")')
+        if relation.name in output_names:
+            lines.append(f'.output {relation_aliases[relation.name]}(IO=file, filename="outputs/{relation_aliases[relation.name]}.csv")')
     for rule in bundle.rules:
         var_names = []
         for term in [*rule.head.terms, *(t for a in rule.body if isinstance(a, Atom) for t in a.terms)]:
@@ -160,8 +209,14 @@ def translate_bundle(bundle: Bundle) -> SouffleProgram:
             if source_atom is None:
                 raise ValueError(f"aggregation {agg.name} has no positive source atom")
             value_index = [c.name for c in source.columns].index(agg.value_variable)
-            source_text = _atom(source_atom, relation_map, relation_aliases, column_aliases, variable_aliases)
-            value = variable_aliases.get(agg.value_variable, _identifier(agg.value_variable))
+            original_source_text = _atom(source_atom, relation_map, relation_aliases, column_aliases, variable_aliases)
+            grouped = set(agg.group_by) | set(source.context_indices)
+            aggregate_overrides = {i: _identifier(f"__capcov_{agg.name}_{column.name}")
+                                   for i, column in enumerate(source.columns) if column.name not in grouped}
+            source_text = _atom(source_atom, relation_map, relation_aliases, column_aliases,
+                                variable_aliases, aggregate_overrides)
+            value = aggregate_overrides.get(value_index, variable_aliases.get(agg.value_variable,
+                                                                              _identifier(agg.value_variable)))
             if agg.operator == "count": expression = f"count : {source_text}"
             elif agg.operator in {"sum", "min", "max"}:
                 op = agg.operator
@@ -179,36 +234,105 @@ def translate_bundle(bundle: Bundle) -> SouffleProgram:
                 helper = _identifier("__capcov_agg_" + agg.name)
                 helper = _aliases([helper])[helper]
                 source_columns = {column.name: column.type for column in source.columns}
-                group_terms = [variable_aliases.get(name, _identifier(name)) for name in agg.group_by]
-                group_types = [_stype(source_columns[name]) for name in agg.group_by]
-                helper_fields = [g + ':' + t for g, t in zip(group_terms, group_types)] + ["n_true:number", "n_total:number"]
-                extra_decls.append(f".decl {helper}({', '.join(helper_fields)})")
-                helper_body = [x for x in body if x != source_text]
-                true_source = _atom(source_atom, relation_map, relation_aliases, column_aliases, variable_aliases, {value_index: "1"})
-                helper_body.extend([f"n_total = count : {source_text}", f"n_true = count : {true_source}"])
-                helper_call = ", ".join([*group_terms, "n_true", "n_total"])
-                extra_rules.append(f"{helper}({helper_call}) :- {', '.join(helper_body)}.")
-                body = [x for x in body if x != source_text]
-                body.append(f"{helper}({helper_call})")
+                source_names = [column.name for column in source.columns]
+                group_names = list(dict.fromkeys((*agg.group_by, *source.context_indices)))
+                group_terms = [_term(source_atom.terms[source_names.index(name)], source.columns,
+                                     source_names.index(name), variable_aliases) for name in group_names]
+                group_types = [_stype(source_columns[name]) for name in group_names]
+                helper_fields = [f"g{i}:{kind}" for i, kind in enumerate(group_types)] + ["n_true:number", "n_total:number"]
+                helper_body = [x for x in body if x != original_source_text]
+                true_overrides = dict(aggregate_overrides); true_overrides[value_index] = "1"
+                true_source = _atom(source_atom, relation_map, relation_aliases, column_aliases,
+                                    variable_aliases, true_overrides)
+                helper_args = [*group_terms, "n_true", "n_total"]
                 if agg.operator == "any":
-                    body.append("n_true > 0")
+                    helper_body.extend([f"n_total = count : {source_text}",
+                                        f"n_true = count : {true_source}"])
                 else:
-                    # all requires the declared finite domain and compares
-                    # source cardinality to that domain's cardinality.
-                    domain_atom = next((a for a in rule.body if isinstance(a, Atom) and a.relation == agg.domain and not a.negated), None)
+                    domain_atom = next((a for a in rule.body if isinstance(a, Atom)
+                                        and a.relation == agg.domain and not a.negated), None)
                     if domain_atom is None:
                         raise ValueError("all aggregation requires a domain atom")
-                    domain_text = _atom(domain_atom, relation_map, relation_aliases, column_aliases, variable_aliases)
-                    body.append("n_total > 0")
-                    body.append("n_true = n_total")
-                target_i = [c.name for c in relation_map[rule.head.relation].columns].index(agg.value_variable)
-                head = _atom(rule.head, relation_map, relation_aliases, column_aliases, variable_aliases, {target_i: "1"})
+                    domain_decl = relation_map[agg.domain]
+                    domain_names = [column.name for column in domain_decl.columns]
+                    # Cardinality alone is unsound: source keys {a,c} and
+                    # domain keys {a,b} have equal sizes.  Project both sets to
+                    # their shared identity columns, count their intersection,
+                    # and separately reject any false source row.  Projection
+                    # relations also collapse source-only dimensions exactly
+                    # like the Python evaluator's set projection.
+                    shared_names = [name for name in domain_names
+                                    if name in source_names and name != agg.value_variable]
+                    member_names = [name for name in shared_names if name not in group_names]
+                    source_keys = _identifier(helper + "_source_keys")
+                    domain_keys = _identifier(helper + "_domain_keys")
+                    shared_keys = _identifier(helper + "_shared_keys")
+                    key_names = [*group_names, *member_names]
+                    key_types = [_stype(source_columns[name]) for name in key_names]
+                    key_fields = ", ".join(f"k{i}:{kind}" for i, kind in enumerate(key_types))
+                    extra_decls.extend((f".decl {source_keys}({key_fields})",
+                                        f".decl {domain_keys}({key_fields})",
+                                        f".decl {shared_keys}({key_fields})"))
+                    source_key_terms = [_term(source_atom.terms[source_names.index(name)], source.columns,
+                                              source_names.index(name), variable_aliases)
+                                        for name in key_names]
+                    domain_key_terms = [_term(domain_atom.terms[domain_names.index(name)], domain_decl.columns,
+                                              domain_names.index(name), variable_aliases)
+                                        for name in key_names]
+                    source_key_call = ", ".join(source_key_terms)
+                    domain_key_call = ", ".join(domain_key_terms)
+                    key_variables = [_identifier(f"__capcov_{agg.name}_key_{i}")
+                                     for i in range(len(key_names))]
+                    key_variable_call = ", ".join(key_variables)
+                    extra_rules.extend((
+                        f"{source_keys}({source_key_call}) :- {original_source_text}.",
+                        f"{domain_keys}({domain_key_call}) :- "
+                        f"{_atom(domain_atom, relation_map, relation_aliases, column_aliases, variable_aliases)}.",
+                        f"{shared_keys}({key_variable_call}) :- {source_keys}({key_variable_call}), "
+                        f"{domain_keys}({key_variable_call}).",
+                    ))
+                    count_tail = ["_" for _ in member_names]
+                    source_count_call = ", ".join([*group_terms, *count_tail])
+                    false_overrides = dict(aggregate_overrides); false_overrides[value_index] = "0"
+                    false_source = _atom(source_atom, relation_map, relation_aliases, column_aliases,
+                                         variable_aliases, false_overrides)
+                    helper_fields.extend(("n_domain:number", "n_shared:number", "n_false:number"))
+                    helper_body.extend((f"n_total = count : {source_keys}({source_count_call})",
+                                        f"n_true = count : {true_source}",
+                                        f"n_domain = count : {domain_keys}({source_count_call})",
+                                        f"n_shared = count : {shared_keys}({source_count_call})",
+                                        f"n_false = count : {false_source}"))
+                    helper_args.extend(("n_domain", "n_shared", "n_false"))
+                extra_decls.append(f".decl {helper}({', '.join(helper_fields)})")
+                helper_call = ", ".join(helper_args)
+                extra_rules.append(f"{helper}({helper_call}) :- {', '.join(helper_body)}.")
+                body = [x for x in body if x != original_source_text]
+                body.append(f"{helper}({helper_call})")
+                false_bodies = []
+                if agg.operator == "any":
+                    false_bodies.append([*body, "n_true = 0"])
+                    body.append("n_true > 0")
+                else:
+                    false_bodies.extend(([*body, "n_total != n_domain"],
+                                         [*body, "n_shared != n_domain"],
+                                         [*body, "n_false > 0"]))
+                    body.extend(["n_domain > 0", "n_total = n_domain",
+                                 "n_shared = n_domain", "n_false = 0"])
+                head_names = [c.name for c in relation_map[rule.head.relation].columns]
+                if agg.value_variable in head_names:
+                    target_i = head_names.index(agg.value_variable)
+                    false_head = _atom(rule.head, relation_map, relation_aliases, column_aliases,
+                                       variable_aliases, {target_i: "0"})
+                    for false_body in false_bodies:
+                        lines.append(f"{false_head} :- {', '.join(false_body)}.")
+                    head = _atom(rule.head, relation_map, relation_aliases, column_aliases,
+                                 variable_aliases, {target_i: "1"})
                 lines.append(f"{head} :- {', '.join(body)}.")
                 continue
             # Souffle's aggregate is a body constraint whose result binds the
             # head value variable.  Remove the source atom from the ordinary
             # body; the aggregate expression supplies it.
-            body = [x for x in body if x != source_text]
+            body = [x for x in body if x != original_source_text]
             head_term = rule.head.terms[[c.name for c in relation_map[rule.head.relation].columns].index(agg.value_variable)]
             head_value = variable_aliases.get(head_term.name, _identifier(head_term.name)) if isinstance(head_term, Variable) else value
             body.append(f"{head_value} = {expression}")
@@ -227,43 +351,64 @@ def translate_bundle(bundle: Bundle) -> SouffleProgram:
         facts[relation_aliases[relation.name]] = "\n".join(sorted(rows)) + ("\n" if rows else "")
     bundle_digest = digest(bundle)
     program_digest = hashlib.sha256(program.encode()).hexdigest()
-    return SouffleProgram(bundle_digest, program, facts, program_digest)
+    return SouffleProgram(bundle_digest, program, facts, program_digest, output_names)
 
 
 def _parse_value(raw: str, type_name: TypeName) -> Any:
     if type_name is TypeName.BOOLEAN: return bool(int(raw))
     if type_name in {TypeName.INTEGER, TypeName.UNSIGNED, TypeName.TIMESTAMP}: return int(raw)
+    decoded = _decode_symbol(raw)
     if type_name is TypeName.JSON_METADATA_ONLY:
         import json
-        return json.loads(raw)
-    return raw
+        return json.loads(decoded)
+    return decoded
 
 
 def run_bundle(bundle: Bundle, *, executable: str = "souffle", timeout: float = MAX_SECONDS,
-               max_rows: int = MAX_ROWS, max_output_bytes: int = MAX_OUTPUT_BYTES) -> SouffleResult:
-    """Run Souffle in a bounded temporary directory and normalize outputs."""
-    translated = translate_bundle(bundle)
+               max_rows: int = MAX_ROWS, max_output_bytes: int = MAX_OUTPUT_BYTES,
+               max_processes: int = MAX_PROCESSES,
+               outputs: Iterable[str] | None = None,
+               _budget: _ExecutionBudget | None = None) -> SouffleResult:
+    """Run Souffle with one cumulative deadline/process budget per evaluation."""
+    resolved = shutil.which(executable)
+    if resolved is None:
+        raise SouffleUnavailable(f"Souffle executable not found: {executable}")
+    started = time.monotonic()
+    if _budget is None:
+        if max_processes < 1:
+            raise OverflowError("Souffle process limit must be positive")
+        _budget = _ExecutionBudget(started + timeout, max_processes)
+    translated = translate_bundle(bundle, outputs=outputs)
     relation_map = {r.name: r for r in bundle.relations}
     relation_aliases = _aliases([r.name for r in bundle.relations])
     root = Path(tempfile.mkdtemp(prefix="capcov-souffle-"))
-    started = time.monotonic()
     try:
         (root / "facts").mkdir(); (root / "outputs").mkdir()
         (root / "program.dl").write_text(translated.program, encoding="utf-8")
         for relation in bundle.relations:
             alias = relation_aliases[relation.name]
             (root / "facts" / f"{alias}.facts").write_text(translated.facts[alias], encoding="utf-8")
-        proc = subprocess.Popen([executable, "--jobs", "1", "program.dl"], cwd=root,
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        deadline = time.monotonic() + timeout
+        input_rows = len(bundle.facts)
+        if input_rows > max_rows:
+            raise OverflowError(f"Souffle input rows exceed {max_rows}")
+        if _budget.remaining_processes <= 0:
+            raise OverflowError(f"Souffle evaluation exceeded {max_processes} processes")
+        if time.monotonic() > _budget.deadline:
+            raise TimeoutError(f"Souffle evaluation exceeded {timeout:.1f}s total")
+        _budget.remaining_processes -= 1
+        try:
+            proc = subprocess.Popen([resolved, "--jobs", "1", "program.dl"], cwd=root,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        except OSError as exc:
+            raise SouffleUnavailable(f"Souffle executable could not be started: {resolved}: {exc}") from exc
         while proc.poll() is None:
             output_bytes = sum(p.stat().st_size for p in (root / "outputs").glob("*") if p.is_file())
             if output_bytes > max_output_bytes:
                 proc.kill(); proc.communicate()
                 raise OverflowError(f"Souffle outputs exceed {max_output_bytes} bytes during execution")
-            if time.monotonic() > deadline:
+            if time.monotonic() > _budget.deadline:
                 proc.kill(); proc.communicate()
-                raise TimeoutError(f"Souffle exceeded {timeout:.1f}s")
+                raise TimeoutError(f"Souffle evaluation exceeded {timeout:.1f}s total")
             time.sleep(0.005)
         stdout, stderr = proc.communicate()
         if proc.returncode:
@@ -272,7 +417,10 @@ def run_bundle(bundle: Bundle, *, executable: str = "souffle", timeout: float = 
         if output_bytes > max_output_bytes:
             raise OverflowError(f"Souffle outputs exceed {max_output_bytes} bytes")
         relations: dict[str, tuple[tuple[Any, ...], ...]] = {}
-        total_rows = 0
+        total_rows = input_rows
+        fact_rows: dict[str, list[tuple[Any, ...]]] = {name: [] for name in relation_map}
+        for fact in bundle.facts:
+            fact_rows[fact.relation].append(tuple(term.value for term in fact.terms if isinstance(term, Constant)))
         for name, relation in relation_map.items():
             path = root / "outputs" / f"{relation_aliases[name]}.csv"
             rows = []
@@ -285,15 +433,48 @@ def run_bundle(bundle: Bundle, *, executable: str = "souffle", timeout: float = 
                     fields = line.split("\t")
                     if len(fields) != relation.arity: raise ValueError(f"malformed output row for {name}")
                     rows.append(tuple(_parse_value(v, c.type) for v, c in zip(fields, relation.columns)))
-            total_rows += len(rows)
-            if total_rows > max_rows: raise OverflowError(f"Souffle derived rows exceed {max_rows}")
+            # Primitive inputs omitted from the requested output subset remain
+            # part of the normalized relation model and resource accounting.
+            if name not in translated.outputs and relation.primitive:
+                rows = fact_rows[name]
+            if name in translated.outputs and relation.primitive:
+                # Output rows include inputs; they were already counted above.
+                total_rows += max(0, len(rows) - len(fact_rows[name]))
+            else:
+                total_rows += len(rows) if not relation.primitive else 0
+            if total_rows > max_rows: raise OverflowError(f"Souffle rows exceed {max_rows}")
             # JSON metadata values decode to mappings and are intentionally not
             # hashable.  Canonical keys preserve set semantics without mutating
             # or stringifying the public normalized values.
             unique = {canonical_json(row): row for row in rows}
             relations[name] = tuple(unique[key] for key in sorted(unique))
         output_digest = hashlib.sha256(b"".join((k + "=" + repr(v)).encode() for k, v in sorted(relations.items()))).hexdigest()
-        claim_results = tuple(_claim_result(claim, relation_map[claim.relation], relations, relation_map) for claim in bundle.claims)
+        claim_results = []
+        eligible_cache: dict[str, Mapping[str, tuple[tuple[Any, ...], ...]]] = {}
+        for claim in bundle.claims:
+            eligible = _eligible_bundle(claim, bundle, relations, relation_map)
+            semantic_relations = relations
+            if eligible is not None:
+                # Souffle independently recomputes closure after removing only
+                # fact propositions whose every producer path depends on the
+                # claim's forbidden assumption.  This preserves an independent
+                # producer for the same proposition and avoids claim-global
+                # revocation based on unrelated evidence.
+                eligible_digest = digest(eligible)
+                semantic_relations = eligible_cache.get(eligible_digest)
+                if semantic_relations is None:
+                    semantic_relations = run_bundle(
+                        eligible, executable=resolved, timeout=timeout,
+                        max_rows=max_rows, max_output_bytes=max_output_bytes,
+                        max_processes=max_processes,
+                        outputs=(decl.name for decl in eligible.relations),
+                        _budget=_budget,
+                    ).relations
+                    eligible_cache[eligible_digest] = semantic_relations
+            claim_results.append(_claim_result(claim, relation_map[claim.relation],
+                                               semantic_relations, relations,
+                                               relation_map, bundle))
+        claim_results = tuple(claim_results)
         runtime = next((line.strip() for line in stdout.splitlines() if line.strip().startswith("Version:")), translated.runtime)
         evidence_digest = hashlib.sha256((translated.bundle_digest + translated.program_digest + runtime + output_digest).encode()).hexdigest()
         return SouffleResult(translated.bundle_digest, translated.program_digest, runtime, relations, claim_results, output_digest, evidence_digest, time.monotonic() - started)
@@ -318,25 +499,304 @@ def _claim_matches(row, terms, relation, context):
     return True
 
 
-def _claim_result(claim, relation, relations, relation_map):
+def _claim_values(claim, relation):
+    values = dict(claim.context.as_dict())
+    for column, term in zip(relation.columns, claim.terms):
+        if isinstance(term, Constant): values[column.name] = term.value
+    return values
+
+
+def _mapping_matches(claim, mapping, relations, relation_map,
+                     variable_values=None):
+    """Return source rows and the claim-variable environment they extend."""
+    claim_relation = relation_map[claim.relation]
+    claim_names = [column.name for column in claim_relation.columns]
+    claim_values = _claim_values(claim, claim_relation)
+    source = relation_map[mapping.evidence_relation]
+    names = [column.name for column in source.columns]
+    matched = []
+    for row in relations.get(mapping.evidence_relation, ()):
+        values = dict(zip(names, row)); next_variables = dict(variable_values or {}); ok = True
+        for left, right in mapping.bindings:
+            if left not in claim_names or right not in values:
+                ok = False; break
+            value = values[right]; term = claim.terms[claim_names.index(left)]
+            if isinstance(term, Constant) and value != term.value:
+                ok = False; break
+            if isinstance(term, Variable):
+                previous = next_variables.setdefault(term.name, value)
+                if previous != value:
+                    ok = False; break
+            if left in claim_values and value != claim_values[left]:
+                ok = False; break
+        if not ok:
+            continue
+        if any(values[name] != value for name, value in claim.context.as_dict().items() if name in values):
+            continue
+        matched.append((row, next_variables))
+    return matched
+
+
+def _mapping_conjunction_matches(claim, mappings, relations, relation_map,
+                                 position=0, variable_values=None):
+    """Relationally join every support mapping through claim variables."""
+    if position == len(mappings):
+        return True
+    mapping = mappings[position]
+    return any(_mapping_conjunction_matches(
+                   claim, mappings, relations, relation_map, position + 1,
+                   next_variables)
+               for _, next_variables in _mapping_matches(
+                   claim, mapping, relations, relation_map, variable_values))
+
+
+def _declared_missing_premises(bundle, claim, relation, relation_map, fallback,
+                               claim_state=SemanticVerdict.UNRESOLVED):
+    values = _claim_values(claim, relation)
+    active_evidence = relevant_evidence_ids(
+        bundle, claim.id, {record.id for record in bundle.evidence})
+    evidence_values = {}
+    for record in bundle.evidence:
+        declaration = relation_map.get(record.atom.relation)
+        row_values = {"id": record.id}
+        if declaration is not None:
+            row_values.update(
+                (column.name, term.value)
+                for column, term in zip(declaration.columns, record.atom.terms)
+                if isinstance(term, Constant))
+        evidence_values[record.id] = row_values
+    declared = []
+    for output in bundle.outputs:
+        if (output.claim_id != claim.id
+                or output.kind != OutputKind.MISSING_PREMISE
+                or not output_triggered(
+                    output, active_evidence,
+                    (claim_state.value, "underived"))):
+            continue
+        item = {"relation": output.relation}; complete = True
+        for name, template in output.fields:
+            if template.source == "constant":
+                item[name] = canonical_dict(template.value)
+            elif template.source == "claim" and template.column in values:
+                item[name] = canonical_dict(values[template.column])
+            elif template.source == "evidence":
+                evidence_id = template.evidence_id or output.evidence_id or ""
+                source_values = evidence_values.get(evidence_id, {})
+                if evidence_id not in active_evidence or template.column not in source_values:
+                    complete = False
+                    break
+                item[name] = canonical_dict(source_values[template.column])
+            else:
+                complete = False
+                break
+        if complete:
+            declared.append(item)
+    if not declared:
+        return fallback
+    unique = {canonical_json(item): item for item in declared}
+    return tuple(unique[key] for key in sorted(unique))
+
+
+def _predicate_matches(row, relation, predicate):
+    if not predicate: return True
+    values = dict(zip((column.name for column in relation.columns), row))
+    actual = values[predicate["column"]]; expected = predicate.get("value")
+    return {"=": actual == expected, "!=": actual != expected,
+            "in": actual in expected if isinstance(expected, (list, tuple)) else False,
+            "not-in": actual not in expected if isinstance(expected, (list, tuple)) else False,
+            "exists": actual is not None}.get(predicate["operator"], False)
+
+
+def _diagnostic_rows(claim, diagnostic, relations, relation_map):
+    source = relation_map[diagnostic.trigger_relation]
+    values = _claim_values(claim, relation_map[claim.relation])
+    names = [column.name for column in source.columns]
+    scoped_names = set(diagnostic.context_indices) | (set(names) & set(values))
+    return [row for row in relations.get(source.name, ())
+            if all(name in values and dict(zip(names, row))[name] == values[name]
+                   for name in scoped_names)
+            and _predicate_matches(row, source, dict(diagnostic.predicate))]
+
+
+def _diagnostic_active(claim, diagnostic, relations, relation_map):
+    rows = _diagnostic_rows(claim, diagnostic, relations, relation_map)
+    return not rows if diagnostic.when_missing else bool(rows)
+
+
+def _atom_key(atom):
+    return atom.relation, canonical_json(tuple(term.value if isinstance(term, Constant) else None
+                                                for term in atom.terms))
+
+
+def _eligible_bundle(claim, bundle, diagnostic_relations, relation_map):
+    blocked_rows = set()
+    for diagnostic in bundle.diagnostics:
+        if (diagnostic.claim_id != claim.id
+                or diagnostic.effect.value not in {"forbidden", "refutation"}
+                or relation_map[diagnostic.trigger_relation].modality.value != "assumption"
+                or diagnostic.when_missing):
+            continue
+        blocked_rows.update((diagnostic.trigger_relation, canonical_json(row))
+                            for row in _diagnostic_rows(claim, diagnostic, diagnostic_relations,
+                                                        relation_map))
+    blocked = {record.id for record in bundle.evidence
+               if _atom_key(record.atom) in blocked_rows}
+    if not blocked:
+        return None
+    by_id = {record.id: record for record in bundle.evidence}
+
+    def allowed(record):
+        pending = [record.id]; seen = set(pending)
+        while pending:
+            dependency = pending.pop()
+            parent = by_id.get(dependency)
+            if parent:
+                for item in parent.depends_on:
+                    if item not in seen:
+                        seen.add(item); pending.append(item)
+        return not bool(seen & blocked)
+
+    eligible_keys = {_atom_key(record) if isinstance(record, Atom) else _atom_key(record.atom)
+                     for record in bundle.evidence if allowed(record)}
+    facts = tuple(fact for fact in bundle.facts if _atom_key(fact) in eligible_keys)
+    # Evidence controls fact eligibility above; the filtered closure bundle is
+    # deliberately evidence-less so validation does not require retaining a
+    # forbidden dependency merely to describe the surviving fact set.
+    return replace(bundle, facts=facts, evidence=(), claims=(), mappings=(),
+                   diagnostics=(), outputs=())
+
+
+def _rule_may_head_claim(rule, claim, relation):
+    if rule.head.relation != claim.relation:
+        return False
+    known = _claim_values(claim, relation)
+    variables = {}
+    for column, term in zip(relation.columns, rule.head.terms):
+        if column.name not in known:
+            continue
+        expected = known[column.name]
+        if isinstance(term, Constant) and term.value != expected:
+            return False
+        if isinstance(term, Variable):
+            previous = variables.setdefault(term.name, expected)
+            if previous != expected:
+                return False
+    return True
+
+
+def _exists_state(claim, relation, relations, diagnostic_relations, relation_map, bundle):
     rows = relations.get(claim.relation, ())
-    if claim.quantifier.value == "forall":
-        domain_decl = relation_map.get(claim.domain) if claim.domain else None
-        domain = relations.get(claim.domain, ()) if claim.domain else ()
-        domain_columns = {column.name: i for i, column in enumerate(domain_decl.columns)} if domain_decl else {}
-        # Every finite-domain member binds variables with the corresponding
-        # domain column name; claim and domain argument order need not match.
-        supported = bool(domain) and all(
-            any(_claim_matches(row, tuple(
-                Constant(d[domain_columns[t.name]]) if isinstance(t, Variable) and t.name in domain_columns else t
-                for t in claim.terms), relation, claim.context.as_dict()) for row in rows)
-            for d in domain
-        )
-    else:
-        supported = any(_claim_matches(row, claim.terms, relation, claim.context.as_dict()) for row in rows)
-    semantic = verdict(supported, False)
-    return EvaluationResult(semantic=semantic, operational=OperationalStatus.COMPLETE,
-                            resources=(("derived_rows", sum(len(v) for v in relations.values())),))
+    direct = any(_claim_matches(row, claim.terms, relation, claim.context.as_dict()) for row in rows)
+    support = direct and relation.polarity.value == "positive"
+    refutation = direct and relation.polarity.value == "negative"
+    support_mappings = [mapping for mapping in bundle.mappings
+                        if mapping.claim_id == claim.id and mapping.effect.value == "support"]
+    has_claim_rules = any(_rule_may_head_claim(rule, claim, relation)
+                          for rule in bundle.rules)
+    if (not support and support_mappings
+            and (not has_claim_rules or direct)):
+        support = _mapping_conjunction_matches(
+            claim, tuple(support_mappings), relations, relation_map)
+    refutation = refutation or any(bool(_mapping_matches(
+                                       claim, mapping, relations, relation_map))
+                                   for mapping in bundle.mappings
+                                   if mapping.claim_id == claim.id and mapping.effect.value == "refutation")
+    status = OperationalStatus.COMPLETE
+    for diagnostic in bundle.diagnostics:
+        if diagnostic.claim_id != claim.id or diagnostic.operational_status == "complete": continue
+        if not _diagnostic_active(claim, diagnostic, diagnostic_relations, relation_map): continue
+        trigger = relation_map[diagnostic.trigger_relation]
+        if trigger.modality.value == "assumption":
+            if diagnostic.effect.value == "forbidden": continue
+            if support: continue
+        status = OperationalStatus(diagnostic.operational_status); break
+    semantic = verdict(support, refutation)
+    missing = (() if support or refutation else
+               _declared_missing_premises(
+                   bundle, claim, relation, relation_map,
+                   (f"claim:{claim.relation}:{canonical_json(claim.context.as_dict())}",),
+                   semantic))
+    return EvaluationResult(semantic, status, EvaluationBasis.DERIVATIONAL,
+                            missing_premises=missing)
 
 
-__all__ = ["SouffleProgram", "SouffleResult", "translate_bundle", "run_bundle", "MAX_SECONDS", "MAX_ROWS", "MAX_OUTPUT_BYTES"]
+def _claim_result(claim, relation, relations, diagnostic_relations, relation_map, bundle):
+    if claim.quantifier.value != "forall":
+        return _exists_state(claim, relation, relations, diagnostic_relations, relation_map, bundle)
+    domain_decl = relation_map[claim.domain]
+    domain_names = [column.name for column in domain_decl.columns]
+    values = _claim_values(claim, relation)
+    shared_values = {name: value for name, value in values.items()
+                     if name in domain_names}
+    # Domain membership is claim input, not a conclusion that revocation may
+    # silently shrink.  Quantify over the full closure and separately require
+    # every member to remain claim-eligible, mirroring the provenance kernel.
+    domain = [row for row in diagnostic_relations.get(claim.domain, ())
+              if all(dict(zip(domain_names, row))[name] == value
+                     for name, value in shared_values.items())]
+    closure_decls = [decl for decl in relation_map.values()
+                     if decl.modality.value == "completeness"
+                     and decl.completes == domain_decl.name
+                     and decl.context_indices == domain_decl.context_indices
+                     and tuple(column.name for column in decl.columns)
+                     == domain_decl.context_indices]
+    closure_available = any(
+        all(dict(zip((column.name for column in closure.columns), row))[name]
+            == shared_values[name]
+            for name in closure.context_indices if name in shared_values)
+        for closure in closure_decls
+        for row in relations.get(closure.name, ()))
+    if not closure_available:
+        return EvaluationResult(SemanticVerdict.UNRESOLVED, OperationalStatus.COMPLETE,
+                                EvaluationBasis.BOUNDED_HISTORY_MODEL,
+                                missing_premises=_declared_missing_premises(
+                                    bundle, claim, relation, relation_map,
+                                    (f"closure:{claim.domain}",)),
+                                message="universal domain has no claim-eligible completeness witness")
+    if not domain:
+        return EvaluationResult(SemanticVerdict.UNRESOLVED, OperationalStatus.INCONSISTENT_PREMISES,
+                                EvaluationBasis.BOUNDED_HISTORY_MODEL,
+                                missing_premises=_declared_missing_premises(
+                                    bundle, claim, relation, relation_map,
+                                    (f"domain:{claim.domain}",)),
+                                message="universal domain is empty in claim context")
+    eligible_domain = {canonical_json(row)
+                       for row in relations.get(claim.domain, ())}
+    missing_member = next((row for row in domain
+                           if canonical_json(row) not in eligible_domain), None)
+    if missing_member is not None:
+        return EvaluationResult(
+            SemanticVerdict.UNRESOLVED, OperationalStatus.COMPLETE,
+            EvaluationBasis.BOUNDED_HISTORY_MODEL,
+            missing_premises=(
+                f"domain-evidence:{claim.domain}:{canonical_json(missing_member)}",),
+            message="universal domain member has no claim-eligible provenance")
+    subresults = []
+    positions = {column.name: i for i, column in enumerate(domain_decl.columns)}
+    for row in domain:
+        terms = tuple(Constant(row[positions[term.name]], relation.columns[i].type)
+                      if isinstance(term, Variable) and term.name in positions else term
+                      for i, term in enumerate(claim.terms))
+        from .ir import Claim
+        subclaim = Claim(claim.relation, terms, claim.context, "exists", None, claim.id)
+        subresults.append(_exists_state(subclaim, relation, relations, diagnostic_relations,
+                                        relation_map, bundle))
+    support = all(result.semantic in {SemanticVerdict.SUPPORTED, SemanticVerdict.CONFLICTING}
+                  for result in subresults)
+    refutation = any(result.semantic in {SemanticVerdict.REFUTED, SemanticVerdict.CONFLICTING}
+                     for result in subresults)
+    status = next((result.operational for result in subresults
+                   if result.operational != OperationalStatus.COMPLETE), OperationalStatus.COMPLETE)
+    subresult_missing = tuple(item for result in subresults
+                              for item in result.missing_premises)
+    semantic = verdict(support, refutation)
+    missing = (() if support or refutation else
+               _declared_missing_premises(bundle, claim, relation, relation_map,
+                                          subresult_missing, semantic))
+    return EvaluationResult(semantic, status,
+                            EvaluationBasis.BOUNDED_HISTORY_MODEL,
+                            missing_premises=missing)
+
+
+__all__ = ["SouffleProgram", "SouffleResult", "SouffleUnavailable", "translate_bundle", "run_bundle",
+           "MAX_SECONDS", "MAX_ROWS", "MAX_OUTPUT_BYTES", "MAX_PROCESSES"]

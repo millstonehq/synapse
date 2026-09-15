@@ -7,9 +7,9 @@ import unittest
 from pathlib import Path
 
 try:
-    from .adapter import canonical_metadata, load_fixture
+    from .adapter import bundle_payload, canonical_metadata, load_fixture
 except ImportError:  # unittest discover -s imports this directory as top-level
-    from adapter import canonical_metadata, load_fixture
+    from adapter import bundle_payload, canonical_metadata, load_fixture
 
 ROOT = Path(__file__).parent
 CORPUS = ROOT / "corpus"
@@ -68,6 +68,17 @@ class CorpusSchemaTests(unittest.TestCase):
                         if section == "claims":
                             self.assertIn("mappings", entry)
                             self.assertIn("diagnostics", entry)
+
+    def test_adapter_rejects_extra_arguments_and_noncanonical_arg_order(self) -> None:
+        fixture = load(CORPUS / "01-correlated-positive.json")
+        extra = json.loads(json.dumps(fixture))
+        extra["facts"][0]["args"].append("silently-discarded")
+        with self.assertRaisesRegex(ValueError, "arity"):
+            bundle_payload(extra)
+        reordered = json.loads(json.dumps(fixture))
+        reordered["facts"][0]["arg_order"] = list(reversed(reordered["facts"][0]["arg_order"]))
+        with self.assertRaisesRegex(ValueError, "arg_order"):
+            bundle_payload(reordered)
 
     def test_each_claim_is_explicitly_quantified_and_expectations_are_polarity_complete(self) -> None:
         for path in FIXTURES:

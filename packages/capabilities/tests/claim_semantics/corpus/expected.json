@@ -1,6 +1,10 @@
 {
   "schema_version": 1,
   "description": "Per-claim semantic expectations",
+  "evaluation_basis_by_quantifier": {
+    "exists": "derivational",
+    "forall": "bounded-history-model"
+  },
   "cases": {
     "01-correlated-positive": {
       "claims": {
@@ -240,7 +244,12 @@
             "fact-missing"
           ],
           "discrepancies": [],
-          "missing_premises": []
+          "missing_premises": [
+            {
+              "relation": "authorization_rejected",
+              "reason": "no explicit rejection for the claimed actor"
+            }
+          ]
         }
       }
     },
@@ -275,6 +284,7 @@
           "semantic_verdict": "supported",
           "operational_status": "complete",
           "support_leaves": [
+            "assumption-independent-source",
             "fact-independent-proof"
           ],
           "refutation_leaves": [],

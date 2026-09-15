@@ -1,0 +1,159 @@
+"""Fail-closed differential comparison for the independent claim kernels."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Callable, Mapping
+
+from .evaluator import ResourceLimits, evaluate
+from .ir import Bundle, canonical_dict, canonical_json, digest
+from .souffle import SouffleUnavailable, run_bundle
+from .validation import ValidationError
+
+
+# This differential intentionally admits closure plus verdict/status fields.
+# Engine-specific provenance, diagnostics, resources, and prose messages are
+# outside this checkpoint and are tested against reviewed expectations where
+# available rather than pretending Souffle produced them independently.
+COMPARABLE_CLAIM_FIELDS = ("semantic", "operational", "basis", "missing_premises")
+
+
+@dataclass(frozen=True)
+class KernelClaim:
+    key: str
+    index: int
+    semantic: str
+    operational: str
+    basis: str
+    missing_premises: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class KernelReport:
+    backend: str
+    relations: tuple[tuple[str, tuple[tuple[Any, ...], ...]], ...]
+    claims: tuple[KernelClaim, ...]
+    operational_failure: str | None = None
+    message: str = ""
+
+    def semantic_payload(self) -> tuple[Any, ...]:
+        return self.relations, self.claims, self.operational_failure
+
+    @property
+    def canonical_digest(self) -> str:
+        return digest({"relations": self.relations,
+                       "claims": tuple((c.key, c.index, c.semantic, c.operational, c.basis,
+                                        c.missing_premises) for c in self.claims),
+                       "operational_failure": self.operational_failure})
+
+
+@dataclass(frozen=True)
+class DifferentialResult:
+    python: KernelReport
+    souffle: KernelReport
+    matched: bool
+    replay_path: str | None = None
+    shrink_steps: int = 0
+    shrink_truncated: bool = False
+    replay_reproduced: bool = False
+
+
+class DifferentialMismatch(AssertionError):
+    def __init__(self, result: DifferentialResult):
+        self.result = result
+        location = f"; replay: {result.replay_path}" if result.replay_path else ""
+        super().__init__(f"claim kernels disagree{location}")
+
+
+def _rows(rows: Any) -> tuple[tuple[Any, ...], ...]:
+    normalized = (tuple(canonical_dict(tuple(row))) for row in rows)
+    unique = {canonical_json(row): row for row in normalized}
+    return tuple(unique[key] for key in sorted(unique))
+
+
+def _missing(values: Any) -> tuple[str, ...]:
+    # Canonicalize scalars too: the literal string '{"relation":"r"}' must
+    # not compare equal to the structured object {"relation": "r"}.
+    return tuple(sorted({canonical_json(value) for value in values}))
+
+
+def run_python(bundle: Bundle, *, limits: ResourceLimits | None = None) -> KernelReport:
+    try:
+        report = evaluate(bundle, limits)
+    except (OverflowError, TimeoutError) as exc:
+        return KernelReport("python", (), (), "resource-exhausted", str(exc))
+    except (ValueError, TypeError, UnicodeError) as exc:
+        return KernelReport("python", (), (), "python-evaluation-invalid", str(exc))
+    except OSError as exc:
+        return KernelReport("python", (), (), "python-io-failed", str(exc))
+    relations = tuple((decl.name, _rows(report.relation_rows(decl.name))) for decl in bundle.relations)
+    claims = tuple(KernelClaim(entry.claim.id or str(entry.index), entry.index,
+                               entry.result.semantic.value, entry.result.operational.value,
+                               entry.result.basis.value, _missing(entry.result.missing_premises))
+                   for entry in report.claims)
+    failure = None if report.status.value == "complete" else report.status.value
+    return KernelReport("python", relations, claims, failure, report.message)
+
+
+def run_souffle(bundle: Bundle, **kwargs: Any) -> KernelReport:
+    try:
+        report = run_bundle(bundle, outputs=(decl.name for decl in bundle.relations), **kwargs)
+    except SouffleUnavailable as exc:
+        return KernelReport("souffle", (), (), "souffle-unavailable", str(exc))
+    except ValidationError as exc:
+        return KernelReport("souffle", (), (), "invalid-input", str(exc))
+    except (OverflowError, TimeoutError) as exc:
+        return KernelReport("souffle", (), (), "resource-exhausted", str(exc))
+    except NotImplementedError as exc:
+        return KernelReport("souffle", (), (), "unsupported-construct", str(exc))
+    except RuntimeError as exc:
+        return KernelReport("souffle", (), (), "souffle-execution-failed", str(exc))
+    except (ValueError, TypeError, UnicodeError) as exc:
+        return KernelReport("souffle", (), (), "souffle-translation-or-output-invalid", str(exc))
+    except OSError as exc:
+        return KernelReport("souffle", (), (), "souffle-io-failed", str(exc))
+    relations = tuple((decl.name, _rows(report.relations.get(decl.name, ()))) for decl in bundle.relations)
+    claims = tuple(KernelClaim(claim.id or str(index), index, result.semantic.value,
+                               result.operational.value, result.basis.value,
+                               _missing(result.missing_premises))
+                   for index, (claim, result) in enumerate(zip(bundle.claims, report.claims)))
+    return KernelReport("souffle", relations, claims)
+
+
+def reports_match(left: KernelReport, right: KernelReport) -> bool:
+    # Operational exhaustion is never positive semantic evidence, including
+    # when both implementations happen to hit their bounds.
+    if left.operational_failure or right.operational_failure:
+        return False
+    return left.semantic_payload() == right.semantic_payload()
+
+
+def compare(bundle: Bundle, *, python_runner: Callable[[Bundle], KernelReport] = run_python,
+            souffle_runner: Callable[[Bundle], KernelReport] = run_souffle,
+            replay_root: str | Path = ".capcov/differential", max_steps: int = 200,
+            shrink: bool = True) -> DifferentialResult:
+    from .shrinker import MAX_SHRINK_STEPS
+    if max_steps < 1 or max_steps > MAX_SHRINK_STEPS:
+        raise ValueError(f"max_steps must be between 1 and {MAX_SHRINK_STEPS}")
+    left = python_runner(bundle); right = souffle_runner(bundle)
+    if reports_match(left, right):
+        return DifferentialResult(left, right, True)
+    replay_path = None; steps = 0; truncated = False
+    from .shrinker import shrink_mismatch
+    # Semantic and operational disagreements always use the bounded reducer.
+    # ``shrink`` remains an input-compatible no-op for callers that used it to
+    # avoid work on expected matches; it cannot bypass replay minimization on
+    # an actual disagreement.  A bound hit is surfaced as shrink_truncated.
+    del shrink
+    shrunk = shrink_mismatch(bundle, python_runner=python_runner,
+                             souffle_runner=souffle_runner,
+                             replay_root=replay_root, max_steps=max_steps,
+                             baseline_left=left, baseline_right=right)
+    replay_path = str(shrunk.path); steps = shrunk.steps; truncated = shrunk.truncated
+    result = DifferentialResult(left, right, False, replay_path, steps, truncated,
+                                shrunk.reproduced)
+    raise DifferentialMismatch(result)
+
+
+__all__ = ["COMPARABLE_CLAIM_FIELDS", "KernelClaim", "KernelReport", "DifferentialResult",
+           "DifferentialMismatch", "run_python", "run_souffle", "reports_match", "compare"]

@@ -85,6 +85,41 @@
         "run",
         "commit"
       ]
+    },
+    {
+      "id": "fact-revoked-proof",
+      "arguments": {
+        "tenant": "tenant-a",
+        "event": "evt-10",
+        "run": "run-10",
+        "commit": "old"
+      },
+      "source": "stale-sql-model",
+      "relation": "sql_row_exists",
+      "args": [
+        "tenant-a",
+        "evt-10",
+        "run-10",
+        "old"
+      ],
+      "context": {
+        "tenant": "tenant-a",
+        "run": "run-10",
+        "event": "evt-10",
+        "attempt": "attempt-10"
+      },
+      "provenance": {
+        "source": "stale-sql-model",
+        "depends_on": [
+          "assumption-revoked"
+        ]
+      },
+      "arg_order": [
+        "tenant",
+        "event",
+        "run",
+        "commit"
+      ]
     }
   ],
   "assumptions": [
@@ -149,6 +184,7 @@
         "semantic_verdict": "supported",
         "operational_status": "complete",
         "support_leaves": [
+          "assumption-independent-source",
           "fact-independent-proof"
         ],
         "refutation_leaves": [],
