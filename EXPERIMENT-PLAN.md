@@ -988,6 +988,132 @@ crash or hang was observed. The warning stays on the record; the mitigation Stag
 is a hard per-call timeout, closed stdin, and captured output, with timeouts reported as named
 operational failures. Note: `sum` is a reserved kernel name in this Shen.
 
+### Stage 0 repin — `shen-go` flake pin moved to the bifrost revision (2026-09-15)
+
+Worktree `capcov-shen-repin`, branch `agent/shen-go-repin`, parent commit
+`8803f17a9a6fce6fad8770d2e5718596cb89d360`. This closes the "two pins recorded as different on
+purpose" state from the addendum above: the flake's `shen-go` now points at the same upstream
+revision that bifrost drives. Only `flake.nix` and this file changed; `flake.lock` is untouched
+(`shasum -a 256 flake.lock` = `d078f9fba512323fd35b24afc6a81aa3bb95c63caa1d00acf700e0827f9e6bac`
+before and after — the shen-go pin lives in `flake.nix` hashes, not in the lock). Host
+`aarch64-darwin`, Darwin `25.5.0`, `nix (Determinate Nix 3.21.5) 2.34.8`, nixpkgs still
+`34ab99075ac4f7e40cf037eef32cb1c360bb85e9` with `go_1_27`.
+
+| | old pin | new pin |
+|---|---|---|
+| `pyrex41/shen-go` rev | `610ba423795b38e58dde3515a0583a109411433c` (2026-09-09) | `c12933d89d7312d5d25a951bbe20d1511c3dfbea` (2026-09-14, `build(nix): bound interpreter package tests`) |
+| `fetchFromGitHub` `hash` | `sha256-nhJdMOcSFY5Kfd695pTGGRfrtnqBdFuy5ZLoa9tfT5Y=` | `sha256-He6LoA/M6IjuV25KK7d2DO5dW8yccloK37KRSj5jKTA=` |
+| `buildGoModule` `vendorHash` | `sha256-iTtlmSlY0qbH/1waOlfRMc1qAkBacQxI6pohRPni/so=` | `sha256-iTtlmSlY0qbH/1waOlfRMc1qAkBacQxI6pohRPni/so=` (unchanged) |
+| package `version` | `0-unstable-2026-09-09` | `0-unstable-2026-09-14` |
+| output store path | `/nix/store/m6vdgvc4g4djhm9ld1s16jrd39k001lm-shen-go-0-unstable-2026-09-09` | `/nix/store/xc7f80vh6gb5j6ar0452sflfs8jm1xxm-shen-go-0-unstable-2026-09-14` |
+| `nix path-info -Sh` closure | `22.2 MiB` | `22.2 MiB` |
+
+`subPackages = [ "cmd/shen" ]`, `nativeBuildInputs = [ git ]`, `env.GOTOOLCHAIN = "local"`, and the
+`shen-evaluator-smoke` check are unchanged. Upstream `git diff 610ba42..c12933d` (one commit) touches
+only `docs/NIX.md` and upstream `flake.nix` (adds `checkFlags = [ "-timeout=5m" ]` to its own
+package); `go.mod`, `go.sum`, and `cmd/shen/` are byte-identical between the two revisions, which
+is why the vendor hash did not change and why the launcher subcommands (`script FILE`, `eval -e
+EXPR`) are the same ones the existing smoke exercises. No smoke or subcommand adjustment was needed.
+The downstream flake does not add upstream's `checkFlags`; `buildGoModule`'s default check phase
+already ran the upstream `cmd/shen` suite (`ok github.com/pyrex41/shen-go/cmd/shen 115.784s`).
+
+Hashes were obtained the honest way, in order:
+
+```sh
+# 1. rev → c12933d…, hash → pkgs.lib.fakeHash, vendorHash → pkgs.lib.fakeHash
+nix build --no-update-lock-file --no-link .#shen-go
+#   error: hash mismatch in fixed-output derivation '/nix/store/4ahm85vh3w0hcbp1z5wrvbn9g5x1xaxl-source.drv'
+#            got:    sha256-He6LoA/M6IjuV25KK7d2DO5dW8yccloK37KRSj5jKTA=
+# 2. paste source hash, vendorHash still fake
+nix build --no-update-lock-file --no-link .#shen-go
+#   error: hash mismatch in fixed-output derivation '/nix/store/ihzwwrgya82i68wyj882zshkic8hq2cb-shen-go-0-unstable-2026-09-14-go-modules.drv'
+#            got:    sha256-iTtlmSlY0qbH/1waOlfRMc1qAkBacQxI6pohRPni/so=
+# 3. paste vendor hash
+nix build --no-update-lock-file --no-link --print-out-paths -L .#shen-go
+#   exit 0 → /nix/store/xc7f80vh6gb5j6ar0452sflfs8jm1xxm-shen-go-0-unstable-2026-09-14
+#   buildPhase 1m08s ("Building subPackage ./cmd/shen"); checkPhase 2m42s, upstream cmd/shen tests ok
+```
+
+Direct evidence from the built output (not through the shell): `bin/shen` sha256
+`17580d4498dc3535e4ab2ea3dc67a288e3b87c20c8a799a33541440dd764c8c3` (20,223,296 bytes, stripped);
+`shen --version` → `42 (port ("Go" "1.0.0-rc1") implementation ("AOT+interpreter" "go1.27.0"))`
+(same string as the old pin — upstream reports the Shen language/runtime version, not its Git
+revision, so `passthru.revision` and this record carry the rev); `shen eval -e '(+ 20 22)'` → `42`;
+`shen eval -e '(+ 1'` → exit 1, stderr `ERROR: syntax error here: 40 43 32 49`.
+
+Workflow gates, each run as `nix develop --no-update-lock-file --command bash -lc '…'` from the
+worktree root:
+
+```sh
+nix flake check --no-update-lock-file
+```
+
+Exit 0. Built `capcov-bash-env`, the workflow `bash` wrapper, and the dev-shell env (all changed
+because `shenGo` changed), then `checks.aarch64-darwin.{capability-regression, scip-go-index-smoke,
+shen-evaluator-smoke, souffle-recursive-typed-smoke}`; `shen-package` was already realised by the
+build above. Nix warned about the dirty Git tree (`flake.nix` uncommitted while under test) and that
+`aarch64-linux`/`x86_64-linux` checks were omitted on this host. The `shen-evaluator-smoke` output
+(`/nix/store/ry1mi503kd5l2ddrhqppfx4si5kk2xic-shen-evaluator-smoke`) recorded `version.txt` =
+the `--version` string above, `evaluation.txt` = `42`, `malformed.stderr` = `ERROR: syntax error
+here: 40 43 32 49`. The sandboxed regression check's `nix log` reported `Ran 1053 tests in
+202.234s`, `OK (skipped=145)`.
+
+```sh
+set -eu; output=$(shen eval -e '(+ 20 22)'); test "$output" = 42; ! shen eval -e '(+ 1' >/dev/null 2>&1
+```
+
+Exit 0 (the manifest's `shen-smoke` gate, verbatim). Inside the same shell form: `command -v shen`
+→ `/nix/store/xc7f80vh6gb5j6ar0452sflfs8jm1xxm-shen-go-0-unstable-2026-09-14/bin/shen`;
+`shen --version` → the string above; workflow `bash` →
+`/nix/store/wc30aj1ysqgqpkiv1vpbl7kacjlbr07a-bash/bin/bash`; `python`, `uv`, `go`, `git`, `jq`,
+`hyperfine`, `shen` all resolved under `/nix/store`; `go version go1.27.0 darwin/arm64`;
+`Python 3.12.14`.
+
+```sh
+nix flake check --all-systems --no-build --no-update-lock-file
+```
+
+Exit 0. Evaluated every advertised package, shell, and check derivation for `aarch64-darwin`,
+`aarch64-linux`, and `x86_64-linux` (including `checks.{aarch64,x86_64}-linux.shen-package` and
+`shen-evaluator-smoke`) without building Linux.
+
+```sh
+cd packages/capabilities && PYTHONPATH="$PWD/src" python -m unittest discover -s tests -t .
+```
+
+Exit 0: `Ran 1053 tests in 134.263s`, `OK (skipped=135)`, no failures or errors. The skip gap
+against the sandboxed check (`145`) is the documented develop-vs-check toolset split (pinned Go and
+Git, visible `.git`), not a regression.
+
+Behavioural comparison, Nix build vs the bifrost/host-Go build
+(`/Users/reuben/projects/capcov/.capcov/shen-go-c12933d/shen-go`, sha256
+`05cac13837e0a78ca207030540721468e13d910979692cb9c1c4b9280f72a29d`, 27,158,402 bytes, unstripped;
+read-only, not modified). The binaries are different builds of the same source revision, so byte
+equality was not expected and does not hold (`17580d44…` vs `05cac138…`). Behavioural equality was
+checked on the same inputs, both binaries invoked directly:
+
+| input | bifrost build | Nix build | comparison |
+|---|---|---|---|
+| `--version` | `42 (port ("Go" "1.0.0-rc1") implementation ("AOT+interpreter" "go1.27.0"))` | same | identical |
+| `eval -e '(+ 20 22)'` | `42`, exit 0 | `42`, exit 0 | identical |
+| `eval -e '(+ 1'` | exit 1, `ERROR: syntax error here: 40 43 32 49` | exit 1, same stderr | identical |
+| `script smoke.shen` | exit 0, stdout `3628800` / `[1 4 9]` (16 B, sha256 `8c9be2f4…`) | exit 0, same | stdout+stderr byte-identical |
+| `script alloc.shen` | exit 0, stdout `200010000` / `200000` (17 B, sha256 `e7c4dd65…`) | exit 0, same | stdout+stderr byte-identical |
+| `script big.shen` | exit 0, stdout `400` (4 B, sha256 `e4df891c…`) | exit 0, same | stdout+stderr byte-identical |
+
+Result: no behavioural difference observed on the smoke, the malformed case, or the three
+stress-probe scripts. Stage D may therefore use either the flake's `shen` (through `nix develop`)
+or the bifrost-driven binary and get the same source revision; the flake path is the reproducible
+one.
+
+**Limits.** Linux remains evaluation-only (`--all-systems --no-build`); no Linux build or execution
+of the new pin is claimed. Host Nix is unpinned. The comparison above covers only the listed inputs,
+not the full upstream suite (which the Nix check phase ran only for the Nix build). The
+`shen-go` pin is fixed by `flake.nix` hashes; an unchanged `flake.lock` SHA does not by itself
+prove the Shen revision. As before, the commit was made after the gates ran on the uncommitted
+`flake.nix`, so a fresh clean-checkout rebuild from the recorded commit is still the driver's to
+demonstrate.
+
 ## 15. Stage A — Adversarial semantic corpus
 
 Add:
