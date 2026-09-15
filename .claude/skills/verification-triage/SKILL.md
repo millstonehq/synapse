@@ -38,39 +38,26 @@ A capability is rebuilt when its e2e rows are green **against a real running ins
 
 ## Establish implementation breadth before choosing a pilot
 
-For a multi-capability replacement, first produce or refresh a **coarse,
-source-grounded operation inventory** in the existing consumer/ledger. Reuse it
-on resumption and reconcile changes. If work began without it, fill this planning
-gap before assigning another implementation wave. A family-level sketch or a
-pilot-only gate is insufficient for breadth-first scheduling or forecasting.
+For a multi-capability replacement, first produce or refresh a **coarse work-unit
+view derived from capcov's existing inventory and flow catalog** in the maintained
+consumer/ledger. Read [deriving implementation work units](references/work-units.md)
+before this first pass or when revising the denominator. “Operation” elsewhere in
+this skill means a caller-visible behavior; it does not introduce a capcov object
+or mean that each CRUD label, route, obligation or transition is a deliverable.
 
-Start from existing discovery and incumbent entry points: HTTP and legacy client
-actions, commands, schedules, workers, hooks and external effects. Group aliases
-and variants by caller-visible operation, retaining source links and unresolved
-dynamic boundaries. Routes, files, tests and helpers are not operation counts.
-Attach background effects to their operation unless they have a distinct contract.
+Reuse native IDs and evidence, with explicit grouping into independently acceptable
+outcomes. Retain unmapped obligations and unknown boundaries across the product.
+A pilot-only gate or family sketch is insufficient for breadth-first scheduling.
+If this view is missing, establish it before another implementation wave.
 
-Retain for each operation: stable ID, family, incumbent source, one-sentence
-observable acceptance condition, candidate implementation pointer/state,
-demonstrated evidence/environment, dependencies, and remaining functionality,
-semantics or verification gaps. Reuse IDs; record grouping/splitting changes.
-Keep required downstream effects and explicit release gates visible without
-requiring a whole-family release audit for each local development checkpoint.
-
-Bound the first pass to one normal planning iteration. Stop with known operations
-across the product, named unknown areas, a provisional count/range, and the next
-independent operations selected. Begin implementation from that view; refine
-contracts progressively. Do not block on exhaustive discovery, perfect dynamic
-resolution, or a new inventory engine. Assign further discovery only where it
-changes an implementation or acceptance decision.
-
-Report implementation and demonstration counts separately in these consistent
-operation units. Unknown boundaries are not zero remaining work. Forecast using
-comparable newly completed operations and recorded runtime, coarse complexity
-bands, and explicit integration/release work. Distinguish elapsed wall time,
-accounted goal time and summed parallel worker time; never mix them or credit
-pre-existing work as new throughput. Use provisional ranges with named assumptions
-when inputs are incomplete. Update this view at integration checkpoints.
+Bound the coarse first pass to one normal planning iteration. Stop with known work
+units, named unknown areas, a provisional count/range and the next independent
+assignments. Refine behavioral contracts while implementing; do not block on
+perfect discovery or build a new inventory engine. Update at integration checkpoints.
+Report implementation and demonstration separately, with environment and evidence
+limits. Forecast from comparable newly completed units and measured runtime,
+including explicit integration/release work. Distinguish elapsed wall time,
+accounted goal time and summed worker time; pre-existing work is not new throughput.
 
 ## Map the capability — the flow model, four fields per step
 
@@ -78,7 +65,7 @@ when inputs are incomplete. Update this view at integration checkpoints.
 
 A transition is **ready to prove** (not "allowed to exist") when all four are filled:
 
-- `outcome` — the caller-distinguishable result, plain words. Two transitions with the same outcome means one is not a real capability.
+- `outcome` — the caller-distinguishable result, plain words. Compare actors and prerequisites before treating similarly named outcomes as equivalent.
 - `obligations` — the surface(s) it binds (`http:/ask`).
 - `evidence` — `file:line` into the **original**. The clean-room anchor: rebuild from here, do not guess.
 - `bindings` — the concrete check.
