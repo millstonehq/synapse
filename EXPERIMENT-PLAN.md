@@ -4960,3 +4960,22 @@ digests describe the tree they live in; the identity pin is unchanged. Merged-tr
 static differential 18, adversarial 6, cross-check 5, live exporter 8 all OK; pilot gate 9 OK
 after the re-pin.
 
+### 2026-09-15 base refresh: merge of upstream `main` (`1b6a47a`, PR #49)
+
+PR #49 (`perf(capcov): reuse incremental source snapshots`, merged upstream by the repository
+owner) replaces `artifacts.tree_sha256` with a metadata-keyed incremental snapshot cache
+(`snapshot_tree`, `SourceSnapshot`, `language_pattern`, `normalise_patterns`, `CAPCOV_NO_CACHE`)
+and threads a carried `CAPCOV_SOURCE_PROVENANCE` through `observe`. It is the production-facing
+half of the section 31 performance review (repeated whole-tree hashing); the experiment's
+evaluator, Soufflé cache, and content-addressed store remain experiment-internal. Merged as
+`e80003f`. Conflicts: `artifacts.py` — upstream taken wholesale and the SCIP exporter's
+`patterns_for` / `tree_manifest` / `manifest_sha256` rebuilt on `snapshot_tree` so a tree is
+walked once and the digest formula is shared (verified equal on go_app: manifest digest ==
+`tree_sha256`, 5 files); `PLUGINS.md`, `har_probe.py`, and four test files — upstream versions
+(this line had not modified them), the observe-env back-compat test adopting upstream's contract
+(additions over the pinned `7801732` baseline are exactly the nonce and the carried provenance).
+Integrator's runs on `e80003f`: exporter 48, static differential 18, static corpus 18,
+`test_cli_engine` + `test_snapshot_performance` 43 (1 skip), full regression `Ran 1053 tests`,
+`OK (skipped=135)`. The target-go pilot gate on this tree is recorded below when it completes; one
+attempt was killed by host memory pressure from an unrelated qualification job.
+
