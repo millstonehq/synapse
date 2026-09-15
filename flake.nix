@@ -13,19 +13,19 @@
         "x86_64-linux"
       ];
       eachSystem = nixpkgs.lib.genAttrs systems;
-      shenRevision = "610ba423795b38e58dde3515a0583a109411433c";
+      shenRevision = "c12933d89d7312d5d25a951bbe20d1511c3dfbea";
       forSystem = system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
           go = pkgs.go_1_27;
           shenGo = (pkgs.buildGoModule.override { inherit go; }) {
             pname = "shen-go";
-            version = "0-unstable-2026-09-09";
+            version = "0-unstable-2026-09-14";
             src = pkgs.fetchFromGitHub {
               owner = "pyrex41";
               repo = "shen-go";
               rev = shenRevision;
-              hash = "sha256-nhJdMOcSFY5Kfd695pTGGRfrtnqBdFuy5ZLoa9tfT5Y=";
+              hash = "sha256-He6LoA/M6IjuV25KK7d2DO5dW8yccloK37KRSj5jKTA=";
             };
             vendorHash = "sha256-iTtlmSlY0qbH/1waOlfRMc1qAkBacQxI6pohRPni/so=";
             subPackages = [ "cmd/shen" ];
