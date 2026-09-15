@@ -210,3 +210,29 @@ binary view — whether a configuration's coverage rolls up whole. `coverage` re
 `feature-obligations.json` (a map `id -> {covered, total}`) and prints the numeric
 completeness vector from `coverage.py::rollup`; omit `--selected` to assess the
 mandatory skeleton alone, leaving every optional and group choice *unassessed*.
+
+### Evidence-derived acceptance
+
+An outcome map's existing `capability` field may name a feature id:
+
+```sh
+capcov features reconcile model.json --outcomes-map capcov.outcomes.json \
+  --inventory capabilities.json --run outcome-run.json --target . \
+  --selected root,feature --out feature-evidence.json
+```
+
+The report carries exact `own_outcome_ids` and `demonstrated_outcome_ids`, an
+acceptance status for every rolled subtree, and current model, map, inventory,
+engine, and input fingerprints. `behavioral_complete` and
+`discovery_accounted` remain separate; unknown or unresolved discovery prevents
+the combined verdict from becoming green. A selected effective leaf with no
+owned outcomes is an explicit gap.
+
+A test-free required outcome can declare exact browser evidence as
+`"flow_bindings": [{"transition": "save", "assertion": "receipt"}]`. Every
+binding must be attested. `capcov flows run` accepts `--outcomes-map`,
+`--capability-inventory`, and `--evidence-target`, fingerprints those inputs
+before and after the runner, and embeds the fingerprint. Feature reconciliation
+then consumes the raw flow model, plan, inventory, and run together. A unified
+capability inventory can serve directly as the flow inventory; its current
+source-tree digest is checked without a parallel discovery configuration.
