@@ -122,14 +122,19 @@ class BundleShapeTest(_Exported):
         stubs = declared - set(frozen)
         self.assertEqual(stubs, {"scip_document_path", "scip_definition_site_at",
                                  "static_route_declared_surface", "static_reaches",
-                                 "runtime_route_observed"})
+                                 "runtime_route_observed", "runtime_function_entered",
+                                 "runtime_sql_executed", "runtime_tx_committed",
+                                 "runtime_route_completed", "runtime_route_reaches_sql_on_index"})
+        runtime_primitives = {"runtime_route_observed", "runtime_function_entered",
+                              "runtime_sql_executed", "runtime_tx_committed",
+                              "runtime_route_completed"}
         for r in self.bundle.relations:
             # the static derived targets are stubs (no rules here: the rule pack
             # owns them); runtime_route_observed is a runtime primitive declared
             # only because index_describes_run names it as a compatibility target
-            if r.name in stubs - {"runtime_route_observed"}:
+            if r.name in stubs - runtime_primitives:
                 self.assertFalse(r.primitive)
-                self.assertEqual(r.binding.value, "static")
+                self.assertIn(r.binding.value, {"static", "runtime"})
         self.assertEqual(self.bundle.rules, ())
         self.assertEqual(self.bundle.claims, ())
 
