@@ -14,8 +14,10 @@ from capcov.probes import load_probe, probe_registry
 
 
 class RegistryTests(unittest.TestCase):
-    def test_registry_names_exactly_the_three_probes(self) -> None:
-        self.assertEqual(set(probe_registry.REGISTRY), {"pytest", "browser", "load"})
+    def test_registry_names_exactly_the_four_probes(self) -> None:
+        self.assertEqual(
+            set(probe_registry.REGISTRY), {"pytest", "browser", "load", "har"}
+        )
 
     def test_resolve_returns_dotted_paths(self) -> None:
         self.assertEqual(probe_registry.resolve("pytest"), "capcov.probes.pytest_probe")

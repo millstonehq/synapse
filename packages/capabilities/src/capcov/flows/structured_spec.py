@@ -129,15 +129,39 @@ def _validate_key(key: str, rule: dict | None) -> None:
         raise ValueError(rule["message"])
 
 
-def _shape_dedupe(key: str, level: dict, level_index: int, state: dict) -> None:
+def _shape_dedupe(key: str, level: dict, level_index: int, bindings: dict,
+                  pointer: str, state: dict) -> None:
+    """A second path with the same template shape is recorded, not refused.
+
+    "/{id}" and "/{optionId}" are one shape to a router and two to a reader; the
+    document is ambiguous about which handler serves a concrete path. That is a
+    limit of reading the document -- named as a boundary carrying both paths --
+    not a reason to produce nothing. Both surfaces are still emitted.
+    """
     rule = level.get("shape_dedupe")
     if rule is None:
         return
     shape = re.sub(rule["template_pattern"], rule["replacement"], key)
-    seen = state["shapes"].setdefault(level_index, set())
+    seen = state["shapes"].setdefault(level_index, {})
     if shape in seen:
-        raise ValueError(rule["message"])
-    seen.add(shape)
+        _emit_boundary(
+            {
+                "category": "path-shape-collision:",
+                "digest_role": "path",
+                "reason": (
+                    f"{rule['message']}: {key!r} has the same template shape as "
+                    f"{seen[shape]!r}; the document does not say which serves a concrete path"
+                ),
+            },
+            # The digest role is "path"; overriding it with this level's key
+            # guarantees the digest input exists even when the level does not bind
+            # path itself, and keys the boundary on the colliding entry.
+            {**bindings, "path": key},
+            pointer,
+            state,
+        )
+        return
+    seen[shape] = key
 
 
 def _field_allowlist(value: object, rule: dict | None, state: dict) -> None:
@@ -192,19 +216,27 @@ def _emit_boundary(spec: dict, bindings: dict, pointer: str, state: dict) -> Non
     )
 
 
-def _emit_surface(bindings: dict, pointer: str, state: dict) -> None:
+def _emit_surface(bindings: dict, pointer: str, state: dict, value: object = None) -> None:
     method = bindings["method"]
     if state["method_transform"] == "upper":
         method = method.upper()
     path = state["prefix"] + bindings["path"]
-    state["obligations"].append(
-        {
-            "id": f"http:{method} {path}",
-            "kind": "surface",
-            "source": {"file": state["relative"], "line": 1, "pointer": pointer},
-            "declaration": state["declaration"],
-        }
-    )
+    obligation = {
+        "id": f"http:{method} {path}",
+        "kind": "surface",
+        "source": {"file": state["relative"], "line": 1, "pointer": pointer},
+        "declaration": state["declaration"],
+    }
+    if isinstance(value, dict):
+        # The document's own grouping and one-line intent, carried verbatim so a
+        # feature tree can be seeded from it and `features map` can claim by tag.
+        tags = value.get("tags")
+        if isinstance(tags, list) and tags and all(isinstance(t, str) for t in tags):
+            obligation["tags"] = list(tags)
+        summary = value.get("summary")
+        if isinstance(summary, str) and summary:
+            obligation["summary"] = summary
+    state["obligations"].append(obligation)
     state["surface_count"] += 1
 
 
@@ -229,15 +261,15 @@ def _descend(node: object, levels: list[dict], level_index: int, bindings: dict,
     for raw_key, value, segment in _entries(node, level, state):
         child_pointer = pointer + "/" + segment
         _validate_key(str(raw_key), level.get("key_validation"))
-        _shape_dedupe(str(raw_key), level, level_index, state)
         if level.get("value_must_be_object") and not isinstance(value, dict):
             raise ValueError(level["value_must_be_object"])
         _field_allowlist(value, level.get("field_allowlist"), state)
         bound = dict(bindings)
         for role, source in level.get("bind", {}).items():
             bound[role] = raw_key if source == "@key" else _read_field(value, source)
+        _shape_dedupe(str(raw_key), level, level_index, bound, child_pointer, state)
         if leaf:
-            _emit_surface(bound, child_pointer, state)
+            _emit_surface(bound, child_pointer, state, value)
         else:
             _emit_gaps(level, value, levels[level_index + 1], bound, child_pointer, state)
             _descend(value, levels, level_index + 1, bound, child_pointer, state)
