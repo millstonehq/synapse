@@ -14,7 +14,8 @@ import shutil
 import tempfile
 import unittest
 
-from capcov.claims import Atom, Bundle, Claim, Constant, Context
+from capcov.claims import Atom, Claim, Constant, Context
+from tests.claim_fixtures import Bundle  # attributed fixture bundles
 from capcov.claims.differential import DifferentialMismatch, compare, run_python, run_souffle
 from capcov.claims.evaluator import ResourceLimits
 

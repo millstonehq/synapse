@@ -56,6 +56,41 @@ class EvidenceProducerTest(unittest.TestCase):
         # second producer complaint on top of it
         self.assertEqual([i.code for i in validate_bundle(_bundle(""))], ["evidence-source"])
 
+    def test_an_evidence_free_fact_bearing_bundle_cannot_bypass_the_boundary(self) -> None:
+        # Attribution used to run only ``if bundle.evidence:``, so a bundle with
+        # facts and an empty evidence tuple validated with zero issues and never
+        # met evidence-producer.  Attribution is unconditional now.
+        relation = RelationDecl(
+            "php_effect",
+            (Column("run", "symbol", True), Column("req", "symbol"), Column("table", "symbol")),
+            context_indices=("run",), producer_classes=("php",))
+        atom = Atom("php_effect", (Constant("run-1"), Constant("req-1"), Constant("issues")))
+        bare = Bundle((relation,), facts=(atom,), evidence=())
+        issues = validate_bundle(bare)
+        self.assertEqual([issue.code for issue in issues], ["fact-without-evidence"])
+        self.assertEqual(issues[0].path, "facts[0]")
+        with self.assertRaises(BundleIngestionError) as ctx:
+            bundle_from_json(canonical_json(bare), validate=True)
+        self.assertIn("fact-without-evidence", str(ctx.exception))
+        # the same holds for an unconstrained relation and for an assumption:
+        # every fact needs a record, whatever the producer classes say
+        plain = RelationDecl("seen", (Column("x", "symbol"),))
+        assumed = RelationDecl("trusted__accepted", (Column("x", "symbol"),), modality="assumption")
+        two = Bundle((plain, assumed), facts=(Atom("seen", (Constant("v"),)),
+                                             Atom("trusted__accepted", (Constant("v"),))))
+        self.assertEqual([(i.code, i.path) for i in validate_bundle(two)],
+                         [("fact-without-evidence", "facts[0]"), ("fact-without-evidence", "facts[1]")])
+        # partial attribution names exactly the unattributed fact
+        record = Evidence("seen:v", Atom("seen", (Constant("v"),)), source="anyone")
+        partial = Bundle((plain, assumed), facts=two.facts, evidence=(record,))
+        self.assertEqual([(i.code, i.path) for i in validate_bundle(partial)],
+                         [("fact-without-evidence", "facts[1]")])
+        # and the public evaluator fails closed on the bare bundle
+        from capcov.claims.evaluator import evaluate
+        report = evaluate(bare)
+        self.assertEqual(report.status.value, "invalid-input")
+        self.assertIn("fact-without-evidence", report.message)
+
     def test_empty_producer_classes_is_unconstrained(self) -> None:
         for source in ("shen model-runner v1", "anything at all", "capcov.claims.static.scip_facts v1"):
             with self.subTest(source=source):

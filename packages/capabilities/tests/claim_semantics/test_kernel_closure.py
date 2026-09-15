@@ -5,10 +5,11 @@ import shutil
 import unittest
 
 from capcov.claims import (
-    Atom, Bundle, Claim, Column, Constant, Context, DiagnosticRule, Evidence,
+    Atom, Claim, Column, Constant, Context, DiagnosticRule, Evidence,
     EvidenceMapping, OutputTemplate, RelationDecl, Rule, TemplateValue,
     TypeName, Variable, bundle_from_json, canonical_json, validate_bundle,
 )
+from tests.claim_fixtures import Bundle  # attributed fixture bundles
 from capcov.claims.differential import compare, run_python, run_souffle
 from capcov.claims.evaluator import ResourceLimits, evaluate
 from capcov.claims.output import VerifiedProofEvidence, render_outputs

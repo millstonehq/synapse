@@ -822,10 +822,13 @@ def _eligible_bundle(claim, bundle, diagnostic_relations, relation_map):
     eligible_keys = {_atom_key(record) if isinstance(record, Atom) else _atom_key(record.atom)
                      for record in bundle.evidence if allowed(record)}
     facts = tuple(fact for fact in bundle.facts if _atom_key(fact) in eligible_keys)
-    # Evidence controls fact eligibility above; the filtered closure bundle is
-    # deliberately evidence-less so validation does not require retaining a
-    # forbidden dependency merely to describe the surviving fact set.
-    return replace(bundle, facts=facts, evidence=(), claims=(), mappings=(),
+    # Evidence controls fact eligibility above.  The filtered closure bundle
+    # keeps exactly the allowed records: attribution is unconditional
+    # (``fact-without-evidence``), and an allowed record depends only on other
+    # allowed records or external ids, so no forbidden dependency is retained
+    # merely to describe the surviving fact set.
+    evidence = tuple(record for record in bundle.evidence if allowed(record))
+    return replace(bundle, facts=facts, evidence=evidence, claims=(), mappings=(),
                    diagnostics=(), outputs=())
 
 
