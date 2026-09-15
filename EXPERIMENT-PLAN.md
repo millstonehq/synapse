@@ -4575,8 +4575,232 @@ join happens only through `index_describes_run` when a retained target-go receip
 otherwise the record says "static half only". Rooted-edge coverage below 0.9 or any
 `deep-unresolved` on the route closure records the result as UNKNOWN.
 
-If the fixture is absent the driver emits `task-blocked`; record BLOCKED here and keep the
-go_app pilot as the delivered static evidence without calling it target-go.
+If the fixture is absent the driver emits `task-blocked` and the record below is BLOCKED; the
+go_app pilot is never described as target-go evidence.
+
+### 2026-09-15 run record (task `scip-target-go-pilot`, worktree `capcov-target-go-pilot`, parent `64ee8bb`)
+
+Result: **static half only, `supported`**. One route of target-go statically reaches a
+`database/sql` write through one first-party hop, identically in both kernels, with replayable
+certificates; the notification *sender* is not route-reachable in target-go's router, so the
+route → notification half of the candidate path is the negative control, not the claim.
+
+**Target checkout.** `/Users/dev/fg/target-go`, HEAD `7e339e07dbaafe7e606a20afe644623a1f58228f`,
+`git status --porcelain` = `?? .worktrees/`, `?? tools/corejs-map/` (two untracked entries, no
+modified tracked file; the run is labelled `dirty: true` and both entries are outside the
+archive by construction). `go.mod`: module `git.internal.example/org/target-go`,
+`go 1.25.0`. The indexed tree is `git archive --format=tar HEAD | tar -x` into
+`<tmp>/capcov-target-go-pilot-*/target-go` (`claims/static/pilot.archive_head`): 120 `.go` files,
+tree digest over `**/*.go` `67d035789074e6f61eb61694d8b11a67bc1011d456e23676ff31f01f62d370c6`.
+The archive directory's basename is part of the identity through `scip_index.project_root =
+file:///target-go` (section 29, item 3); a hand run of the same tree in a directory named
+`fgarchive` produced identity `77d013fe…` for otherwise identical rows, so the test fixes the
+basename. The `notification-capcov-bind` worktree under `target-go/.worktrees/` was inspected
+(three commits on top of a loopback mailer; capcov plans and docs, no capcov code) and nothing
+was copied.
+
+**Toolchain (nix devShell, all store paths asserted by the test).** scip-go
+`/nix/store/3inxss33qhklfr6416j0kwp4cbjkdlys-scip-go-0.2.7/bin/scip-go` (`0.2.7`), scip
+`/nix/store/hckm2075va6x941b4lwncv8ls3p6ssr1-scip-0.9.0/bin/scip` (`v0.9.0`), go
+`/nix/store/lz3qw52rpazqga73xgsqlj4qz1lgs4hg-go-1.27.0/bin/go` (`go1.27.0 darwin/arm64`,
+`GOTOOLCHAIN=local`), Soufflé `/nix/store/hjf84h92h4ynbbn9sg9q1biyr25r617i-souffle-2.5/bin/souffle`
+(its `--version` prints an empty `Version:` line in this build; the store path is the pin),
+python 3.12.14. Go environment: `GOFLAGS=-mod=mod`, `GOTOOLCHAIN=local`, `GOMODCACHE` and
+`GOCACHE` under `$CAPCOV_GO_CACHE_ROOT` (default `$TMPDIR/capcov-target-go-pilot/`); for these runs
+the session scratchpad's `gomodcache` (198 MB, populated from `go.sum` pins on the first run) and
+`gocache` (323 MB). Indexing wall time: 89 s cold, 43 s with a warm module cache, 4–14 s with a
+warm build cache; `read_scip_index` 0.3 s.
+
+**Index receipts (not identity).** `sha256(index.scip)` differed on every indexing, as section
+28 predicts: `15d71940…` (hand run), `c5b430f5…` (warm run 1), `5128b4ad…` (warm run 3),
+`a3141c39c7f04f4e0a120896c12bf3b5c29e0b2a14bf6c01697b82b66496aa25` (cold run 1, the committed
+receipt), `549e29ad…` (cold run 2). 2,328,103 bytes;
+`tool_info.name == "scip-go"`, `tool_version 0.2.7`, arguments `--output index.scip`;
+scip-go visited 28 packages; 105 documents, 28,284 occurrences. Standard-library symbols are
+spelled under the go.mod directive (`scip-go gomod github.com/golang/go/src go1.25.0
+\`database/sql\`/Tx#ExecContext().`), not the toolchain version. The 24 `.go` files without a
+document (`static_file_unindexed` 24 in both kernels) are all `//go:build integration` or
+test-harness `_test.go` files; the test asserts no production file is unindexed.
+
+**Route, and why.** `internal/httpserver/server.go:47` mounts the app handler at `/`;
+`cmd/target-go/main.go:181` passes `Runtime.Handler()` (`internal/pilot/runtime.go:160`), which
+registers `GET /api/cloud/notification-unsubscribe/<action>-email` for `action ∈ {decrypt,
+unsubscribe, subscribe}` at `internal/pilot/runtime.go:163` with `r.recipientLinks(action)`
+(defined `internal/pilot/recipient_links.go:13`), `POST /inquire/` with `Runtime.cloudSave`,
+and two closures (`GET`/`DELETE /api/cloud/project/{project}/issues/…`) whose bodies SCIP
+attributes to `Handler()` itself. `recipientLinks` is the only route that touches the
+notification subsystem: it calls `legacyissues.ChangeSubscription(ctx, r.DB, …)`
+(`internal/legacyissues/subscriptions.go:31`), which opens a transaction (`db.BeginTx`, line 48)
+and issues `tx.ExecContext` writes (lines 54–78) to `notification_unsubscribed` and
+`go_notification_confirmation`. The mail sender (`legacyissues.SendDueDigests`,
+`Mailer.Send` over smtp/SES/loopback) is reached only from the worker loop
+`Runtime.RunNotifications` (`internal/pilot/notifications.go`), never from a route, so
+route → notification is not derivable from this router and is used as the negative control.
+Declared surface: `http:GET /api/cloud/notification-unsubscribe/subscribe-email` (one of the
+three concrete patterns; all three share the closure `recipientLinks` returns). Handler symbol:
+`scip-go gomod git.internal.example/org/target-go . \`git.internal.example/org/target-go/internal/pilot\`/Runtime#recipientLinks().`
+
+**Handler binding is a labelled assumption.** The go_app tree-sitter route query does not
+match `ServeMux.HandleFunc` on a returned closure, and tree-sitter is not in the devShell, so
+no `route_site` / `route_handler_location` row is emitted (the test asserts their absence and
+the absence of `static_op_site`). Instead the claim-time bundle declares
+`route_handler_symbol__accepted(index, surface, symbol)` (modality `assumption`, binding
+static, primitive, context `index`; `Evidence.kind = "assumption"`, source `human-declared from
+router source: internal/pilot/runtime.go:163 registers GET /api/cloud/notification-unsubscribe/<action>-email -> r.recipientLinks(action); handler defined at internal/pilot/recipient_links.go:13; app mounted at internal/httpserver/server.go:47 and wired at cmd/target-go/main.go:181`,
+evidence id `static:0759ccef8fbb:route_handler_symbol__accepted:517419cba2c0`, depending on
+the `scip_index` row) and one rule, `static_route_handler_from_accepted_symbol`:
+`static_route_handler(IX,S,Sym) :- route_handler_symbol__accepted(IX,S,Sym),
+scip_symbol(IX,Sym,_,"callable",_)`. The pack is unchanged (it is outside this task's write
+set); the rule is added through `combine`, and the join with the index's own `scip_symbol` row
+means a misdeclared name yields `unresolved`, never a path. The test re-reads the five archived
+lines it names (registration, definition, mount, wiring, SQL site) so a drift in target-go fails
+the binding loudly. This is the "assumption fact" option of the task, not the "grep of
+httpserver registration" option.
+
+**Op sites.** target-go does not use gorm: SQL goes through `database/sql` (`*sql.DB`, `*sql.Tx`,
+driver `github.com/go-sql-driver/mysql`) and the recognizer has no `static_op_site` producer
+for it, so the claims are `static_reaches(index, handler, sink)` for named sinks rather than
+`static_capability_op`. The section's "route → SQL and route → notification
+`static_capability_op` rows" acceptance is therefore met as symbol reachability, which is
+recorded here as a decision rather than as a recognizer result it is not.
+
+**Slice.** Import closure of `internal/pilot` computed from the packages of the first-party
+symbols each document references (`pilot.package_closure`; scip-go 0.2.7 emits no `Import`
+symbol roles, and a cross-package reference is only possible through an import): 9 packages —
+`internal/{issues, legacyfiles, legacyflags, legacyissues, legacypermissions, legacyprojects,
+legacysessions, phpcache, pilot}` — over 11 package edges; 54 documents (46 test documents
+excluded: `_test.go` files and scip-go's `pkg.test` / `pkg_test` packages), 15,392 occurrences;
+scope `document_set`, profile `slice`; `ExportLimits(500, 200_000, 100_000)`, none tripped.
+Export `complete` in 3–6 s: 20,617 facts — `scip_read_site` 11,591, `scip_definition_site` 2,561,
+`scip_symbol` 2,508, `scip_may_reference` 1,714, `scip_symbol_node` 935, `scip_type_reference`
+667, `scip_enclosing` 165, `static_source_file` 120, `scip_symbol_unrooted` 115, `scip_document`
+96 (the index's 105 documents minus the nine out-of-tree `_testmain.go` documents; see *Identity
+defect* below), `scip_definitions_closed` 54, `static_scope` 54, `scip_module_scope_reference` 23,
+`scip_relationship` 8 (scip-go does emit relationships on target-go), one each of `scip_index`,
+`scip_index_tree`, `scip_index_commit`, `static_language_covered`, `scip_documents_closed`,
+`static_scope_closed`; no `static_scope_leak`, so the closure is closed. 105 type references at
+module scope have no section-29 relation and are not exported (exporter message). No census
+(`census_available: false`): no `scip_references_closed`, no `static_reachability_closed`.
+
+**Identities.** Index identity (`static-relations-v1`)
+`0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b`; exported bundle digest
+(receipt-free) `89d2988a92a4f5e17d9eea77002a07b44768c875ce071660c40245d36771e4f0`; combined
+bundle (exporter + pack + assumption bundle + claim-time `source_tree_observed` + three claims)
+`scip_facts.bundle_digest` `413014e24facd45783b79eb3905bafb49773c853ea137e6aee71658ff089e253`,
+20,619 facts, 28 rules, 69 relations, rules digest
+`1490a850b07272f5c53a750d7cbc8375fb3538cbd70b03e333c3b87a607160ec`. The plain IR digest of the
+combined bundle differs per run (it sees the index-file receipt; cold run 1 `95ec166e…`), which
+the pin test asserts. Two cold-cache runs from fresh `nix develop` shells
+(`/tmp/nix-shell.pkTq7q` and `/tmp/nix-shell.ThRZ5i`, each with its own empty `GOMODCACHE` and
+`GOCACHE` under the default cache root, no `CAPCOV_GO_CACHE_ROOT`) reproduced the identity, the
+exported digest, every row count, the out-of-tree receipt, the combined digest, the kernel
+digest and the certificate derivations. The three earlier warm runs (identity `153c788961ef…`,
+superseded) shared one scratch build cache and so could not have exposed the defect below;
+"three independent indexings" was true of the indexer's emission order only, not of the cache.
+
+**Kernel agreement.** `compare` matched: Python and Soufflé canonical report digest
+`06daf07b4a6dd63038390e2c055b152856bc3f07b83b12a7dd3e62adb4d4ff16`, no operational failure, no
+shrink; 25–80 s per run (190 s in the hand run). Derived rows: `static_edge` 1,095,
+`static_root` 1, `static_route_handler` 1, `static_reaches` 47 (the handler's closure: 48
+symbols including the root), `static_index_current` 1, `scip_index_stale` 0,
+`scip_duplicate_definition` 0, `static_scope_closed` 1, `static_file_unindexed` 24,
+`scip_references_closed` 0, `static_reachability_closed` 0.
+
+**Claims and the derived path.** `claim-route-reaches-change-subscription`
+(`static_reaches(IX, Runtime#recipientLinks()., legacyissues/ChangeSubscription().)`) —
+supported, complete, derivational in both kernels; certificate steps 0, 13 nodes, 3 leaves.
+`claim-route-reaches-sql-tx-exec` (`… → \`database/sql\`/Tx#ExecContext().`) — supported in
+both; certificate steps 1, 173 nodes, 4 leaves; the symbol chain is
+`Runtime#recipientLinks()` → `legacyissues/ChangeSubscription()` → `database/sql/Tx#ExecContext()`
+(the closure also holds `DB#BeginTx()`, `Tx#Commit()`, `Tx#Rollback()`,
+`Result#RowsAffected()`). Certificates extracted from the Python rows and from the Soufflé rows
+are identical, `recheck` accepts both against both closures, every leaf is a `scip:`/`static:`
+id and the assumption leaf is among them: the first-party claim rests on
+`scip:0759ccef8fbb:scip_may_reference:795036b39318` (the `recipientLinks` → `ChangeSubscription`
+reference), `scip:0759ccef8fbb:scip_symbol:ac84fe7dafb3` (the handler is a callable) and the
+assumption; the SQL claim adds `scip:0759ccef8fbb:scip_may_reference:711c00868b3b`
+(`ChangeSubscription` → `Tx#ExecContext`). Derivation digests (certificate minus its
+`bundle_digest`, run-independent): `267bc470a769…` and `02bd7b2203e9…`; the full certificates
+for cold run 1 are committed as
+`tests/claim_semantics/target_go/artifacts/certificate-<claim>.json` with the receipt
+`receipt.json` (symbol names, paths, lines, digests and counts only — no target-go source).
+Negative control `control-route-reaches-send-due-digests`
+(`… → legacyissues/SendDueDigests().`) — `unresolved`, operational `complete`, missing
+premise the claim row itself, in both kernels; it can never be `refuted` here because
+`static_reachability_closed` and `scip_references_closed` are absent (no call-graph
+completeness witness), which the test asserts.
+
+**Coverage and outcome.** Rooted edges / resolved edges = 1,714 / 1,714 = 1.0 on the slice
+(every `scip_may_reference` endpoint has a `scip_symbol_node`); 115 unrooted symbols in the
+slice (104 `local`, 11 `non-node-descriptor`), none on the route closure; 0 `deep-unresolved`
+(no tree-sitter side). Decision rule (`pilot.outcome`): `supported`. Every rooted symbol
+*defined* in the index carries the module path as its package prefix (asserted); referenced
+standard-library and third-party symbols are rooted under their own packages and are counted
+in the coverage ratio, not against the module-prefix check.
+
+**Runtime join.** None. No retained target-go run receipt exists in this repository, so no
+`index_describes_run` row was declared and none was fabricated; the record is static half
+only.
+
+**Gates.** `target-go-static-pilot` (manifest command form, run from the worktree with
+`CAPCOV_GO_FIXTURE_ROOT=/Users/dev/fg/target-go` and `CAPCOV_GO_CACHE_ROOT` pointing at the
+scratch caches above): first run failed on three test-side expectations (no committed receipt
+yet; the certificate edge chain is emitted root-to-sink; bundle metadata `scope` is a
+`_FrozenMap`), corrected and rerun; the pin then failed on the per-run certificate
+`bundle_digest`, corrected to compare the derivation only; warm run `Ran 9 tests in 47.315s`
+/ `OK` / `rc=0`. That state (commit `939fb57`) failed the coordinator's cold reruns — see
+*Identity defect* below. After the fix: cold run 2, the exact manifest command from a fresh
+shell with the default (cold) cache root, `Ran 9 tests in 195.320s` / `OK` / `rc=0`, not
+skipped, pin satisfied against cold run 1's committed receipt. The closing warm rerun and the
+full regression are recorded in the last paragraph of this record.
+
+**Identity defect found by cold reruns, and the fix.** The coordinator reran the manifest gate
+from two fresh `nix develop` shells (cold default cache roots) and got identities
+`bf16337e57e1…` and `1a629d8fd97a…` against the committed `153c788961ef…` — same slice, same
+fact count, same coverage, three identities. Root cause, established by diffing the exported
+primitive rows (index column stripped) of two cold exports into two fresh cache roots
+(identities `72afaa0c…` vs `d6c6fecc…`, `scratchpad/coldexport.py`): exactly one relation
+differed, `scip_document`, in 9 of its 105 rows, whose `path` values were
+`../../../<host path>/gocache/<hh>/<hash>-d`. Those nine documents are Go's generated
+`_testmain.go` for the nine `<pkg>.test` packages scip-go loads
+(`internal/{httpserver,issues,legacyfiles,legacyissues,legacysessions,phpcache,pilot}.test`,
+`test-harness/{notification…,policy}.test`; each defines `package main` and imports `os` and
+`testing`), read out of `GOCACHE` and spelled relative to the project root. Their
+content-addressed basenames (`0ff5b09e…-d`, `4a6eb265…-d`, …) and occurrence counts were
+identical in both runs; only the cache location differed. No other relation and no other
+metadata value differed, so this is an exporter fact leaking a per-run path — not
+module-resolution nondeterminism (the module basis from `go.sum` was the same in both runs).
+Fix, in `scip_facts.export_bundle`: a document whose path is absolute or climbs out of the
+project root is not a document of the indexed tree; it contributes to no fact (the identity
+rows in particular) and is recorded in metadata `out_of_tree_documents` as
+`{basename, occurrence_count}`, a receipt excluded from `bundle_digest`
+(`RECEIPT_METADATA_KEYS`), with an exporter message naming the count. `scip_documents_closed`
+therefore reads "every document of the tree is exported", the only truthful reading. The pilot
+test now asserts one out-of-tree document per `.test` package in the index, that no
+`scip_document` path escapes the tree, that no fact or metadata names either Go cache, and
+pins the identity for this HEAD in code (`PINNED_IDENTITY`) as well as against the committed
+receipt. The exporter's own 48 tests and the 66 static-rules tests pass unchanged.
+
+**Limits.** (1) Static half only; the SQL sink is a standard-library method, not an entity/verb
+op site, so nothing here names a table. (2) The handler binding is an assumption a human read
+from the router; the index attests only that a callable of that name is defined at the
+declared line. (3) The closure comes from references, not `Import` roles. (4) Closures inside
+`Runtime.Handler()` attribute to `Handler()`, so a claim about those two routes would root at
+`Handler()`. (5) No census, so every negative stays `unresolved`. (6) The identity binds the
+archive basename through `project_root`. (7) During this task the host disk hit `ENOSPC`
+mid-run (not caused by the pilot's ~520 MB of Go caches; it cleared without intervention); the
+run record above is from the runs that completed. (8) The identity pin is for HEAD `7e339e07`
+under scip-go 0.2.7 / go 1.27.0; a run on any other HEAD or toolchain compares against nothing
+and prints that it did not.
+
+**Closing verification (after the fix).** Warm rerun of the manifest gate against the scratch
+caches (`CAPCOV_GO_CACHE_ROOT` set) with the committed cold-run-1 receipt and `PINNED_IDENTITY`
+in place: `Ran 9 tests in 52.357s` / `OK` / `rc=0`, identity `0759ccef8fbb…`, kernel digest
+`06daf07b…` — the same values as both cold runs. Full regression (`discover -s tests -t .` in
+the devShell with `CAPCOV_GO_FIXTURE_ROOT` and `CAPCOV_GO_CACHE_ROOT`, so the pilot runs inside
+it): `Ran 1017 tests in 124.515s` / `OK (skipped=126)` / `rc=0`; the skip set is the documented
+tool-dependent one, unchanged. Cold-run wall times: index 100–106 s, compare 50–80 s, 167–216 s
+total per run.
 
 ### 2026-09-15 `datalog-kernel-closure` wave: fan-out succeeded, reducer exhausted
 

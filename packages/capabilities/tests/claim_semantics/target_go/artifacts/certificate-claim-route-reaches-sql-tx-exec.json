@@ -1,0 +1,177 @@
+{
+ "absent": [],
+ "bounds": {
+  "max_depth": 64,
+  "max_nodes": 10000
+ },
+ "bundle_digest": "95ec166ef72edd6f419a93f0641432d70f349c67c1cb6daa438eb3723be4406a",
+ "certificate_version": "capcov-static-certificate-v1",
+ "conclusion": {
+  "relation": "static_reaches",
+  "row": [
+   "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
+   "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks().",
+   "scip-go gomod github.com/golang/go/src go1.25.0 `database/sql`/Tx#ExecContext()."
+  ]
+ },
+ "derivation": {
+  "absent": [],
+  "comparisons": [],
+  "kind": "rule",
+  "premises": [
+   {
+    "absent": [],
+    "comparisons": [],
+    "kind": "rule",
+    "premises": [
+     {
+      "absent": [],
+      "comparisons": [],
+      "kind": "rule",
+      "premises": [
+       {
+        "absent": [],
+        "comparisons": [],
+        "kind": "rule",
+        "premises": [
+         {
+          "evidence": [
+           "static:0759ccef8fbb:route_handler_symbol__accepted:517419cba2c0"
+          ],
+          "kind": "fact",
+          "relation": "route_handler_symbol__accepted",
+          "row": [
+           "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
+           "http:GET /api/cloud/notification-unsubscribe/subscribe-email",
+           "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks()."
+          ]
+         },
+         {
+          "evidence": [
+           "scip:0759ccef8fbb:scip_symbol:ac84fe7dafb3"
+          ],
+          "kind": "fact",
+          "relation": "scip_symbol",
+          "row": [
+           "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
+           "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks().",
+           "Method",
+           "callable",
+           "recipientLinks"
+          ]
+         }
+        ],
+        "relation": "static_route_handler",
+        "row": [
+         "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
+         "http:GET /api/cloud/notification-unsubscribe/subscribe-email",
+         "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks()."
+        ],
+        "rule": "static_route_handler_from_accepted_symbol",
+        "rule_digest": "5c6679efddf6a30b6c1cdd63dc603bea5fa4c6cf602eeff76523341c375126b0"
+       }
+      ],
+      "relation": "static_root",
+      "row": [
+       "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
+       "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks()."
+      ],
+      "rule": "static_root",
+      "rule_digest": "f07a1c70f4a43a62d2e13c79514d3a2c420d6fe8c74b467ec1d82cd6c55ceaa4"
+     },
+     {
+      "absent": [],
+      "comparisons": [],
+      "kind": "rule",
+      "premises": [
+       {
+        "evidence": [
+         "scip:0759ccef8fbb:scip_may_reference:795036b39318"
+        ],
+        "kind": "fact",
+        "relation": "scip_may_reference",
+        "row": [
+         "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
+         "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks().",
+         "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/legacyissues`/ChangeSubscription().",
+         "internal/pilot/recipient_links.go",
+         47,
+         "a5d9e04abbf4d766a69520787a9d9e6509c0a35e73a1ec043689389e0e0260c5",
+         false
+        ]
+       }
+      ],
+      "relation": "static_edge",
+      "row": [
+       "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
+       "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks().",
+       "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/legacyissues`/ChangeSubscription()."
+      ],
+      "rule": "static_edge",
+      "rule_digest": "4d0116601a666234821668f8e577b8579a6ddd5ba859a5a9b3d052141a4556e2"
+     }
+    ],
+    "relation": "static_reaches",
+    "row": [
+     "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
+     "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks().",
+     "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/legacyissues`/ChangeSubscription()."
+    ],
+    "rule": "static_reaches_base",
+    "rule_digest": "0979290f9df25c7d9fc4653d22214c4240df122288fecb74b7a2db2c48cf7def"
+   },
+   {
+    "absent": [],
+    "comparisons": [],
+    "kind": "rule",
+    "premises": [
+     {
+      "evidence": [
+       "scip:0759ccef8fbb:scip_may_reference:711c00868b3b"
+      ],
+      "kind": "fact",
+      "relation": "scip_may_reference",
+      "row": [
+       "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
+       "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/legacyissues`/ChangeSubscription().",
+       "scip-go gomod github.com/golang/go/src go1.25.0 `database/sql`/Tx#ExecContext().",
+       "internal/legacyissues/subscriptions.go",
+       54,
+       "bfcc670950b1039ff2090655448c39e2c0451dd1f698262c9a3d70d626fa8ac3",
+       false
+      ]
+     }
+    ],
+    "relation": "static_edge",
+    "row": [
+     "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
+     "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/legacyissues`/ChangeSubscription().",
+     "scip-go gomod github.com/golang/go/src go1.25.0 `database/sql`/Tx#ExecContext()."
+    ],
+    "rule": "static_edge",
+    "rule_digest": "4d0116601a666234821668f8e577b8579a6ddd5ba859a5a9b3d052141a4556e2"
+   }
+  ],
+  "relation": "static_reaches",
+  "row": [
+   "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
+   "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks().",
+   "scip-go gomod github.com/golang/go/src go1.25.0 `database/sql`/Tx#ExecContext()."
+  ],
+  "rule": "static_reaches_step",
+  "rule_digest": "4aa64aa6031e6e71da381339bf624583bbb99ba8d87572da87d718f28c9bbbb9"
+ },
+ "leaves": [
+  "scip:0759ccef8fbb:scip_may_reference:711c00868b3b",
+  "scip:0759ccef8fbb:scip_may_reference:795036b39318",
+  "scip:0759ccef8fbb:scip_symbol:ac84fe7dafb3",
+  "static:0759ccef8fbb:route_handler_symbol__accepted:517419cba2c0"
+ ],
+ "nesting": 4,
+ "nodes": 173,
+ "rules_digest": "1490a850b07272f5c53a750d7cbc8375fb3538cbd70b03e333c3b87a607160ec",
+ "steps": 1,
+ "truncated": false,
+ "truncation": null,
+ "witnesses": []
+}
