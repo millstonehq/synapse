@@ -3,9 +3,10 @@ from __future__ import annotations
 import unittest
 
 from capcov.claims.evaluator import ResourceLimits, evaluate
-from capcov.claims.ir import (Aggregation, Atom, Bundle, Claim, Column, Comparison,
+from capcov.claims.ir import (Aggregation, Atom, Claim, Column, Comparison,
                               Constant, Evidence, EvidenceMapping, OutputTemplate,
                               RelationDecl, Rule, TemplateValue, Variable)
+from tests.claim_fixtures import Bundle  # attributed fixture bundles
 from capcov.claims.verdicts import OperationalStatus, SemanticVerdict
 
 

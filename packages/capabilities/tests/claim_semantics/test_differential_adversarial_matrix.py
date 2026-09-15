@@ -9,7 +9,6 @@ import unittest
 
 from capcov.claims import (
     Atom,
-    Bundle,
     Claim,
     Constant,
     Context,
@@ -25,6 +24,7 @@ from capcov.claims import (
     bundle_from_json,
     digest,
 )
+from tests.claim_fixtures import Bundle  # attributed fixture bundles
 from capcov.claims.differential import (
     COMPARABLE_CLAIM_FIELDS,
     DifferentialMismatch,
