@@ -69,10 +69,16 @@ when the host exposes those measurements.
 
 ## Select work across the whole system
 
-Start with the existing inventory/ledger and a coarse capability-family view.
-Unknown families remain visible. Fill gaps progressively; completing an exhaustive
-inventory is not a prerequisite to starting implementation. Reuse the project's
-capcov consumer and progress artifact, rather than introducing a competing ledger.
+Before selecting an implementation wave, establish or refresh the feature/outcome
+view required by SKILL.md using [capability and evidence accounting](capability-evidence.md).
+Reuse the existing consumer and native evidence-derived reports. Show capabilities,
+acceptance gaps and unknown areas across the product; timebox the coarse first pass.
+
+Link assignments to feature/outcome IDs, source references and observable acceptance
+conditions. Multiple workers or steps serving one outcome do not create additional
+completions. At integration, update scoped evidence and compare missing capabilities
+across families. Keep counts and estimates in consistent units; retain uncertainty
+and record splits/merges without claiming new throughput.
 
 Track separately for each family: implementation state, local behavioral evidence,
 deployed evidence, remaining requirements, dependencies, assigned owner and effort
