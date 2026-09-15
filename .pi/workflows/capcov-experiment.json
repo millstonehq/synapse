@@ -4,7 +4,7 @@
   "plan": "EXPERIMENT-PLAN.md",
   "requiredAncestor": "d1550e4d49401a0e8fa8cdd813fb2fd7bbd00765",
   "maxAttemptsPerTask": 3,
-  "agentTimeoutMinutes": 30,
+  "agentTimeoutMinutes": 90,
   "reviewerCount": 2,
   "commitCheckpoints": true,
   "mismatchRepairCap": 3,

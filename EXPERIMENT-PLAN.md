@@ -1456,6 +1456,26 @@ hard-wires refutation to false and treats an empty universal domain as complete;
 binary is resolved by bare name with no guard, so both Soufflé test modules error rather than
 skip outside `nix develop` and inside the python-only `capability-regression` check.
 
+#### 2026-09-15 first driver run of `datalog-differential`
+
+Run `claims-20260914185300567` resumed at `0b6ec34` on model `openai-codex/gpt-5.6-sol`.
+Attempt 1: both scouts finished (about 6 minutes each); the implementer was killed by the
+30-minute agent timeout (exit 143) while running the regression suite, so the journaled
+feedback was test noise. Attempt 2: scouts finished; the implementer was killed by a host
+low-memory kill of the driver process, leaving roughly 1,000 changed lines uncommitted in
+`claims/{evaluator,souffle,validation}.py`, the two Soufflé test modules, `schema-v1.json`,
+and corpus fixtures 02, 07, 10 and `expected.json`. Neither attempt reached a gate or a
+reviewer, so neither is semantic evidence for or against the task.
+
+Repairs (human-owned, this commit): `agentTimeoutMinutes` 30 → 90; the driver accepts a
+`manifest-checkpoint` event as the expected resume HEAD so such commits do not require a
+fake task completion; the attempt counter for `datalog-differential` is reset by a
+`task-reset` event naming the infrastructure causes; the implementer receives targeted
+feedback (keep reviewed corpus fixtures byte-stable apart from added evidence records, do
+not reformat them, and make `static-context` apply only to relations that declare an
+`index` column rather than forcing `index` onto the corpus's existing static relations).
+The dirty tree is left in place for attempt 3, which the driver treats as a retry.
+
 ## 27. Kernel provenance repair and differential closure
 
 Owner: `datalog-differential` (reducer, wave `datalog-kernels`). Write set: `claims/**`,

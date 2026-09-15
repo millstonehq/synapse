@@ -27,7 +27,7 @@ assert.equal(fs.existsSync(worker), false, "worker worktree is removed after cap
 const harness = execFileSync("node", [".pi/workflows/datalog-runtime-harness.mjs", "--task", "semantic-contract", "--dry-run"], { cwd: process.cwd(), encoding: "utf8" });
 assert.match(harness, /semantic-contract/);
 const source = fs.readFileSync(new URL("../extensions/capcov-experiment.ts", import.meta.url), "utf8");
-for (const marker of ["task-fanout-completed", "fanout-patch-applied", "wave-checkpoint", "latestSmoke", "wave-repair"]) assert.match(source, new RegExp(marker));
+for (const marker of ["task-fanout-completed", "fanout-patch-applied", "wave-checkpoint", "latestSmoke", "wave-repair", "manifest-checkpoint"]) assert.match(source, new RegExp(marker));
 assert.match(source, /function nextTask[\s\S]*return undefined;/);
 const config = JSON.parse(fs.readFileSync(new URL("./capcov-experiment.json", import.meta.url), "utf8"));
 const modern = config.tasks.filter((task) => !config.legacyTaskIds.includes(task.id));
