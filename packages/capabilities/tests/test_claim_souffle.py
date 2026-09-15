@@ -104,7 +104,7 @@ class SouffleBackendTests(unittest.TestCase):
         relation = R("items", ("item", TypeName.SYMBOL))
         bundle = Bundle((relation,), facts=(Atom("items", (Constant("x"),)),))
         with self.assertRaises(TimeoutError):
-            run_bundle(bundle, timeout=0.001)
+            run_bundle(bundle, timeout=0.0)
 
     def test_sanitized_column_names_do_not_collide(self):
         relation = R("values", ("a-b", TypeName.SYMBOL), ("a_b", TypeName.SYMBOL))
