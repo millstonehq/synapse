@@ -1,0 +1,391 @@
+"""Evaluator-independent checks for the replay rule pack and its review cases (Phase 4, judge side)."""
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import unittest
+
+try:
+    from .replay_rules import cases as case_builder
+    from .replay_rules.adapter import (CASES_DIR, EXPECTED_PATH, FROZEN_PRIMITIVES, PACK_PATH, REJECTED_DIR,
+                                       REJECTED_PATH, bundle_payload, canonical_metadata, case_paths,
+                                       load_case, load_pack, pack_bundle, pack_relations, read_json)
+except ImportError:  # unittest discover -s imports this directory as top-level
+    from replay_rules import cases as case_builder
+    from replay_rules.adapter import (CASES_DIR, EXPECTED_PATH, FROZEN_PRIMITIVES, PACK_PATH, REJECTED_DIR,
+                                      REJECTED_PATH, bundle_payload, canonical_metadata, case_paths,
+                                      load_case, load_pack, pack_bundle, pack_relations, read_json)
+
+from capcov.claims import BundleIngestionError, canonical_json, validate_bundle
+from capcov.claims.replay import replay_facts
+
+VERDICTS = {"supported", "refuted", "unresolved", "conflicting"}
+OPERATIONAL = {"complete", "invalid-input", "inconsistent-premises", "resource-exhausted",
+               "unsupported-construct", "stale", "out-of-scope"}
+LEAF_KEYS = ("support_leaves", "refutation_leaves", "observed_leaves", "forbidden_leaves")
+EXPECTED_KEYS = (*LEAF_KEYS, "semantic_verdict", "operational_status", "discrepancies", "missing_premises")
+STUBS = {"mutant_killed_in", "op_qualified_rt"}
+DERIVED = {
+    "replay_run_current", "replay_run_stale", "requested", "requested_closed", "replayed",
+    "php_model_agree", "php_model_disagree", "go_model_agree", "go_model_disagree", "op_exercised",
+    "undeclared_write", "surviving_mutant", "op_has_surviving_mutant", "op_surviving_closed",
+    "corpus_constrains", "kill_closure_gap", "php_disagree_any", "go_disagree_any", "undeclared_any",
+    "php_disagreement_closed", "go_disagreement_closed", "undeclared_writes_closed", "op_qualified",
+}
+COMPLETENESS = {"requested_closed": "requested", "op_surviving_closed": "op_has_surviving_mutant",
+                "php_disagreement_closed": "php_disagree_any", "go_disagreement_closed": "go_disagree_any",
+                "undeclared_writes_closed": "undeclared_any"}
+EVIDENCE_ID = re.compile(r"^(replay|php|go|shen|mut|reviewer):([0-9a-f]{12}|claim-time):([a-z_]+):([0-9a-f]{12})$")
+CLAIM_TIME_RELATIONS = {"run_nonce_observed", "snapshot_observed", "model_observed", "op_declared"}
+
+
+def canonical(value) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def sha256(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _atoms(rule):
+    return [atom for atom in rule["body"] if "relation" in atom]
+
+
+class ReplayRulePackTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.pack = load_pack()
+        self.declarations = {item["name"]: item for item in pack_relations(self.pack)}
+
+    def test_primitives_are_digest_equal_to_the_frozen_schema(self) -> None:
+        frozen = read_json(FROZEN_PRIMITIVES)["relations"]
+        self.assertEqual(frozen, self.pack["primitives"])
+        self.assertEqual(sha256(canonical(frozen)), sha256(canonical(self.pack["primitives"])))
+        frozen_text = json.dumps(frozen, indent=2, sort_keys=True)
+        self.assertEqual(frozen_text, json.dumps(self.pack["primitives"], indent=2, sort_keys=True))
+        self.assertIn(frozen_text.replace("\n", "\n  ")[1:], PACK_PATH.read_text(encoding="utf-8"))
+        self.assertTrue(all(item["primitive"] for item in self.pack["primitives"]))
+        self.assertEqual(self.pack["supplementary_primitives"], [])
+        self.assertEqual(self.pack["primitives_source"],
+                         "packages/capabilities/src/capcov/claims/replay/schema_replay_v1.json")
+
+    def test_stubs_are_byte_identical_to_the_exporter_declarations(self) -> None:
+        by_name = {decl.name: decl for decl in replay_facts._DERIVED_TARGET_DECLS}
+        self.assertEqual(set(by_name), STUBS)
+        self.assertEqual(set(replay_facts.STUB_RELATIONS), STUBS)
+        for item in self.pack["derived"]:
+            if item["name"] in STUBS:
+                self.assertEqual(replay_facts._relation_from_json(item), by_name[item["name"]])
+        # index_describes_replay is a frozen primitive: identical by the primitives check above
+        exported = {decl.name: decl for decl in replay_facts.replay_relations()}
+        for name, raw in self.declarations.items():
+            if name in exported:
+                self.assertEqual(replay_facts._relation_from_json(raw), exported[name], name)
+        self.assertEqual(self.pack["derived"][:2], [item for item in self.pack["derived"] if item["name"] in STUBS])
+
+    def test_derived_relations_and_their_shapes(self) -> None:
+        derived = {item["name"]: item for item in self.pack["derived"]}
+        self.assertEqual(set(derived), DERIVED | STUBS)
+        for name, item in derived.items():
+            with self.subTest(relation=name):
+                self.assertFalse(item["primitive"])
+                self.assertEqual(item["binding"], "runtime")
+                self.assertEqual(item["producer_classes"], [])
+                if name in {"op_qualified", "op_qualified_rt"}:
+                    self.assertEqual(item["context_indices"], ["index", "run"])
+                else:
+                    self.assertEqual(item["context_indices"], ["run"])
+        self.assertEqual({name for name, item in derived.items() if item["modality"] == "claim"}, {"op_qualified"})
+        self.assertEqual({name: item["completes"] for name, item in derived.items()
+                          if item["modality"] == "completeness"}, COMPLETENESS)
+        self.assertEqual({item["modality"] for item in derived.values()}, {"derived", "completeness", "claim"})
+        frozen = {item["name"]: item for item in self.pack["primitives"]}
+        self.assertEqual(frozen["mutant_kills_closed"]["completes"], "mutant_killed_in")
+        self.assertIn("op_qualified_rt", frozen["index_describes_replay"]["compatibility_targets"])
+
+    def test_pack_validates_alone_with_no_issues(self) -> None:
+        bundle = pack_bundle(self.pack)
+        self.assertEqual(validate_bundle(bundle), ())
+        self.assertEqual(len(bundle.rules), len(self.pack["rules"]))
+        names = [rule["name"] for rule in self.pack["rules"]]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertTrue(all(rule.get("aggregation") is None for rule in self.pack["rules"]))
+        heads = {rule["head"]["relation"] for rule in self.pack["rules"]}
+        self.assertEqual(heads, DERIVED | STUBS)
+
+    def test_every_model_and_run_join_carries_a_positive_model_describes_run_binding_both(self) -> None:
+        for rule in self.pack["rules"]:
+            model_terms, run_terms, witnesses = set(), set(), []
+            for atom in _atoms(rule):
+                decl = self.declarations[atom["relation"]]
+                names = [column["name"] for column in decl["columns"]]
+                if atom["relation"] == "model_describes_run":
+                    if not atom.get("negated"):
+                        witnesses.append((canonical(atom["terms"][0]), canonical(atom["terms"][1])))
+                    continue
+                if "model" in decl["context_indices"]:
+                    model_terms.add(canonical(atom["terms"][names.index("model")]))
+                if "run" in decl["context_indices"]:
+                    run_terms.add(canonical(atom["terms"][names.index("run")]))
+            with self.subTest(rule=rule["name"]):
+                if model_terms and run_terms:
+                    self.assertEqual(len(model_terms), 1)
+                    self.assertEqual(len(run_terms), 1)
+                    self.assertIn((next(iter(model_terms)), next(iter(run_terms))), witnesses)
+        self.assertTrue(any(rule["name"] == "surviving_mutant" for rule in self.pack["rules"]))
+
+    def test_negation_is_stratified_through_witnessed_relations_and_nothing_recurses(self) -> None:
+        heads = {}
+        for rule in self.pack["rules"]:
+            heads.setdefault(rule["head"]["relation"], []).append(rule)
+        recursive = {name for name, rules in heads.items()
+                     if any(atom["relation"] == name for rule in rules for atom in _atoms(rule))}
+        self.assertEqual(recursive, set())
+        negated = {(rule["head"]["relation"], atom["relation"]) for rule in self.pack["rules"]
+                   for atom in _atoms(rule) if atom.get("negated")}
+        self.assertEqual(negated, {
+            ("php_model_disagree", "model_admissible"), ("go_model_disagree", "model_admissible"),
+            ("undeclared_write", "model_writes"), ("surviving_mutant", "mutant_killed_in"),
+            ("corpus_constrains", "op_has_surviving_mutant"), ("kill_closure_gap", "requested"),
+            ("op_qualified_rt", "php_disagree_any"), ("op_qualified_rt", "go_disagree_any"),
+            ("op_qualified_rt", "undeclared_any")})
+        witnesses = {item["completes"] for item in self.declarations.values() if item["modality"] == "completeness"}
+        self.assertTrue({target for _, target in negated} <= witnesses)
+
+    def test_the_static_join_is_isolated_in_the_claim_rule(self) -> None:
+        for rule in self.pack["rules"]:
+            static = [atom["relation"] for atom in _atoms(rule)
+                      if self.declarations[atom["relation"]]["binding"] == "static"]
+            with self.subTest(rule=rule["name"]):
+                if rule["name"] == "op_qualified":
+                    self.assertEqual(static, ["op_declared"])
+                    self.assertEqual([atom["relation"] for atom in _atoms(rule)],
+                                     ["op_declared", "index_describes_replay", "op_qualified_rt"])
+                else:
+                    self.assertEqual(static, [])
+
+
+class ReplayCaseTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.pack = load_pack()
+        self.declarations = {item["name"]: item for item in pack_relations(self.pack)}
+        self.paths = case_paths()
+
+    def test_case_numbers_cover_the_control_and_the_adversarial_shapes(self) -> None:
+        self.assertEqual([path.stem for path in self.paths], list(case_builder.BUILDERS))
+        self.assertEqual(sorted({path.name[:2] for path in self.paths}), ["00", "01", "02", "03", "04", "05", "06", "08"])
+        self.assertEqual([path.stem for path in case_paths(REJECTED_DIR)], ["07-producer-class-violation"])
+
+    def test_every_case_regenerates_identically_from_the_exporter(self) -> None:
+        for path in [*self.paths, *case_paths(REJECTED_DIR)]:
+            case = read_json(path)
+            with self.subTest(case=path.name):
+                generated = case_builder.build(path.stem)
+                self.assertNotIn("expected", generated)
+                self.assertEqual({key: value for key, value in case.items() if key != "expected"}, generated)
+                self.assertEqual(list(case), [*generated, "expected"] if "expected" in case else list(generated))
+
+    def test_case_conventions(self) -> None:
+        for path in self.paths:
+            case = read_json(path)
+            with self.subTest(case=path.name):
+                self.assertEqual(path.stem, case["id"])
+                self.assertEqual(case["rule_pack"], "rules-replay-v1")
+                self.assertEqual(case["provenance"]["kind"], "synthetic")
+                self.assertIn("seeded_fault", case["provenance"])
+                self.assertTrue(case["review_notes"])
+                context = case["context"]
+                self.assertEqual(set(context), {"run", "model", "index"})
+                self.assertRegex(context["model"], r"^[0-9a-f]{64}$")
+                self.assertRegex(context["index"], r"^[0-9a-f]{64}$")
+                self.assertEqual(case["assumptions"], [])
+                ids = set()
+                for entry in case["facts"]:
+                    self.assertEqual(entry["kind"], "fact")
+                    self.assertNotIn(entry["id"], ids)
+                    ids.add(entry["id"])
+                    declaration = self.declarations[entry["relation"]]
+                    self.assertTrue(declaration["primitive"], entry["relation"])
+                    self.assertNotEqual(declaration["modality"], "claim")
+                    self.assertEqual(entry["arg_order"], [c["name"] for c in declaration["columns"]])
+                    values = dict(zip(entry["arg_order"], entry["args"]))
+                    self.assertEqual(entry["context"], {name: values[name] for name in declaration["context_indices"]})
+                    for key in ("run", "model", "index"):
+                        if key in values:
+                            self.assertEqual(values[key], context[key])
+                    self.assertTrue(entry["source"])
+                    if declaration["producer_classes"]:
+                        self.assertIn(entry["source"].split(" ", 1)[0], declaration["producer_classes"])
+                for claim in case["claims"]:
+                    self.assertEqual(claim["quantifier"], "exists")
+                    self.assertIsNone(claim["domain"])
+                    declaration = self.declarations[claim["relation"]]
+                    self.assertFalse(declaration["primitive"])
+                    self.assertEqual(claim["arg_order"], [c["name"] for c in declaration["columns"]])
+                    values = {name: value for name, value in zip(claim["arg_order"], claim["args"])
+                              if not isinstance(value, dict)}
+                    self.assertEqual(claim["context"], {name: values[name] for name in declaration["context_indices"]})
+                    for diagnostic in claim["diagnostics"]:
+                        self.assertIn(diagnostic["trigger_relation"], self.declarations)
+
+    def test_evidence_ids_follow_the_replay_scheme_and_recompute_from_their_rows(self) -> None:
+        decls = {decl.name: decl for decl in replay_facts.replay_relations()}
+        for path in self.paths:
+            case = read_json(path)
+            segments = set()
+            with self.subTest(case=path.name):
+                for entry in case["facts"]:
+                    match = EVIDENCE_ID.match(entry["id"])
+                    self.assertIsNotNone(match, entry["id"])
+                    prefix, segment, relation, row12 = match.groups()
+                    self.assertEqual(relation, entry["relation"])
+                    self.assertEqual(row12, replay_facts.row_digest(relation, entry["args"])[:12])
+                    self.assertEqual(prefix, replay_facts.evidence_prefix(decls[relation]))
+                    if relation in CLAIM_TIME_RELATIONS:
+                        self.assertEqual(segment, "claim-time")
+                    else:
+                        segments.add(segment)
+                        self.assertEqual(entry["id"], replay_facts.evidence_id(segment + "0" * 52, decls[relation],
+                                                                               entry["args"]))
+                self.assertEqual(len(segments), 1, "one exported receipt per case")
+
+    def test_no_orphan_dependencies_and_every_expected_leaf_is_an_evidence_id(self) -> None:
+        for path in self.paths:
+            case = read_json(path)
+            ids = {entry["id"] for entry in case["facts"]}
+            with self.subTest(case=path.name):
+                for entry in case["facts"]:
+                    for dependency in entry["provenance"]["depends_on"]:
+                        self.assertTrue(dependency in ids or dependency.startswith("external:"), dependency)
+                for output in case["outputs"]:
+                    for key in ("requires_all_evidence", "requires_any_evidence", "excludes_evidence"):
+                        self.assertTrue(set(output.get(key, ())) <= ids)
+                    if output["kind"] == "missing_premise":
+                        self.assertEqual(output["when_claim"], "unresolved")
+                        self.assertIn(output["relation"], self.declarations)
+                expected = case["expected"]["claims"]
+                self.assertEqual(set(expected), {claim["id"] for claim in case["claims"]})
+                for claim_id, outcome in expected.items():
+                    self.assertEqual(set(outcome), set(EXPECTED_KEYS), claim_id)
+                    self.assertIn(outcome["semantic_verdict"], VERDICTS)
+                    self.assertIn(outcome["operational_status"], OPERATIONAL)
+                    for key in LEAF_KEYS:
+                        self.assertTrue(set(outcome[key]) <= ids, (claim_id, key))
+                        self.assertEqual(outcome[key], sorted(outcome[key]))
+                    self.assertTrue(set(outcome["support_leaves"]).isdisjoint(outcome["refutation_leaves"]))
+                    self.assertTrue(set(outcome["support_leaves"]) | set(outcome["refutation_leaves"])
+                                    <= set(outcome["observed_leaves"]))
+                    verdict = outcome["semantic_verdict"]
+                    if verdict == "supported":
+                        self.assertTrue(outcome["support_leaves"] and not outcome["refutation_leaves"])
+                    else:
+                        self.assertEqual(verdict, "unresolved")
+                        self.assertFalse(outcome["support_leaves"] or outcome["refutation_leaves"])
+                        self.assertTrue(outcome["missing_premises"], claim_id)
+                    for item in outcome["missing_premises"]:
+                        self.assertIn(item["relation"], self.declarations)
+
+    def test_support_that_uses_forbidden_evidence_is_only_admitted_as_a_labelled_seeded_fault(self) -> None:
+        for path in self.paths:
+            case = read_json(path)
+            with self.subTest(case=path.name):
+                overlap = any(set(outcome["support_leaves"]) & set(outcome["forbidden_leaves"])
+                              for outcome in case["expected"]["claims"].values())
+                if overlap:
+                    self.assertIsNotNone(case["provenance"]["seeded_fault"])
+                if case["provenance"]["seeded_fault"] is None:
+                    self.assertFalse(overlap)
+        lying = read_json(CASES_DIR / "08-lying-closure.json")
+        gap = lying["expected"]["claims"]["claim-kill-outside-corpus"]
+        self.assertEqual(gap["semantic_verdict"], "supported")
+        self.assertTrue(set(gap["support_leaves"]) & set(gap["forbidden_leaves"]))
+        self.assertEqual({leaf.split(":")[2] for leaf in gap["forbidden_leaves"]}, {"mutant_kills_closed"})
+        self.assertEqual(lying["provenance"]["seeded_fault"], "lying-completeness-witness")
+
+    def test_expected_table_duplicates_each_case(self) -> None:
+        table = read_json(EXPECTED_PATH)
+        self.assertEqual(table["schema_version"], 1)
+        self.assertEqual(table["rule_pack"], "rules-replay-v1")
+        self.assertEqual({"exists": "derivational", "forall": "bounded-history-model"},
+                         table["evaluation_basis_by_quantifier"])
+        self.assertEqual(set(table["cases"]), {path.stem for path in self.paths})
+        for path in self.paths:
+            case = read_json(path)
+            with self.subTest(case=path.name):
+                self.assertEqual(case["expected"], table["cases"][case["id"]])
+
+    def test_every_case_ingests_with_validation_and_retains_its_inputs(self) -> None:
+        for path in self.paths:
+            case = read_json(path)
+            with self.subTest(case=path.name):
+                bundle = load_case(path, self.pack)
+                self.assertEqual(validate_bundle(bundle), ())
+                self.assertEqual(len(bundle.rules), len(self.pack["rules"]))
+                retained = canonical_metadata(bundle)["semantic_inputs"]
+                self.assertEqual(case["id"], retained["case_id"])
+                for section in ("facts", "assumptions", "claims"):
+                    self.assertEqual(case[section], retained[section])
+                self.assertNotIn("expected", retained)
+                metadata = canonical_metadata(bundle)
+                self.assertEqual({metadata[key] for key in ("run", "model", "index")}, set(case["context"].values()))
+
+    def test_adapter_rejects_extra_arguments_wrong_context_and_a_foreign_pack(self) -> None:
+        case = read_json(CASES_DIR / "00-positive-control.json")
+        extra = json.loads(json.dumps(case))
+        extra["facts"][0]["args"].append("silently-discarded")
+        with self.assertRaisesRegex(ValueError, "arity"):
+            bundle_payload(extra, self.pack)
+        wrong = json.loads(json.dumps(case))
+        wrong["facts"][0]["context"] = {"run": "run-other"}
+        with self.assertRaisesRegex(ValueError, "context"):
+            bundle_payload(wrong, self.pack)
+        foreign = json.loads(json.dumps(case))
+        foreign["rule_pack"] = "rules-static-v1"
+        with self.assertRaisesRegex(ValueError, "rule pack"):
+            bundle_payload(foreign, self.pack)
+
+    def test_each_case_names_a_discriminating_semantic_control(self) -> None:
+        table = read_json(EXPECTED_PATH)["cases"]
+        for stem, review in case_builder.REVIEW.items():
+            for claim_id, (verdict, status, missing, discrepancies) in review.items():
+                outcome = table[stem]["claims"][claim_id]
+                with self.subTest(case=stem, claim=claim_id):
+                    self.assertEqual(outcome["semantic_verdict"], verdict)
+                    self.assertEqual(outcome["operational_status"], status)
+                    self.assertEqual(sorted(item["relation"] for item in outcome["missing_premises"]), sorted(missing))
+                    self.assertEqual(sorted(item["kind"] for item in outcome["discrepancies"]), sorted(discrepancies))
+        control = table["00-positive-control"]["claims"]
+        for claim_id in ("claim-qualified-create", "claim-qualified-close"):
+            leaves = control[claim_id]["support_leaves"]
+            self.assertEqual({leaf.split(":")[0] for leaf in leaves}, {"replay", "php", "go", "shen", "mut", "reviewer"})
+        facts = {entry["id"]: entry for entry in read_json(CASES_DIR / "00-positive-control.json")["facts"]}
+        classes = {facts[leaf]["source"].split(" ", 1)[0] for leaf in control["claim-qualified-create"]["support_leaves"]}
+        self.assertTrue({"replay", "php", "go", "shen", "mut", "reviewer", "php-census"} <= classes)
+        self.assertEqual(table["06-stale-replay"]["claims"]["claim-qualified-close"]["operational_status"], "stale")
+
+    def test_the_rejected_case_is_refused_at_ingestion_by_the_producer_class_alone(self) -> None:
+        table = read_json(REJECTED_PATH)
+        self.assertEqual(table["rule_pack"], "rules-replay-v1")
+        path = REJECTED_DIR / "07-producer-class-violation.json"
+        case = read_json(path)
+        entry = table["cases"][case["id"]]
+        with self.assertRaises(BundleIngestionError) as ctx:
+            load_case(path, self.pack)
+        self.assertIn("evidence-producer", str(ctx.exception))
+        lenient = load_case(path, self.pack, validate=False)
+        self.assertEqual([issue.code for issue in validate_bundle(lenient)], entry["validation_issues"])
+        relabelled = [f for f in case["facts"] if f["source"] == entry["relabelled_source"]]
+        self.assertEqual({f["relation"] for f in relabelled}, {entry["relabelled_relation"]})
+        self.assertEqual(len(relabelled), len(entry["validation_issues"]))
+        control = read_json(CASES_DIR / "00-positive-control.json")
+        differing = [(a, b) for a, b in zip(control["facts"], case["facts"]) if a != b]
+        self.assertEqual(len(differing), 3)
+        for a, b in differing:
+            self.assertEqual({**a, "source": b["source"]}, b)
+        self.assertEqual(control["claims"], case["claims"])
+        self.assertEqual(control["outputs"], case["outputs"])
+        self.assertNotIn("expected", case)
+
+
+if __name__ == "__main__":
+    unittest.main()
