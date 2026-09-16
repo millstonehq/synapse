@@ -18,14 +18,18 @@ class Section27ValidationTests(unittest.TestCase):
                                 producer_classes=("target-go-runtime-trace-v2",),
                                 context_indices=("run",))
         atom = Atom("runtime_sql_executed", (Constant("run-1", "symbol"),))
+        # Producer identity lives in Evidence.source (its first token names the
+        # producer class); Evidence.kind stays fact/assumption/completeness/
+        # compatibility.  A kind-based check briefly existed and collided with
+        # this contract; see section 26 (2026-09-15, replay-judge integration).
         unauthorized = Bundle((relation,), facts=(atom,), evidence=(
             Evidence("event", atom, Context.from_mapping({"run": "run-1"}),
-                     source="receipt", kind="generic-json"),))
-        self.assertIn("producer-authority", codes(unauthorized))
+                     source="generic-json receipt", kind="fact"),))
+        self.assertIn("evidence-producer", codes(unauthorized))
         authorized = Bundle((relation,), facts=(atom,), evidence=(
             Evidence("event", atom, Context.from_mapping({"run": "run-1"}),
-                     source="receipt", kind="target-go-runtime-trace-v2"),))
-        self.assertNotIn("producer-authority", codes(authorized))
+                     source="target-go-runtime-trace-v2 receipt", kind="fact"),))
+        self.assertNotIn("evidence-producer", codes(authorized))
 
     def test_evidence_and_facts_correspond_exactly(self):
         relation = RelationDecl("seen", (Column("x", "symbol"),))

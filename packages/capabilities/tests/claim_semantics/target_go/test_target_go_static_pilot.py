@@ -442,7 +442,7 @@ class FgGoStaticPilotTest(unittest.TestCase):
             f"runtime:{value['run']}:runtime_route_observed:{scip_facts.row_digest('runtime_route_observed', route_values)[:12]}",
             route_atom, Context.from_mapping({"tenant": value["tenant"], "surface": value["surface"],
                                               "event": value["request_id"], "run": value["run"]}),
-            source=f"target-go runtime receipt sha256:{cls.runtime_receipt_sha256}",
+            source=f"{TRACE_PRODUCER} receipt sha256:{cls.runtime_receipt_sha256}",
             depends_on=(f"external:run:{value['run']}", f"external:git-commit:{value['candidate_commit']}"))
         decls = {decl.name: decl for decl in RUNTIME_TRACE_DECLS}
         facts = [route_atom]
@@ -465,9 +465,8 @@ class FgGoStaticPilotTest(unittest.TestCase):
                 f"runtime:{value['run']}:{relation}:{scip_facts.row_digest(relation, values)[:12]}",
                 atom, Context.from_mapping({column.name: item for item, column in zip(values, columns)
                                             if column.context}),
-                source=f"target-go runtime receipt sha256:{cls.runtime_receipt_sha256}",
-                depends_on=(f"external:run:{value['run']}", f"external:git-commit:{value['candidate_commit']}"),
-                kind=TRACE_PRODUCER))
+                source=f"{TRACE_PRODUCER} receipt sha256:{cls.runtime_receipt_sha256}",
+                depends_on=(f"external:run:{value['run']}", f"external:git-commit:{value['candidate_commit']}")))
         return Bundle((RUNTIME_STATIC_SQL, RUNTIME_CAUSAL_SQL, *RUNTIME_TRACE_DECLS), facts=tuple(facts),
                       rules=(RUNTIME_STATIC_SQL_RULE, RUNTIME_CAUSAL_SQL_RULE), evidence=tuple(evidence))
 

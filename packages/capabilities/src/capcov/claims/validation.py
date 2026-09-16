@@ -459,10 +459,6 @@ def validate_bundle(bundle: Bundle) -> tuple[ValidationIssue, ...]:
                     path))
         if not isinstance(record.kind, str) or not record.kind: issues.append(ValidationIssue("evidence-kind", "evidence kind must be a non-empty string", path))
         if declared:
-            if declared.producer_classes and record.kind not in declared.producer_classes:
-                issues.append(ValidationIssue(
-                    "producer-authority",
-                    f"evidence kind {record.kind!r} is not authorized for {declared.name!r}", path))
             names = [c.name for c in declared.columns]
             for name, value in context.items():
                 if name in names:

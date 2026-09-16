@@ -5207,3 +5207,31 @@ workbench above it; both consume the same rule-pack wire form and the frozen
 through bifrost; the flake was repinned to the same revision (`643491c`), with the
 Shen-Backpressure crash warning and this line's 300-call probe recorded above section 15. Merged-tree gates (integrator's runs on `9553a1a`): replay 73, validation-producer 4, static differential 18, static adversarial 6, exporter 48, manifest seam tests, and the full regression recorded in the log above this line.
 
+### 2026-09-15 target-go runtime join integrated (second fork); producer-authority collision resolved
+
+Upstream PR #50's head branch lives in `pyrex41/synapse-capcov` (GitHub's registered fork of
+`millstonehq/synapse`; the `pyrex41/synapse` repository used earlier for "fork main" has an
+unrelated re-rooted history). Another agent (`codex/fork-souffle-trial`) continued on that PR
+branch from `3e8a5f8` and pushed `507ef19`: an optional retained target-go runtime receipt
+(`CAPCOV_TARGET_GO_RUNTIME_RECEIPT`, schema `capcov-target-go-runtime-route/v2`, produced by target-go's
+disposable `tools/check_subscription_links.py` path at candidate `01fe913`) whose trace preserves
+one request identity across route entry, `ChangeSubscription`, two transaction SQL operations,
+commit, and completion; `index_describes_run(index, run)` emitted by the exporter; and
+`runtime_route_reaches_sql_on_index` derived in both kernels — the runtime join that section 30
+had left open, with static and runtime certificates kept complementary rather than fused. Also:
+CI runs the differential suite with Soufflé, and the Soufflé timeout test is made deterministic.
+Merged into this line as `5c22a89` without conflicts.
+
+Collision: `507ef19` had also added a `producer-authority` validation issue requiring
+`Evidence.kind` to be one of the relation's `producer_classes`, and labelled its runtime
+evidence with `kind="target-go-runtime-trace-v2"`. On the merged tree that rejected every replay
+record (kind `fact`): the replay suite fell to 19 failures and 32 errors, and conversely the
+runtime evidence (source first token `target-go`) would have failed the cherry-picked
+`evidence-producer` check. One contract wins, the plan's (section 13): producer identity is the
+first token of `Evidence.source`; `Evidence.kind` stays `fact`/`assumption`/`completeness`/
+`compatibility`. The kind-based check is removed, the runtime evidence is relabelled
+(`source="target-go-runtime-trace-v2 receipt sha256:…"`, default kind), and the section 27 test
+now asserts `evidence-producer`. Integrator's runs after the fix: validation 23 + 4, replay 73,
+static corpus 18, static differential 18, evidence policy 5 all OK; target-go pilot gate with the
+real runtime receipt `Ran 10 tests in 142.9s`, `OK`; full regression recorded below.
+
