@@ -279,6 +279,40 @@ Design points a reviewer should check:
   says the Go side did not reproduce, so `oracle_stable`'s positive premise
   holds and only `!oracle_unstable` refuses.
 
+## Deviations from the design, and what the rules do not cover
+
+* **`delete_target` still names the op constant `delete-issue`** instead of
+  being generic over `replay_request_seq`.  The tape table carries *every*
+  request, not only the DELETEs, so an op-generic rule would read two POSTs to
+  one collection path as a delete and its repeat.  Genericity needs either a
+  method column on `replay_request_seq` or an op-shaped predicate; until then
+  the constant is the honest restriction, and a second delete op would need a
+  second rule.
+* **`first_delete_committed` names `issue` / `update`** as what a committed
+  delete writes -- a soft delete, which is what the modelled op does.  A hard
+  delete (`issue` / `delete`) would need a second rule; the pack would report
+  the repeat claim as unresolved rather than wrongly supported, which is the
+  safe direction.
+* **The order join is on `(table, kind)`, so a model that declared two
+  statements with the same `(table, kind)` for one request** -- two `issue`
+  updates, say -- would pair them crosswise and could report a violation that
+  is only an artefact of the pairing.  The model declares one statement per
+  `(table, kind)` per request, so this is not reachable today; a model that
+  changes that must refine the join (on `pk`, or on the sequence position
+  itself) before the pack can judge it.
+* **Case 17 plants the order fault on the Go side only.**  The two
+  `effect_order_violation` rules are the same shape over `php_effect_seq` and
+  `go_effect_seq` and the pack lint checks both, but the PHP leg is exercised
+  by symmetry, not by a case of its own.
+* **`repeat_delete_not_found` has never been evaluated against a real
+  receipt.**  Cases 00, 18 and 23-25 are synthetic edits of
+  `fixtures/replay_receipt_min`; the committed target-go receipt is a
+  three-request run whose tape has no repeat, so the receipt suite asserts the
+  *empty* repeat shape (marked `TODO(four-request run)` in
+  `test_target_go_replay_receipt`).  A live four-request run is the open item,
+  and it is the only thing that will show whether the real repeat writes only
+  excluded tables.
+
 ## One observation per key
 
 The exporter, not the pack, settles duplicate observations: two `php_effect`

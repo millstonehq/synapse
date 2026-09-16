@@ -565,7 +565,13 @@ class RealReceiptTest(_JoinCase):
             [row] = summary["stability"]["rows"]
             self.assertEqual(row[2:], ["php", "true"])
             self.assertEqual(len(row), 4, "(run_a, run_b, side, stable) after the run column")
-            # the committed receipt predates the repeat request: no repeat rows to judge
+            # TODO(four-request run): the committed receipt is a three-request run that
+            # predates the repeat request, so there is nothing for the repeat rules to
+            # judge here.  This asserts the *empty* shape, which is the inverse of the
+            # open item -- repeat_delete_not_found(run, DELETE /.../issues/<id>) supported
+            # on a live four-request tape.  The claim has never been evaluated against a
+            # real receipt; cases 00, 18 and 23-25 are synthetic.  Replace this assertion
+            # with the positive one when that run exists, do not delete it.
             self.assertEqual(entry["repeat_delete"], {"repeats": [], "violations": [], "not_found": []})
 
     def test_artifacts_carry_digests_and_verdicts_only(self) -> None:

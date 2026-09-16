@@ -4,9 +4,10 @@ import unittest
 from pathlib import Path
 
 from .adapter import ROOT, bundle_payload, load_fixture
-from capcov.claims import (Bundle, Claim, Column, Constant, EvidenceEffect,
-                           RelationDecl, assert_valid, bundle_from_json,
-                           canonical_json, schema_digest, render_outputs, VerifiedProofEvidence)
+from capcov.claims import (Atom, Bundle, Claim, Column, Comparison, Constant, Context, Evidence, EvidenceEffect,
+                           RelationDecl, Rule, Variable, assert_valid, bundle_from_json,
+                           canonical_json, relevant_evidence_ids, schema_digest, render_outputs,
+                           VerifiedProofEvidence)
 
 
 class EvidencePolicyCompilationTests(unittest.TestCase):
@@ -202,6 +203,36 @@ class EvidencePolicyCompilationTests(unittest.TestCase):
         self.assertTrue(all(mapping.effect == EvidenceEffect.OBSERVATION for mapping in bundle.mappings if mapping.evidence_relation == "compatible_history"))
         effects = {diagnostic.effect for diagnostic in bundle.diagnostics if diagnostic.trigger_relation == "compatible_history"}
         self.assertEqual({EvidenceEffect.OBSERVATION}, effects)
+
+    def test_a_comparison_in_a_rule_body_is_not_mistaken_for_an_atom(self):
+        # relevant_evidence_ids scans the bodies of the rules that conclude the
+        # claim's relation; a Comparison names no relation, and reading one as an
+        # atom used to raise AttributeError on the first claim stated over a rule
+        # with an arithmetic guard.
+        observation = RelationDecl("status_seen", (Column("run", "symbol", True), Column("status", "unsigned")),
+                                   modality="observation", binding="runtime", primitive=True,
+                                   context_indices=("run",), producer_classes=("harness",))
+        derived = RelationDecl("late_status", (Column("run", "symbol", True), Column("status", "unsigned")),
+                               modality="claim", binding="runtime", primitive=False, context_indices=("run",))
+        rule = Rule(Atom("late_status", (Variable("Run"), Variable("St"))),
+                    (Atom("status_seen", (Variable("Run"), Variable("St"))),
+                     Comparison(Variable("St"), ">", Constant(399, "unsigned"))),
+                    name="late_status")
+        atom = Atom("status_seen", (Constant("run-1", "symbol"), Constant(404, "unsigned")))
+        evidence = Evidence("harness:1:status_seen:1", atom, Context.from_mapping({"run": "run-1"}), "harness x")
+        claim = Claim("late_status", (Constant("run-1", "symbol"), Constant(404, "unsigned")),
+                      Context.from_mapping({"run": "run-1"}), id="claim-late")
+        bundle = Bundle((observation, derived), rules=(rule,), facts=(atom,), evidence=(evidence,), claims=(claim,))
+        assert_valid(bundle)
+        self.assertEqual(relevant_evidence_ids(bundle, "claim-late", {evidence.id}, {evidence.id}), {evidence.id})
+        # nothing else makes it relevant: without the proof it is not in scope
+        self.assertEqual(relevant_evidence_ids(bundle, "claim-late", {evidence.id}), set())
+        # and a rule whose body names another relation does not pull it in
+        other = Rule(Atom("late_status", (Variable("Run"), Variable("St"))),
+                     (Atom("late_status", (Variable("Run"), Variable("St"))),
+                      Comparison(Variable("St"), ">", Constant(399, "unsigned"))), name="other")
+        unrelated = Bundle((observation, derived), rules=(other,), facts=(atom,), evidence=(evidence,), claims=(claim,))
+        self.assertEqual(relevant_evidence_ids(unrelated, "claim-late", {evidence.id}, {evidence.id}), set())
 
     def test_malformed_evidence_policy_is_rejected(self):
         payload = bundle_payload(json.loads((ROOT / "01-correlated-positive.json").read_text()))
