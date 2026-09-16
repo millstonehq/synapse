@@ -5662,4 +5662,8 @@ rerun bound to the final commit.
 Second rewrite (fixleak, same day): user home-directory paths that predated this line's records
 were generalized away across the full history; tip `b47c24f` replaces `0ece816` (kept locally as
 `backup/pre-rewrite2-0ece816`). Content differences are confined to those path strings.
+Full regression bound to `7d14b45` (the docs commit on that tip): `Ran 1195 tests in 135.1s`,
+`OK (skipped=154)`; PR #50 CLEAN on it with every check green. The devShell had to rebuild
+`shen-go` after a store path was collected and first failed on a full disk; only this session's
+own scratch (cold-shell Go caches, a nixpkgs unpack, identity dumps, about 2.3 GB) was removed.
 
