@@ -28,9 +28,9 @@ if str(SRC) not in sys.path:
 
 from capcov.claims import (Atom, Bundle, Claim, Constant, Context, DiagnosticRule, Evidence,  # noqa: E402
                            OutputTemplate, TemplateValue, Variable, canonical_json)
+from capcov.claims import assumptions  # noqa: E402
 from capcov.claims.differential import DifferentialMismatch, compare  # noqa: E402
 from capcov.claims.replay import replay_facts  # noqa: E402
-from capcov.claims.static.certificate import certify, claim_conclusions, recheck  # noqa: E402
 from capcov.claims.static.combine import combine  # noqa: E402
 
 try:
@@ -175,6 +175,8 @@ class ReplayJoin:
     """The first claim row's certificate per claim id."""
     row_certificates: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     """Every claim row's certificate per claim id (an open claim such as exclusion_applied has one per table)."""
+    invalidations: dict[str, assumptions.Invalidation] = field(default_factory=dict)
+    """``invalidate`` results by assumption id, in call order."""
 
     @property
     def model_absent(self) -> bool:
@@ -286,7 +288,7 @@ def build(directory: Path) -> ReplayJoin:
 
 
 def evaluate_join(join: ReplayJoin, replay_root: str) -> ReplayJoin:
-    """Run both kernels and certify every corpus_constrains / op_qualified row from both closures."""
+    """Run both kernels and certify every claim row from both closures."""
     if join.bundle is None:
         return join
     try:
@@ -294,22 +296,53 @@ def evaluate_join(join: ReplayJoin, replay_root: str) -> ReplayJoin:
     except DifferentialMismatch as exc:
         join.mismatch = exc.result
         return join
-    for claim in join.bundle.claims:
-        rows = claim_conclusions(join.bundle, join.result.python.relations, claim)
-        if rows != claim_conclusions(join.bundle, join.result.souffle.relations, claim):
-            raise AssertionError(f"{claim.id}: the kernels disagree on the claim rows")
-        for row in rows:
-            from_python = certify(join.bundle, join.result.python.relations, claim.relation, row)
-            from_souffle = certify(join.bundle, join.result.souffle.relations, claim.relation, row)
-            if from_python != from_souffle:
-                raise AssertionError(f"{claim.id}: certificates differ between closures")
-            for relations in (join.result.python.relations, join.result.souffle.relations):
-                checked = recheck(join.bundle, from_python, relations)
-                if not checked.ok:
-                    raise AssertionError(f"{claim.id}: recheck failed: {checked}")
-            join.certificates.setdefault(claim.id, from_python)
-            join.row_certificates.setdefault(claim.id, []).append(from_python)
+    join.certificates, join.row_certificates = assumptions.certify_claims(join.bundle, join.result)
     return join
+
+
+def _explain(join: ReplayJoin):
+    """Pack-specific detail for an invalidated claim: what blocks it, and the tables to blame."""
+    qualified = {join.claim_id("qualified", op): op for op in join.ops}
+
+    def explain(claim_id: str, relations) -> dict[str, Any]:
+        op = qualified.get(claim_id)
+        if op is None:
+            return {}
+        rows = dict(relations)
+        out: dict[str, Any] = {"blocking_premise": blocking_premise(rows, join.run, op)}
+        if out["blocking_premise"] and out["blocking_premise"]["relation"] == "undeclared_any":
+            out["undeclared_tables"] = undeclared_tables(rows, None, join.run, op)
+        return out
+
+    return explain
+
+
+def assumption_registry(join: ReplayJoin) -> dict[str, Any]:
+    """The A2 registry of the join's combined bundle (contract: ``assumptions.json``)."""
+    if join.bundle is None:
+        return {"registry_version": assumptions.REGISTRY_VERSION, "run": join.run,
+                "combined_bundle_digest": None, "assumptions": [], "shared_assumptions": [],
+                "unreferenced": []}
+    report = join.report()
+    return assumptions.registry(join.bundle, join.row_certificates, run=join.run,
+                                relations=report.relations if report is not None else None)
+
+
+def invalidate(join: ReplayJoin, identifier: str, replay_root: str) -> assumptions.Invalidation:
+    """Withdraw one registered assumption and record what every claim did.
+
+    ``identifier`` is an ``asm:`` id or the evidence id of an assumption row.
+    The join must have been evaluated: the baseline verdicts and certificates
+    are read from it rather than recomputed.
+    """
+    if join.bundle is None or join.result is None:
+        raise assumptions.InvalidationError("the join must be evaluated before an assumption is withdrawn")
+    result = assumptions.invalidate(
+        join.bundle, identifier, replay_root=replay_root,
+        baseline_result=join.result, baseline_row_certificates=join.row_certificates,
+        explain=_explain(join))
+    join.invalidations[result.assumption_id] = result
+    return result
 
 
 def summary(join: ReplayJoin) -> dict[str, Any]:
@@ -325,9 +358,13 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
         "combined_bundle_digest": replay_facts.bundle_digest(join.bundle),
         "model_absent": join.model_absent,
         "synthetic_index": SYNTHETIC_INDEX,
-        "assumptions": list(join.assumption_ids),
+        "assumption_ids": list(join.assumption_ids),
         "ops": list(join.ops),
     }
+    registry = assumption_registry(join)
+    # the run-independent registry entries; "assumption_ids" above stays the evidence-id list
+    out["assumptions"] = registry["assumptions"]
+    out["shared_assumptions"] = registry["shared_assumptions"]
     relations = dict(join.report().relations) if join.report() is not None else {}
     for op in join.ops:
         constrains = join.verdict(join.claim_id("corpus-constrains", op)) or {}
@@ -365,6 +402,10 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
     return out
 
 
+def _write(path: Path, document: Any) -> None:
+    path.write_text(json.dumps(document, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def write_artifacts(join: ReplayJoin, out_dir: Path) -> dict[str, Any]:
     """Digests, counts and verdicts only; no source text and no local paths."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -390,13 +431,34 @@ def write_artifacts(join: ReplayJoin, out_dir: Path) -> dict[str, Any]:
                                     "leaves": len(cert["leaves"]), "nodes": cert["nodes"], "truncated": cert["truncated"]}
                          for claim_id, cert in join.certificates.items()},
     }
+    # the registry entries summary() already computed, restated as the standalone A2 document
+    registry = document["join"].get("assumptions")
+    registry_document = {"registry_version": assumptions.REGISTRY_VERSION, "run": join.run,
+                         "combined_bundle_digest": (replay_facts.bundle_digest(join.bundle)
+                                                    if join.bundle is not None else None),
+                         "assumptions": registry if registry is not None else [],
+                         "shared_assumptions": document["join"].get("shared_assumptions", []),
+                         "unreferenced": sorted({entry["assumption_id"] for entry in (registry or [])
+                                                 if not entry["carried_by"]})}
+    _write(out_dir / "assumptions.json", registry_document)
+    invalidations = {}
+    for assumption_id, invalidation in join.invalidations.items():
+        name = f"invalidation-{invalidation.short_id}.json"
+        _write(out_dir / name, invalidation.as_dict())
+        invalidations[assumption_id] = name
+        for claim_id, certs in invalidation.row_certificates.items():
+            for position, cert in enumerate(certs):
+                suffix = "" if position == 0 else f"-{position}"
+                _write(out_dir / f"invalidation-{invalidation.short_id}-certificate-{claim_id}{suffix}.json", cert)
+    document["assumptions"] = {"registry": "assumptions.json", "invalidations": invalidations}
     for claim_id, certs in join.row_certificates.items():
         for position, cert in enumerate(certs):
             name = f"certificate-{claim_id}.json" if position == 0 else f"certificate-{claim_id}-{position}.json"
-            (out_dir / name).write_text(json.dumps(cert, indent=1, sort_keys=True) + "\n", encoding="utf-8")
-    (out_dir / "receipt.json").write_text(json.dumps(document, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+            _write(out_dir / name, cert)
+    _write(out_dir / "receipt.json", document)
     return document
 
 
 __all__ = ["COMMITTED_RECEIPT_DIR", "UNQUALIFIED_RECEIPT_DIR", "RECEIPT_DIR_ENV", "OUT_ENV", "SYNTHETIC_INDEX", "ReplayJoin", "receipt_dir", "build", "evaluate_join",
-           "summary", "write_artifacts", "blocking_premise", "undeclared_tables", "exclusions", "exclusions_applied"]
+           "summary", "write_artifacts", "blocking_premise", "undeclared_tables", "exclusions", "exclusions_applied",
+           "assumption_registry", "invalidate"]
