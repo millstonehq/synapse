@@ -5651,5 +5651,9 @@ rebased over it. On the rewritten tip, in the pinned devShell:
   with the committed receipt); pilot at `7e339e07` `Ran 10 tests in 140.7s OK (skipped=1)`
   (pinned identity held, per-head anchors verified); receipt suite 17 OK (1 skipped); replay 73
   OK; PR #3 modules 24 OK; evidence policy 5, validation 23, CLI 19 (1 skipped), manifest checks
-  ok. Full regression bound to the commit is recorded below.
+  ok. Full regression bound to `3eac405`: `Ran 1195 tests in 98.1s`, `OK (skipped=154)`.
+Note for the record: the repository's local leak-guard pre-commit hook prints a block but does
+not fail `git commit`; a first attempt that named the former short names literally went
+through as `3eac405`'s content only after the wording was neutralized, and the regression was
+rerun bound to the final commit.
 
