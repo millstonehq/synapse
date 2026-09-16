@@ -51,6 +51,27 @@ because "no rows" and "no rows exist" are different statements.  Every key of
 default to empty.  ``replay_run`` has no file: its one row is the receipt
 header.
 
+REVIEWER SCOPE EXCLUSIONS.  Infrastructure tables the systems write around an
+op (a session touch, job bookkeeping, a cache, an outbox) leave the
+``undeclared_write`` judgement only through explicit, reviewer-owned facts,
+never silently.  The optional ``model_scope_exclusions.json``
+(``EXCLUSIONS_FILE``)::
+
+    {"producer": "reviewer <name>",          # optional; first token must be reviewer
+     "reviewer": "<name>", "reviewed_at": "<date>",
+     "reviewed_against": {"model": "<sha256>", "run": "<run id>"},
+     "rows": [{"model": "<sha256>", "table": "<table>", "reason": "<why>"}, ...]}
+
+exports one ``model_scope_exclusion(model, table, reason)`` row per entry as
+*assumption*-kind evidence whose source is ``"<producer or reviewer <name>>
+<reviewed_at> model:<digest12> run:<run>"``, so a certificate's assumption
+leaf points at who reviewed what.  ``reviewed_against.model`` must equal the
+receipt's model (a mismatch is a *stale review* and ``invalid-input``);
+``reviewed_against.run`` is recorded, not enforced, because an exclusion is
+model-scoped.  ``closed.model_scope_exclusions`` (true iff the file is
+authoritative for that model) emits ``model_scope_exclusions_closed(model)``;
+without it the judge has no closed exclusion set and qualifies nothing.
+
 One observation per write and per post-state (``UNIQUE_KEYS``): two
 ``php_effect`` / ``go_effect`` / ``model_effect`` rows sharing
 ``(run, [model,] req, table, kind, pk)`` with different ``cols_digest``, or
@@ -206,6 +227,11 @@ WITNESS_MODEL_ADMISSIBLE = "model-admissible-closed-v1"
 WITNESS_MUTANT_KILLS = "mutant-kills-closed-v1"
 WITNESS_MODEL_WRITES = "model-writes-closed-v1"
 WITNESS_MUTANTS = "mutants-closed-v1"
+WITNESS_SCOPE_EXCLUSIONS = "model-scope-exclusions-closed-v1"
+
+# The reviewer's scope exclusions (module docstring, REVIEWER SCOPE EXCLUSIONS).
+EXCLUSIONS_FILE = "model_scope_exclusions.json"
+_EXCLUSIONS_KEYS = frozenset({"producer", "reviewer", "reviewed_at", "reviewed_against", "rows"})
 
 # receipt.json ``closed`` key -> (witness relation, predicate version).
 _RUN_WITNESSES = {
@@ -216,7 +242,10 @@ _RUN_WITNESSES = {
     "go_post_states": ("go_post_states_closed", WITNESS_GO_POST_STATES),
     "model_admissible": ("model_admissible_closed", WITNESS_MODEL_ADMISSIBLE),
     "mutant_kills": ("mutant_kills_closed", WITNESS_MUTANT_KILLS),
+    "model_scope_exclusions": ("model_scope_exclusions_closed", WITNESS_SCOPE_EXCLUSIONS),
 }
+# Witnesses keyed by the model rather than the run.
+_MODEL_KEYED_WITNESSES = frozenset({"model_scope_exclusions_closed"})
 _RECEIPT_KEYS = frozenset({
     "version", "run", "nonce", "snapshot", "model", "php_commit", "go_commit",
     "closed", "model_writes_closed", "mutants_closed", "receipts",
@@ -540,6 +569,48 @@ def _read_receipt(receipt_dir: Path, run: str, limits: ExportLimits) -> dict[str
     return {**header, "closed": closed, **scoped, "receipts": dict(receipts)}
 
 
+def _read_exclusions(receipt_dir: Path, header: Mapping[str, str],
+                     limits: ExportLimits) -> tuple[str | None, list[dict[str, Any]]]:
+    """``(source, rows)`` of ``model_scope_exclusions.json``; ``(None, [])`` when absent."""
+    path = receipt_dir / EXCLUSIONS_FILE
+    if not path.is_file():
+        return None, []
+    document = _read_json(path, limits.file_bytes)
+    if not isinstance(document, Mapping) or set(document) - _EXCLUSIONS_KEYS:
+        raise ExportInputError(f"{EXCLUSIONS_FILE}: must be {{reviewer, reviewed_at, reviewed_against, rows, producer?}}")
+    for key in ("reviewer", "reviewed_at"):
+        if not isinstance(document.get(key), str) or not document[key].strip():
+            raise ExportInputError(f"{EXCLUSIONS_FILE}: {key!r} must be a non-empty string")
+    against = document.get("reviewed_against")
+    if (not isinstance(against, Mapping) or set(against) != {"model", "run"}
+            or not all(isinstance(against[k], str) and against[k] for k in ("model", "run"))):
+        raise ExportInputError(f"{EXCLUSIONS_FILE}: 'reviewed_against' must be {{model, run}} with non-empty strings")
+    if against["model"] != header["model"]:
+        raise ExportInputError(f"{EXCLUSIONS_FILE}: stale review: reviewed against model "
+                               f"{against['model'][:12]!r}, the receipt's model is {header['model'][:12]!r}")
+    producer = document.get("producer")
+    if producer is not None and (not isinstance(producer, str) or not producer.strip()):
+        raise ExportInputError(f"{EXCLUSIONS_FILE}: 'producer' must be a non-empty string")
+    prefix = producer.strip() if producer is not None else f"reviewer {document['reviewer'].strip()}"
+    source = f"{prefix} {document['reviewed_at'].strip()} model:{header['model'][:12]} run:{against['run']}"
+    raw_rows = document.get("rows", [])
+    if not isinstance(raw_rows, list):
+        raise ExportInputError(f"{EXCLUSIONS_FILE}: 'rows' must be an array")
+    rows = []
+    for index, raw in enumerate(raw_rows):
+        if not isinstance(raw, Mapping) or set(raw) - {"model", "table", "reason"}:
+            raise ExportInputError(f"{EXCLUSIONS_FILE}: rows[{index}] must be {{model?, table, reason}}")
+        row = {"model": raw.get("model", header["model"]), "table": raw.get("table"), "reason": raw.get("reason")}
+        if row["model"] != header["model"]:
+            raise ExportInputError(f"{EXCLUSIONS_FILE}: rows[{index}] names model {str(row['model'])[:12]!r}, "
+                                   f"the receipt's model is {header['model'][:12]!r}")
+        for key in ("table", "reason"):
+            if not isinstance(row[key], str) or not row[key]:
+                raise ExportInputError(f"{EXCLUSIONS_FILE}: rows[{index}].{key} must be a non-empty string")
+        rows.append(row)
+    return source, rows
+
+
 def _read_rows(receipt_dir: Path, relation: RelationDecl, header: Mapping[str, str],
                limits: ExportLimits) -> tuple[str | None, list[dict[str, Any]]]:
     """``(producer, rows)`` of ``<relation>.json``; ``(None, [])`` when absent."""
@@ -667,6 +738,15 @@ def export_bundle(
                 return ExportResult(STATUS_RESOURCE_EXHAUSTED, None, facts.counts(),
                                     (f"rows {len(facts)} exceed limit {limits.rows}",))
 
+        # --- reviewer scope exclusions (assumption-kind evidence) --------------------
+        source, rows = _read_exclusions(receipt_dir, header, limits)
+        if source is None:
+            messages.append(f"{EXCLUSIONS_FILE} absent: zero exclusions")
+        else:
+            producers["model_scope_exclusion"] = source
+            for row in rows:
+                facts.add("model_scope_exclusion", row, source=source, depends_on=[model_ext], kind="assumption")
+
         # --- compatibility rows --------------------------------------------------
         facts.add("model_describes_run", {"model": model, "run": header["run"]},
                   source=default_source(relations["model_describes_run"]), depends_on=[run_eid, model_ext])
@@ -682,11 +762,14 @@ def export_bundle(
             if not header["closed"][key]:
                 messages.append(f"closed.{key} is false: no {relation} witness")
                 continue
-            values = {"run": header["run"]}
-            deps = [run_eid]
-            if relation == "model_admissible_closed":
-                values["model"] = model
-                deps.append(model_ext)
+            if relation in _MODEL_KEYED_WITNESSES:
+                values, deps = {"model": model}, [model_ext]
+            else:
+                values = {"run": header["run"]}
+                deps = [run_eid]
+                if relation == "model_admissible_closed":
+                    values["model"] = model
+                    deps.append(model_ext)
             facts.add(relation, values, source=witness_source(relations[relation], predicate),
                       depends_on=deps)
         for entry in header["model_writes_closed"]:
@@ -771,6 +854,7 @@ __all__ = [
     "EXPORT_VERSION", "EXPORTER", "PRODUCER", "REPLAY_IDENTITY", "RECEIPT_VERSION",
     "RECEIPT_FILE", "RECEIPT_METADATA_KEYS", "EVIDENCE_PREFIXES", "OBSERVATION_FILES",
     "STATUS_COMPLETE", "STATUS_RESOURCE_EXHAUSTED", "STATUS_INVALID_INPUT", "STATUS_STALE", "UNIQUE_KEYS",
+    "EXCLUSIONS_FILE", "WITNESS_SCOPE_EXCLUSIONS",
     "ExportLimits", "ExportResult", "ExportInputError", "StaleReceiptError",
     "evidence_id", "evidence_prefix", "row_digest", "replay_relations_identity",
     "replay_relations", "primitive_relations", "STUB_RELATIONS", "default_source", "witness_source",

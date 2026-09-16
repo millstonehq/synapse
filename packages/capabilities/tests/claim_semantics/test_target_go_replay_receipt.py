@@ -187,7 +187,11 @@ class _JoinCase(unittest.TestCase):
         self.assertTrue(self.join.ops)
         self.assertRegex(self.join.receipt["model"], r"^[0-9a-f]{64}$")
         for record in self.join.bundle.evidence:
-            if record.kind == "assumption":
+            if record.kind == "assumption" and record.atom.relation == "model_scope_exclusion":
+                # the reviewer's exported scope exclusions are assumptions too
+                self.assertTrue(record.id.startswith("reviewer:"))
+                self.assertEqual(record.source.split(" ", 1)[0], "reviewer")
+            elif record.kind == "assumption":
                 self.assertIn(record.id, self.join.assumption_ids)
                 self.assertIn(":assumed:", record.id)
                 self.assertIn(record.atom.relation, {"op_declared", "index_describes_replay"})
@@ -288,12 +292,66 @@ class _JoinCase(unittest.TestCase):
         self.assertEqual({row[2] for row in dict(self.join.result.python.relations)["op_qualified"]},
                          {op for op in self.join.ops if self._expect_qualified(op)})
 
+    def _raw_undeclared(self) -> dict[str, dict[str, set[str]]]:
+        """From the receipt files alone: tables each side wrote for the op minus declared minus reviewer-excluded."""
+        directory = self.join.receipt_dir
+        requests = {row["req"]: row["op"] for row in json.loads((directory / "replay_request.json").read_text())["rows"]}
+        writes = {row["op"]: {row["table"]} for row in []}
+        for row in json.loads((directory / "model_writes.json").read_text())["rows"]:
+            writes.setdefault(row["op"], set()).add(row["table"])
+        excluded = set()
+        exclusions_path = directory / replay_facts.EXCLUSIONS_FILE
+        if exclusions_path.is_file() and self.join.receipt["closed"].get("model_scope_exclusions"):
+            excluded = {row["table"] for row in json.loads(exclusions_path.read_text())["rows"]}
+        out = {op: {"php": set(), "go": set()} for op in self.join.ops}
+        for side in ("php", "go"):
+            for row in json.loads((directory / f"{side}_effect.json").read_text())["rows"]:
+                op = requests.get(row["req"])
+                if op is not None and row["table"] not in writes.get(op, set()) and row["table"] not in excluded:
+                    out[op][side].add(row["table"])
+        return out
+
+    def check_exclusions(self) -> None:
+        """Exclusions are explicit reviewer assumptions; the closure-derived gap equals the raw one."""
+        self._evaluated()
+        summary = replay_join.summary(self.join)
+        relations = dict(self.join.result.python.relations)
+        exclusion_rows = [record for record in self.join.bundle.evidence if record.atom.relation == "model_scope_exclusion"]
+        for record in exclusion_rows:
+            self.assertEqual(record.kind, "assumption")
+            self.assertEqual(record.source.split(" ", 1)[0], "reviewer")
+            self.assertIn(f"model:{self.join.receipt['model'][:12]} run:", record.source)
+        self.assertEqual({item["table"] for item in summary["exclusions"]},
+                         {record.atom.terms[1].value for record in exclusion_rows})
+        raw = self._raw_undeclared()
+        for op in self.join.ops:
+            tables = self._undeclared()[op]
+            print(f"\n{self.join.receipt_dir.name} {op}: remaining undeclared php={tables['php']} go={tables['go']}; "
+                  f"exclusions applied={summary[op]['exclusions_applied']}")
+            with self.subTest(op=op):
+                self.assertEqual({side: set(v) for side, v in tables.items()}, raw[op])
+                applied = set(summary[op]["exclusions_applied"])
+                self.assertTrue(applied <= {record.atom.terms[1].value for record in exclusion_rows})
+                self.assertEqual(set(relations["exclusion_applied"]) & {(self.join.run, op, t) for t in applied},
+                                 {(self.join.run, op, t) for t in applied})
+                claim_id = self.join.claim_id("exclusions-applied", op)
+                if applied:
+                    self.assertIn(claim_id, self.join.certificates)
+                    cert_leaves = set(self.join.certificates[claim_id]["leaves"])
+                    self.assertTrue({r.id for r in exclusion_rows} & cert_leaves, "the assumption is a leaf")
+                    self.assertEqual(summary[op]["assumption_leaves"], len({r.id for r in exclusion_rows} & cert_leaves))
+                if summary[op]["op_qualified"] == "supported" and applied:
+                    self.assertTrue(summary[op]["qualified_under_exclusions"].startswith(
+                        f"qualified under {len(applied)} reviewer exclusions: "))
+                elif summary[op]["op_qualified"] == "supported":
+                    self.assertNotIn("qualified_under_exclusions", summary[op])
+
     def check_qualified(self) -> None:
         self._evaluated()
         by_id = {record.id: record for record in self.join.bundle.evidence}
         for op in self.join.ops:
             if not self._expect_qualified(op):
-                self.skipTest(f"{op}: awaiting model write-set for PHP bookkeeping tables "
+                self.skipTest(f"{op}: awaiting model write-set for the remaining business tables "
                               f"(undeclared: {self._undeclared()[op]})")
             claim_id = self.join.claim_id("qualified", op)
             with self.subTest(op=op):
@@ -363,6 +421,14 @@ class FixtureJoinTest(_JoinCase):
         self.check_undeclared_writes()
         self.check_not_qualified_naming_the_blocker()
 
+    def test_exclusions_are_explicit_and_unused_on_the_clean_fixture(self) -> None:
+        self.check_exclusions()
+        summary = replay_join.summary(self.join)
+        self.assertEqual({item["table"] for item in summary["exclusions"]}, {"authentication", "redis"})
+        for op in self.join.ops:
+            self.assertEqual(summary[op]["exclusions_applied"], [])
+            self.assertEqual(summary[op]["assumption_leaves"], 0)
+
     def test_artifacts(self) -> None:
         self.check_artifacts()
 
@@ -384,7 +450,7 @@ class FixtureJoinTest(_JoinCase):
                 self.assertEqual([item["relation"] for item in entry.result.missing_premises], ["model_observed"])
             elif entry.claim.relation == "corpus_constrains":
                 self.assertEqual(entry.result.semantic.value, "supported")
-            else:  # the undeclared_write companion: nothing undeclared on the clean fixture
+            else:  # undeclared_write / exclusion_applied companions: nothing to report on the clean fixture
                 self.assertEqual(entry.result.semantic.value, "unresolved")
 
 
@@ -421,6 +487,22 @@ class RealReceiptTest(_JoinCase):
 
     def test_delete_issue_is_not_qualified_and_the_why_not_names_the_undeclared_writes(self) -> None:
         self.check_not_qualified_naming_the_blocker()
+
+    def test_reviewer_exclusions_leave_exactly_the_undeclared_business_tables(self) -> None:
+        self.check_exclusions()
+        summary = replay_join.summary(self.join)
+        self.assertTrue(summary["exclusions"], "the receipt carries a reviewer exclusion file")
+        if self.join.receipt_dir.resolve() == replay_join.COMMITTED_RECEIPT_DIR.resolve():
+            # the committed receipt: bookkeeping tables excluded by the reviewer, two business tables
+            # the model does not declare yet
+            self.assertEqual({item["table"] for item in summary["exclusions"]},
+                             {"authentication", "jobs_statuses", "redis", "go_issue_outbox"})
+            tables = self._undeclared()["delete-issue"]
+            self.assertEqual(set(tables["php"]), {"entity_statistics", "mongo:issue"})
+            self.assertEqual(set(tables["go"]), {"entity_statistics", "mongo:issue"})
+            self.assertEqual(set(summary["delete-issue"]["exclusions_applied"]),
+                             {"authentication", "jobs_statuses", "redis", "go_issue_outbox"})
+            self.assertEqual(summary["delete-issue"]["op_qualified"], "unresolved")
 
     def test_delete_issue_is_qualified_with_leaves_from_every_producer(self) -> None:
         # conditional: passes only once the model's write set covers the bookkeeping tables

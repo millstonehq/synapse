@@ -75,8 +75,14 @@ post_state_gap(Run,Req,"php")   :- requested(Run,Req), replay_requests_closed(Ru
 post_state_any(Run,Op)          :- replay_request(Run,Req,_,_,Op), post_state_gap(Run,Req,_).
 post_state_gap_closed(Run,Op)   :- replayed(Run,Op), replay_requests_closed(Run), php_post_states_closed(Run),
                                    go_post_states_closed(Run).
+model_scope_excluded(M,Tb)      :- model_scope_exclusion(M,Tb,_).
+model_scope_excluded_closed(M)  :- model_scope_exclusions_closed(M).
+exclusion_applied(Run,Op,Tb)    :- replay_request(Run,Req,_,_,Op), php_effect(Run,Req,Tb,_,_,_), model_describes_run(M,Run),
+                                   model_scope_excluded(M,Tb).          (and the same over go_effect)
 undeclared_write(Run,Op,Tb)     :- replay_request(Run,Req,_,_,Op), php_effect(Run,Req,Tb,_,_,_), model_describes_run(M,Run),
-                                   model_writes_closed(M,Op), !model_writes(M,Op,Tb).
+                                   model_writes_closed(M,Op), !model_writes(M,Op,Tb),
+                                   model_scope_exclusions_closed(M), model_scope_excluded_closed(M),
+                                   !model_scope_excluded(M,Tb).
 undeclared_write(Run,Op,Tb)     :- ... the same over go_effect.
 surviving_mutant(Run,Op,Mu)     :- model_describes_run(M,Run), mutant(M,Mu,Op), mutants_closed(M,Op),
                                    mutant_kills_closed(Run), !mutant_killed_in(Run,Mu).
@@ -97,7 +103,7 @@ php_disagreement_closed(Run,Op) :- replayed(Run,Op), replay_run_current(Run), mo
 go_disagreement_closed(Run,Op)  :- the same body with go_post_states_closed(Run).
 undeclared_writes_closed(Run,Op):- replayed(Run,Op), replay_run_current(Run), model_describes_run(M,Run),
                                    replay_requests_closed(Run), php_effects_closed(Run), go_effects_closed(Run),
-                                   model_writes_closed(M,Op).
+                                   model_writes_closed(M,Op), model_scope_exclusions_closed(M).
 op_qualified_rt(IX,Run,Op)      :- index_describes_replay(IX,Run), replayed(Run,Op), op_exercised(Run,Op),
                                    corpus_constrains(Run,Op),
                                    php_disagreement_closed(Run,Op), !php_disagree_any(Run,Op),
@@ -160,6 +166,23 @@ Design points a reviewer should check:
   replayed request with no post-state on that side (case 09; the mutation
   tests in `test_replay_corpus_evaluation` show that dropping the gate flips
   the case).
+* **Reviewer scope exclusions** (schema addition, pre-consumer).  The
+  infrastructure tables the systems write around an op (a session touch,
+  job bookkeeping, a cache, an outbox) leave the `undeclared_write` judgement
+  only through explicit reviewer-owned facts: `model_scope_exclusion(model,
+  table, reason)` (modality *assumption*, producer `reviewer`, exported as
+  assumption-kind evidence from `model_scope_exclusions.json`, whose source
+  names the reviewer, the date and the model/run reviewed) under
+  `model_scope_exclusions_closed(model)` (`closed.model_scope_exclusions`).
+  The negation in `undeclared_write` is gated by that closure through the
+  projection `model_scope_excluded` and its derived completeness, and the
+  closure is an input of `undeclared_writes_closed`, so an empty exclusion set
+  with no closure qualifies nothing (case 15) and rows without the closure
+  license nothing (case 14).  A negated atom carries no leaf, so the
+  `op_qualified` certificate cites the closure witness; the exclusion rows
+  themselves are the assumption leaves of the companion `exclusion_applied`
+  certificate (case 13), which is what the join summary counts as
+  `assumption_leaves` and reports as "qualified under N reviewer exclusions".
 * **`kill_closure_gap`** (case 08) is the replay analogue of the static
   `02-lying-witness` gap: a kill that names a request outside the closed
   request set while `mutant_kills_closed` is asserted.  It is derived *from*
@@ -266,6 +289,10 @@ constant in a case.
 | 09 missing post-state | `php_post_state` row for req-3 (issues.create) removed; `php_post_states` still closed | create: unresolved, missing `php_post_state` (req-1 alone satisfies `op_exercised`, so only the gate catches it); close: supported; companion `post_state_gap(run, req-3, php)` supported, discrepancy `post-state-missing` |
 | 10 missing effects closure | `closed.php_effects = false` (go stays closed) | both unresolved, missing `php_effects_closed`: an open effect table cannot license `!undeclared_any` |
 | 11 missing admissible closure | `closed.model_admissible = false`; `model_describes_run` present (unlike 04) | both unresolved, missing `model_admissible_closed`; companion `php_model_agree` supported (observed agreement is not closed agreement) |
+| 13 excluded undeclared write | case 02's Go `audit_log` write plus a closed reviewer exclusion file naming `authentication`, `redis`, `audit_log` | both ops supported; companion `exclusion_applied(run, issues.close, audit_log)` supported with the exclusion assumption as a leaf, discrepancy `write-excluded-by-reviewer`; contrast 02 (same table, not excluded: unresolved) |
+| 14 exclusions not closed | case 13's file with `closed.model_scope_exclusions = false` | both unresolved, missing `model_scope_exclusions_closed` |
+| 15 no exclusions, no closure | control without the file and without the closure | both unresolved, missing `model_scope_exclusions_closed`: the reviewer must close an empty set, not say nothing |
 | 08 lying closure | `mutant_killed` m-1 names req-9, not a replayed request; closures asserted | both ops **unresolved** (contradiction gate; missing premise `replay_request` for req-9); `kill_closure_gap` supported with support ∩ forbidden = the `mutant_kills_closed` witness (seeded fault), discrepancy `kill-outside-replayed-requests` |
 | rejected 07 | control with `php_post_state` sourced `shen shen-model-host v1` | `load_case` raises; `validate_bundle` lists `evidence-producer` ×3; evaluated unvalidated both ops would be supported |
+| rejected 16 | control with the two `model_scope_exclusion` assumptions sourced `replay …` (the harness excluding on the reviewer's behalf) | `load_case` raises; `evidence-producer` ×2; evaluated unvalidated both ops would be supported |
 | rejected 12 | control with `model_admissible_closed` sourced `replay ...` (the harness closing the model runner's table) | `load_case` raises; `evidence-producer` ×1; evaluated unvalidated both ops would be supported |

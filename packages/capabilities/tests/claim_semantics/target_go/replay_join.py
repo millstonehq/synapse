@@ -44,11 +44,12 @@ SYNTHETIC_INDEX = hashlib.sha256(b"target-go replay pilot: synthetic PHP census 
 REVIEWER_SOURCE = "reviewer claim-time observation"
 CENSUS_ASSUMPTION_SOURCE = "php-census assumed by the reviewer pending the PHP SCIP census"
 INDEX_ASSUMPTION_SOURCE = "reviewer assumed: synthetic census index pending the PHP SCIP census"
-MODEL_WITNESSES = ("model_describes_run", "model_observed", "model_admissible_closed")
+MODEL_WITNESSES = ("model_describes_run", "model_observed", "model_admissible_closed", "model_scope_exclusions_closed")
 REASONS = {
     "model_describes_run": "no model runner vouched that a model describes the run",
     "model_observed": "the receipt names no model, so the reviewer has no model digest to observe",
     "model_admissible_closed": "the receipt names no model, so no admissible-state set is closed",
+    "model_scope_exclusions_closed": "the reviewer did not close the model-scope exclusion set for this model",
 }
 UNDECLARED_REASON = "blocked by undeclared writes: PHP or Go wrote a table the model's closed write set does not declare for this op"
 # The premises op_qualified_rt needs, in the order a reviewer checks them; the
@@ -57,7 +58,8 @@ _BLOCKING_ORDER = (
     ("replay_run_current", False), ("model_describes_run", False), ("replayed", False), ("op_exercised", False),
     ("corpus_constrains", False), ("php_disagreement_closed", False), ("php_disagree_any", True),
     ("go_disagreement_closed", False), ("go_disagree_any", True), ("undeclared_writes_closed", False),
-    ("undeclared_any", True), ("post_state_gap_closed", False), ("post_state_any", True),
+    ("model_scope_exclusions_closed", False), ("undeclared_any", True),
+    ("post_state_gap_closed", False), ("post_state_any", True),
     ("kill_gap_closed", False), ("kill_closure_gap_any", True), ("index_describes_replay", False),
     ("op_declared", False),
 )
@@ -84,6 +86,19 @@ def _values(decls, relation: str, row) -> dict[str, Any]:
     return dict(zip((column.name for column in decls[relation].columns), row))
 
 
+def exclusions(relations, run: str) -> list[dict[str, str]]:
+    """The reviewer's exclusion rows for the model(s) describing ``run``: table and reason."""
+    rows = dict(relations) if not isinstance(relations, dict) else relations
+    models = {r[0] for r in rows.get("model_describes_run", ()) if r[1] == run}
+    return sorted(({"table": r[1], "reason": r[2]} for r in rows.get("model_scope_exclusion", ()) if r[0] in models),
+                  key=lambda item: item["table"])
+
+
+def exclusions_applied(relations, run: str, op: str) -> list[str]:
+    rows = dict(relations) if not isinstance(relations, dict) else relations
+    return sorted({r[2] for r in rows.get("exclusion_applied", ()) if r[0] == run and r[1] == op})
+
+
 def undeclared_tables(relations, decls, run: str, op: str) -> dict[str, list[str]]:
     """Per side, the tables ``undeclared_write(run, op, _)`` names that that side wrote for a request of ``op``."""
     rows = dict(relations) if not isinstance(relations, dict) else relations
@@ -101,6 +116,7 @@ def blocking_premise(relations, run: str, op: str, index: str = SYNTHETIC_INDEX)
     rows = dict(relations) if not isinstance(relations, dict) else relations
     if any(r[0] == index and r[1] == run and r[2] == op for r in rows.get("op_qualified", ())):
         return None
+    models = {r[0] for r in rows.get("model_describes_run", ()) if r[1] == run}
 
     def holds(name: str) -> bool:
         for r in rows.get(name, ()):
@@ -111,6 +127,8 @@ def blocking_premise(relations, run: str, op: str, index: str = SYNTHETIC_INDEX)
             if name in ("replay_run_current", "kill_gap_closed") and r == (run,):
                 return True
             if name == "model_describes_run" and r[1] == run:
+                return True
+            if name == "model_scope_exclusions_closed" and r[0] in models:
                 return True
             if r[:2] == (run, op):
                 return True
@@ -204,7 +222,8 @@ def build(directory: Path) -> ReplayJoin:
     present.update({record.atom.relation: record.id for _, record in additions if record.atom.relation in MODEL_WITNESSES})
     # the effect rows the model's closed write set does not cover, per op (what
     # the undeclared_write rules will derive from), so the why-not can name them
-    exported_rows = {name: [] for name in ("replay_request", "php_effect", "go_effect", "model_writes", "model_writes_closed")}
+    exported_rows = {name: [] for name in ("replay_request", "php_effect", "go_effect", "model_writes", "model_writes_closed",
+                                           "model_scope_exclusion", "model_scope_exclusions_closed")}
     evidence_of: dict[tuple[str, tuple], str] = {}
     for record in exported.bundle.evidence:
         if record.atom.relation in exported_rows:
@@ -213,6 +232,8 @@ def build(directory: Path) -> ReplayJoin:
             evidence_of[(record.atom.relation, row)] = record.id
     declared = {(r[1], r[2]) for r in exported_rows["model_writes"]}
     closed_ops = {r[1] for r in exported_rows["model_writes_closed"]}
+    exclusions_closed = bool(exported_rows["model_scope_exclusions_closed"])
+    excluded = {r[1] for r in exported_rows["model_scope_exclusion"]} if exclusions_closed else set()
     claims, diagnostics, outputs = [], [], []
     for op in ops:
         qualified = Claim("op_qualified", (Constant(SYNTHETIC_INDEX, "digest"), Constant(run, "symbol"), Constant(op, "symbol")),
@@ -221,10 +242,13 @@ def build(directory: Path) -> ReplayJoin:
                            Context.from_mapping({"run": run}), id=join.claim_id("corpus-constrains", op))
         undeclared = Claim("undeclared_write", (Constant(run, "symbol"), Constant(op, "symbol"), Variable("table")),
                            Context.from_mapping({"run": run}), id=join.claim_id("undeclared-write", op))
-        claims.extend([qualified, constrains, undeclared])
+        applied = Claim("exclusion_applied", (Constant(run, "symbol"), Constant(op, "symbol"), Variable("table")),
+                        Context.from_mapping({"run": run}), id=join.claim_id("exclusions-applied", op))
+        claims.extend([qualified, constrains, undeclared, applied])
         requests = {r[1] for r in exported_rows["replay_request"] if r[4] == op}
         offending = [evidence_of[(side, row)] for side in ("php_effect", "go_effect") for row in exported_rows[side]
-                     if row[1] in requests and op in closed_ops and (op, row[2]) not in declared]
+                     if row[1] in requests and op in closed_ops and exclusions_closed
+                     and (op, row[2]) not in declared and row[2] not in excluded]
         if offending:
             for side in ("php_effect", "go_effect"):
                 diagnostics.append(DiagnosticRule(side, "observation", "complete", ("run",), claim_id=qualified.id))
@@ -233,7 +257,7 @@ def build(directory: Path) -> ReplayJoin:
                 fields=(("reason", TemplateValue("constant", "", "symbol", UNDECLARED_REASON)),),
                 requires_any_evidence=tuple(sorted(offending)), when_claim="unresolved"))
         for relation in MODEL_WITNESSES:
-            context = ("run",) if relation != "model_observed" else ()
+            context = ("run",) if relation in ("model_describes_run", "model_admissible_closed") else ()
             diagnostics.append(DiagnosticRule(relation, "observation", "complete", context, claim_id=qualified.id))
             excludes = (present[relation],) if relation in present else ()
             outputs.append(OutputTemplate(
@@ -300,6 +324,13 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
         undeclared = join.verdict(join.claim_id("undeclared-write", op)) or {}
         blocking = blocking_premise(relations, join.run, op) if relations else None
         tables = undeclared_tables(relations, None, join.run, op) if relations else {}
+        applied = exclusions_applied(relations, join.run, op) if relations else []
+        kinds = {record.id: record.kind for record in join.bundle.evidence}
+        leaves = set()
+        for claim_id in (join.claim_id("qualified", op), join.claim_id("exclusions-applied", op)):
+            leaves.update(join.certificates.get(claim_id, {}).get("leaves", ()))
+        assumption_leaves = sorted(leaf for leaf in leaves if kinds.get(leaf) == "assumption"
+                                   and leaf.split(":")[2] == "model_scope_exclusion")
         entry = {"corpus_constrains": constrains.get("semantic") == "supported",
                  "op_qualified": qualified.get("semantic"),
                  "operational": qualified.get("operational"),
@@ -307,11 +338,18 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
                  "missing_premise": [json.loads(item)["relation"] for item in qualified.get("missing_premises", [])
                                      if item.startswith("{")],
                  "undeclared_write": undeclared.get("semantic"),
-                 "blocking_premise": blocking}
+                 "blocking_premise": blocking,
+                 "exclusions_applied": applied,
+                 "assumption_leaves": len(assumption_leaves),
+                 "assumption_leaf_ids": assumption_leaves}
         if blocking and blocking["relation"] == "undeclared_any":
             entry["blocked_by"] = "blocked by undeclared writes: " + json.dumps(tables, sort_keys=True)
             entry["undeclared_tables"] = tables
+        if qualified.get("semantic") == "supported" and applied:
+            entry["qualified_under_exclusions"] = (f"qualified under {len(applied)} reviewer exclusions: "
+                                                   + ", ".join(applied))
         out[op] = entry
+    out["exclusions"] = exclusions(relations, join.run) if relations else []
     return out
 
 
@@ -348,4 +386,4 @@ def write_artifacts(join: ReplayJoin, out_dir: Path) -> dict[str, Any]:
 
 
 __all__ = ["COMMITTED_RECEIPT_DIR", "RECEIPT_DIR_ENV", "OUT_ENV", "SYNTHETIC_INDEX", "ReplayJoin", "receipt_dir", "build", "evaluate_join",
-           "summary", "write_artifacts", "blocking_premise", "undeclared_tables"]
+           "summary", "write_artifacts", "blocking_premise", "undeclared_tables", "exclusions", "exclusions_applied"]

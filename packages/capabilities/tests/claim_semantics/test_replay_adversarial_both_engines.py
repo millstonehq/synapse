@@ -101,7 +101,8 @@ class AdversarialReplayCasesInBothEngines(unittest.TestCase):
         qualified = {"00-positive-control": 2, "01-planted-disagreement": 1, "02-planted-undeclared-write": 1,
                      "03-surviving-mutant": 1, "04-missing-model-witness": 0, "05-missing-snapshot-witness": 0,
                      "06-stale-replay": 0, "08-lying-closure": 0, "09-missing-post-state": 1,
-                     "10-missing-effects-closure": 0, "11-missing-admissible-closure": 0}
+                     "10-missing-effects-closure": 0, "11-missing-admissible-closure": 0,
+                     "13-excluded-undeclared-write": 2, "14-exclusions-not-closed": 0, "15-no-exclusions-no-closure": 0}
         for stem, (_, result) in sorted(self.results.items()):
             for report in (result.python, result.souffle):
                 relations = dict(report.relations)

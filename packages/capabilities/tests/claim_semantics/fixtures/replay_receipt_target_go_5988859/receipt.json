@@ -3,6 +3,7 @@
     "go_effects": true,
     "go_post_states": true,
     "model_admissible": true,
+    "model_scope_exclusions": true,
     "mutant_kills": true,
     "php_effects": true,
     "php_post_states": true,
@@ -61,7 +62,6 @@
         "transient": 0
       }
     },
-    "target_go_dirty": false,
     "fixture_note": "Committed fixture: a real replay run 333072ef11f5 of the candidate service (exporter at 5988859) over synthetic oracle seed data; local evidence paths replaced by <evidence>/ and the tenant symbol renamed to `oracle` for publication.",
     "go_binary_sha256": "72d1bb55ed65628d4ddb5aa2920eb7e04606485521ca45f66381778a35fc7171",
     "go_evidence_dir": "<evidence>/a99a3ced7525",
@@ -280,7 +280,8 @@
       "replay_request": 3
     },
     "schema_sha256": "a8ffc07d620d1666c170c85832692a85f3bff19f001e47cf3307e0840851e85f",
-    "seed_sha256": "54ccce662f40420ac8c79543381a4c0f025098db2c8fb67aa8e588935e1ba29a"
+    "seed_sha256": "54ccce662f40420ac8c79543381a4c0f025098db2c8fb67aa8e588935e1ba29a",
+    "target_go_dirty": false
   },
   "run": "333072ef11f5",
   "snapshot": "f386e8e7df8058f867206b2b7f5f506b68fbedb68fdaa122a2c75b0d5486da21",

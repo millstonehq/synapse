@@ -26,6 +26,18 @@
         "claim-qualified-create": "supported",
         "claim-qualified-close": "supported"
       }
+    },
+    "16-exclusion-producer-violation": {
+      "validation_issues": [
+        "evidence-producer",
+        "evidence-producer"
+      ],
+      "relabelled_relation": "model_scope_exclusion",
+      "relabelled_source": "replay capcov.claims.replay.replay_facts 2026-09-16 model:5f0d985d02df run:run-fixture-1",
+      "unvalidated_verdicts": {
+        "claim-qualified-create": "supported",
+        "claim-qualified-close": "supported"
+      }
     }
   }
 }

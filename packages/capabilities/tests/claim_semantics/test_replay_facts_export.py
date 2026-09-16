@@ -111,7 +111,7 @@ class BundleShapeTest(_Exported):
         self.assertEqual(sum(self.result.counts.values()), len(self.bundle.facts))
         decls = {r.name: r for r in self.bundle.relations}
         for record in self.bundle.evidence:
-            self.assertEqual(record.kind, "fact")
+            self.assertEqual(record.kind, "assumption" if record.atom.relation == "model_scope_exclusion" else "fact")
             self.assertTrue(record.source)
             decl = decls[record.atom.relation]
             self.assertEqual(set(record.context.as_dict()), set(decl.context_indices))
@@ -158,6 +158,7 @@ class BundleShapeTest(_Exported):
             "php_post_states_closed": "replay", "go_post_states_closed": "replay", "mutant_kills_closed": "replay",
             "model_admissible_closed": "shen", "model_writes_closed": "shen", "model_describes_run": "shen",
             "mutants_closed": "mut", "index_describes_replay": "reviewer",
+            "model_scope_exclusion": "reviewer", "model_scope_exclusions_closed": "reviewer",
         }
         self.assertTrue(all(decl.producer_classes for decl in decls.values() if decl.primitive),
                         "every frozen primitive relation names its producer class")
@@ -225,7 +226,7 @@ class BundleShapeTest(_Exported):
         # model-scoped rows depend on the model identity the receipt only names
         for relation in ("model_effect", "model_admissible", "model_writes", "mutant",
                          "model_writes_closed", "mutants_closed", "model_admissible_closed",
-                         "model_describes_run"):
+                         "model_describes_run", "model_scope_exclusion", "model_scope_exclusions_closed"):
             for record in _evidence(self.bundle, relation):
                 self.assertIn(f"external:model:{self.model}", record.depends_on, relation)
         for relation in ("replay_requests_closed", "php_effects_closed", "go_effects_closed",
@@ -264,7 +265,7 @@ class MetadataTest(_Exported):
             self.assertEqual(meta[key], self.receipt[key])
         self.assertEqual(dict(meta["closed"]), {k: True for k in (
             "replay_requests", "php_effects", "go_effects", "php_post_states", "go_post_states",
-            "model_admissible", "mutant_kills")})
+            "model_admissible", "mutant_kills", "model_scope_exclusions")})
         # the receipts are carried, reported, and are not identity
         self.assertEqual(json.loads(canonical_json(meta["receipts"])), self.receipt["receipts"])
         self.assertEqual(meta["receipt_dir"], str(FIXTURE))
@@ -512,6 +513,7 @@ class WitnessTest(_Exported):
             "mutant_kills_closed": "mutant-kills-closed-v1",
             "model_writes_closed": "model-writes-closed-v1",
             "mutants_closed": "mutants-closed-v1",
+            "model_scope_exclusions_closed": "model-scope-exclusions-closed-v1",
         }
         decls = {r.name: r for r in self.bundle.relations}
         for relation, predicate in expected.items():
@@ -535,6 +537,7 @@ class WitnessTest(_Exported):
                          [[self.model, "issues.close"], [self.model, "issues.create"]])
         self.assertEqual(_rows(self.bundle, "mutants_closed"),
                          [[self.model, "issues.close"], [self.model, "issues.create"]])
+        self.assertEqual(_rows(self.bundle, "model_scope_exclusions_closed"), [[self.model]])
 
     def test_a_false_closed_flag_withholds_the_witness_and_says_so(self) -> None:
         def open_php(document):
@@ -637,6 +640,77 @@ class UniqueObservationTest(_Exported):
             result = self.export(root)
         self.assertEqual(result.status, replay_facts.STATUS_COMPLETE, result.messages)
         self.assertEqual(len(_rows(result.bundle, "model_admissible")), 4)
+
+
+class ScopeExclusionTest(_Exported):
+    """The reviewer's scope exclusions: assumption-kind, reviewer-owned, bound to the model reviewed."""
+
+    def test_exclusions_export_as_reviewer_assumptions_naming_what_was_reviewed(self) -> None:
+        records = _evidence(self.bundle, "model_scope_exclusion")
+        self.assertEqual(sorted(r.atom.terms[1].value for r in records), ["authentication", "redis"])
+        for record in records:
+            self.assertEqual(record.kind, "assumption")
+            self.assertEqual(record.source, f"reviewer fixture-reviewer 2026-09-16 model:{self.model[:12]} run:{RUN}")
+            self.assertTrue(record.id.startswith("reviewer:"))
+            self.assertIn(f"external:model:{self.model}", record.depends_on)
+        [closure] = _evidence(self.bundle, "model_scope_exclusions_closed")
+        self.assertEqual(closure.source, "reviewer capcov.claims.replay.replay_facts model-scope-exclusions-closed-v1")
+        self.assertEqual(dict(dict(self.bundle.metadata)["producers"])["model_scope_exclusion"], records[0].source)
+        self.assertEqual(validate_bundle(self.bundle), ())
+
+    def test_a_file_producer_names_the_reviewer_and_a_non_reviewer_is_refused(self) -> None:
+        with _variant(model_scope_exclusions=lambda d: {**d, "producer": "reviewer alice"}) as root:
+            result = self.export(root)
+        self.assertEqual(result.status, replay_facts.STATUS_COMPLETE, result.messages)
+        for record in _evidence(result.bundle, "model_scope_exclusion"):
+            self.assertEqual(record.source, f"reviewer alice 2026-09-16 model:{self.model[:12]} run:{RUN}")
+        with _variant(model_scope_exclusions=lambda d: {**d, "producer": "replay fg-replay v1"}) as root:
+            result = self.export(root)
+        self.assertEqual(result.status, replay_facts.STATUS_INVALID_INPUT)
+        self.assertEqual(len(result.messages), 2)
+        for message in result.messages:
+            self.assertTrue(message.startswith("evidence-producer:"), message)
+            self.assertIn("'model_scope_exclusion' admits ('reviewer',)", message)
+
+    def test_a_stale_review_and_a_malformed_file_are_refused_with_their_own_messages(self) -> None:
+        def stale(document):
+            document = copy.deepcopy(document)
+            document["reviewed_against"]["model"] = "9" * 64
+            return document
+
+        with _variant(model_scope_exclusions=stale) as root:
+            result = self.export(root)
+        self.assertEqual(result.status, replay_facts.STATUS_INVALID_INPUT)
+        [message] = result.messages
+        self.assertIn("stale review: reviewed against model '999999999999'", message)
+        for edit, needle in ((lambda d: {k: v for k, v in d.items() if k != "reviewer"}, "'reviewer' must be a non-empty string"),
+                             (lambda d: {**d, "reviewed_against": {"model": d["reviewed_against"]["model"]}},
+                              "'reviewed_against' must be {model, run}"),
+                             (lambda d: {**d, "extra": 1}, "must be {reviewer, reviewed_at, reviewed_against, rows, producer?}"),
+                             (lambda d: {**d, "rows": [{"table": "x"}]}, "rows[0].reason must be a non-empty string"),
+                             (lambda d: {**d, "rows": [{"model": "8" * 64, "table": "x", "reason": "y"}]}, "names model")):
+            with self.subTest(needle=needle), _variant(model_scope_exclusions=edit) as root:
+                result = self.export(root)
+                self.assertEqual(result.status, replay_facts.STATUS_INVALID_INPUT)
+                self.assertIn(needle, result.messages[0])
+
+    def test_without_the_file_or_the_closure_the_judge_sees_no_exclusions(self) -> None:
+        def open_exclusions(document):
+            document = copy.deepcopy(document)
+            document["closed"]["model_scope_exclusions"] = False
+            return document
+
+        with _variant(model_scope_exclusions=lambda _: None, receipt=open_exclusions) as root:
+            result = self.export(root)
+        self.assertEqual(result.status, replay_facts.STATUS_COMPLETE, result.messages)
+        self.assertEqual(_rows(result.bundle, "model_scope_exclusion"), [])
+        self.assertEqual(_rows(result.bundle, "model_scope_exclusions_closed"), [])
+        self.assertTrue(any("model_scope_exclusions.json absent" in m for m in result.messages))
+        # rows without the closure are exported (the reviewer said something) but nothing is closed
+        with _variant(receipt=open_exclusions) as root:
+            result = self.export(root)
+        self.assertEqual(len(_rows(result.bundle, "model_scope_exclusion")), 2)
+        self.assertEqual(_rows(result.bundle, "model_scope_exclusions_closed"), [])
 
 
 class ProducerAuthorityTest(_Exported):
