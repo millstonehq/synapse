@@ -222,29 +222,50 @@ def certify_claims(bundle: Bundle, result: Any, *,
     the claim rows and on each certificate, and each certificate must recheck
     against each closure; otherwise the disagreement is raised rather than
     reported, because a judge with two answers has none.
+
+    ``result`` may carry two closures (python, interpreted Souffle) or three
+    (plus the compiled Souffle checker, as ``result.compiled``); every closure
+    present is held to the same agreement, so admitting the compiled kernel
+    does not widen what a certificate is allowed to rest on.
     """
-    closures = [result.python.relations, result.souffle.relations]
+    closures = _closures(result)
     certificates: dict[str, dict[str, Any]] = {}
     row_certificates: dict[str, list[dict[str, Any]]] = {}
     for claim in bundle.claims:
-        rows = claim_conclusions(bundle, closures[0], claim)
-        for other in closures[1:]:
+        first, first_backend = closures[0]
+        rows = claim_conclusions(bundle, first, claim)
+        for other, backend in closures[1:]:
             if rows != claim_conclusions(bundle, other, claim):
-                raise AssertionError(f"{claim.id}: the kernels disagree on the claim rows")
+                raise AssertionError(f"{claim.id}: the kernels disagree on the claim rows ({backend})")
         for row in rows:
-            certificate = certify(bundle, closures[0], claim.relation, row,
+            certificate = certify(bundle, first, claim.relation, row,
                                   max_depth=max_depth, max_nodes=max_nodes)
-            for other in closures[1:]:
+            for other, backend in closures[1:]:
                 if certify(bundle, other, claim.relation, row,
                            max_depth=max_depth, max_nodes=max_nodes) != certificate:
-                    raise AssertionError(f"{claim.id}: certificates differ between closures")
-            for closure in closures:
+                    raise AssertionError(f"{claim.id}: certificates differ between closures ({backend})")
+            for closure, backend in closures:
                 checked = recheck(bundle, certificate, closure)
                 if not checked.ok:
-                    raise AssertionError(f"{claim.id}: recheck failed: {checked}")
+                    raise AssertionError(f"{claim.id}: recheck failed against {backend}: {checked}")
             certificates.setdefault(claim.id, certificate)
             row_certificates.setdefault(claim.id, []).append(certificate)
     return certificates, row_certificates
+
+
+def _closures(result: Any) -> list[tuple[Any, str]]:
+    """Every agreeing kernel's relations and backend name, python first.
+
+    A three-way result carries ``compiled``; a two-way one does not, and a
+    hand-built stand-in need not name its backends.
+    """
+    reports = [result.python, result.souffle]
+    compiled = getattr(result, "compiled", None)
+    if compiled is not None:
+        reports.append(compiled)
+    names = ("python", "souffle", "souffle-compiled")
+    return [(report.relations, getattr(report, "backend", None) or names[position])
+            for position, report in enumerate(reports)]
 
 
 def shared_across(bundle: Bundle, certificates: Sequence[Mapping[str, Any]]) -> list[str]:

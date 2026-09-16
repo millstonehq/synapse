@@ -25,7 +25,9 @@ from typing import Any, Callable, Mapping
 
 from .evaluator import ResourceLimits, evaluate
 from .ir import Bundle, canonical_dict, canonical_json, digest
-from .souffle import SouffleUnavailable, run_bundle
+from .souffle import SouffleUnavailable, program_for_pack, run_bundle
+from .souffle.compile import (CompiledChecker, CompileError, CompiledProgramMismatch,
+                              compile_program, run_compiled)
 from .validation import ValidationError
 
 
@@ -53,6 +55,10 @@ class KernelReport:
     claims: tuple[KernelClaim, ...]
     operational_failure: str | None = None
     message: str = ""
+    # The Souffle kernels' ``SouffleResult.output_digest`` (sha256 over the
+    # sorted normalized closure); ``None`` for the Python kernel and for a
+    # failed run.  Recorded provenance, outside ``semantic_payload``.
+    closure_digest: str | None = None
 
     def semantic_payload(self) -> tuple[Any, ...]:
         return self.relations, self.claims, self.operational_failure
@@ -81,6 +87,31 @@ class DifferentialMismatch(AssertionError):
         self.result = result
         location = f"; replay: {result.replay_path}" if result.replay_path else ""
         super().__init__(f"claim kernels disagree{location}")
+
+
+@dataclass(frozen=True)
+class ThreeWayResult:
+    """``compare`` (python vs interpreted Souffle) extended by the compiled kernel.
+
+    ``matched`` is ``reports_match(souffle, compiled)``; ``closure_digest_equal``
+    is equality of the two Souffle kernels' ``output_digest``.  Both must hold
+    for ``compare_three`` to return.  ``timings`` records wall seconds per
+    backend (``python``, ``souffle``, ``souffle-compiled``).
+    """
+    python: KernelReport
+    souffle: KernelReport
+    compiled: KernelReport
+    matched: bool
+    closure_digest_equal: bool
+    replay_path: str | None = None
+    timings: tuple[tuple[str, float], ...] = ()
+
+
+class CompiledKernelMismatch(AssertionError):
+    def __init__(self, result: ThreeWayResult):
+        self.result = result
+        location = f"; replay: {result.replay_path}" if result.replay_path else ""
+        super().__init__(f"compiled Souffle kernel disagrees with the interpreter{location}")
 
 
 def _rows(rows: Any) -> tuple[tuple[Any, ...], ...]:
@@ -136,7 +167,7 @@ def run_souffle(bundle: Bundle, **kwargs: Any) -> KernelReport:
                 _missing(result.missing_premises))
             for index, (claim, result) in enumerate(
                 zip(bundle.claims, report.claims)))
-        return KernelReport("souffle", relations, claims)
+        return KernelReport("souffle", relations, claims, closure_digest=report.output_digest)
     except SouffleUnavailable as exc:
         return KernelReport("souffle", (), (), "souffle-unavailable", str(exc))
     except ValidationError as exc:
@@ -155,6 +186,65 @@ def run_souffle(bundle: Bundle, **kwargs: Any) -> KernelReport:
         return KernelReport("souffle", (), (), "souffle-translation-or-output-invalid", str(exc))
     except OSError as exc:
         return KernelReport("souffle", (), (), "souffle-io-failed", str(exc))
+
+
+def _souffle_failure(backend: str, exc: BaseException) -> KernelReport:
+    """The interpreter's exception → failure-name mapping, shared by both Souffle kernels."""
+    if isinstance(exc, SouffleUnavailable):
+        return KernelReport(backend, (), (), "souffle-unavailable", str(exc))
+    if isinstance(exc, ValidationError):
+        return KernelReport(backend, (), (), "invalid-input", str(exc))
+    if isinstance(exc, RecursionError):
+        return KernelReport(backend, (), (), "resource-exhausted",
+                            str(exc) or f"{backend} kernel boundary exceeded the recursion limit")
+    if isinstance(exc, (OverflowError, TimeoutError)):
+        return KernelReport(backend, (), (), "resource-exhausted", str(exc))
+    if isinstance(exc, NotImplementedError):
+        return KernelReport(backend, (), (), "unsupported-construct", str(exc))
+    if isinstance(exc, RuntimeError):
+        return KernelReport(backend, (), (), "souffle-execution-failed", str(exc))
+    if isinstance(exc, (ValueError, TypeError, UnicodeError)):
+        return KernelReport(backend, (), (), "souffle-translation-or-output-invalid", str(exc))
+    if isinstance(exc, OSError):
+        return KernelReport(backend, (), (), "souffle-io-failed", str(exc))
+    raise exc
+
+
+def run_souffle_compiled(bundle: Bundle, *, checker: CompiledChecker | None = None,
+                         cache_dir: str | Path = ".capcov/compiled",
+                         executable: str = "souffle", **kwargs: Any) -> KernelReport:
+    """The compiled Souffle kernel as a ``KernelReport`` (backend ``souffle-compiled``).
+
+    Without ``checker`` the bundle's fact-independent program is compiled (or
+    reused from ``cache_dir``) first.  Failures are named: an absent souffle is
+    ``souffle-unavailable``, a failed ``souffle -o`` is ``souffle-compile-failed``,
+    a checker built from another program is ``compiled-program-mismatch``; the
+    rest map exactly as ``run_souffle`` maps them.  A failure is never a
+    fallback to the interpreter.
+    """
+    backend = "souffle-compiled"
+    try:
+        if checker is None:
+            checker = compile_program(program_for_pack(bundle), executable=executable,
+                                      cache_dir=cache_dir)
+        report = run_compiled(bundle, checker, **kwargs)
+        relations = tuple(
+            (decl.name, _rows(report.relations.get(decl.name, ())))
+            for decl in bundle.relations)
+        claims = tuple(
+            KernelClaim(
+                claim.id or str(index), index, result.semantic.value,
+                result.operational.value, result.basis.value,
+                _missing(result.missing_premises))
+            for index, (claim, result) in enumerate(
+                zip(bundle.claims, report.claims)))
+        return KernelReport(backend, relations, claims, closure_digest=report.output_digest)
+    except CompileError as exc:
+        return KernelReport(backend, (), (), "souffle-compile-failed", str(exc))
+    except CompiledProgramMismatch as exc:
+        return KernelReport(backend, (), (), "compiled-program-mismatch", str(exc))
+    except Exception as exc:  # noqa: BLE001 - narrowed by _souffle_failure, which re-raises the rest
+        return _souffle_failure(backend, exc)
 
 
 def reports_match(left: KernelReport, right: KernelReport) -> bool:
@@ -211,5 +301,61 @@ def compare(bundle: Bundle, *, python_runner: Callable[[Bundle], KernelReport] =
     raise DifferentialMismatch(result)
 
 
+def compare_three(bundle: Bundle, *, checker: CompiledChecker | None = None,
+                  replay_root: str | Path = ".capcov/differential", max_steps: int = 200,
+                  cache_dir: str | Path = ".capcov/compiled", executable: str = "souffle",
+                  python_runner: Callable[[Bundle], KernelReport] = run_python,
+                  souffle_runner: Callable[[Bundle], KernelReport] = run_souffle,
+                  compiled_runner: Callable[[Bundle], KernelReport] | None = None) -> ThreeWayResult:
+    """``compare`` plus the compiled kernel: python, souffle and souffle-compiled must agree.
+
+    The pairwise differential (with its shrinker) runs first and raises
+    ``DifferentialMismatch`` as before.  Then the compiled kernel must match
+    the interpreter's report *and* its closure digest; on disagreement the
+    bundle is persisted to ``<replay_root>/compiled-<bundle digest>.json`` and
+    ``CompiledKernelMismatch`` is raised.  There is no three-way shrink: the
+    pairwise shrinker stays two-kernel.
+    """
+    import time
+    timings: dict[str, float] = {}
+
+    def timed(name: str, runner: Callable[[Bundle], KernelReport]) -> Callable[[Bundle], KernelReport]:
+        def run(candidate: Bundle) -> KernelReport:
+            started = time.monotonic()
+            try:
+                return runner(candidate)
+            finally:
+                timings[name] = timings.get(name, 0.0) + (time.monotonic() - started)
+        return run
+
+    two = compare(bundle, python_runner=timed("python", python_runner),
+                  souffle_runner=timed("souffle", souffle_runner),
+                  replay_root=replay_root, max_steps=max_steps)
+    if compiled_runner is None:
+        def compiled_runner(candidate: Bundle) -> KernelReport:
+            return run_souffle_compiled(candidate, checker=checker, cache_dir=cache_dir,
+                                        executable=executable)
+    compiled = _invoke_runner(timed("souffle-compiled", compiled_runner), bundle, "souffle-compiled")
+    # Both pairs, not just the Souffle pair: reports_match is transitive over
+    # semantic_payload, but stating it keeps the three-way contract explicit
+    # if either report ever grows a field canonical_digest does not cover.
+    matched = (reports_match(two.souffle, compiled) and reports_match(two.python, compiled)
+               and len({two.python.canonical_digest, two.souffle.canonical_digest,
+                        compiled.canonical_digest}) == 1)
+    closure_equal = (two.souffle.closure_digest is not None
+                     and two.souffle.closure_digest == compiled.closure_digest)
+    recorded = tuple(sorted(timings.items()))
+    if matched and closure_equal:
+        return ThreeWayResult(two.python, two.souffle, compiled, True, True, None, recorded)
+    root = Path(replay_root)
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / f"compiled-{digest(bundle)}.json"
+    path.write_text(canonical_json(bundle) + "\n", encoding="utf-8")
+    raise CompiledKernelMismatch(ThreeWayResult(two.python, two.souffle, compiled, matched,
+                                                closure_equal, str(path), recorded))
+
+
 __all__ = ["COMPARABLE_CLAIM_FIELDS", "KernelClaim", "KernelReport", "DifferentialResult",
-           "DifferentialMismatch", "run_python", "run_souffle", "reports_match", "compare"]
+           "DifferentialMismatch", "ThreeWayResult", "CompiledKernelMismatch",
+           "run_python", "run_souffle", "run_souffle_compiled", "reports_match", "compare",
+           "compare_three"]
