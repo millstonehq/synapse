@@ -1235,6 +1235,41 @@ Tests include malformed and cyclic certificates, substituted evidence IDs, remov
 
 ## 18. Stage D — Executable Shen workbench
 
+### 2026-09-16 Stage D redefined: typed well-formedness of the Shen domain model (decision, repository owner)
+
+Verdict on the delivered workbench: it works (section 18 record, merged as `114a35a`) but its
+authority checks are functions walking the elaborated rule pack — a second walker over JSON that
+Python already validates — and the three `.shen` files contain no `datatype` declarations and no
+use of the type checker. By the criterion agreed with shen1 ("Stage D earns its place only if its
+authority checks are expressed as types of rule forms, so an ill-formed rule fails to typecheck"),
+the rule-pack walker is retired as the purpose of Stage D. It stays in the tree until the
+replacement lands, and its certificate-equality evidence remains valid for what it checked.
+
+New purpose. Stage D checks the well-formedness of the Shen *domain model* (the fact producer:
+admissible-state sets, effect lists, declared writes, closures, reviewer exclusions) that the
+replay judge consumes and signs verdicts against. Invariants are Shen typing rules (the sequent
+calculus the type system is programmed in), so an ill-formed model fails to typecheck; Prolog
+gives the why-not. The typecheck emits one fact with a `capcov-static-certificate-v1`-style
+certificate, signed against the model digest, which the judge takes as a premise: no
+well-formedness fact at that digest, no qualification, only `unresolved`.
+
+Invariant list proposed to shen1 (open until they reply): (1) every closure owned by a named
+producer, no exclusion set closed without a signed review; (2) every declared write has an effect
+and every effect a declaring operation; (3) no operation both admissible and killed in one state;
+(4) admissibility total over every operation the corpus claims to constrain; (5) every assumption
+signed against the model digest and a run, a stale review cannot typecheck; (6) the digest the
+judge binds to is the digest of the artifact that typechecked. Constraints: every invariant
+written to terminate, under the existing hard timeouts; well-formed is not "correct against PHP",
+which stays with the judge and the lineage-derived mutants.
+
+Architecture stated with the decision: Shen's types define correctness deterministically; Soufflé
+does the derivation (shen1's compiled-checker item becomes the production evaluator); Python keeps
+strict ingestion, IR validation, certificate extraction and recheck, and remains an oracle in the
+differential gates only — it is no longer the evaluator of record, because graph walking in Python
+is the slow path (section 31 numbers). Sequencing: nothing starts until shen1's five in-flight r2
+worktrees land (lineage-derived mutants, assumption registry, ordering claims, compiled gate,
+active learning); Stage D stays off those paths.
+
 Add:
 
 ```text
