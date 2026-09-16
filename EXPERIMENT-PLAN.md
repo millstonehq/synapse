@@ -5132,3 +5132,27 @@ Integrator's runs on `e80003f`: exporter 48, static differential 18, static corp
 `OK (skipped=135)`. The target-go pilot gate on this tree is recorded below when it completes; one
 attempt was killed by host memory pressure from an unrelated qualification job.
 target-go pilot gate on `e80003f`/`7c781e4` (integrator's rerun, PR #49 artifacts in place): `Ran 9 tests in 221.1s`, `OK`, not skipped; identity `0759ccef…` unchanged.
+
+### 2026-09-15 replay judge (shen1 session) integrated; Shen runtime aligned
+
+The `shen1` session built an executable the target system domain model in Shen (target-go worktree,
+branch `feat/TICKET-0000-model-shen`) whose admissible-state sets, effect lists, and declared
+write-sets become `model_admissible`, `model_effect`, `model_writes` facts with honest
+completeness witnesses, consumed by a PHP-vs-Go-vs-model binlog replay runner. On the capcov
+side that work is `experiment/replay-claims` (pushed to the pyrex41 fork at `e373bb3`, off this
+line's `3e8a5f8`): `claims/replay/{schema_replay_v1.json, replay_facts.py}` (receipt directory →
+strict schema-v1 bundle, `Evidence.source` set from a per-file producer label or the schema's
+producer classes), the rule pack `experiments/claim-semantics/replay/rules-replay-v1.json`
+(26 primitives, 34 derived, 36 rules; every witness owned by a producer class; qualification
+gated on the pack's own contradiction detectors), a reviewed replay corpus (cases 00–11, two
+rejected), certificates identical from both kernels, and three manifest gates. Two of its
+commits touch `validation.py` and were cherry-picked first (`6605d44` evidence-producer
+enforcement, `ebb5897` unconditional fact attribution); the branch was then merged as `9553a1a`
+without conflicts. `schema_replay_v1.json` is **v1-draft** until the target-go `export-facts` runner
+and the model host produce a real receipt; a re-merge follows that SHA. Layering agreed between
+the sessions: shen1's Shen is a fact producer below the IR; Stage D (this line) is the rule
+workbench above it; both consume the same rule-pack wire form and the frozen
+`capcov-static-certificate-v1` shape with `recheck` unchanged. shen1 runs shen-go `c12933d`
+through bifrost; the flake was repinned to the same revision (`643491c`), with the
+Shen-Backpressure crash warning and this line's 300-call probe recorded above section 15. Merged-tree gates (integrator's runs on `9553a1a`): replay 73, validation-producer 4, static differential 18, static adversarial 6, exporter 48, manifest seam tests, and the full regression recorded in the log above this line.
+
