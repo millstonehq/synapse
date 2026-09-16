@@ -205,6 +205,16 @@ def judge(args: argparse.Namespace) -> int:
         _write_json(out_dir / JUDGE_FILE, document)
         print(f"compile failed: {str(exc)[-400:]}", file=sys.stderr)
         return EXIT_KERNEL
+    except AssertionError as exc:
+        # the kernels agreed on the closure but not on a claim row, a
+        # certificate or a recheck: still a kernel disagreement, never a verdict
+        document = _judge_document(join, required, verdict=VERDICT_KERNEL_MISMATCH,
+                                   exit_code=EXIT_KERNEL, program_digest=program_digest,
+                                   findings=join.contract_findings)
+        document["message"] = str(exc)[-4000:]
+        _write_json(out_dir / JUDGE_FILE, document)
+        print(f"kernels disagree on a certified claim row: {exc}", file=sys.stderr)
+        return EXIT_KERNEL
     if join.mismatch is not None:
         document = _judge_document(join, required, verdict=VERDICT_KERNEL_MISMATCH,
                                    exit_code=EXIT_KERNEL, program_digest=program_digest,
@@ -397,7 +407,12 @@ def main(argv: list[str] | None = None) -> int:
     except compiled.CompileError as exc:
         print(f"compile failed: {str(exc)[-400:]}", file=sys.stderr)
         return EXIT_KERNEL
-    except replay_facts.ExportInputError as exc:
+    except (replay_facts.ExportInputError, json.JSONDecodeError) as exc:
+        print(f"contract finding: {exc}", file=sys.stderr)
+        return EXIT_CONTRACT
+    except OSError as exc:
+        # an unreadable or absent receipt directory is a contract finding, not a
+        # verdict and not a traceback
         print(f"contract finding: {exc}", file=sys.stderr)
         return EXIT_CONTRACT
 

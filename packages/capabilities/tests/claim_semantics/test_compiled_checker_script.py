@@ -197,6 +197,15 @@ class CompiledCheckerScriptTests(unittest.TestCase):
         self.assertEqual(len(document["contract_findings"]), 1)
         self.assertIn("extra_key", document["contract_findings"][0])
 
+    def test_an_absent_receipt_is_a_contract_finding_and_exits_three(self) -> None:
+        out = self.out("no-receipt")
+        completed = self.run_script(
+            "--receipt", str(self.workspace / "there-is-no-receipt-here"), "--out", str(out),
+            "--cache-dir", str(self.cache), "--require-supported", "delete-issue")
+        self.assertEqual(completed.returncode, 3, completed.stderr[-2000:])
+        self.assertIn("contract finding", completed.stderr)
+        self.assertNotIn("Traceback", completed.stderr)
+
     def test_an_absent_souffle_is_unavailable_and_exits_four(self) -> None:
         out = self.out("unavailable")
         completed = self.run_script(
