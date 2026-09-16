@@ -280,6 +280,31 @@ class PythonEvaluatorAgreesWithReviewedExpectations(unittest.TestCase):
         self.assertEqual(report.relation_rows("effect_order_violation"), ())
         self.assertEqual(set(report.relation_rows("repeat_delete_not_found")), {(RUN, DELETE_TARGET)})
 
+    def test_one_unstable_side_is_enough_and_the_negation_is_what_refuses(self) -> None:
+        report = self._report("26-unstable-on-one-side")
+        self.assertEqual(report.relation_rows("oracle_unstable"), ((RUN,),))
+        self.assertEqual(report.relation_rows("oracle_stable"), ())
+        self.assertEqual(report.relation_rows("op_qualified"), ())
+        # oracle_stable's own positive premise (a "true" php row) still holds here,
+        # which is what makes the negated atom load-bearing
+        rows = {row[3:] for row in report.relation_rows("replay_stability")}
+        self.assertEqual(rows, {("php", "true"), ("go", "false")})
+
+        def drop_negation(pack):
+            rule = next(r for r in pack["rules"] if r["name"] == "oracle_stable")
+            rule["body"] = [a for a in rule["body"]
+                            if a.get("relation") not in {"oracle_unstable", "oracle_unstable_closed"}]
+        pack = json.loads(json.dumps(load_pack()))
+        drop_negation(pack)
+        mutated = evaluate(load_case(CASES_DIR / "26-unstable-on-one-side.json", pack))
+        self.assertEqual(mutated.status.value, "complete", mutated.message)
+        self.assertEqual(mutated.relation_rows("oracle_stable"), ((RUN,),),
+                         "without !oracle_unstable the unstable side is invisible")
+        self.assertEqual(len(mutated.relation_rows("op_qualified")), 3)
+        # case 19 flips the only row instead, so it cannot catch that mutation
+        nineteen = evaluate(load_case(CASES_DIR / "19-unstable-oracle.json", pack))
+        self.assertEqual(nineteen.relation_rows("oracle_stable"), ())
+
     def test_an_open_new_table_blocks_the_gate_that_needs_it_and_no_other(self) -> None:
         stability = self._report("20-missing-stability-closure")
         self.assertEqual(stability.relation_rows("replay_stability_closed"), ())

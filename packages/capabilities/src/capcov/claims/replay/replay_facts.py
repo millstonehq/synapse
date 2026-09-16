@@ -189,7 +189,9 @@ rows use ``default_source`` like any other owned row.  Rows depend on the ``repl
 on the ``replay_request`` row of their request when one is exported, and on
 ``external:model:<model>``, ``external:git-commit:<commit>``,
 ``external:snapshot:<snapshot>`` and ``external:index:<index>`` for the
-identities the receipt only names.
+identities the receipt only names; a ``replay_stability`` row also depends on
+``external:run:<run_a>`` and ``external:run:<run_b>``, the two selftest runs
+whose provenance the harness matched against this one.
 """
 
 from __future__ import annotations
@@ -798,6 +800,10 @@ def export_bundle(
                     req_eid = request_eids.get(row["req"])
                     if req_eid is not None:
                         deps.append(req_eid)
+                if name == "replay_stability":
+                    # the two selftest runs are outside this receipt: name them, so a
+                    # certificate that rests on cross-run stability says whose runs it rests on
+                    deps.extend(f"external:run:{row[column]}" for column in ("run_a", "run_b"))
                 eid = facts.add(name, row, source=source, depends_on=deps)
                 if name == "replay_request":
                     request_eids[row["req"]] = eid

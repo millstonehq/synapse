@@ -8,7 +8,7 @@ census is qualified by this replay*.  The replay harness is a producer of
 observations, never an oracle; the judge is these rules.
 
 * `rules-replay-v1.json` - the rule pack in raw IR JSON wire form.
-* `cases/NN-*.json` - one positive control (`00`) and twenty-one adversarial
+* `cases/NN-*.json` - one positive control (`00`) and twenty-two adversarial
   shapes (the numbering is not contiguous: the gaps are the rejected cases);
   `rejected/NN-*.json` are the cases the ingestion boundary must refuse.
 * `expected.json` / `rejected.json` - the per-claim review tables duplicated
@@ -264,13 +264,20 @@ Design points a reviewer should check:
   run_a, run_b, side, stable)` binds the receipt's run to a *selftest* of the
   same oracle: two further runs of the same tape whose provenance (oracle
   commit, PHP/schema/seed digests) equals this run's.  The harness emits the
-  row only when that provenance matches, so the row itself is the binding;
+  row only when that provenance matches, so the row itself is the binding --
+  and the row depends on `external:run:<run_a>` / `external:run:<run_b>`, so a
+  certificate that rests on cross-run stability names the two runs it rests on
+  (what the harness checked about them is still the harness's word, and a
+  reviewer who wants more must read those runs);
   `stable` is `"true"` iff every request agreed on status and net SQL effects
   between the two.  `oracle_unstable(run)` fires on any `"false"` row and
   `oracle_stable(run)` needs the closure, a `"true"` PHP row and the absence
   of an unstable one; `op_qualified_rt` requires `oracle_stable`.  An oracle
   that does not reproduce itself qualifies nothing, however well PHP, Go and
-  the model agree within one run (cases 19, 20).
+  the model agree within one run (cases 19, 20).  Case 26 is the one that makes
+  the negated atom load-bearing: the PHP row says `"true"` and a second row
+  says the Go side did not reproduce, so `oracle_stable`'s positive premise
+  holds and only `!oracle_unstable` refuses.
 
 ## One observation per key
 

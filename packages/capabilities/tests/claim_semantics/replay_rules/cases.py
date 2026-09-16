@@ -1011,6 +1011,44 @@ def build_19() -> dict[str, Any]:
                  notes, facts, claims, outputs)
 
 
+# the selftest's two runs, as the fixture's stability row names them
+SELFTEST_A, SELFTEST_B = RECEIPT["receipts"]["selftest"]["run_ids"]
+
+
+def build_26() -> dict[str, Any]:
+    with variant({"replay_stability": _append_row(run=RUN, run_a=SELFTEST_A, run_b=SELFTEST_B,
+                                                  side="go", stable="false")}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    unstable = find_id(facts, "replay_stability", side="go")
+    reason = ("the bound selftest is unstable on the Go side (a request differed in status or net SQL effects "
+              "between the two runs)")
+    seen = observation("replay_stability", ["run"], {"column": "side", "operator": "=", "value": "go"})
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "The PHP leg of the selftest is stable, but its Go leg is not: oracle_unstable derives from the "
+                "\"false\" row, and oracle_stable negates it even though its own positive premise (a \"true\" PHP "
+                "row) is satisfied.",
+        CLOSE: "As for issues.create.", DELETE: "As for issues.create."},
+        extra_diagnostics={op: [seen] for op in OPS})
+    for op in OPS:
+        outputs.append(missing(claim_id_for(op), "oracle_stable", reason, requires=[unstable]))
+    companion = _claim("claim-oracle-unstable", "oracle_unstable", ["run"], [RUN], {"run": RUN},
+                       "replay_stability carries a row with stable = false for the run (the Go side).", [seen])
+    claims.append(companion)
+    outputs.append(discrepancy(companion["id"], "oracle-unstable", [unstable], side="go"))
+    notes = [
+        "replay_stability.json keeps the control's stable = true PHP row and gains a stable = false row for the Go "
+        "side of the same pair of selftest runs; nothing else is touched.",
+        "All three op_qualified claims are unresolved with oracle_stable as the missing premise.  This is the case "
+        "that makes the negation in oracle_stable load-bearing: in case 19 the single PHP row is flipped, so "
+        "oracle_stable already fails on its positive premise, and a pack that dropped !oracle_unstable would still "
+        "pass.  Here the positive premise holds and only the negation refuses.",
+        "The companion oracle_unstable claim is supported from the Go row alone (discrepancy oracle-unstable).",
+    ]
+    return _case("26-unstable-on-one-side", "The selftest reproduces the oracle on one side only", "oracle-unstable",
+                 notes, facts, claims, outputs)
+
+
 def build_20() -> dict[str, Any]:
     with variant({"receipt": _open("replay_stability")}) as root:
         exported, _ = exported_facts(root)
@@ -1155,6 +1193,7 @@ BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "23-repeat-delete-excluded-write": build_23,
     "24-repeat-before-the-commit": build_24,
     "25-first-delete-not-committed": build_25,
+    "26-unstable-on-one-side": build_26,
 }
 REJECTED_BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "07-producer-class-violation": build_rejected_07,
@@ -1224,6 +1263,8 @@ REVIEW: dict[str, dict[str, tuple[str, str, list[str], list[str]]]] = {
                                                                  ["effect_order_respected"], []),
                                       "claim-repeat-delete-not-found": ("unresolved", "complete",
                                                                         ["first_delete_committed"], [])},
+    "26-unstable-on-one-side": {**_all_ops("oracle_stable"),
+                                "claim-oracle-unstable": ("supported", "complete", [], ["oracle-unstable"])},
     "23-repeat-delete-excluded-write": {"claim-qualified-create": SUPPORTED, "claim-qualified-close": SUPPORTED,
                                         "claim-qualified-delete": SUPPORTED,
                                         "claim-repeat-delete-not-found": SUPPORTED,

@@ -2882,6 +2882,8 @@
       "source": "replay capcov.claims.replay.replay_facts v1",
       "provenance": {
         "depends_on": [
+          "external:run:run-fixture-1a",
+          "external:run:run-fixture-1b",
           "replay:3ba1f734a213:replay_run:ad8057bded65"
         ]
       }

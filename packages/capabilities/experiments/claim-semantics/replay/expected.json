@@ -4032,6 +4032,131 @@
           ]
         }
       }
+    },
+    "26-unstable-on-one-side": {
+      "claims": {
+        "claim-qualified-close": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "complete",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "replay:36207050a90d:go_effect_seqs_closed:abdb419a2db3",
+            "replay:36207050a90d:go_effects_closed:741c700022f7",
+            "replay:36207050a90d:go_post_states_closed:d399545a4a0d",
+            "replay:36207050a90d:go_responses_closed:f59875098423",
+            "replay:36207050a90d:php_effect_seqs_closed:d8e1764ed4bf",
+            "replay:36207050a90d:php_effects_closed:c69d8dda2898",
+            "replay:36207050a90d:php_post_states_closed:563c8b6a1be0",
+            "replay:36207050a90d:php_responses_closed:a139721eba4a",
+            "replay:36207050a90d:replay_request_seqs_closed:2bfa66364c8c",
+            "replay:36207050a90d:replay_stability:5510f3417266",
+            "replay:36207050a90d:replay_stability_closed:cafd259173e9",
+            "reviewer:36207050a90d:model_scope_exclusions_closed:62143215abdd",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:36207050a90d:model_admissible_closed:e42e24b4af61",
+            "shen:36207050a90d:model_describes_run:30e5416af7e4",
+            "shen:36207050a90d:model_effect_seqs_closed:53d4ce94a7bc"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "oracle_stable",
+              "reason": "the bound selftest is unstable on the Go side (a request differed in status or net SQL effects between the two runs)"
+            }
+          ]
+        },
+        "claim-qualified-create": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "complete",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "replay:36207050a90d:go_effect_seqs_closed:abdb419a2db3",
+            "replay:36207050a90d:go_effects_closed:741c700022f7",
+            "replay:36207050a90d:go_post_states_closed:d399545a4a0d",
+            "replay:36207050a90d:go_responses_closed:f59875098423",
+            "replay:36207050a90d:php_effect_seqs_closed:d8e1764ed4bf",
+            "replay:36207050a90d:php_effects_closed:c69d8dda2898",
+            "replay:36207050a90d:php_post_states_closed:563c8b6a1be0",
+            "replay:36207050a90d:php_responses_closed:a139721eba4a",
+            "replay:36207050a90d:replay_request_seqs_closed:2bfa66364c8c",
+            "replay:36207050a90d:replay_stability:5510f3417266",
+            "replay:36207050a90d:replay_stability_closed:cafd259173e9",
+            "reviewer:36207050a90d:model_scope_exclusions_closed:62143215abdd",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:36207050a90d:model_admissible_closed:e42e24b4af61",
+            "shen:36207050a90d:model_describes_run:30e5416af7e4",
+            "shen:36207050a90d:model_effect_seqs_closed:53d4ce94a7bc"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "oracle_stable",
+              "reason": "the bound selftest is unstable on the Go side (a request differed in status or net SQL effects between the two runs)"
+            }
+          ]
+        },
+        "claim-qualified-delete": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "complete",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "replay:36207050a90d:go_effect_seqs_closed:abdb419a2db3",
+            "replay:36207050a90d:go_effects_closed:741c700022f7",
+            "replay:36207050a90d:go_post_states_closed:d399545a4a0d",
+            "replay:36207050a90d:go_responses_closed:f59875098423",
+            "replay:36207050a90d:php_effect_seqs_closed:d8e1764ed4bf",
+            "replay:36207050a90d:php_effects_closed:c69d8dda2898",
+            "replay:36207050a90d:php_post_states_closed:563c8b6a1be0",
+            "replay:36207050a90d:php_responses_closed:a139721eba4a",
+            "replay:36207050a90d:replay_request_seqs_closed:2bfa66364c8c",
+            "replay:36207050a90d:replay_stability:5510f3417266",
+            "replay:36207050a90d:replay_stability_closed:cafd259173e9",
+            "reviewer:36207050a90d:model_scope_exclusions_closed:62143215abdd",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:36207050a90d:model_admissible_closed:e42e24b4af61",
+            "shen:36207050a90d:model_describes_run:30e5416af7e4",
+            "shen:36207050a90d:model_effect_seqs_closed:53d4ce94a7bc"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "oracle_stable",
+              "reason": "the bound selftest is unstable on the Go side (a request differed in status or net SQL effects between the two runs)"
+            }
+          ]
+        },
+        "claim-oracle-unstable": {
+          "semantic_verdict": "supported",
+          "operational_status": "complete",
+          "support_leaves": [
+            "replay:36207050a90d:replay_stability:5510f3417266"
+          ],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "replay:36207050a90d:replay_stability:5510f3417266"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [
+            {
+              "kind": "oracle-unstable",
+              "side": "go"
+            }
+          ],
+          "missing_premises": []
+        }
+      }
     }
   }
 }

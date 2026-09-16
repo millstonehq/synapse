@@ -107,11 +107,12 @@ class AdversarialReplayCasesInBothEngines(unittest.TestCase):
                      "17-effect-order-violation": 2, "18-repeat-delete-with-effects": 3, "19-unstable-oracle": 0,
                      "20-missing-stability-closure": 0, "21-missing-effect-seq-closure": 0,
                      "23-repeat-delete-excluded-write": 3, "24-repeat-before-the-commit": 3,
-                     "25-first-delete-not-committed": 2}
+                     "25-first-delete-not-committed": 2, "26-unstable-on-one-side": 0}
         # one derived row per shape the new rules are there to catch, in both kernels
         planted = {"17-effect-order-violation": ("effect_order_violation", 1),
                    "18-repeat-delete-with-effects": ("repeat_delete_violation", 1),
-                   "19-unstable-oracle": ("oracle_unstable", 1)}
+                   "19-unstable-oracle": ("oracle_unstable", 1),
+                   "26-unstable-on-one-side": ("oracle_unstable", 1)}
         for stem, (_, result) in sorted(self.results.items()):
             for report in (result.python, result.souffle):
                 relations = dict(report.relations)

@@ -233,6 +233,12 @@ class BundleShapeTest(_Exported):
                          "model_describes_run", "model_scope_exclusion", "model_scope_exclusions_closed"):
             for record in _evidence(self.bundle, relation):
                 self.assertIn(f"external:model:{self.model}", record.depends_on, relation)
+        # the stability row names the two selftest runs it was matched against
+        for record in _evidence(self.bundle, "replay_stability"):
+            run_a, run_b = record.atom.terms[1].value, record.atom.terms[2].value
+            self.assertIn(f"external:run:{run_a}", record.depends_on)
+            self.assertIn(f"external:run:{run_b}", record.depends_on)
+            self.assertIn(run_eid, record.depends_on)
         for relation in ("replay_requests_closed", "php_effects_closed", "go_effects_closed",
                          "php_post_states_closed", "go_post_states_closed",
                          "model_admissible_closed", "mutant_kills_closed"):
