@@ -68,6 +68,13 @@ php_model_disagree(Run,Req,S)   :- php_post_state(Run,Req,S), model_describes_ru
                                    model_admissible_closed(Run,M), !model_admissible(Run,M,Req,S).
 go_model_agree / go_model_disagree: the same over go_post_state.
 op_exercised(Run,Op)            :- replay_request(Run,Req,_,_,Op), php_model_agree(Run,Req), go_model_agree(Run,Req).
+php_observed(Run,Req)           :- php_post_state(Run,Req,_).         go_observed: the same over go_post_state.
+php_observed_closed(Run)        :- php_post_states_closed(Run).        go_observed_closed: from go_post_states_closed.
+post_state_gap(Run,Req,"php")   :- requested(Run,Req), replay_requests_closed(Run), php_observed_closed(Run),
+                                   !php_observed(Run,Req).             post_state_gap(Run,Req,"go"): the same.
+post_state_any(Run,Op)          :- replay_request(Run,Req,_,_,Op), post_state_gap(Run,Req,_).
+post_state_gap_closed(Run,Op)   :- replayed(Run,Op), replay_requests_closed(Run), php_post_states_closed(Run),
+                                   go_post_states_closed(Run).
 undeclared_write(Run,Op,Tb)     :- replay_request(Run,Req,_,_,Op), php_effect(Run,Req,Tb,_,_,_), model_describes_run(M,Run),
                                    model_writes_closed(M,Op), !model_writes(M,Op,Tb).
 undeclared_write(Run,Op,Tb)     :- ... the same over go_effect.
@@ -83,8 +90,9 @@ php_disagree_any(Run,Op)        :- replay_request(Run,Req,_,_,Op), php_model_dis
 go_disagree_any(Run,Op)         :- replay_request(Run,Req,_,_,Op), go_model_disagree(Run,Req,_).
 undeclared_any(Run,Op)          :- undeclared_write(Run,Op,_).
 php_disagreement_closed(Run,Op) :- replayed(Run,Op), replay_run_current(Run), model_describes_run(M,Run),
-                                   replay_requests_closed(Run), model_admissible_closed(Run,M).
-go_disagreement_closed(Run,Op)  :- the same body.
+                                   replay_requests_closed(Run), php_post_states_closed(Run),
+                                   model_admissible_closed(Run,M).
+go_disagreement_closed(Run,Op)  :- the same body with go_post_states_closed(Run).
 undeclared_writes_closed(Run,Op):- replayed(Run,Op), replay_run_current(Run), model_describes_run(M,Run),
                                    replay_requests_closed(Run), php_effects_closed(Run), go_effects_closed(Run),
                                    model_writes_closed(M,Op).
@@ -92,7 +100,8 @@ op_qualified_rt(IX,Run,Op)      :- index_describes_replay(IX,Run), replayed(Run,
                                    corpus_constrains(Run,Op),
                                    php_disagreement_closed(Run,Op), !php_disagree_any(Run,Op),
                                    go_disagreement_closed(Run,Op),  !go_disagree_any(Run,Op),
-                                   undeclared_writes_closed(Run,Op), !undeclared_any(Run,Op).
+                                   undeclared_writes_closed(Run,Op), !undeclared_any(Run,Op),
+                                   post_state_gap_closed(Run,Op), !post_state_any(Run,Op).
 op_qualified(IX,Run,Op)         :- op_declared(IX,Op), index_describes_replay(IX,Run), op_qualified_rt(IX,Run,Op).
 ```
 
@@ -135,6 +144,19 @@ Design points a reviewer should check:
   what makes the control's support leaves span the `php`, `go` and `shen`
   producer classes.  `replayed` is kept as the spec writes it; `op_exercised`
   implies it.
+* **Post-state completeness** (schema addition, pre-consumer):
+  `php_post_states_closed(run)` / `go_post_states_closed(run)` complete the
+  post-state relations (`receipt.json` `closed.php_post_states` /
+  `closed.go_post_states`).  Without them a replayed request whose post-state
+  the runner omitted was invisible to `php_disagree_any` while the
+  disagreement closure still held, so one agreeing request could satisfy
+  `op_exercised` and every other request's disagreement could be hidden by
+  omission.  Both disagreement closures now require the witness, and
+  `op_qualified_rt` is gated on `!post_state_any(Run, Op)` under
+  `post_state_gap_closed`, where `post_state_gap(Run, Req, side)` is a
+  replayed request with no post-state on that side (case 09; the mutation
+  tests in `test_replay_corpus_evaluation` show that dropping the gate flips
+  the case).
 * **`kill_closure_gap`** (case 08) is the replay analogue of the static
   `02-lying-witness` gap: a kill that names a request outside the closed
   request set while `mutant_kills_closed` is asserted.  It is derived *from*
@@ -223,5 +245,6 @@ constant in a case.
 | 04 missing model witness | exported `model_describes_run` withheld | both unresolved, missing `model_describes_run`; no `php_model_*`/`go_model_*` rows; companion `php_model_agree` unresolved |
 | 05 missing snapshot witness | no `snapshot_observed` | both unresolved, missing `replay_run_current` |
 | 06 stale replay | `run_nonce_observed` carries another nonce | both unresolved, operational `stale`, missing `replay_run_current`; companion `replay_run_stale` supported |
+| 09 missing post-state | `php_post_state` row for req-3 (issues.create) removed; `php_post_states` still closed | create: unresolved, missing `php_post_state` (req-1 alone satisfies `op_exercised`, so only the gate catches it); close: supported; companion `post_state_gap(run, req-3, php)` supported, discrepancy `post-state-missing` |
 | 08 lying closure | `mutant_killed` m-1 names req-9, not a replayed request; closures asserted | both ops supported *from the lying witness* (seeded fault); `kill_closure_gap` supported with support ∩ forbidden = the `mutant_kills_closed` witness, discrepancy `kill-outside-replayed-requests` |
 | rejected 07 | control with `php_post_state` sourced `shen shen-model-host v1` | `load_case` raises; `validate_bundle` lists `evidence-producer` ×3; evaluated unvalidated both ops would be supported |

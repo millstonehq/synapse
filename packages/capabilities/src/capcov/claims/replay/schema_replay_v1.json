@@ -646,6 +646,56 @@
           "context": true,
           "name": "run",
           "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "php_post_state",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "php_post_states_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "replay"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "go_post_state",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "go_post_states_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "replay"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
         },
         {
           "context": false,
