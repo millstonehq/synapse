@@ -65,10 +65,17 @@ _BLOCKING_ORDER = (
 )
 
 
-COMMITTED_RECEIPT_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "replay_receipt_target_go_5988859"
-"""A real, conforming target-go replay receipt (run 333072ef11f5, synthetic oracle seed, local
-evidence paths scrubbed) committed so the receipt suite is not skip-gated on an
-untracked work directory.  ``CAPCOV_REPLAY_RECEIPT_DIR`` still overrides it."""
+_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+COMMITTED_RECEIPT_DIR = _FIXTURES / "replay_receipt_target_go_qualified"
+"""A real, conforming target-go replay receipt (run eca6e7930af3, synthetic oracle seed, local
+evidence paths scrubbed) against the model that declares every business table the
+systems write for delete-issue, with the reviewer's scope exclusions: the default
+the receipt suite judges, so it is never skip-gated on an untracked work directory.
+``CAPCOV_REPLAY_RECEIPT_DIR`` still overrides it."""
+UNQUALIFIED_RECEIPT_DIR = _FIXTURES / "replay_receipt_target_go_unqualified"
+"""The earlier real receipt (run 333072ef11f5) whose model declared only ``issue``:
+with the reviewer's four exclusions applied, ``entity_statistics`` and ``mongo:issue``
+stay undeclared on both sides, so delete-issue is unresolved.  Kept for the negative path."""
 
 
 def receipt_dir() -> Path | None:
@@ -165,6 +172,9 @@ class ReplayJoin:
     result: Any = None
     mismatch: Any = None
     certificates: dict[str, dict[str, Any]] = field(default_factory=dict)
+    """The first claim row's certificate per claim id."""
+    row_certificates: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    """Every claim row's certificate per claim id (an open claim such as exclusion_applied has one per table)."""
 
     @property
     def model_absent(self) -> bool:
@@ -297,7 +307,8 @@ def evaluate_join(join: ReplayJoin, replay_root: str) -> ReplayJoin:
                 checked = recheck(join.bundle, from_python, relations)
                 if not checked.ok:
                     raise AssertionError(f"{claim.id}: recheck failed: {checked}")
-            join.certificates[claim.id] = from_python
+            join.certificates.setdefault(claim.id, from_python)
+            join.row_certificates.setdefault(claim.id, []).append(from_python)
     return join
 
 
@@ -328,7 +339,8 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
         kinds = {record.id: record.kind for record in join.bundle.evidence}
         leaves = set()
         for claim_id in (join.claim_id("qualified", op), join.claim_id("exclusions-applied", op)):
-            leaves.update(join.certificates.get(claim_id, {}).get("leaves", ()))
+            for cert in join.row_certificates.get(claim_id, ()):
+                leaves.update(cert.get("leaves", ()))
         assumption_leaves = sorted(leaf for leaf in leaves if kinds.get(leaf) == "assumption"
                                    and leaf.split(":")[2] == "model_scope_exclusion")
         entry = {"corpus_constrains": constrains.get("semantic") == "supported",
@@ -378,12 +390,13 @@ def write_artifacts(join: ReplayJoin, out_dir: Path) -> dict[str, Any]:
                                     "leaves": len(cert["leaves"]), "nodes": cert["nodes"], "truncated": cert["truncated"]}
                          for claim_id, cert in join.certificates.items()},
     }
-    for claim_id, cert in join.certificates.items():
-        (out_dir / f"certificate-{claim_id}.json").write_text(json.dumps(cert, indent=1, sort_keys=True) + "\n",
-                                                              encoding="utf-8")
+    for claim_id, certs in join.row_certificates.items():
+        for position, cert in enumerate(certs):
+            name = f"certificate-{claim_id}.json" if position == 0 else f"certificate-{claim_id}-{position}.json"
+            (out_dir / name).write_text(json.dumps(cert, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     (out_dir / "receipt.json").write_text(json.dumps(document, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     return document
 
 
-__all__ = ["COMMITTED_RECEIPT_DIR", "RECEIPT_DIR_ENV", "OUT_ENV", "SYNTHETIC_INDEX", "ReplayJoin", "receipt_dir", "build", "evaluate_join",
+__all__ = ["COMMITTED_RECEIPT_DIR", "UNQUALIFIED_RECEIPT_DIR", "RECEIPT_DIR_ENV", "OUT_ENV", "SYNTHETIC_INDEX", "ReplayJoin", "receipt_dir", "build", "evaluate_join",
            "summary", "write_artifacts", "blocking_premise", "undeclared_tables", "exclusions", "exclusions_applied"]
