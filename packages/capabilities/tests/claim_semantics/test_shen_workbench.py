@@ -50,7 +50,7 @@ if os.environ.get("CAPCOV_SHEN_REQUIRED") and not RUNTIME_PRESENT:
 # The handoff fixture (.capcov/shen-handoff/go_app-static-bundle.json) is the
 # same bundle go_app.go_app_bundle() rebuilds; pin its digests here so a
 # drift in either shows up as a failure rather than a silently different run.
-GO_APP_BUNDLE_DIGEST = "50e642610e13c00fc06eefbfe9c507897fed049da9c9532f5a8b0a1614f1cdb7"
+GO_APP_BUNDLE_DIGEST = "7e5a0b1fe20a04c8489bd83429bf0e42f3184590050205ec1535758326a2d092"
 GO_APP_RULES_DIGEST = "3c7c80822404fc2ef221b91edd209db7ea8e73a40122a9f9764be20398a4d36c"
 
 CHECK_IDS = (

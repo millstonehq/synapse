@@ -49,6 +49,11 @@ from capcov.claims.static.combine import combine
 from capcov.scip import runner
 
 try:
+    from . import replay_join
+except ImportError:  # unittest discover -s imports this directory as top-level
+    from target_go import replay_join
+
+try:
     from ..static_rules.adapter import pack_bundle
 except ImportError:  # unittest discover -s tests/claim_semantics imports target_go as top-level
     from static_rules.adapter import pack_bundle
@@ -380,10 +385,23 @@ class FgGoStaticPilotTest(unittest.TestCase):
             "runtime_join": ({"run": cls.runtime_receipt["run"], "receipt_sha256": cls.runtime_receipt_sha256,
                               "claim": CLAIM_RUNTIME_SQL} if cls.runtime_receipt else
                              "none: no retained target-go run receipt exists, so no index_describes_run row was declared"),
+            "replay_join": cls._replay_join(),
             "timings_seconds": cls.timings,
         }
         (cls.out_dir / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True) + "\n", encoding="utf-8")
         return receipt
+
+    @classmethod
+    def _replay_join(cls):
+        """The replay-judge half when ``CAPCOV_REPLAY_RECEIPT_DIR`` names a receipt directory,
+        else a static-only note.  Distinct from ``runtime_join`` (the route trace receipt)."""
+        directory = replay_join.receipt_dir()
+        if directory is None:
+            return "none: no CAPCOV_REPLAY_RECEIPT_DIR receipt directory was named"
+        join = replay_join.build(directory)
+        if join.bundle is not None and shutil.which("souffle") is not None:
+            replay_join.evaluate_join(join, tempfile.mkdtemp(prefix="capcov-target-go-pilot-replay-join-"))
+        return replay_join.summary(join)
 
     @classmethod
     def _load_runtime_receipt(cls):
@@ -689,6 +707,26 @@ class FgGoStaticPilotTest(unittest.TestCase):
         else:
             self.assertEqual(self.receipt["runtime_join"].split(":")[0], "none")
             self.assertNotIn("index_describes_run", self.exported.counts)
+        join = self.receipt["replay_join"]
+        if replay_join.receipt_dir() is None:
+            self.assertEqual(join.split(":")[0], "none")
+        elif join["status"] == "blocked":
+            # a nonconforming receipt is recorded with the exporter's exact refusal, never worked around
+            self.assertTrue(join["contract_findings"], join)
+        else:
+            self.assertEqual(join["status"], "complete", join)
+            for op in join["ops"]:
+                entry = join[op]
+                self.assertTrue(entry["corpus_constrains"], op)
+                # the honest verdict is recorded as-is: qualified, or unresolved with the
+                # write-set gap named (test_target_go_replay_receipt asserts the same two shapes)
+                if entry["op_qualified"] == "supported":
+                    self.assertEqual(entry["missing_premise"], [])
+                else:
+                    self.assertEqual(entry["op_qualified"], "unresolved", entry)
+                    self.assertEqual(entry["missing_premise"], ["model_writes"])
+                    self.assertEqual(entry["blocking_premise"]["relation"], "undeclared_any")
+                    self.assertTrue(entry["blocked_by"].startswith("blocked by undeclared writes: "))
 
     def test_identity_is_pinned_when_the_committed_receipt_names_this_head(self) -> None:
         self._ready()
