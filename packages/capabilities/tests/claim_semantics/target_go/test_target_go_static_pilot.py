@@ -17,8 +17,12 @@ What is target-go specific is stated, not hidden:
 * target-go issues SQL through ``database/sql`` and sends mail through its own
   ``Mailer`` implementations, so there are no ``static_op_site`` rows and the
   claims are ``static_reaches`` from the handler to named sinks;
-* nothing runtime is joined: no retained target-go run receipt exists, so no
-  ``index_describes_run`` row is declared (static half only).
+* when ``CAPCOV_TARGET_GO_RUNTIME_RECEIPT`` names a retained receipt, the exporter
+  binds its run through ``index_describes_run`` and both kernels derive the
+  route observation on that exact index; this does not claim a runtime-traced
+  route-to-SQL call stack;
+* this external SCIP fixture has an explicit 300-second Python-kernel budget.
+  A limit hit still fails as ``resource-exhausted`` and is never narrowed away.
 
 No target-go source is written anywhere under the repository: the archive lives in
 a temporary directory; the artifacts the test writes (receipt, certificates)
@@ -35,8 +39,10 @@ import time
 import unittest
 from pathlib import Path
 
-from capcov.claims import canonical_json, digest as ir_digest
-from capcov.claims.differential import DifferentialMismatch, compare
+from capcov.claims import (Atom, Bundle, Claim, Column, Constant, Context, Evidence,
+                           RelationDecl, Rule, Variable, canonical_json, digest as ir_digest)
+from capcov.claims.differential import DifferentialMismatch, compare, run_python
+from capcov.claims.evaluator import ResourceLimits
 from capcov.claims.static import pilot, scip_facts
 from capcov.claims.static.certificate import certify, claim_conclusions, recheck, rules_digest
 from capcov.claims.static.combine import combine
@@ -48,6 +54,7 @@ except ImportError:  # unittest discover -s tests/claim_semantics imports target
     from static_rules.adapter import pack_bundle
 
 FIXTURE_ROOT = os.environ.get("CAPCOV_GO_FIXTURE_ROOT")
+RUNTIME_RECEIPT_PATH = os.environ.get("CAPCOV_TARGET_GO_RUNTIME_RECEIPT")
 _HAVE_TOOLS = bool(FIXTURE_ROOT and shutil.which("scip-go") and shutil.which("scip") and shutil.which("go"))
 
 MODULE = "git.internal.example/org/target-go"
@@ -60,11 +67,11 @@ HANDLER_PACKAGE = f"{MODULE}/internal/pilot"
 # (ROUTE_REGISTRATION).  The three actions share one handler closure returned by
 # Runtime.recipientLinks (HANDLER_DEFINITION), so one concrete surface is declared.
 SURFACE = "http:GET /api/cloud/notification-unsubscribe/subscribe-email"
-ROUTE_REGISTRATION = ("internal/pilot/runtime.go", 163, "r.recipientLinks(action)")
-HANDLER_DEFINITION = ("internal/pilot/recipient_links.go", 13, "func (r *Runtime) recipientLinks(")
+ROUTE_REGISTRATION = ("internal/pilot/runtime.go", 209, "r.recipientLinks(action)")
+HANDLER_DEFINITION = ("internal/pilot/recipient_links.go", 14, "func (r *Runtime) recipientLinks(")
 APP_MOUNT = ("internal/httpserver/server.go", 47, 'mux.Handle("/", app)')
 APP_WIRING = ("cmd/target-go/main.go", 181, "httpserver.New(runtime.Handler()")
-SQL_SINK_SITE = ("internal/legacyissues/subscriptions.go", 54, "tx.ExecContext(")
+SQL_SINK_SITE = ("internal/legacyissues/subscriptions.go", 56, "tx.ExecContext(")
 
 _P = f"scip-go gomod {MODULE} . "
 HANDLER = _P + f"`{HANDLER_PACKAGE}`/Runtime#recipientLinks()."
@@ -74,7 +81,60 @@ SEND_DUE_DIGESTS = _P + f"`{MODULE}/internal/legacyissues`/SendDueDigests()."
 CLAIM_FIRST_PARTY = "claim-route-reaches-change-subscription"
 CLAIM_SQL = "claim-route-reaches-sql-tx-exec"
 CONTROL = "control-route-reaches-send-due-digests"
-CERTIFIED_CLAIMS = (CLAIM_FIRST_PARTY, CLAIM_SQL)
+CLAIM_RUNTIME_SQL = "claim-runtime-route-belongs-to-index-with-terminal-sql-receipt"
+CLAIM_RUNTIME_CAUSAL_SQL = "claim-runtime-route-executed-sql-on-index"
+CERTIFIED_CLAIMS = (CLAIM_FIRST_PARTY, CLAIM_SQL, CLAIM_RUNTIME_SQL, CLAIM_RUNTIME_CAUSAL_SQL)
+
+TRACE_PRODUCER = "target-go-runtime-trace-v2"
+RUNTIME_TRACE_DECLS = (
+    RelationDecl("runtime_function_entered",
+                 (Column("run", "symbol", True), Column("request", "symbol", True), Column("symbol", "symbol")),
+                 producer_classes=(TRACE_PRODUCER,), context_indices=("run", "request")),
+    RelationDecl("runtime_sql_executed",
+                 (Column("run", "symbol", True), Column("request", "symbol", True), Column("tx", "symbol", True),
+                  Column("operation", "symbol"), Column("ordinal", "unsigned")),
+                 producer_classes=(TRACE_PRODUCER,), context_indices=("run", "request", "tx")),
+    RelationDecl("runtime_tx_committed",
+                 (Column("run", "symbol", True), Column("request", "symbol", True), Column("tx", "symbol", True)),
+                 producer_classes=(TRACE_PRODUCER,), context_indices=("run", "request", "tx")),
+    RelationDecl("runtime_route_completed",
+                 (Column("run", "symbol", True), Column("request", "symbol", True), Column("surface", "symbol", True)),
+                 producer_classes=(TRACE_PRODUCER,), context_indices=("run", "request", "surface")),
+)
+RUNTIME_CAUSAL_SQL = RelationDecl(
+    "runtime_route_reaches_sql_on_index",
+    (Column("index", "digest", True), Column("run", "symbol", True), Column("request", "symbol", True),
+     Column("surface", "symbol", True), Column("symbol", "symbol"), Column("tx", "symbol", True),
+     Column("operation", "symbol")),
+    modality="derived", binding="runtime", primitive=False,
+    context_indices=("index", "run", "request", "surface", "tx"))
+RUNTIME_CAUSAL_SQL_RULE = Rule(
+    Atom("runtime_route_reaches_sql_on_index",
+         (Variable("IX"), Variable("Run"), Variable("Request"), Variable("Surface"), Variable("Symbol"),
+          Variable("Tx"), Variable("Operation"))),
+    (Atom("runtime_route_observed", (Variable("Tenant"), Variable("Surface"), Variable("Request"), Variable("Run"))),
+     Atom("runtime_function_entered", (Variable("Run"), Variable("Request"), Variable("Symbol"))),
+     Atom("runtime_sql_executed", (Variable("Run"), Variable("Request"), Variable("Tx"), Variable("Operation"), Variable("Ordinal"))),
+     Atom("runtime_tx_committed", (Variable("Run"), Variable("Request"), Variable("Tx"))),
+     Atom("runtime_route_completed", (Variable("Run"), Variable("Request"), Variable("Surface"))),
+     Atom("index_describes_run", (Variable("IX"), Variable("Run"))),
+     Atom("scip_index", (Variable("IX"), Variable("Indexer"), Variable("Version"), Variable("Language"), Variable("Root"), Variable("Kind")))),
+    name="runtime_route_executes_committed_sql_on_index")
+
+RUNTIME_STATIC_SQL = RelationDecl(
+    "runtime_route_observed_on_index",
+    (Column("index", "digest", True), Column("tenant", "symbol", True),
+     Column("surface", "symbol", True), Column("run", "symbol", True)),
+    modality="derived", binding="runtime", primitive=False,
+    context_indices=("index", "tenant", "surface", "run"))
+RUNTIME_STATIC_SQL_RULE = Rule(
+    Atom("runtime_route_observed_on_index",
+         (Variable("IX"), Variable("T"), Variable("S"), Variable("Run"))),
+    (Atom("runtime_route_observed", (Variable("T"), Variable("S"), Variable("Request"), Variable("Run"))),
+     Atom("index_describes_run", (Variable("IX"), Variable("Run"))),
+     Atom("scip_index", (Variable("IX"), Variable("Indexer"), Variable("Version"),
+                         Variable("Language"), Variable("Root"), Variable("Kind")))),
+    name="runtime_route_matches_scip_index")
 
 INDEX_TIMEOUT = 20 * 60
 LIMITS = scip_facts.ExportLimits(documents=500, occurrences=200_000, rows=100_000)
@@ -121,6 +181,7 @@ class FgGoStaticPilotTest(unittest.TestCase):
         cls.out_dir = Path(os.environ.get("CAPCOV_TARGET_GO_PILOT_OUT") or tempfile.mkdtemp(prefix="capcov-target-go-pilot-out-"))
         cls.out_dir.mkdir(parents=True, exist_ok=True)
         cls.checkout = pilot.inspect_checkout(FIXTURE_ROOT)
+        cls.runtime_receipt = cls._load_runtime_receipt()
         cls.archive = pilot.archive_head(FIXTURE_ROOT, Path(cls.tmp.name) / "target-go")
         cache_root = Path(os.environ.get("CAPCOV_GO_CACHE_ROOT") or Path(tempfile.gettempdir()) / "capcov-target-go-pilot")
         cls.go_env = pilot.index_environment(cache_root / "gomodcache", cache_root / "gocache")
@@ -155,7 +216,8 @@ class FgGoStaticPilotTest(unittest.TestCase):
             cls.normalized, ast_raw=None, source_root=cls.archive, language=LANGUAGE,
             scope=scip_facts.Scope.document_set(cls.closure.documents), limits=LIMITS,
             index_digest=cls.normalized["index_digest"], index_digest_kind=cls.normalized["index_digest_kind"],
-            commit=cls.checkout.head)
+            commit=cls.checkout.head,
+            describes_runs=(cls.runtime_receipt["run"],) if cls.runtime_receipt else ())
         cls.timings["export"] = round(time.time() - t, 1)
         if cls.exported.status != scip_facts.STATUS_COMPLETE:
             cls.blocked = (f"export {cls.exported.status}: {cls.exported.messages}; counts {cls.exported.counts}; "
@@ -175,23 +237,52 @@ class FgGoStaticPilotTest(unittest.TestCase):
         cls.assumption = pilot.route_handler_assumption(cls.index, SURFACE, HANDLER, declared_from=declared_from,
                                                         index_evidence_id=index_eid)
         tree_atom, tree_evidence = pilot.source_tree_observation(decls, dict(cls.meta["tree"])["digest"])
-        cls.claims = (
+        cls.claims = [
             pilot.reaches_claim(cls.index, HANDLER, CHANGE_SUBSCRIPTION, CLAIM_FIRST_PARTY),
             pilot.reaches_claim(cls.index, HANDLER, cls.sql_tx_exec, CLAIM_SQL),
             pilot.reaches_claim(cls.index, HANDLER, SEND_DUE_DIGESTS, CONTROL),
-        )
+        ]
+        runtime_bundle = Bundle(())
+        if cls.runtime_receipt:
+            runtime_bundle = cls._runtime_bundle(decls)
+            cls.claims.append(Claim(
+                "runtime_route_observed_on_index",
+                (Constant(cls.index, "digest"), Constant(cls.runtime_receipt["tenant"], "symbol"),
+                 Constant(SURFACE, "symbol"), Constant(cls.runtime_receipt["run"], "symbol")),
+                Context.from_mapping({"index": cls.index, "tenant": cls.runtime_receipt["tenant"],
+                                      "surface": SURFACE, "run": cls.runtime_receipt["run"]}),
+                id=CLAIM_RUNTIME_SQL))
+            cls.claims.append(Claim(
+                "runtime_route_reaches_sql_on_index",
+                (Constant(cls.index, "digest"), Constant(cls.runtime_receipt["run"], "symbol"),
+                 Constant(cls.runtime_receipt["request_id"], "symbol"), Constant(SURFACE, "symbol"),
+                 Constant("git.internal.example/org/target-go/internal/legacyissues.ChangeSubscription", "symbol"),
+                 Constant("change-subscription", "symbol"),
+                 Constant("cancel-notification-confirmation", "symbol")),
+                Context.from_mapping({"index": cls.index, "run": cls.runtime_receipt["run"],
+                                      "request": cls.runtime_receipt["request_id"], "surface": SURFACE,
+                                      "tx": "change-subscription"}),
+                id=CLAIM_RUNTIME_CAUSAL_SQL))
+        cls.claims = tuple(cls.claims)
         cls.bundle = combine(
-            cls.exported.bundle, pack, cls.assumption, facts=[tree_atom], evidence=[tree_evidence],
+            cls.exported.bundle, pack, cls.assumption, runtime_bundle,
+            facts=[tree_atom], evidence=[tree_evidence],
             claims=cls.claims,
             metadata={"experiment": "section-30 target-go static path pilot", "surface": SURFACE,
-                      "target": cls.checkout.receipt(), "runtime_join": "none (static half only)"})
+                      "target": cls.checkout.receipt(),
+                      "runtime_join": cls.runtime_receipt["run"] if cls.runtime_receipt else "none (static half only)"})
         # --- both kernels ---------------------------------------------------------
         cls.replay_root = tempfile.mkdtemp(prefix="capcov-target-go-pilot-replay-")
         cls.result = None
         cls.mismatch = None
         t = time.time()
         try:
-            cls.result = compare(cls.bundle, replay_root=cls.replay_root)
+            cls.result = compare(
+                cls.bundle,
+                python_runner=lambda bundle: run_python(
+                    bundle, limits=ResourceLimits(max_seconds=300.0)),
+                replay_root=cls.replay_root,
+            )
         except DifferentialMismatch as exc:
             cls.mismatch = exc.result
         cls.timings["compare"] = round(time.time() - t, 1)
@@ -286,11 +377,99 @@ class FgGoStaticPilotTest(unittest.TestCase):
             "coverage": {**cls.coverage.receipt(), "route_closure_symbols": len(closure),
                          "unrooted_on_route_closure": unrooted_closure, "deep_unresolved": deep_unresolved},
             "outcome": outcome, "outcome_reasons": reasons,
-            "runtime_join": "none: no retained target-go run receipt exists, so no index_describes_run row was declared",
+            "runtime_join": ({"run": cls.runtime_receipt["run"], "receipt_sha256": cls.runtime_receipt_sha256,
+                              "claim": CLAIM_RUNTIME_SQL} if cls.runtime_receipt else
+                             "none: no retained target-go run receipt exists, so no index_describes_run row was declared"),
             "timings_seconds": cls.timings,
         }
         (cls.out_dir / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True) + "\n", encoding="utf-8")
         return receipt
+
+    @classmethod
+    def _load_runtime_receipt(cls):
+        if not RUNTIME_RECEIPT_PATH:
+            cls.runtime_receipt_sha256 = None
+            return None
+        path = Path(RUNTIME_RECEIPT_PATH)
+        raw = path.read_bytes()
+        def unique(pairs):
+            value = {}
+            for key, item in pairs:
+                if key in value:
+                    raise ValueError(f"duplicate runtime receipt key: {key}")
+                value[key] = item
+            return value
+        value = json.loads(raw, object_pairs_hook=unique)
+        required = {"schema", "run", "candidate_commit", "tenant", "request_id", "surface",
+                    "http_status", "unsubscribe_http_status", "terminal_sql", "trace", "cleanup", "recorded_at"}
+        if set(value) != required or value["schema"] != "capcov-target-go-runtime-route/v2":
+            raise ValueError("invalid target-go runtime receipt schema")
+        if value["candidate_commit"] != cls.checkout.head or value["surface"] != SURFACE:
+            raise ValueError("runtime receipt does not describe the indexed checkout and surface")
+        if value["http_status"] != 200 or value["unsubscribe_http_status"] != 200:
+            raise ValueError("runtime route did not succeed")
+        if value["terminal_sql"] != {"notification_unsubscribed": 0,
+                                      "go_notification_confirmation_cancelled": 1}:
+            raise ValueError("runtime SQL terminal state differs")
+        if value["cleanup"] != {"status": "complete", "owned_resources_remaining": 0}:
+            raise ValueError("runtime fixture cleanup differs")
+        if not value["run"] or value["request_id"] != value["run"] + "-subscribe":
+            raise ValueError("runtime receipt identity differs")
+        expected_trace = [
+            {"kind": "route_entered", "request_id": value["request_id"], "symbol": SURFACE},
+            {"kind": "function_entered", "request_id": value["request_id"],
+             "symbol": "git.internal.example/org/target-go/internal/legacyissues.ChangeSubscription"},
+            {"kind": "sql_executed", "request_id": value["request_id"], "tx": "change-subscription",
+             "operation": "delete-notification-unsubscribed", "ordinal": 1},
+            {"kind": "sql_executed", "request_id": value["request_id"], "tx": "change-subscription",
+             "operation": "cancel-notification-confirmation", "ordinal": 2},
+            {"kind": "tx_committed", "request_id": value["request_id"], "tx": "change-subscription"},
+            {"kind": "route_completed", "request_id": value["request_id"], "symbol": SURFACE},
+        ]
+        if value["trace"] != expected_trace:
+            raise ValueError("runtime causal trace differs")
+        cls.runtime_receipt_sha256 = __import__("hashlib").sha256(raw).hexdigest()
+        return value
+
+    @classmethod
+    def _runtime_bundle(cls, decls):
+        value = cls.runtime_receipt
+        route_decl = decls["runtime_route_observed"]
+        route_values = [value["tenant"], value["surface"], value["request_id"], value["run"]]
+        route_atom = Atom("runtime_route_observed", tuple(
+            Constant(item, column.type) for item, column in zip(route_values, route_decl.columns)))
+        route_evidence = Evidence(
+            f"runtime:{value['run']}:runtime_route_observed:{scip_facts.row_digest('runtime_route_observed', route_values)[:12]}",
+            route_atom, Context.from_mapping({"tenant": value["tenant"], "surface": value["surface"],
+                                              "event": value["request_id"], "run": value["run"]}),
+            source=f"target-go runtime receipt sha256:{cls.runtime_receipt_sha256}",
+            depends_on=(f"external:run:{value['run']}", f"external:git-commit:{value['candidate_commit']}"))
+        decls = {decl.name: decl for decl in RUNTIME_TRACE_DECLS}
+        facts = [route_atom]
+        evidence = [route_evidence]
+        trace_rows = (
+            ("runtime_function_entered", [value["run"], value["request_id"], value["trace"][1]["symbol"]]),
+            ("runtime_sql_executed", [value["run"], value["request_id"], "change-subscription",
+                                      "delete-notification-unsubscribed", 1]),
+            ("runtime_sql_executed", [value["run"], value["request_id"], "change-subscription",
+                                      "cancel-notification-confirmation", 2]),
+            ("runtime_tx_committed", [value["run"], value["request_id"], "change-subscription"]),
+            ("runtime_route_completed", [value["run"], value["request_id"], value["surface"]]),
+        )
+        for relation, values in trace_rows:
+            columns = decls[relation].columns
+            atom = Atom(relation, tuple(Constant(item, column.type)
+                                        for item, column in zip(values, columns)))
+            facts.append(atom)
+            evidence.append(Evidence(
+                f"runtime:{value['run']}:{relation}:{scip_facts.row_digest(relation, values)[:12]}",
+                atom, Context.from_mapping({column.name: item for item, column in zip(values, columns)
+                                            if column.context}),
+                source=f"target-go runtime receipt sha256:{cls.runtime_receipt_sha256}",
+                depends_on=(f"external:run:{value['run']}", f"external:git-commit:{value['candidate_commit']}"),
+                kind=TRACE_PRODUCER))
+        return Bundle((RUNTIME_STATIC_SQL, RUNTIME_CAUSAL_SQL, *RUNTIME_TRACE_DECLS), facts=tuple(facts),
+                      rules=(RUNTIME_STATIC_SQL_RULE, RUNTIME_CAUSAL_SQL_RULE), evidence=tuple(evidence))
 
     # -- helpers --------------------------------------------------------------
 
@@ -340,7 +519,7 @@ class FgGoStaticPilotTest(unittest.TestCase):
         self.assertIn('"GET /api/cloud/notification-unsubscribe/"', self._archived_line(ROUTE_REGISTRATION))
         [record] = self.assumption.evidence
         self.assertEqual(record.kind, "assumption")
-        self.assertTrue(record.source.startswith("human-declared from router source: internal/pilot/runtime.go:163"))
+        self.assertTrue(record.source.startswith("human-declared from router source: internal/pilot/runtime.go:209"))
         self.assertEqual(record.id.split(":")[:3], ["static", self.index[:12], pilot.ROUTE_HANDLER_ASSUMPTION])
         # the handler symbol is a callable the index defines at the declared line
         definitions = {(p, l): s for _, p, l, s in _rows(self.exported.bundle, "scip_definition_site")}
@@ -426,14 +605,50 @@ class FgGoStaticPilotTest(unittest.TestCase):
                 self.assertFalse(from_python["truncated"])
                 self.assertTrue(recheck(self.bundle, from_python, relations).ok)
                 self.assertTrue(recheck(self.bundle, from_souffle, dict(result.souffle.relations)).ok)
-                self.assertTrue(all(leaf.startswith(("scip:", "static:")) for leaf in from_python["leaves"]))
-                self.assertIn(self.assumption.evidence[0].id, from_python["leaves"])
+                runtime_claims = {CLAIM_RUNTIME_SQL, CLAIM_RUNTIME_CAUSAL_SQL}
+                allowed = ("scip:", "static:", "runtime:") if claim.id in runtime_claims else ("scip:", "static:")
+                self.assertTrue(all(leaf.startswith(allowed) for leaf in from_python["leaves"]))
+                if claim.id not in runtime_claims:
+                    self.assertIn(self.assumption.evidence[0].id, from_python["leaves"])
                 self.assertEqual(json.loads((self.out_dir / f"certificate-{claim.id}.json").read_text()), from_python)
         # the derived path, as a symbol chain
         self.assertEqual(self.receipt["path"][CLAIM_FIRST_PARTY], [[HANDLER, CHANGE_SUBSCRIPTION]])
         self.assertEqual(self.receipt["path"][CLAIM_SQL],
                          [[HANDLER, CHANGE_SUBSCRIPTION], [CHANGE_SUBSCRIPTION, self.sql_tx_exec]])
         self.assertEqual(self.receipt["certificates"][CLAIM_SQL]["steps"], 1)
+
+    @unittest.skipUnless(RUNTIME_RECEIPT_PATH, "needs CAPCOV_TARGET_GO_RUNTIME_RECEIPT")
+    def test_runtime_receipt_joins_the_index_and_terminal_sql_in_both_kernels(self) -> None:
+        result = self._result()
+        expected = (self.index, self.runtime_receipt["tenant"], SURFACE,
+                    self.runtime_receipt["run"])
+        causal = (self.index, self.runtime_receipt["run"], self.runtime_receipt["request_id"], SURFACE,
+                  "git.internal.example/org/target-go/internal/legacyissues.ChangeSubscription",
+                  "change-subscription", "cancel-notification-confirmation")
+        for report in (result.python, result.souffle):
+            with self.subTest(kernel=report.backend):
+                claims = {claim.key: claim for claim in report.claims}
+                self.assertEqual(claims[CLAIM_RUNTIME_SQL].semantic, "supported")
+                self.assertEqual(claims[CLAIM_RUNTIME_CAUSAL_SQL].semantic, "supported")
+                self.assertIn(expected, set(dict(report.relations)["runtime_route_observed_on_index"]))
+                self.assertIn(causal, set(dict(report.relations)["runtime_route_reaches_sql_on_index"]))
+                self.assertIn((self.index, self.runtime_receipt["run"]),
+                              set(dict(report.relations)["index_describes_run"]))
+        claim = next(claim for claim in self.claims if claim.id == CLAIM_RUNTIME_SQL)
+        rows = claim_conclusions(self.bundle, dict(result.python.relations), claim)
+        certificate = certify(self.bundle, dict(result.python.relations), claim.relation, rows[0])
+        self.assertTrue(any(leaf.startswith("runtime:") for leaf in certificate["leaves"]))
+        self.assertTrue(any(":index_describes_run:" in leaf for leaf in certificate["leaves"]))
+        self.assertTrue(recheck(self.bundle, certificate, dict(result.souffle.relations)).ok)
+        causal_claim = next(claim for claim in self.claims if claim.id == CLAIM_RUNTIME_CAUSAL_SQL)
+        rows = claim_conclusions(self.bundle, dict(result.python.relations), causal_claim)
+        certificate = certify(self.bundle, dict(result.python.relations), causal_claim.relation, rows[0])
+        leaf_relations = {leaf.split(":")[2] for leaf in certificate["leaves"] if leaf.startswith("runtime:")}
+        self.assertTrue({"runtime_route_observed", "runtime_function_entered", "runtime_sql_executed",
+                         "runtime_tx_committed", "runtime_route_completed"}
+                        <= leaf_relations)
+        self.assertTrue(any(":index_describes_run:" in leaf for leaf in certificate["leaves"]))
+        self.assertTrue(recheck(self.bundle, certificate, dict(result.souffle.relations)).ok)
 
     def test_negative_control_is_unresolved_never_refuted(self) -> None:
         result = self._result()
@@ -469,8 +684,12 @@ class FgGoStaticPilotTest(unittest.TestCase):
             self.assertEqual(outcome, pilot.OUTCOME_SUPPORTED, self.receipt["outcome_reasons"])
             self.assertEqual(self.receipt["outcome_reasons"], [])
         self.assertEqual(self.receipt["kernels"]["matched"], result.matched)
-        self.assertEqual(self.receipt["runtime_join"].split(":")[0], "none")
-        self.assertNotIn("index_describes_run", self.exported.counts)
+        if self.runtime_receipt:
+            self.assertEqual(self.receipt["runtime_join"]["run"], self.runtime_receipt["run"])
+            self.assertEqual(self.exported.counts["index_describes_run"], 1)
+        else:
+            self.assertEqual(self.receipt["runtime_join"].split(":")[0], "none")
+            self.assertNotIn("index_describes_run", self.exported.counts)
 
     def test_identity_is_pinned_when_the_committed_receipt_names_this_head(self) -> None:
         self._ready()

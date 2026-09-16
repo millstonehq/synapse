@@ -30,6 +30,7 @@ SECTION_29_DERIVED = {
     "static_route_authorized", "static_route_authorization_gap", "static_route_authorized_closed",
 }
 COMPLETENESS_PROJECTIONS = {"scip_document_path", "scip_definition_site_at"}
+RUNTIME_DERIVED = {"runtime_route_reaches_sql_on_index"}
 EVIDENCE_ID = re.compile(r"^(scip|static|runtime):([0-9a-f]{12}|claim-time|run-[0-9]+):([a-z_]+):([0-9a-f]{12})$")
 
 
@@ -58,7 +59,7 @@ class StaticRulePackTests(unittest.TestCase):
 
     def test_derived_relations_cover_section_29_and_the_completeness_projections(self) -> None:
         derived = {item["name"]: item for item in self.pack["derived"]}
-        self.assertEqual(set(derived), SECTION_29_DERIVED | COMPLETENESS_PROJECTIONS)
+        self.assertEqual(set(derived), SECTION_29_DERIVED | COMPLETENESS_PROJECTIONS | RUNTIME_DERIVED)
         frozen = {item["name"]: item for item in self.pack["primitives"]}
         for name in ("scip_documents_closed", "scip_definitions_closed", "static_route_inventory_closed",
                      "static_reachability_closed"):
@@ -66,10 +67,14 @@ class StaticRulePackTests(unittest.TestCase):
         for name, item in derived.items():
             with self.subTest(relation=name):
                 self.assertFalse(item["primitive"])
-                if name == "runtime_route_without_static":
+                if name in {"runtime_route_without_static", "runtime_route_reaches_sql_on_index"}:
                     self.assertEqual((item["modality"], item["polarity"], item["binding"]),
-                                     ("claim", "negative", "runtime"))
-                    self.assertEqual(item["context_indices"], ["tenant", "surface", "run", "index"])
+                                     (("claim", "negative", "runtime") if name == "runtime_route_without_static"
+                                      else ("derived", "positive", "runtime")))
+                    self.assertEqual(item["context_indices"],
+                                     (["tenant", "surface", "run", "index"]
+                                      if name == "runtime_route_without_static"
+                                      else ["index", "run", "request", "surface", "tx"]))
                 else:
                     self.assertEqual(item["binding"], "static")
                     self.assertEqual(item["context_indices"], ["index"])

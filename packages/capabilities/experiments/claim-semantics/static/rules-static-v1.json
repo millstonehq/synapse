@@ -718,6 +718,63 @@
       "polarity": "positive",
       "primitive": false,
       "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": true,
+          "name": "request",
+          "type": "symbol"
+        },
+        {
+          "context": true,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        },
+        {
+          "context": true,
+          "name": "tx",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "operation",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index",
+        "run",
+        "request",
+        "surface",
+        "tx"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "runtime_route_reaches_sql_on_index",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
     }
   ],
   "description": "SCIP -> Datalog static rule pack (EXPERIMENT-PLAN section 29). `primitives` is a byte-identical copy of claims/static/schema_static_v1.json; `supplementary_primitives` declares the runtime observation and assumptions the section names outside the frozen file; `derived` and `rules` are the reviewed program in raw IR JSON wire form.",
@@ -2304,7 +2361,12 @@
         "route_site",
         "route_site_excluded",
         "run_built_from_commit",
+        "runtime_function_entered",
+        "runtime_route_completed",
         "runtime_route_observed",
+        "runtime_route_reaches_sql_on_index",
+        "runtime_sql_executed",
+        "runtime_tx_committed",
         "scip_definition_site",
         "scip_definitions_closed",
         "scip_document",
@@ -3880,6 +3942,163 @@
       "polarity": "negative",
       "primitive": true,
       "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": true,
+          "name": "request",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run",
+        "request"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "runtime_function_entered",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "target-go-runtime-trace-v2"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": true,
+          "name": "request",
+          "type": "symbol"
+        },
+        {
+          "context": true,
+          "name": "tx",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "operation",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "ordinal",
+          "type": "unsigned"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run",
+        "request",
+        "tx"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "runtime_sql_executed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "target-go-runtime-trace-v2"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": true,
+          "name": "request",
+          "type": "symbol"
+        },
+        {
+          "context": true,
+          "name": "tx",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run",
+        "request",
+        "tx"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "runtime_tx_committed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "target-go-runtime-trace-v2"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": true,
+          "name": "request",
+          "type": "symbol"
+        },
+        {
+          "context": true,
+          "name": "surface",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run",
+        "request",
+        "surface"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "runtime_route_completed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "target-go-runtime-trace-v2"
+      ]
     }
   ]
 }
