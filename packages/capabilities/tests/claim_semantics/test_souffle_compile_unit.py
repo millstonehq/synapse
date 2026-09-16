@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -155,6 +156,33 @@ def _fake_version(argv, **kwargs):
     return subprocess.CompletedProcess(argv, 0, "Version: fake-2.5\n", "")
 
 
+class _RecordingPopen:
+    """A compiled checker that echoes its facts back out, recording every spawn.
+
+    Patched over ``souffle.subprocess.Popen``, so every process the shared
+    execution path starts is recorded with its argv, cwd and temp-root
+    contents.
+    """
+    spawns: list[dict[str, object]] = []
+
+    def __init__(self, argv, *, cwd, stdout, stderr, text):
+        del stdout, stderr, text
+        root = Path(cwd)
+        type(self).spawns.append({
+            "argv": list(argv), "cwd": str(root),
+            "files": sorted(str(p.relative_to(root)) for p in root.rglob("*") if p.is_file()),
+        })
+        for fact_path in (root / "facts").glob("*.facts"):
+            (root / "outputs" / f"{fact_path.stem}.csv").write_bytes(fact_path.read_bytes())
+        self.returncode = 0
+
+    def poll(self):
+        return 0
+
+    def communicate(self):
+        return "", "Warning: OpenMP was not enabled\n"
+
+
 class CompileProgramTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(prefix="capcov-compile-unit-")
@@ -290,6 +318,75 @@ class CompileProgramTests(unittest.TestCase):
         with self.assertRaises(souffle.SouffleUnavailable):
             compiled.compile_program(self.program, executable=str(self.root / "absent"), cache_dir=self.cache_dir)
 
+    def test_a_missing_compiler_configuration_is_unavailable_not_a_compile_failure(self) -> None:
+        """No ``souffle-compile.py`` beside souffle is exit 4, never a kernel verdict."""
+        (self.root / "souffle-compile.py").unlink()
+        with self.assertRaises(souffle.SouffleUnavailable) as raised:
+            self._compile()
+        self.assertIn("souffle-compile.py", str(raised.exception))
+        self.assertEqual(_FakeCompiler.calls, [], "nothing is compiled without a compiler")
+        self.assertEqual(list(self.cache_dir.glob("compiled-*")), [])
+
+    def test_an_unusable_cache_directory_is_unavailable(self) -> None:
+        """A cache that cannot be written is the judge's environment, not the receipt's."""
+        blocker = self.root / "not-a-directory"
+        blocker.write_text("", encoding="utf-8")
+        with (patch.object(compiled.subprocess, "Popen", _FakeCompiler),
+              patch.object(compiled.subprocess, "run", _fake_version)):
+            with self.assertRaises(souffle.SouffleUnavailable) as raised:
+                compiled.compile_program(self.program, executable=str(self.executable),
+                                         cache_dir=blocker)
+        self.assertIn("cache directory is not usable", str(raised.exception))
+
+    def test_a_failed_cache_write_leaves_no_partial_entry(self) -> None:
+        """A simulated OSError mid-write: no ``compiled-*``, no ``.compiled-*`` residue."""
+        with (patch.object(compiled.subprocess, "Popen", _FakeCompiler),
+              patch.object(compiled.subprocess, "run", _fake_version),
+              patch.object(compiled.shutil, "move", side_effect=OSError("No space left on device"))):
+            with self.assertRaises(souffle.SouffleUnavailable) as raised:
+                compiled.compile_program(self.program, executable=str(self.executable),
+                                         cache_dir=self.cache_dir)
+        self.assertIn("could not be written", str(raised.exception))
+        self.assertEqual(sorted(p.name for p in self.cache_dir.iterdir()), [])
+        # and the next attempt still compiles into a complete entry
+        checker = self._compile()
+        self.assertTrue(Path(checker.binary_path).is_file())
+        self.assertEqual(sorted(p.name for p in Path(checker.binary_path).parent.iterdir()),
+                         ["checker", "provenance.json"])
+
+    def test_a_relative_cache_dir_still_yields_a_runnable_binary_path(self) -> None:
+        """The checker is spawned from a temp root: a relative argv[0] would not resolve."""
+        previous = Path.cwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, previous)
+        relative = Path(".capcov") / "compiled"
+        with (patch.object(compiled.subprocess, "Popen", _FakeCompiler),
+              patch.object(compiled.subprocess, "run", _fake_version)):
+            checker = compiled.compile_program(self.program, executable=str(self.executable),
+                                               cache_dir=relative)
+            again = compiled.compile_program(self.program, executable=str(self.executable),
+                                             cache_dir=relative)
+        self.assertTrue(Path(checker.binary_path).is_absolute(), checker.binary_path)
+        self.assertTrue(again.cache_hit)
+        self.assertEqual(again.binary_path, checker.binary_path)
+        self.assertEqual(Path(checker.binary_path).parent.parent, (Path.cwd() / relative))
+
+        # the real defect: spawned with cwd = a temp root, the relative
+        # spelling raises ENOENT while the recorded path runs
+        elsewhere = Path(tempfile.mkdtemp(dir=self.root))
+        self.assertEqual(subprocess.run([checker.binary_path], cwd=elsewhere,
+                                        capture_output=True).returncode, 0)
+        relative_argv = str(relative / Path(checker.binary_path).parent.name / "checker")
+        with self.assertRaises(OSError):
+            subprocess.run([relative_argv], cwd=elsewhere, capture_output=True)
+
+        # and through the shared execution path the argv is that absolute binary
+        _RecordingPopen.spawns = []
+        with patch.object(souffle.subprocess, "Popen", _RecordingPopen):
+            compiled.run_compiled(self.bundle, checker)
+        self.assertEqual([spawn["argv"] for spawn in _RecordingPopen.spawns],
+                         [[checker.binary_path, "-j1"]])
+
 
 class RunCompiledTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -338,28 +435,13 @@ class RunCompiledTests(unittest.TestCase):
     def test_the_binary_runs_with_the_compiled_argv_in_the_shared_temp_root(self) -> None:
         program = souffle.program_for_pack(self.bundle)
         checker = replace(self.checker, program_digest=program.program_digest)
-        seen: dict[str, object] = {}
-
-        class _RecordingPopen:
-            def __init__(self, argv, *, cwd, stdout, stderr, text):
-                del stdout, stderr, text
-                seen["argv"] = list(argv)
-                seen["files"] = sorted(str(p.relative_to(cwd)) for p in Path(cwd).rglob("*") if p.is_file())
-                root = Path(cwd)
-                for fact_path in (root / "facts").glob("*.facts"):
-                    (root / "outputs" / f"{fact_path.stem}.csv").write_bytes(fact_path.read_bytes())
-                self.returncode = 0
-
-            def poll(self):
-                return 0
-
-            def communicate(self):
-                return "", "Warning: OpenMP was not enabled\n"
-
+        _RecordingPopen.spawns = []
         with patch.object(souffle.subprocess, "Popen", _RecordingPopen):
             result = compiled.run_compiled(self.bundle, checker)
-        self.assertEqual(seen["argv"], [str(self.root / "checker"), "-j1"])
-        self.assertEqual(seen["files"], ["facts/derived.facts", "facts/left.facts", "program.dl"])
+        self.assertEqual(len(_RecordingPopen.spawns), 1)
+        spawn = _RecordingPopen.spawns[0]
+        self.assertEqual(spawn["argv"], [str(self.root / "checker"), "-j1"])
+        self.assertEqual(spawn["files"], ["facts/derived.facts", "facts/left.facts", "program.dl"])
         self.assertEqual(result.runtime, "souffle-compiled:" + "1" * 16)
         self.assertEqual(result.program_digest, program.program_digest)
         self.assertEqual(result.relations["left"], (("l",),))

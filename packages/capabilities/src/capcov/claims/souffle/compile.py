@@ -10,6 +10,12 @@ through the same temp-root / parse / claim-fold path the interpreter uses
 (``souffle._execute``), so the two Souffle kernels differ only in the process
 that computes the closure.
 
+One deliberate difference the provenance records in ``compile_flags``: the
+compiled program is built with ``--no-preprocessor`` while the interpreter runs
+with mcpp on.  The two kernels therefore run the same program *text*; a
+relation alias colliding with a predefined mcpp macro would diverge, and would
+do so as an interpreter failure, never as a silent disagreement.
+
 The value of the compiled kernel is a third independent evaluator with
 recorded provenance (program digest, souffle sha256, compiler configuration,
 binary sha256), not throughput: at fixture scale the binary is slower than the
@@ -131,12 +137,19 @@ def _souffle_version(resolved: str) -> str:
 
 
 def _compiler_config_sha256(resolved: str) -> str:
-    """sha256 of the sibling ``souffle-compile.py`` (it embeds the C++ toolchain), or ``""``."""
+    """sha256 of the sibling ``souffle-compile.py`` (it embeds the C++ toolchain).
+
+    ``souffle -o`` cannot build a binary without it, so an absent or unreadable
+    sibling is ``SouffleUnavailable`` (the judge's exit 4) and never a compile
+    failure: a toolchain gap must not surface as a kernel disagreement.
+    """
     sibling = Path(resolved).resolve().parent / COMPILER_CONFIG_NAME
     try:
         return _sha256_file(sibling)
-    except OSError:
-        return ""
+    except OSError as exc:
+        raise SouffleUnavailable(
+            f"{COMPILER_CONFIG_NAME} is not readable beside the souffle executable: "
+            f"{sibling}: {exc}") from exc
 
 
 def _entry_dir(cache_dir: str | os.PathLike[str], key: str) -> Path:
@@ -186,8 +199,11 @@ def prune_cache(cache_dir: str | os.PathLike[str], souffle_sha256: str) -> list[
     """Remove ``compiled-*`` entries not built by the souffle executable in use.
 
     Bounds the cache to one souffle build: an entry whose provenance is
-    unreadable or names another ``souffle_sha256`` is deleted.  Returns the
-    removed entry names.
+    unreadable or names another ``souffle_sha256`` is deleted.  A ``.compiled-*``
+    staging directory older than one compile timeout is removed too --
+    ``compile_program`` cleans up its own, so one that old is the residue of a
+    killed process, and the age bound keeps a live compile's staging directory.
+    Returns the removed entry names.
     """
     removed = []
     directory = Path(cache_dir)
@@ -200,6 +216,14 @@ def prune_cache(cache_dir: str | os.PathLike[str], souffle_sha256: str) -> list[
         if payload is None or payload.get("souffle_sha256") != souffle_sha256:
             shutil.rmtree(entry, ignore_errors=True)
             removed.append(entry.name)
+    for staging in sorted(directory.glob(".compiled-*")):
+        try:
+            stale = staging.is_dir() and time.time() - staging.stat().st_mtime > COMPILE_TIMEOUT
+        except OSError:
+            continue
+        if stale:
+            shutil.rmtree(staging, ignore_errors=True)
+            removed.append(staging.name)
     return removed
 
 
@@ -213,8 +237,16 @@ def compile_program(program: SouffleProgram, *, executable: str = "souffle",
     otherwise the program is compiled in a temp dir, moved atomically into the
     cache and its provenance written.  rc != 0 is ``CompileError`` (Souffle
     writes dozens of ``variable only occurs once`` warnings to stderr with rc
-    0; only the return code decides).
+    0; only the return code decides).  ``cache_dir`` may be relative: it is
+    made absolute first, so ``binary_path`` runs from the temp root the shared
+    execution path spawns it in.  A cache directory that cannot be written is
+    ``SouffleUnavailable`` -- an environment failure, never a claim about the
+    program.
     """
+    # The binary is spawned with ``cwd`` = a temp root, where a relative
+    # argv[0] would not resolve: the cache directory is made absolute here so
+    # every ``binary_path`` (cached or fresh) is runnable from any directory.
+    cache_dir = Path(cache_dir).absolute()
     resolved = shutil.which(executable)
     if resolved is None:
         raise SouffleUnavailable(f"Souffle executable not found: {executable}")
@@ -223,18 +255,23 @@ def compile_program(program: SouffleProgram, *, executable: str = "souffle",
         raise SouffleUnavailable(f"Souffle executable could not be read: {resolved}")
     souffle_sha256 = identity["sha256"]
     souffle_path = identity["path"]
+    compiler_config = _compiler_config_sha256(resolved)
     key = compile_key(program.program_digest, souffle_sha256, COMPILE_FLAGS)
     expected = {
         "schema": PROGRAM_SCHEMA, "compile_key": key, "program_digest": program.program_digest,
         "souffle_sha256": souffle_sha256, "souffle_version": _souffle_version(resolved),
-        "compiler_config_sha256": _compiler_config_sha256(resolved),
+        "compiler_config_sha256": compiler_config,
         "compile_flags": list(COMPILE_FLAGS),
     }
     entry = _entry_dir(cache_dir, key)
     cached = _cached_checker(entry, expected)
     if cached is not None:
         return cached
-    Path(cache_dir).mkdir(parents=True, exist_ok=True)
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise SouffleUnavailable(
+            f"compiled-checker cache directory is not usable: {cache_dir}: {exc}") from exc
     work = Path(tempfile.mkdtemp(prefix="capcov-souffle-compile-"))
     try:
         (work / "program.dl").write_text(program.program, encoding="utf-8")
@@ -265,13 +302,29 @@ def compile_program(program: SouffleProgram, *, executable: str = "souffle",
             compile_flags=COMPILE_FLAGS, compile_key=key,
             compiler_config_sha256=expected["compiler_config_sha256"],
             compile_seconds=round(compile_seconds, 3))
-        staging = Path(tempfile.mkdtemp(prefix=".compiled-", dir=cache_dir))
-        shutil.move(os.fspath(binary), staging / "checker")
-        (staging / "provenance.json").write_text(
-            json.dumps(checker.provenance(), indent=1, sort_keys=True) + "\n", encoding="utf-8")
-        if entry.exists():
-            shutil.rmtree(entry, ignore_errors=True)
-        os.replace(staging, entry)
+        # The entry appears under its final name only once it is complete, and
+        # a staging directory never outlives the attempt that created it.
+        try:
+            staging = Path(tempfile.mkdtemp(prefix=".compiled-", dir=cache_dir))
+        except OSError as exc:
+            raise SouffleUnavailable(
+                f"compiled-checker cache directory is not usable: {cache_dir}: {exc}") from exc
+        try:
+            shutil.move(os.fspath(binary), staging / "checker")
+            (staging / "provenance.json").write_text(
+                json.dumps(checker.provenance(), indent=1, sort_keys=True) + "\n", encoding="utf-8")
+            if entry.exists():
+                shutil.rmtree(entry, ignore_errors=True)
+            os.replace(staging, entry)
+        except OSError as exc:
+            shutil.rmtree(staging, ignore_errors=True)
+            # A concurrent compile of the same key may have taken the entry
+            # between the rmtree and the replace; its bytes are this binary's.
+            concurrent = _cached_checker(entry, expected)
+            if concurrent is not None:
+                return concurrent
+            raise SouffleUnavailable(
+                f"compiled-checker cache entry could not be written: {entry}: {exc}") from exc
     finally:
         shutil.rmtree(work, ignore_errors=True)
     if prune:
