@@ -225,6 +225,7 @@ class BundleShapeTest(_Exported):
             for record in _evidence(self.bundle, relation):
                 self.assertIn(f"external:model:{self.model}", record.depends_on, relation)
         for relation in ("replay_requests_closed", "php_effects_closed", "go_effects_closed",
+                         "php_post_states_closed", "go_post_states_closed",
                          "model_admissible_closed", "mutant_kills_closed"):
             [record] = _evidence(self.bundle, relation)
             self.assertIn(run_eid, record.depends_on)
@@ -258,7 +259,8 @@ class MetadataTest(_Exported):
         for key in ("nonce", "snapshot", "model", "php_commit", "go_commit"):
             self.assertEqual(meta[key], self.receipt[key])
         self.assertEqual(dict(meta["closed"]), {k: True for k in (
-            "replay_requests", "php_effects", "go_effects", "model_admissible", "mutant_kills")})
+            "replay_requests", "php_effects", "go_effects", "php_post_states", "go_post_states",
+            "model_admissible", "mutant_kills")})
         # the receipts are carried, reported, and are not identity
         self.assertEqual(json.loads(canonical_json(meta["receipts"])), self.receipt["receipts"])
         self.assertEqual(meta["receipt_dir"], str(FIXTURE))
@@ -500,20 +502,29 @@ class WitnessTest(_Exported):
             "replay_requests_closed": "requests-closed-v1",
             "php_effects_closed": "php-effects-closed-v1",
             "go_effects_closed": "go-effects-closed-v1",
+            "php_post_states_closed": "php-post-states-closed-v1",
+            "go_post_states_closed": "go-post-states-closed-v1",
             "model_admissible_closed": "model-admissible-closed-v1",
             "mutant_kills_closed": "mutant-kills-closed-v1",
             "model_writes_closed": "model-writes-closed-v1",
             "mutants_closed": "mutants-closed-v1",
         }
+        decls = {r.name: r for r in self.bundle.relations}
         for relation, predicate in expected.items():
             records = _evidence(self.bundle, relation)
             self.assertTrue(records, relation)
+            owner = f"{decls[relation].producer_classes[0]} " if decls[relation].producer_classes else ""
             for record in records:
-                self.assertEqual(record.source, f"capcov.claims.replay.replay_facts {predicate}")
+                self.assertEqual(record.source, f"{owner}capcov.claims.replay.replay_facts {predicate}")
+                self.assertEqual(record.source, replay_facts.witness_source(decls[relation], predicate))
+        # the schema attributes the post-state closures to the harness
+        for relation in ("php_post_states_closed", "go_post_states_closed"):
+            [record] = _evidence(self.bundle, relation)
+            self.assertTrue(record.source.startswith("replay "), record.source)
 
     def test_all_witnesses_hold_on_the_clean_fixture(self) -> None:
         for relation in ("replay_requests_closed", "php_effects_closed", "go_effects_closed",
-                         "mutant_kills_closed"):
+                         "php_post_states_closed", "go_post_states_closed", "mutant_kills_closed"):
             self.assertEqual(_rows(self.bundle, relation), [[RUN]], relation)
         self.assertEqual(_rows(self.bundle, "model_admissible_closed"), [[RUN, self.model]])
         self.assertEqual(_rows(self.bundle, "model_writes_closed"),
@@ -672,13 +683,23 @@ class ProducerAuthorityTest(_Exported):
         lenient = bundle_from_json(json.dumps(raw), validate=False)
         issues = validate_bundle(lenient)
         self.assertEqual([issue.code for issue in issues], ["evidence-producer"] * 3)
-        # the unconstrained witnesses accept any producer string
+        # a witness the schema leaves unowned accepts any producer string; an
+        # owned witness (the post-state closures belong to the harness) does not
+        decls = {r.name: r for r in self.bundle.relations}
+        owned = sorted(name for name, decl in decls.items() if name.endswith("_closed") and decl.producer_classes)
+        self.assertTrue({"php_post_states_closed", "go_post_states_closed"} <= set(owned))
         for record in raw["evidence"]:
             if record["atom"]["relation"] == "php_effect":
                 record["source"] = "php target-cloud x"
-            if record["atom"]["relation"].endswith("_closed"):
+            if record["atom"]["relation"].endswith("_closed") and not decls[record["atom"]["relation"]].producer_classes:
                 record["source"] = "anyone at all"
         self.assertEqual(validate_bundle(bundle_from_json(json.dumps(raw), validate=False)), ())
+        for record in raw["evidence"]:
+            if record["atom"]["relation"] in owned:
+                record["source"] = "anyone at all"
+        issues = validate_bundle(bundle_from_json(json.dumps(raw), validate=False))
+        self.assertEqual({issue.code for issue in issues}, {"evidence-producer"})
+        self.assertEqual(len(issues), sum(1 for r in raw["evidence"] if r["atom"]["relation"] in owned))
 
 
 if __name__ == "__main__":

@@ -29,13 +29,16 @@ STUBS = {"mutant_killed_in", "op_qualified_rt"}
 DERIVED = {
     "replay_run_current", "replay_run_stale", "requested", "requested_closed", "replayed",
     "php_model_agree", "php_model_disagree", "go_model_agree", "go_model_disagree", "op_exercised",
+    "php_observed", "go_observed", "php_observed_closed", "go_observed_closed", "post_state_gap",
+    "post_state_any", "post_state_gap_closed",
     "undeclared_write", "surviving_mutant", "op_has_surviving_mutant", "op_surviving_closed",
     "corpus_constrains", "kill_closure_gap", "php_disagree_any", "go_disagree_any", "undeclared_any",
     "php_disagreement_closed", "go_disagreement_closed", "undeclared_writes_closed", "op_qualified",
 }
 COMPLETENESS = {"requested_closed": "requested", "op_surviving_closed": "op_has_surviving_mutant",
                 "php_disagreement_closed": "php_disagree_any", "go_disagreement_closed": "go_disagree_any",
-                "undeclared_writes_closed": "undeclared_any"}
+                "undeclared_writes_closed": "undeclared_any", "php_observed_closed": "php_observed",
+                "go_observed_closed": "go_observed", "post_state_gap_closed": "post_state_any"}
 EVIDENCE_ID = re.compile(r"^(replay|php|go|shen|mut|reviewer):([0-9a-f]{12}|claim-time):([a-z_]+):([0-9a-f]{12})$")
 CLAIM_TIME_RELATIONS = {"run_nonce_observed", "snapshot_observed", "model_observed", "op_declared"}
 
@@ -148,9 +151,30 @@ class ReplayRulePackTests(unittest.TestCase):
             ("undeclared_write", "model_writes"), ("surviving_mutant", "mutant_killed_in"),
             ("corpus_constrains", "op_has_surviving_mutant"), ("kill_closure_gap", "requested"),
             ("op_qualified_rt", "php_disagree_any"), ("op_qualified_rt", "go_disagree_any"),
-            ("op_qualified_rt", "undeclared_any")})
+            ("op_qualified_rt", "undeclared_any"), ("op_qualified_rt", "post_state_any"),
+            ("post_state_gap", "php_observed"), ("post_state_gap", "go_observed")})
         witnesses = {item["completes"] for item in self.declarations.values() if item["modality"] == "completeness"}
         self.assertTrue({target for _, target in negated} <= witnesses)
+
+    def test_every_closure_lists_the_post_state_witnesses_and_the_gate_is_on(self) -> None:
+        rules = {rule["name"]: rule for rule in self.pack["rules"]}
+        bodies = {name: [atom["relation"] for atom in _atoms(rules[name])] for name in rules}
+        self.assertIn("php_post_states_closed", bodies["php_disagreement_closed"])
+        self.assertIn("go_post_states_closed", bodies["go_disagreement_closed"])
+        for witness in ("replay_requests_closed", "php_post_states_closed", "go_post_states_closed"):
+            self.assertIn(witness, bodies["post_state_gap_closed"])
+        self.assertEqual(bodies["php_observed_closed"], ["php_post_states_closed"])
+        self.assertEqual(bodies["go_observed_closed"], ["go_post_states_closed"])
+        gate = [atom for atom in _atoms(rules["op_qualified_rt"]) if atom["relation"] == "post_state_any"]
+        self.assertEqual([atom.get("negated") for atom in gate], [True])
+        self.assertIn("post_state_gap_closed", bodies["op_qualified_rt"])
+        for side in ("php", "go"):
+            gap = rules[f"post_state_gap_{side}"]
+            self.assertEqual(gap["head"]["terms"][2], {"type": "symbol", "value": side})
+            self.assertIn("replay_requests_closed", bodies[f"post_state_gap_{side}"])
+        frozen = {item["name"]: item for item in self.pack["primitives"]}
+        self.assertEqual(frozen["php_post_states_closed"]["completes"], "php_post_state")
+        self.assertEqual(frozen["go_post_states_closed"]["completes"], "go_post_state")
 
     def test_the_static_join_is_isolated_in_the_claim_rule(self) -> None:
         for rule in self.pack["rules"]:
@@ -173,7 +197,8 @@ class ReplayCaseTests(unittest.TestCase):
 
     def test_case_numbers_cover_the_control_and_the_adversarial_shapes(self) -> None:
         self.assertEqual([path.stem for path in self.paths], list(case_builder.BUILDERS))
-        self.assertEqual(sorted({path.name[:2] for path in self.paths}), ["00", "01", "02", "03", "04", "05", "06", "08"])
+        self.assertEqual(sorted({path.name[:2] for path in self.paths}),
+                         ["00", "01", "02", "03", "04", "05", "06", "08", "09"])
         self.assertEqual([path.stem for path in case_paths(REJECTED_DIR)], ["07-producer-class-violation"])
 
     def test_every_case_regenerates_identically_from_the_exporter(self) -> None:

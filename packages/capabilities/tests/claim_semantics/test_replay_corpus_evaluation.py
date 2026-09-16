@@ -7,6 +7,7 @@ a reason to edit the expectation in place.
 """
 from __future__ import annotations
 
+import json
 import shutil
 import tempfile
 import unittest
@@ -120,6 +121,85 @@ class PythonEvaluatorAgreesWithReviewedExpectations(unittest.TestCase):
         self.assertEqual(set(report.relation_rows("mutant_killed_in")), {(RUN, "m-1"), (RUN, "m-2")})
         self.assertEqual(report.relation_rows("surviving_mutant"), ())
         self.assertEqual(set(report.relation_rows("op_qualified")), {(INDEX, RUN, CREATE), (INDEX, RUN, CLOSE)})
+
+
+    def test_missing_post_state_is_a_gap_only_the_gate_catches(self) -> None:
+        report = self._report("09-missing-post-state")
+        self.assertEqual(set(report.relation_rows("post_state_gap")), {(RUN, "req-3", "php")})
+        self.assertEqual(set(report.relation_rows("post_state_any")), {(RUN, CREATE)})
+        # the hole the gate closes: op_exercised and both disagreement closures still hold for issues.create
+        self.assertIn((RUN, CREATE), set(report.relation_rows("op_exercised")))
+        self.assertIn((RUN, CREATE), set(report.relation_rows("php_disagreement_closed")))
+        self.assertEqual(report.relation_rows("php_disagree_any"), ())
+        self.assertEqual(set(report.relation_rows("op_qualified")), {(INDEX, RUN, CLOSE)})
+
+
+class PackMutationsFailTheCorpus(unittest.TestCase):
+    """Dropping a post-state closure input, or the gate, is caught by the corpus."""
+
+    def _mutated(self, mutate):
+        pack = json.loads(json.dumps(load_pack()))
+        mutate(pack)
+        return pack
+
+    def _create_verdict(self, pack) -> str:
+        report = evaluate(load_case(CASES_DIR / "09-missing-post-state.json", pack))
+        self.assertEqual(report.status.value, "complete", report.message)
+        return next(entry.result.semantic.value for entry in report.claims if entry.claim.id == "claim-qualified-create")
+
+    def test_the_reviewed_pack_leaves_the_planted_gap_unresolved(self) -> None:
+        self.assertEqual(self._create_verdict(load_pack()), "unresolved")
+
+    def test_dropping_the_gate_from_op_qualified_rt_flips_the_case(self) -> None:
+        def drop_gate(pack):
+            rule = next(r for r in pack["rules"] if r["name"] == "op_qualified_rt")
+            rule["body"] = [a for a in rule["body"] if a.get("relation") not in {"post_state_any", "post_state_gap_closed"}]
+        self.assertEqual(self._create_verdict(self._mutated(drop_gate)), "supported")
+
+    def test_dropping_the_post_state_closure_from_a_closure_rule_flips_a_witnessless_variant(self) -> None:
+        # With php_post_states_closed withheld the gate is open only because the
+        # closures that carry it are absent; a closure rule that no longer lists
+        # the witness re-admits the omission.
+        case = read_json(CASES_DIR / "09-missing-post-state.json")
+        case["facts"] = [f for f in case["facts"] if f["relation"] != "php_post_states_closed"]
+        case["outputs"] = [o for o in case["outputs"]
+                           if not (set(o.get("excludes_evidence", ())) & {f["id"] for f in read_json(CASES_DIR / "09-missing-post-state.json")["facts"] if f["relation"] == "php_post_states_closed"})]
+        from capcov.claims import bundle_from_json
+        try:
+            from .replay_rules.adapter import bundle_payload
+        except ImportError:
+            from replay_rules.adapter import bundle_payload
+
+        def verdict(pack):
+            report = evaluate(bundle_from_json(bundle_payload(case, pack), validate=True))
+            self.assertEqual(report.status.value, "complete", report.message)
+            return next(entry.result.semantic.value for entry in report.claims if entry.claim.id == "claim-qualified-create")
+
+        self.assertEqual(verdict(load_pack()), "unresolved")
+
+        def drop_witness_inputs_and_the_php_gap_rule(pack):
+            for name in ("php_disagreement_closed", "post_state_gap_closed"):
+                rule = next(r for r in pack["rules"] if r["name"] == name)
+                rule["body"] = [a for a in rule["body"] if a.get("relation") != "php_post_states_closed"]
+            pack["rules"] = [r for r in pack["rules"] if r["name"] != "post_state_gap_php"]
+        # with the witness no longer an input to either closure and no PHP gap
+        # rule, the omitted post-state is admitted: the inputs are load-bearing
+        self.assertEqual(verdict(self._mutated(drop_witness_inputs_and_the_php_gap_rule)), "supported")
+
+        def drop_from_one_closure(pack):
+            rule = next(r for r in pack["rules"] if r["name"] == "php_disagreement_closed")
+            rule["body"] = [a for a in rule["body"] if a.get("relation") != "php_post_states_closed"]
+        # one closure alone cannot re-admit it: the gate still needs post_state_gap_closed
+        self.assertEqual(verdict(self._mutated(drop_from_one_closure)), "unresolved")
+
+        def drop_witness_inputs_but_keep_the_gap_rule(pack):
+            for name in ("php_disagreement_closed", "post_state_gap_closed"):
+                rule = next(r for r in pack["rules"] if r["name"] == name)
+                rule["body"] = [a for a in rule["body"] if a.get("relation") != "php_post_states_closed"]
+            rule = next(r for r in pack["rules"] if r["name"] == "php_observed_closed")
+            rule["body"] = [{"relation": "replay_requests_closed", "terms": [{"variable": "Run"}]}]
+        # the gap rule alone still catches the omission once its closure is derivable
+        self.assertEqual(verdict(self._mutated(drop_witness_inputs_but_keep_the_gap_rule)), "unresolved")
 
 
 @unittest.skipIf(shutil.which("souffle") is None, "souffle is not on PATH; run inside the nix devShell")

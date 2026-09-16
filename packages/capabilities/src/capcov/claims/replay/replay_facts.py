@@ -25,6 +25,7 @@ This is the contract the Go replay driver writes.  ``receipt.json``::
      "nonce": "<sha256>", "snapshot": "<sha256>", "model": "<sha256>",
      "php_commit": "<git sha>", "go_commit": "<git sha>",
      "closed": {"replay_requests": true, "php_effects": true, "go_effects": true,
+                "php_post_states": true, "go_post_states": true,
                 "model_admissible": true, "mutant_kills": true},
      "model_writes_closed": [{"model": "<sha256>", "op": "<op>"}, ...],
      "mutants_closed":      [{"model": "<sha256>", "op": "<op>"}, ...],
@@ -59,6 +60,14 @@ make the export ``invalid-input`` naming the key -- the judge never carries
 both as facts and lets a rule pick.  A row repeated verbatim is one fact.
 ``model_admissible`` is a set of admissible states per request and is not
 constrained.
+
+``closed.php_post_states`` / ``closed.go_post_states`` (witnesses
+``php_post_states_closed`` / ``go_post_states_closed``) say that every replayed
+request's post-state on that side was reported.  Without them a request whose
+post-state the runner omitted is invisible to the disagreement check while
+the disagreement closure still holds, so the judge treats an unwitnessed
+post-state table as open: no ``*_disagreement_closed`` row, no
+qualification.
 
 IDENTITY
 --------
@@ -106,8 +115,11 @@ default source for an observation row is ``"<class> capcov.claims.replay.replay_
 that claims a producer class the relation does not admit is rejected at
 ingestion, which is the single boundary at which producer authority is
 enforced.  Completeness witnesses use
-``"capcov.claims.replay.replay_facts <predicate>-v1"``, naming the predicate
-whose emission condition was checked.  Rows depend on the ``replay_run`` row,
+``"<class> capcov.claims.replay.replay_facts <predicate>-v1"`` -- the producer
+class the schema attributes the closure to (``witness_source``), then the
+transcriber, then the predicate whose emission condition was checked; a
+witness the schema leaves unowned carries no class token, and compatibility
+rows use ``default_source`` like any other owned row.  Rows depend on the ``replay_run`` row,
 on the ``replay_request`` row of their request when one is exported, and on
 ``external:model:<model>``, ``external:git-commit:<commit>``,
 ``external:snapshot:<snapshot>`` and ``external:index:<index>`` for the
@@ -182,6 +194,8 @@ UNIQUE_KEYS = {
 WITNESS_REQUESTS = "requests-closed-v1"
 WITNESS_PHP_EFFECTS = "php-effects-closed-v1"
 WITNESS_GO_EFFECTS = "go-effects-closed-v1"
+WITNESS_PHP_POST_STATES = "php-post-states-closed-v1"
+WITNESS_GO_POST_STATES = "go-post-states-closed-v1"
 WITNESS_MODEL_ADMISSIBLE = "model-admissible-closed-v1"
 WITNESS_MUTANT_KILLS = "mutant-kills-closed-v1"
 WITNESS_MODEL_WRITES = "model-writes-closed-v1"
@@ -192,6 +206,8 @@ _RUN_WITNESSES = {
     "replay_requests": ("replay_requests_closed", WITNESS_REQUESTS),
     "php_effects": ("php_effects_closed", WITNESS_PHP_EFFECTS),
     "go_effects": ("go_effects_closed", WITNESS_GO_EFFECTS),
+    "php_post_states": ("php_post_states_closed", WITNESS_PHP_POST_STATES),
+    "go_post_states": ("go_post_states_closed", WITNESS_GO_POST_STATES),
     "model_admissible": ("model_admissible_closed", WITNESS_MODEL_ADMISSIBLE),
     "mutant_kills": ("mutant_kills_closed", WITNESS_MUTANT_KILLS),
 }
@@ -319,6 +335,13 @@ def default_source(relation: RelationDecl) -> str:
     if relation.producer_classes:
         return f"{relation.producer_classes[0]} {PRODUCER}"
     return PRODUCER
+
+
+def witness_source(relation: RelationDecl, predicate: str) -> str:
+    """``"<class> <EXPORTER> <predicate>"`` for an owned witness, else without the class."""
+    if relation.producer_classes:
+        return f"{relation.producer_classes[0]} {EXPORTER} {predicate}"
+    return f"{EXPORTER} {predicate}"
 
 
 # ---------------------------------------------------------------------------
@@ -640,15 +663,15 @@ def export_bundle(
 
         # --- compatibility rows --------------------------------------------------
         facts.add("model_describes_run", {"model": model, "run": header["run"]},
-                  source=PRODUCER, depends_on=[run_eid, model_ext])
+                  source=default_source(relations["model_describes_run"]), depends_on=[run_eid, model_ext])
         for index in sorted(set(describes_indexes)):
             if not isinstance(index, str) or not index:
                 raise ExportInputError("describes_indexes must contain non-empty digest strings")
             facts.add("index_describes_replay", {"index": index, "run": header["run"]},
-                      source=PRODUCER, depends_on=[run_eid, f"external:index:{index}"])
+                      source=default_source(relations["index_describes_replay"]),
+                      depends_on=[run_eid, f"external:index:{index}"])
 
         # --- completeness witnesses ----------------------------------------------
-        witness = f"{EXPORTER} "
         for key, (relation, predicate) in _RUN_WITNESSES.items():
             if not header["closed"][key]:
                 messages.append(f"closed.{key} is false: no {relation} witness")
@@ -658,12 +681,15 @@ def export_bundle(
             if relation == "model_admissible_closed":
                 values["model"] = model
                 deps.append(model_ext)
-            facts.add(relation, values, source=witness + predicate, depends_on=deps)
+            facts.add(relation, values, source=witness_source(relations[relation], predicate),
+                      depends_on=deps)
         for entry in header["model_writes_closed"]:
-            facts.add("model_writes_closed", entry, source=witness + WITNESS_MODEL_WRITES,
+            facts.add("model_writes_closed", entry,
+                      source=witness_source(relations["model_writes_closed"], WITNESS_MODEL_WRITES),
                       depends_on=[model_ext])
         for entry in header["mutants_closed"]:
-            facts.add("mutants_closed", entry, source=witness + WITNESS_MUTANTS,
+            facts.add("mutants_closed", entry,
+                      source=witness_source(relations["mutants_closed"], WITNESS_MUTANTS),
                       depends_on=[model_ext])
     except StaleReceiptError as exc:
         return ExportResult(STATUS_STALE, None, facts.counts(), (str(exc),))
@@ -741,6 +767,6 @@ __all__ = [
     "STATUS_COMPLETE", "STATUS_RESOURCE_EXHAUSTED", "STATUS_INVALID_INPUT", "STATUS_STALE", "UNIQUE_KEYS",
     "ExportLimits", "ExportResult", "ExportInputError", "StaleReceiptError",
     "evidence_id", "evidence_prefix", "row_digest", "replay_relations_identity",
-    "replay_relations", "primitive_relations", "STUB_RELATIONS", "default_source",
+    "replay_relations", "primitive_relations", "STUB_RELATIONS", "default_source", "witness_source",
     "export_bundle", "bundle_digest",
 ]

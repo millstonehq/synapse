@@ -1,9 +1,11 @@
 {
   "closed": {
     "go_effects": true,
+    "go_post_states": true,
     "model_admissible": true,
     "mutant_kills": true,
     "php_effects": true,
+    "php_post_states": true,
     "replay_requests": true
   },
   "go_commit": "go00000000000000000000000000000000000001",

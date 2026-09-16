@@ -357,6 +357,197 @@
         },
         {
           "context": false,
+          "name": "req",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "php_observed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "go_observed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "php_observed",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "php_observed_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "go_observed",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "go_observed_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "side",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "post_state_gap",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "post_state_any",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "post_state_any",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "post_state_gap_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
           "name": "op",
           "type": "symbol"
         },
@@ -1381,6 +1572,56 @@
           "context": true,
           "name": "run",
           "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "php_post_state",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "php_post_states_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "replay"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "go_post_state",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "go_post_states_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "replay"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
         },
         {
           "context": false,
@@ -2145,6 +2386,327 @@
     {
       "body": [
         {
+          "relation": "php_post_state",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "php_observed",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Req"
+          }
+        ]
+      },
+      "name": "php_observed"
+    },
+    {
+      "body": [
+        {
+          "relation": "go_post_state",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "go_observed",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Req"
+          }
+        ]
+      },
+      "name": "go_observed"
+    },
+    {
+      "body": [
+        {
+          "relation": "php_post_states_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "php_observed_closed",
+        "terms": [
+          {
+            "variable": "Run"
+          }
+        ]
+      },
+      "name": "php_observed_closed"
+    },
+    {
+      "body": [
+        {
+          "relation": "go_post_states_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "go_observed_closed",
+        "terms": [
+          {
+            "variable": "Run"
+          }
+        ]
+      },
+      "name": "go_observed_closed"
+    },
+    {
+      "body": [
+        {
+          "relation": "requested",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            }
+          ]
+        },
+        {
+          "relation": "replay_requests_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "php_observed_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "php_observed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "post_state_gap",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Req"
+          },
+          {
+            "type": "symbol",
+            "value": "php"
+          }
+        ]
+      },
+      "name": "post_state_gap_php"
+    },
+    {
+      "body": [
+        {
+          "relation": "requested",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            }
+          ]
+        },
+        {
+          "relation": "replay_requests_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "go_observed_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "go_observed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "post_state_gap",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Req"
+          },
+          {
+            "type": "symbol",
+            "value": "go"
+          }
+        ]
+      },
+      "name": "post_state_gap_go"
+    },
+    {
+      "body": [
+        {
+          "relation": "replay_request",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Tenant"
+            },
+            {
+              "variable": "Route"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "post_state_gap",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Side"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "post_state_any",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "post_state_any"
+    },
+    {
+      "body": [
+        {
+          "relation": "replayed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "replay_requests_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "php_post_states_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "go_post_states_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "post_state_gap_closed",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "post_state_gap_closed"
+    },
+    {
+      "body": [
+        {
           "relation": "replay_request",
           "terms": [
             {
@@ -2787,6 +3349,14 @@
           ]
         },
         {
+          "relation": "php_post_states_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
           "relation": "model_admissible_closed",
           "terms": [
             {
@@ -2845,6 +3415,14 @@
         },
         {
           "relation": "replay_requests_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "go_post_states_closed",
           "terms": [
             {
               "variable": "Run"
@@ -3063,6 +3641,29 @@
         {
           "negated": true,
           "relation": "undeclared_any",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "post_state_gap_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "post_state_any",
           "terms": [
             {
               "variable": "Run"

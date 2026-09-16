@@ -210,12 +210,15 @@ def observation(trigger: str, context: list[str], predicate: dict[str, Any] | No
 # claim by an observation diagnostic so a missing-premise template can be
 # suppressed by the witness's presence (excludes_evidence).
 WITNESS_DIAGNOSTICS = [observation("model_describes_run", ["run"]), observation("run_nonce_observed", []),
-                       observation("snapshot_observed", []), observation("model_observed", [])]
+                       observation("snapshot_observed", []), observation("model_observed", []),
+                       observation("php_post_states_closed", ["run"]), observation("go_post_states_closed", ["run"])]
 WITNESS_REASONS = {
     "model_describes_run": "no model_describes_run witness binds the receipt's model to the run",
     "run_nonce_observed": "the reviewer did not observe the run's nonce",
     "snapshot_observed": "the reviewer did not observe the run's snapshot digest",
     "model_observed": "the reviewer did not observe the model digest",
+    "php_post_states_closed": "the harness did not close the PHP post-state table for the run",
+    "go_post_states_closed": "the harness did not close the Go post-state table for the run",
 }
 
 
@@ -495,6 +498,43 @@ def build_08() -> dict[str, Any]:
                  "lying-completeness-witness", notes, facts, claims, outputs)
 
 
+def build_09() -> dict[str, Any]:
+    with variant({"php_post_state": _drop_row(2)}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    req3 = find_id(facts, "replay_request", req="req-3")
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "req-1 still agrees on both sides, so op_exercised(issues.create) holds; req-3's PHP post-state is "
+                "omitted while php_post_states_closed is asserted, so post_state_gap(req-3, php) derives, "
+                "post_state_any(issues.create) holds and the gate in op_qualified_rt fails.",
+        CLOSE: "issues.close (req-2) is fully observed and qualifies as in the control."},
+        extra_diagnostics={CREATE: [observation("replay_request", ["run"],
+                                                {"column": "req", "operator": "=", "value": "req-3"})]})
+    outputs.append(missing("claim-qualified-create", "php_post_state",
+                           "req-3 of issues.create was replayed but the PHP runner reported no post-state for it",
+                           requires=[req3]))
+    companion = _claim("claim-req-3-php-post-state-gap", "post_state_gap", ["run", "req", "side"],
+                       [RUN, "req-3", "php"], {"run": RUN},
+                       "replay_request is closed and contains req-3; php_post_states_closed is asserted and no "
+                       "php_post_state(run, req-3, _) exists.",
+                       # the gap rule reads the request through the requested projection; the
+                       # diagnostic makes the request row itself relevant to the discrepancy
+                       [observation("replay_request", ["run"], {"column": "req", "operator": "=", "value": "req-3"})])
+    claims.append(companion)
+    outputs.append(discrepancy(companion["id"], "post-state-missing", [req3], req="req-3", side="php"))
+    notes = [
+        "php_post_state.json loses its req-3 row; receipt.json still asserts php_post_states closed and every other "
+        "row of the control is present.",
+        "Without the post-state gate, issues.create would qualify: req-1 satisfies op_exercised and the omitted req-3 "
+        "is invisible to php_disagree_any.  With it, op_qualified(issues.create) is unresolved with php_post_state as "
+        "the missing premise (for req-3); issues.close is supported.",
+        "The companion post_state_gap claim is supported from the req-3 request row, replay_requests_closed and "
+        "php_post_states_closed.",
+    ]
+    return _case("09-missing-post-state", "A replayed request of issues.create has no PHP post-state",
+                 "post-state-omitted", notes, facts, claims, outputs)
+
+
 def build_rejected_07() -> dict[str, Any]:
     case = build_00()
     case["id"] = "07-producer-class-violation"
@@ -524,6 +564,7 @@ BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "05-missing-snapshot-witness": build_05,
     "06-stale-replay": build_06,
     "08-lying-closure": build_08,
+    "09-missing-post-state": build_09,
 }
 REJECTED_BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "07-producer-class-violation": build_rejected_07,
@@ -553,6 +594,9 @@ REVIEW: dict[str, dict[str, tuple[str, str, list[str], list[str]]]] = {
     "08-lying-closure": {"claim-qualified-create": ("supported", "complete", [], []),
                          "claim-qualified-close": ("supported", "complete", [], []),
                          "claim-kill-outside-corpus": ("supported", "complete", [], ["kill-outside-replayed-requests"])},
+    "09-missing-post-state": {"claim-qualified-create": ("unresolved", "complete", ["php_post_state"], []),
+                              "claim-qualified-close": ("supported", "complete", [], []),
+                              "claim-req-3-php-post-state-gap": ("supported", "complete", [], ["post-state-missing"])},
 }
 # Evidence a derivation must not use, per case: the lying witness of 08.
 FORBIDDEN: dict[str, Callable[[list[dict[str, Any]]], list[str]]] = {
