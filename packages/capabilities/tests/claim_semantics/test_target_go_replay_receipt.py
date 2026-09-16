@@ -289,6 +289,13 @@ class _JoinCase(unittest.TestCase):
                 self.assertEqual(entry["blocking_premise"], {"relation": "undeclared_any", "holds": True})
                 self.assertTrue(entry["blocked_by"].startswith("blocked by undeclared writes: "))
                 self.assertEqual(entry["undeclared_tables"], self._undeclared()[op])
+                explanation = entry["explanation"]
+                self.assertFalse(explanation["holds"])
+                self.assertFalse(explanation["refuted"])
+                attempts = explanation["attempts"]
+                self.assertTrue(any(attempt["status"] == "blocked-by-presence"
+                                    and attempt["relation"] == "undeclared_any"
+                                    for attempt in attempts), attempts)
         self.assertEqual({row[2] for row in dict(self.join.result.python.relations)["op_qualified"]},
                          {op for op in self.join.ops if self._expect_qualified(op)})
 
@@ -394,6 +401,11 @@ class _JoinCase(unittest.TestCase):
                 classes = {by_id[leaf].source.split(" ", 1)[0] for leaf in leaves}
                 self.assertTrue(PRODUCER_CLASSES | {"php-census"} <= classes)
                 self.assertTrue(set(self.join.assumption_ids) & leaves, "the census assumptions carry the claim")
+                explanation = entry["explanation"]
+                self.assertTrue(explanation["holds"])
+                self.assertFalse(explanation["truncated"])
+                self.assertEqual(set(explanation["leaves"]), set(cert["leaves"]))
+                self.assertTrue(set(explanation["shared_assumptions"]) & set(self.join.assumption_ids))
         self.assertEqual({row[2] for row in dict(self.join.result.python.relations)["op_qualified"]}, set(self.join.ops))
 
     def check_artifacts(self) -> None:
