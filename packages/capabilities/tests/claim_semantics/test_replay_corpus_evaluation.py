@@ -115,12 +115,16 @@ class PythonEvaluatorAgreesWithReviewedExpectations(unittest.TestCase):
         self.assertEqual(len(report.relation_rows("replay_run_stale")), 1)
         self.assertEqual(report.relation_rows("op_qualified"), ())
 
-    def test_lying_closure_qualifies_both_ops_and_exposes_the_gap(self) -> None:
+    def test_lying_closure_poisons_the_run_and_exposes_the_gap(self) -> None:
         report = self._report("08-lying-closure")
         self.assertEqual(set(report.relation_rows("kill_closure_gap")), {(RUN, "m-1", "req-9")})
         self.assertEqual(set(report.relation_rows("mutant_killed_in")), {(RUN, "m-1"), (RUN, "m-2")})
         self.assertEqual(report.relation_rows("surviving_mutant"), ())
-        self.assertEqual(set(report.relation_rows("op_qualified")), {(INDEX, RUN, CREATE), (INDEX, RUN, CLOSE)})
+        # without the contradiction gate the lie would qualify both ops
+        self.assertEqual(set(report.relation_rows("corpus_constrains")), {(RUN, CREATE), (RUN, CLOSE)})
+        self.assertEqual(set(report.relation_rows("kill_closure_gap_any")), {(RUN, CREATE), (RUN, CLOSE)})
+        self.assertEqual(report.relation_rows("kill_gap_closed"), ((RUN,),))
+        self.assertEqual(report.relation_rows("op_qualified"), ())
 
 
     def test_missing_post_state_is_a_gap_only_the_gate_catches(self) -> None:

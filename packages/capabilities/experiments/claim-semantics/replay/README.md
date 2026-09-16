@@ -86,6 +86,8 @@ corpus_constrains(Run,Op)       :- model_describes_run(M,Run), mutant(M,_,Op), o
                                    !op_has_surviving_mutant(Run,Op).
 kill_closure_gap(Run,Mu,Req)    :- mutant_killed(Run,Mu,Req), mutant_kills_closed(Run), requested_closed(Run),
                                    !requested(Run,Req).
+kill_closure_gap_any(Run,Op)    :- replayed(Run,Op), kill_closure_gap(Run,_,_).
+kill_gap_closed(Run)            :- mutant_kills_closed(Run), replay_requests_closed(Run).
 php_disagree_any(Run,Op)        :- replay_request(Run,Req,_,_,Op), php_model_disagree(Run,Req,_).
 go_disagree_any(Run,Op)         :- replay_request(Run,Req,_,_,Op), go_model_disagree(Run,Req,_).
 undeclared_any(Run,Op)          :- undeclared_write(Run,Op,_).
@@ -101,7 +103,8 @@ op_qualified_rt(IX,Run,Op)      :- index_describes_replay(IX,Run), replayed(Run,
                                    php_disagreement_closed(Run,Op), !php_disagree_any(Run,Op),
                                    go_disagreement_closed(Run,Op),  !go_disagree_any(Run,Op),
                                    undeclared_writes_closed(Run,Op), !undeclared_any(Run,Op),
-                                   post_state_gap_closed(Run,Op), !post_state_any(Run,Op).
+                                   post_state_gap_closed(Run,Op), !post_state_any(Run,Op),
+                                   kill_gap_closed(Run), !kill_closure_gap_any(Run,Op).
 op_qualified(IX,Run,Op)         :- op_declared(IX,Op), index_describes_replay(IX,Run), op_qualified_rt(IX,Run,Op).
 ```
 
@@ -160,7 +163,22 @@ Design points a reviewer should check:
 * **`kill_closure_gap`** (case 08) is the replay analogue of the static
   `02-lying-witness` gap: a kill that names a request outside the closed
   request set while `mutant_kills_closed` is asserted.  It is derived *from*
-  the lying witness, so its support intersects `forbidden_leaves`.
+  the lying witness, so its support intersects `forbidden_leaves`.  Unlike
+  the static precedent the lie does **not** qualify anything: `op_qualified_rt`
+  is gated on `!kill_closure_gap_any(Run, Op)` under `kill_gap_closed(Run)`
+  (kills and requests both closed), and a gap anywhere in the run poisons
+  every replayed op of that run, because the contradicted witness is per run
+  -- an op whose own mutants were honestly killed still rests on it.
+* **Witness producer authority.**  Every completeness and compatibility
+  relation of the schema names the class that vouches for it: the harness
+  (`replay`) owns the request, effect, post-state and kill closures; the
+  model runner (`shen`) owns `model_admissible_closed`, `model_writes_closed`
+  and `model_describes_run`; the mutation tool (`mut`) owns
+  `mutants_closed`; the reviewer owns `index_describes_replay`.  The
+  exporter tags each witness with its class (`replay_facts.witness_source`)
+  and the validator refuses a closure emitted by another producer
+  (`rejected/12-closure-producer-violation`: `model_admissible_closed`
+  sourced `replay`).
 
 ## One observation per key
 
@@ -223,7 +241,7 @@ derivation must not use (the lying `mutant_kills_closed` witness of case 08);
 Exported rows: `<prefix>:<replay12>:<relation>:<row12>` exactly as
 `replay_facts` emits them (`prefix` from the relation's producer class:
 `replay`, `php`, `go`, `shen`, `mut`, `reviewer`; `php-census` shares `php`;
-witnesses and compatibility rows use `replay`; `replay12` is the
+witnesses and compatibility rows use their owning class's prefix; `replay12` is the
 `replay-relations-v1` identity of the case's receipt variant; `row12 =
 sha256(canonical_json([relation, row]))[:12]`).  Claim-time rows the judge
 adds -- the reviewer's three witnesses and the census -- use
@@ -246,5 +264,6 @@ constant in a case.
 | 05 missing snapshot witness | no `snapshot_observed` | both unresolved, missing `replay_run_current` |
 | 06 stale replay | `run_nonce_observed` carries another nonce | both unresolved, operational `stale`, missing `replay_run_current`; companion `replay_run_stale` supported |
 | 09 missing post-state | `php_post_state` row for req-3 (issues.create) removed; `php_post_states` still closed | create: unresolved, missing `php_post_state` (req-1 alone satisfies `op_exercised`, so only the gate catches it); close: supported; companion `post_state_gap(run, req-3, php)` supported, discrepancy `post-state-missing` |
-| 08 lying closure | `mutant_killed` m-1 names req-9, not a replayed request; closures asserted | both ops supported *from the lying witness* (seeded fault); `kill_closure_gap` supported with support ∩ forbidden = the `mutant_kills_closed` witness, discrepancy `kill-outside-replayed-requests` |
+| 08 lying closure | `mutant_killed` m-1 names req-9, not a replayed request; closures asserted | both ops **unresolved** (contradiction gate; missing premise `replay_request` for req-9); `kill_closure_gap` supported with support ∩ forbidden = the `mutant_kills_closed` witness (seeded fault), discrepancy `kill-outside-replayed-requests` |
 | rejected 07 | control with `php_post_state` sourced `shen shen-model-host v1` | `load_case` raises; `validate_bundle` lists `evidence-producer` ×3; evaluated unvalidated both ops would be supported |
+| rejected 12 | control with `model_admissible_closed` sourced `replay ...` (the harness closing the model runner's table) | `load_case` raises; `evidence-producer` ×1; evaluated unvalidated both ops would be supported |
