@@ -12,6 +12,20 @@ produced; 1 when the authority verdict is not ok or the row is not
 derivable (a semantic answer, not an error); 3 for a named operational
 failure of the Shen runtime (``ShenUnavailable`` / ``ShenFailure``), whose
 JSON carries ``operational_failure``; 2 for usage errors.
+
+The assumption registry (``claims/assumptions.py``) is reached the same way::
+
+    capcov experiment claims assumptions registry   --receipt DIR [--out DIR]
+    capcov experiment claims assumptions invalidate --receipt DIR --drop ID [--drop ID]
+
+``registry`` judges a replay receipt with the target-go join and prints the A2
+registry document; ``invalidate`` additionally withdraws each ``--drop``
+assumption (an ``asm:`` id or the evidence id of an assumption row), prints one
+A3 document per drop and, with ``--out``, writes ``assumptions.json`` and
+``invalidation-<id12>.json`` beside the join's ``receipt.json``.  Exit 0 when
+the documents were produced, 2 for a refusal (the exporter refused the receipt,
+an unknown id, or a withdrawal that would refute a claim), 3 when the two
+kernels disagree on the withdrawn bundle (the replay path is printed).
 """
 from __future__ import annotations
 
@@ -19,6 +33,8 @@ import argparse
 import json
 import sys
 from typing import Any
+
+from pathlib import Path
 
 from .ir import BundleIngestionError, bundle_from_json
 from .validation import ValidationError
@@ -66,6 +82,62 @@ def _common(parser: argparse.ArgumentParser, *, need_row: bool) -> None:
         parser.add_argument("--max-nodes", type=int, default=DEFAULT_MAX_NODES)
 
 
+def _join_module():
+    """The target-go replay join lives beside its fixtures, under ``tests/claim_semantics``."""
+    tests = Path(__file__).resolve().parents[3] / "tests" / "claim_semantics"
+    if not (tests / "target_go" / "replay_join.py").is_file():
+        raise FileNotFoundError(f"the replay join was not found under {tests}")
+    if str(tests) not in sys.path:
+        sys.path.insert(0, str(tests))
+    from target_go import replay_join  # noqa: E402
+    return replay_join
+
+
+def _assumptions(args: argparse.Namespace) -> int:
+    """``claims assumptions registry|invalidate`` over a replay receipt directory."""
+    import tempfile
+
+    from .assumptions import InvalidationError
+    from .differential import DifferentialMismatch
+
+    try:
+        replay_join = _join_module()
+    except (FileNotFoundError, ImportError) as exc:
+        _emit({"refusal": f"the replay join is unavailable: {exc}"}, args.out)
+        return 2
+    receipt = Path(args.receipt) if args.receipt else replay_join.receipt_dir()
+    if receipt is None or not (receipt / "receipt.json").is_file():
+        _emit({"refusal": "no receipt directory (pass --receipt DIR)"}, args.out)
+        return 2
+    replay_root = args.replay_root or tempfile.mkdtemp(prefix="capcov-assumptions-")
+    try:
+        join = replay_join.build(receipt)
+        if join.bundle is None:
+            _emit({"refusal": "the exporter refused the receipt",
+                   "contract_findings": list(join.contract_findings)}, args.out)
+            return 2
+        replay_join.evaluate_join(join, replay_root)
+        if join.mismatch is not None:
+            _emit({"kernel_mismatch": "the kernels disagree on the join",
+                   "replay": str(join.mismatch.replay_path)}, args.out)
+            return 3
+        document: dict[str, Any] = {"registry": replay_join.assumption_registry(join)}
+        if args.command == "invalidate":
+            document["invalidations"] = [replay_join.invalidate(join, drop, replay_root).as_dict()
+                                         for drop in args.drop]
+    except DifferentialMismatch as exc:
+        _emit({"kernel_mismatch": "the kernels disagree on the withdrawn bundle",
+               "replay": str(exc.result.replay_path)}, args.out)
+        return 3
+    except InvalidationError as exc:
+        _emit({"refusal": str(exc)}, args.out)
+        return 2
+    if args.out:
+        replay_join.write_artifacts(join, Path(args.out))
+    _emit(document, None)
+    return 0
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="capcov experiment")
     sub = parser.add_subparsers(dest="area", required=True)
@@ -76,7 +148,20 @@ def main(argv: list[str]) -> int:
     _common(shen_sub.add_parser("authority", help="structural authority checks over a rule pack"), need_row=False)
     _common(shen_sub.add_parser("evaluate", help="search for a derivation and emit its certificate"), need_row=True)
     _common(shen_sub.add_parser("why-not", help="bounded missing-premise alternatives for a row"), need_row=True)
+    asm = claims_sub.add_parser("assumptions", help="assumption registry and invalidation over a replay receipt")
+    asm_sub = asm.add_subparsers(dest="command", required=True)
+    for name, help_text in (("registry", "list every assumption and the claims it carries"),
+                            ("invalidate", "withdraw an assumption and report what every claim did")):
+        command = asm_sub.add_parser(name, help=help_text)
+        command.add_argument("--receipt", default=None, help="replay receipt directory (default: the committed fixture)")
+        command.add_argument("--out", default=None, help="write the join artifacts to this directory")
+        command.add_argument("--replay-root", default=None, help="differential replay directory for a kernel mismatch")
+        if name == "invalidate":
+            command.add_argument("--drop", action="append", default=[], required=True, metavar="ID",
+                                 help="an asm: id or the evidence id of an assumption row (repeatable)")
     args = parser.parse_args(argv)
+    if args.tool == "assumptions":
+        return _assumptions(args)
 
     try:
         bundle = _load_bundle(args.bundle) if args.bundle else None
