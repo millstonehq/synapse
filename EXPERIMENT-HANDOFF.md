@@ -26,6 +26,42 @@ deepen (runtime join, Stage C why/why-not, producer-class authority).
 | Pi workflow driver | `.pi/workflows/capcov-experiment.json`, `.pi/extensions/capcov-experiment.ts`, `.pi/workflows/README.md` | Optional orchestration with gates and two reviewers; `CAPCOV_AGENT_BACKEND=codex` supported. Not required; see "How work actually got done". |
 | Assumption registry | `claims/assumptions.py`, `target_go/replay_join.py`, `test_assumption_registry.py`, `claims assumptions registry\|invalidate` | Run-independent ids (`asm:` + `sha256(canonical_json([producer_class, relation, row]))`), a registry of what each assumption carries (`assumptions.json` beside the join's `receipt.json`), and withdrawal: drop an assumption from the combined bundle, re-run both kernels, re-certify (`invalidation-<id12>.json`). No receipt or exporter contract change. A drop may only leave a claim `supported`/`unresolved`; `refuted` raises. Finding: the reviewer's scope exclusions guard `op_qualified` through a **negated** atom, so they are not leaves of it and `ground.impact` cannot predict that fall — `prediction_agrees` is `false` there, which is why re-evaluation exists. **Not delivered, do not read as done:** the candidate repo's `make replay-assumptions` target does not exist, and the live cross-run acceptance (a fresh replay run, exported and registered, with the ids compared across two real runs) is **NOT RUN / UNKNOWN** — cross-run id stability is evidenced only by `CrossRunIdStabilityTest`, an in-process re-export of a copied receipt whose run id is rewritten in place, which is a faithful stand-in for the per-run stamping the exporter does but is not live evidence. Fixture-backed evidence binds to capcov `30072a6` (66 tests green under Soufflé 2.5: 44 + 22), `assumptions.json` sha256 `7c1f9d049cba96d1407ba46be37cdf09ca2f963c2ddcc2dc92c4e599f49677cb`, combined bundle digest `bca7f43fca509191e2ff4228604ff570c8b65b118c2e604b0d6f880204b2eabc`. Four places where the code deviates from the design and the design is what should move: `missing_premise` is `[]` for the exclusion drop and `prediction_agrees` `false` (the `model_writes` template exists only where the baseline had offending rows); `ALLOWED_AFTER` admits `unresolved → supported`, with a separate `gained` list so a headline claim gaining support stays visible; an exclusion's `carried_by` / `shared_across` name only `exclusion_applied` (the negation finding above); and the unreferenced-drop case compares certificate `derivation` rather than `certificate_sha256`, because a certificate embeds its bundle digest. `reviewed_against.run` is stamped by the exporter out of the receipt, not signed by the reviewer. |
 
+
+### What the round-2 merge moved (read before trusting a digest above)
+
+The three round-2 items were cut from the same commit and merged in one
+lineage (`experiment/r2-judge`): the assumption registry, then the ordering /
+cross-request / cross-run claims, then the compiled Soufflé kernel.  The
+ordering item adds relations and rules to `rules-replay-v1`, so **the replay
+pack the compiled checker compiles is not the pack the compiled row's numbers
+were measured against**.  Post-merge, on the merge head, the pack is **98
+relations / 64 rules**, program digest
+`5043a715770e26e6b0b3aa1495540630d0137b12a38f671564ee5e292a47b03d`, 98 outputs,
+303 program lines; the compiled row's `99ab0f1377e3…`, 65 relations and 40
+rules are that item's own evidence **at `ed53bcb`, before the merge**, and are
+historical from here on.  The recorded pins in
+`test_souffle_compile_unit.py` and `test_compiled_checker_script.py` were
+refreshed to the merged pack in the merge commit; the compile key, binary
+sha256 and the wall-clock figures in that row were **not** re-measured after
+the merge and remain `ed53bcb` evidence.  Two other post-merge facts, both
+from the merge head: `tests/claim_semantics` is **524 tests green, 28 skipped**
+(the compiled row's 456/28 is pre-merge), and
+`scripts/compiled_checker.py judge --receipt <qualified fixture> --require-op
+delete-issue` exits **0** with `verdict "supported"`, `kernels.matched true`
+and `closure_digest_equal true`.  Everything the compiled row says about the
+judged receipt being **stale** (run `eca6e7930af3`) is unchanged by the merge:
+U4b stays open.
+
+Certification is now one function.  The compiled item widened certification to
+every closure a result carries so the third kernel is held to the same
+agreement; the assumption item had factored certification into
+`assumptions.certify_claims`.  The merge kept the single certifier —
+`certify_claims` derives its closures from the result (python, interpreted
+Soufflé, and compiled when present) and names the disagreeing backend — so the
+withdrawal path re-certifies against three kernels wherever three ran.  This is
+a merge decision, not something either item tested: **no test yet withdraws an
+assumption under `kernels="three"`.**
+
 ## The target-go pilot result (the first "for real" claim)
 
 Target `/Users/dev/fg/target-go` at `7e339e0`, indexed from a `git archive HEAD` copy with pinned
