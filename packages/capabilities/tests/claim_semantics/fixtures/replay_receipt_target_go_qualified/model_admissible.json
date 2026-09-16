@@ -1,0 +1,23 @@
+{
+  "producer": "shen fg-model-host v1",
+  "rows": [
+    {
+      "run": "eca6e7930af3",
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "req": "forbidden",
+      "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37"
+    },
+    {
+      "run": "eca6e7930af3",
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "req": "missing",
+      "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37"
+    },
+    {
+      "run": "eca6e7930af3",
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "req": "owner",
+      "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37"
+    }
+  ]
+}

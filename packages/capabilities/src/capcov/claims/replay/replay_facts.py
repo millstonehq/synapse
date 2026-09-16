@@ -64,8 +64,9 @@ never silently.  The optional ``model_scope_exclusions.json``
 
 exports one ``model_scope_exclusion(model, table, reason)`` row per entry as
 *assumption*-kind evidence whose source is ``"<producer or reviewer <name>>
-<reviewed_at> model:<digest12> run:<run>"``, so a certificate's assumption
-leaf points at who reviewed what.  ``reviewed_against.model`` must equal the
+<reviewed_at> model:<digest12> run:<run>"`` (a ``producer`` that already ends
+with that suffix is carried verbatim), so a certificate's assumption leaf
+points at who reviewed what.  ``reviewed_against.model`` must equal the
 receipt's model (a mismatch is a *stale review* and ``invalid-input``);
 ``reviewed_against.run`` is recorded, not enforced, because an exclusion is
 model-scoped.  ``closed.model_scope_exclusions`` (true iff the file is
@@ -592,7 +593,9 @@ def _read_exclusions(receipt_dir: Path, header: Mapping[str, str],
     if producer is not None and (not isinstance(producer, str) or not producer.strip()):
         raise ExportInputError(f"{EXCLUSIONS_FILE}: 'producer' must be a non-empty string")
     prefix = producer.strip() if producer is not None else f"reviewer {document['reviewer'].strip()}"
-    source = f"{prefix} {document['reviewed_at'].strip()} model:{header['model'][:12]} run:{against['run']}"
+    suffix = f"{document['reviewed_at'].strip()} model:{header['model'][:12]} run:{against['run']}"
+    # a producer that already names what was reviewed is carried verbatim
+    source = prefix if prefix.endswith(suffix) else f"{prefix} {suffix}"
     raw_rows = document.get("rows", [])
     if not isinstance(raw_rows, list):
         raise ExportInputError(f"{EXCLUSIONS_FILE}: 'rows' must be an array")

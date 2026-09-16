@@ -1,0 +1,20 @@
+{
+  "producer": "shen fg-model-host v1",
+  "rows": [
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "op": "delete-issue",
+      "table": "entity_statistics"
+    },
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "op": "delete-issue",
+      "table": "issue"
+    },
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "op": "delete-issue",
+      "table": "mongo:issue"
+    }
+  ]
+}
