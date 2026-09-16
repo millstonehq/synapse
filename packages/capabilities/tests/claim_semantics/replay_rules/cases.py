@@ -799,13 +799,11 @@ def build_18() -> dict[str, Any]:
         CREATE: "issues.create is untouched by the repeat's effect and qualifies as in the control.",
         CLOSE: "issues.close is untouched by the repeat's effect and qualifies as in the control.",
         DELETE: "req-5 repeats the committed delete of " + DELETE_TARGET + " and still answers 404 on both sides, but PHP "
-                "recorded an issue update for it: repeat_delete_has_effect derives, repeat_delete_violation(req-5, "
-                "effects) holds, repeat_delete_any(delete-issue) blocks the gate and repeat_delete_not_found does not "
-                "derive (the negated premise fails)."},
+                "recorded an issue update for it: repeat_delete_has_effect derives (issue is not a reviewer-excluded "
+                "table) and repeat_delete_violation(req-5, effects) holds, so the per-target claim "
+                "repeat_delete_not_found does not derive.  op_qualified is not gated on that claim: the repeat's write "
+                "is a declared table and both post-states stay inside the model, so delete-issue still qualifies."},
         extra_diagnostics={DELETE: [req5]})
-    outputs.append(missing("claim-qualified-delete", "repeat_delete_not_found",
-                           "the repeat of " + DELETE_TARGET + " (req-5) was not judged not-found: PHP recorded an issue "
-                           "update for it", requires=[php_row]))
     violation = _claim("claim-repeat-delete-has-effects", "repeat_delete_violation", ["run", "req", "side"],
                        [RUN, REPEAT_DELETE, "effects"], {"run": RUN},
                        "req-5 is a later request for req-4's target, req-4 committed (200 on both sides with an issue "
@@ -822,12 +820,13 @@ def build_18() -> dict[str, Any]:
     notes = [
         "php_effect.json (and php_effect_seq.json, to stay coherent) gain an issue update for req-5, the repeat of "
         "req-4's DELETE; responses stay 200/404 and the write is a declared table, so undeclared_write does not fire.",
-        "op_qualified(delete-issue) is unresolved with repeat_delete_not_found as the missing premise, triggered by the "
-        "PHP row; issues.create and issues.close are supported (the repeat gate is per op).",
+        "All three op_qualified claims are supported: op_qualified_rt is not gated on the repeat (the repeat is its "
+        "own claim, and a repeat that answers 404 while writing a declared table leaves every premise of the op gate "
+        "intact).  Case 23 is the shape where the repeat's write is a reviewer-excluded table and the claim survives.",
         "The companion repeat_delete_violation(run, req-5, effects) is supported (discrepancy "
         "repeat-delete-with-effects); the companion repeat_delete_not_found is unresolved, its missing premise naming "
-        "the negated repeat_delete_has_effect that the PHP row defeats.  Reviewer exclusions do not apply to this rule "
-        "by design: a repeat delete that touches anything is a finding.",
+        "the negated repeat_delete_has_effect that the PHP row defeats.  issue is not one of the reviewer's excluded "
+        "tables (authentication, redis), so the exclusion guard on repeat_delete_has_effect does not exempt it.",
     ]
     return _case("18-repeat-delete-with-effects", "The repeat delete answers 404 but PHP writes the issue again",
                  "repeat-delete-with-effects", notes, facts, claims, outputs)
@@ -1057,7 +1056,7 @@ REVIEW: dict[str, dict[str, tuple[str, str, list[str], list[str]]]] = {
                                   "claim-qualified-close": SUPPORTED, "claim-qualified-delete": SUPPORTED,
                                   "claim-go-order-violated-req-1": ("supported", "complete", [], ["effect-order-violated"])},
     "18-repeat-delete-with-effects": {"claim-qualified-create": SUPPORTED, "claim-qualified-close": SUPPORTED,
-                                      "claim-qualified-delete": ("unresolved", "complete", ["repeat_delete_not_found"], []),
+                                      "claim-qualified-delete": SUPPORTED,
                                       "claim-repeat-delete-has-effects": ("supported", "complete", [], ["repeat-delete-with-effects"]),
                                       "claim-repeat-delete-not-found": ("unresolved", "complete", ["repeat_delete_has_effect"], [])},
     "19-unstable-oracle": {**_all_ops("oracle_stable"),

@@ -167,8 +167,9 @@ class ReplayRulePackTests(unittest.TestCase):
             ("op_qualified_rt", "undeclared_any"), ("op_qualified_rt", "post_state_any"),
             ("op_qualified_rt", "kill_closure_gap_any"), ("undeclared_write", "model_scope_excluded"),
             ("post_state_gap", "php_observed"), ("post_state_gap", "go_observed"),
-            ("op_qualified_rt", "effect_order_any"), ("op_qualified_rt", "repeat_delete_any"),
-            ("repeat_delete_not_found", "repeat_delete_has_effect"), ("oracle_stable", "oracle_unstable")})
+            ("op_qualified_rt", "effect_order_any"),
+            ("repeat_delete_not_found", "repeat_delete_has_effect"),
+            ("repeat_delete_has_effect", "model_scope_excluded"), ("oracle_stable", "oracle_unstable")})
         witnesses = {item["completes"] for item in self.declarations.values() if item["modality"] == "completeness"}
         self.assertTrue({target for _, target in negated} <= witnesses)
 

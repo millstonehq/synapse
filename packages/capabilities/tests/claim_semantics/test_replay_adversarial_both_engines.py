@@ -104,7 +104,7 @@ class AdversarialReplayCasesInBothEngines(unittest.TestCase):
                      "10-missing-effects-closure": 0, "11-missing-admissible-closure": 0,
                      "13-excluded-undeclared-write": 3, "14-exclusions-not-closed": 0, "15-no-exclusions-no-closure": 0,
                      # the ordering, repeat-delete and cross-run shapes
-                     "17-effect-order-violation": 2, "18-repeat-delete-with-effects": 2, "19-unstable-oracle": 0,
+                     "17-effect-order-violation": 2, "18-repeat-delete-with-effects": 3, "19-unstable-oracle": 0,
                      "20-missing-stability-closure": 0, "21-missing-effect-seq-closure": 0}
         # one derived row per shape the new rules are there to catch, in both kernels
         planted = {"17-effect-order-violation": ("effect_order_violation", 1),
@@ -123,10 +123,13 @@ class AdversarialReplayCasesInBothEngines(unittest.TestCase):
                         self.assertEqual(len(relations[relation]),
                                          expected[1] if expected[0] == relation else 0,
                                          (stem, relation))
-                    # the repeat-delete claim holds wherever the repeat is clean and both
-                    # effect tables are closed (case 10 opens php_effects, case 18 plants a write)
+                    # the repeat-delete claim holds wherever the repeat is clean, both effect
+                    # tables are closed and the reviewer's exclusion set is closed and bound to the
+                    # run by a model witness (case 04 drops that witness, case 10 opens php_effects,
+                    # cases 14/15 leave the exclusions open, case 18 plants a write)
                     self.assertEqual(len(relations["repeat_delete_not_found"]),
-                                     0 if stem in ("10-missing-effects-closure",
+                                     0 if stem in ("04-missing-model-witness", "10-missing-effects-closure",
+                                                   "14-exclusions-not-closed", "15-no-exclusions-no-closure",
                                                    "18-repeat-delete-with-effects") else 1, stem)
 
     def test_certificates_from_both_closures_agree_on_every_derived_claim_row(self) -> None:

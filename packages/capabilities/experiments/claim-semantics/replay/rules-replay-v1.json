@@ -6181,6 +6181,37 @@
               "variable": "Cols"
             }
           ]
+        },
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_scope_excluded_closed",
+          "terms": [
+            {
+              "variable": "M"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "model_scope_excluded",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Tb"
+            }
+          ]
         }
       ],
       "head": {
@@ -6234,6 +6265,37 @@
               "variable": "Cols"
             }
           ]
+        },
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_scope_excluded_closed",
+          "terms": [
+            {
+              "variable": "M"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "model_scope_excluded",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Tb"
+            }
+          ]
         }
       ],
       "head": {
@@ -6252,6 +6314,17 @@
     {
       "body": [
         {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
           "relation": "php_effects_closed",
           "terms": [
             {
@@ -6264,6 +6337,14 @@
           "terms": [
             {
               "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_scope_exclusions_closed",
+          "terms": [
+            {
+              "variable": "M"
             }
           ]
         }
@@ -6998,29 +7079,6 @@
         },
         {
           "relation": "effect_order_exercised",
-          "terms": [
-            {
-              "variable": "Run"
-            },
-            {
-              "variable": "Op"
-            }
-          ]
-        },
-        {
-          "relation": "repeat_delete_closed",
-          "terms": [
-            {
-              "variable": "Run"
-            },
-            {
-              "variable": "Op"
-            }
-          ]
-        },
-        {
-          "negated": true,
-          "relation": "repeat_delete_any",
           "terms": [
             {
               "variable": "Run"

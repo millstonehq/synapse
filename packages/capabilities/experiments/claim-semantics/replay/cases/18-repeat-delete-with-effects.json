@@ -15,8 +15,8 @@
   },
   "review_notes": [
     "php_effect.json (and php_effect_seq.json, to stay coherent) gain an issue update for req-5, the repeat of req-4's DELETE; responses stay 200/404 and the write is a declared table, so undeclared_write does not fire.",
-    "op_qualified(delete-issue) is unresolved with repeat_delete_not_found as the missing premise, triggered by the PHP row; issues.create and issues.close are supported (the repeat gate is per op).",
-    "The companion repeat_delete_violation(run, req-5, effects) is supported (discrepancy repeat-delete-with-effects); the companion repeat_delete_not_found is unresolved, its missing premise naming the negated repeat_delete_has_effect that the PHP row defeats.  Reviewer exclusions do not apply to this rule by design: a repeat delete that touches anything is a finding."
+    "All three op_qualified claims are supported: op_qualified_rt is not gated on the repeat (the repeat is its own claim, and a repeat that answers 404 while writing a declared table leaves every premise of the op gate intact).  Case 23 is the shape where the repeat's write is a reviewer-excluded table and the claim survives.",
+    "The companion repeat_delete_violation(run, req-5, effects) is supported (discrepancy repeat-delete-with-effects); the companion repeat_delete_not_found is unresolved, its missing premise naming the negated repeat_delete_has_effect that the PHP row defeats.  issue is not one of the reviewer's excluded tables (authentication, redis), so the exclusion guard on repeat_delete_has_effect does not exempt it."
   ],
   "facts": [
     {
@@ -3813,7 +3813,7 @@
           }
         }
       ],
-      "reading": "req-5 repeats the committed delete of DELETE /api/issues/1 and still answers 404 on both sides, but PHP recorded an issue update for it: repeat_delete_has_effect derives, repeat_delete_violation(req-5, effects) holds, repeat_delete_any(delete-issue) blocks the gate and repeat_delete_not_found does not derive (the negated premise fails)."
+      "reading": "req-5 repeats the committed delete of DELETE /api/issues/1 and still answers 404 on both sides, but PHP recorded an issue update for it: repeat_delete_has_effect derives (issue is not a reviewer-excluded table) and repeat_delete_violation(req-5, effects) holds, so the per-target claim repeat_delete_not_found does not derive.  op_qualified is not gated on that claim: the repeat's write is a declared table and both post-states stay inside the model, so delete-issue still qualifies."
     },
     {
       "id": "claim-repeat-delete-has-effects",
@@ -4602,20 +4602,6 @@
       ]
     },
     {
-      "kind": "missing_premise",
-      "claim_id": "claim-qualified-delete",
-      "relation": "repeat_delete_not_found",
-      "fields": {
-        "reason": {
-          "value": "the repeat of DELETE /api/issues/1 (req-5) was not judged not-found: PHP recorded an issue update for it"
-        }
-      },
-      "when_claim": "unresolved",
-      "requires_all_evidence": [
-        "php:e8bc98741eff:php_effect:e26eda7c38ff"
-      ]
-    },
-    {
       "kind": "discrepancy",
       "claim_id": "claim-repeat-delete-has-effects",
       "when_claim": "supported",
@@ -4667,14 +4653,11 @@
           "replay:e8bc98741eff:go_effect_seqs_closed:abdb419a2db3",
           "replay:e8bc98741eff:go_effects_closed:741c700022f7",
           "replay:e8bc98741eff:go_post_states_closed:d399545a4a0d",
-          "replay:e8bc98741eff:go_responses_closed:f59875098423",
           "replay:e8bc98741eff:mutant_kills_closed:5ec55c452bcf",
           "replay:e8bc98741eff:php_effect_seqs_closed:d8e1764ed4bf",
           "replay:e8bc98741eff:php_effects_closed:c69d8dda2898",
           "replay:e8bc98741eff:php_post_states_closed:563c8b6a1be0",
-          "replay:e8bc98741eff:php_responses_closed:a139721eba4a",
           "replay:e8bc98741eff:replay_request:e1b3e116da62",
-          "replay:e8bc98741eff:replay_request_seqs_closed:2bfa66364c8c",
           "replay:e8bc98741eff:replay_requests_closed:acc922ba3952",
           "replay:e8bc98741eff:replay_run:ad8057bded65",
           "replay:e8bc98741eff:replay_stability:555c8d99e7b2",
@@ -4751,14 +4734,11 @@
           "replay:e8bc98741eff:go_effect_seqs_closed:abdb419a2db3",
           "replay:e8bc98741eff:go_effects_closed:741c700022f7",
           "replay:e8bc98741eff:go_post_states_closed:d399545a4a0d",
-          "replay:e8bc98741eff:go_responses_closed:f59875098423",
           "replay:e8bc98741eff:mutant_kills_closed:5ec55c452bcf",
           "replay:e8bc98741eff:php_effect_seqs_closed:d8e1764ed4bf",
           "replay:e8bc98741eff:php_effects_closed:c69d8dda2898",
           "replay:e8bc98741eff:php_post_states_closed:563c8b6a1be0",
-          "replay:e8bc98741eff:php_responses_closed:a139721eba4a",
           "replay:e8bc98741eff:replay_request:b67ffd90fbf2",
-          "replay:e8bc98741eff:replay_request_seqs_closed:2bfa66364c8c",
           "replay:e8bc98741eff:replay_requests_closed:acc922ba3952",
           "replay:e8bc98741eff:replay_run:ad8057bded65",
           "replay:e8bc98741eff:replay_stability:555c8d99e7b2",
@@ -4820,38 +4800,86 @@
         "missing_premises": []
       },
       "claim-qualified-delete": {
-        "semantic_verdict": "unresolved",
+        "semantic_verdict": "supported",
         "operational_status": "complete",
-        "support_leaves": [],
-        "refutation_leaves": [],
-        "observed_leaves": [
-          "php:e8bc98741eff:php_effect:e26eda7c38ff",
+        "support_leaves": [
+          "go:e8bc98741eff:go_effect_seq:4d9d7170f1dc",
+          "go:e8bc98741eff:go_effect_seq:e7b8dd7ed7db",
+          "go:e8bc98741eff:go_post_state:4d82078e2c4a",
+          "mut:e8bc98741eff:mutant:922bc90b7793",
+          "mut:e8bc98741eff:mutants_closed:adb434f574a9",
+          "php:claim-time:op_declared:435ff47d3ea2",
+          "php:e8bc98741eff:php_effect_seq:56d289a677b4",
+          "php:e8bc98741eff:php_effect_seq:941ca360b4fc",
+          "php:e8bc98741eff:php_post_state:62d53ef57d7c",
           "replay:e8bc98741eff:go_effect_seqs_closed:abdb419a2db3",
           "replay:e8bc98741eff:go_effects_closed:741c700022f7",
           "replay:e8bc98741eff:go_post_states_closed:d399545a4a0d",
-          "replay:e8bc98741eff:go_responses_closed:f59875098423",
+          "replay:e8bc98741eff:mutant_kills_closed:5ec55c452bcf",
           "replay:e8bc98741eff:php_effect_seqs_closed:d8e1764ed4bf",
           "replay:e8bc98741eff:php_effects_closed:c69d8dda2898",
           "replay:e8bc98741eff:php_post_states_closed:563c8b6a1be0",
-          "replay:e8bc98741eff:php_responses_closed:a139721eba4a",
-          "replay:e8bc98741eff:replay_request_seqs_closed:2bfa66364c8c",
+          "replay:e8bc98741eff:replay_request:843caaa74c2d",
+          "replay:e8bc98741eff:replay_requests_closed:acc922ba3952",
+          "replay:e8bc98741eff:replay_run:ad8057bded65",
+          "replay:e8bc98741eff:replay_stability:555c8d99e7b2",
           "replay:e8bc98741eff:replay_stability_closed:cafd259173e9",
           "reviewer:claim-time:model_observed:5071ad5dc2c5",
           "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
           "reviewer:claim-time:snapshot_observed:320fa56f8495",
+          "reviewer:e8bc98741eff:index_describes_replay:6da538f7902a",
           "reviewer:e8bc98741eff:model_scope_exclusions_closed:62143215abdd",
+          "shen:e8bc98741eff:model_admissible:c88ec3adb7d6",
           "shen:e8bc98741eff:model_admissible_closed:e42e24b4af61",
           "shen:e8bc98741eff:model_describes_run:30e5416af7e4",
-          "shen:e8bc98741eff:model_effect_seqs_closed:53d4ce94a7bc"
+          "shen:e8bc98741eff:model_effect_seq:8cc36ec3d9a2",
+          "shen:e8bc98741eff:model_effect_seq:9d0f6b87c294",
+          "shen:e8bc98741eff:model_effect_seqs_closed:53d4ce94a7bc",
+          "shen:e8bc98741eff:model_writes_closed:c0617349e17e"
+        ],
+        "refutation_leaves": [],
+        "observed_leaves": [
+          "go:e8bc98741eff:go_effect_seq:4d9d7170f1dc",
+          "go:e8bc98741eff:go_effect_seq:e7b8dd7ed7db",
+          "go:e8bc98741eff:go_post_state:4d82078e2c4a",
+          "mut:e8bc98741eff:mutant:922bc90b7793",
+          "mut:e8bc98741eff:mutants_closed:adb434f574a9",
+          "php:claim-time:op_declared:435ff47d3ea2",
+          "php:e8bc98741eff:php_effect:e26eda7c38ff",
+          "php:e8bc98741eff:php_effect_seq:56d289a677b4",
+          "php:e8bc98741eff:php_effect_seq:941ca360b4fc",
+          "php:e8bc98741eff:php_post_state:62d53ef57d7c",
+          "replay:e8bc98741eff:go_effect_seqs_closed:abdb419a2db3",
+          "replay:e8bc98741eff:go_effects_closed:741c700022f7",
+          "replay:e8bc98741eff:go_post_states_closed:d399545a4a0d",
+          "replay:e8bc98741eff:go_responses_closed:f59875098423",
+          "replay:e8bc98741eff:mutant_kills_closed:5ec55c452bcf",
+          "replay:e8bc98741eff:php_effect_seqs_closed:d8e1764ed4bf",
+          "replay:e8bc98741eff:php_effects_closed:c69d8dda2898",
+          "replay:e8bc98741eff:php_post_states_closed:563c8b6a1be0",
+          "replay:e8bc98741eff:php_responses_closed:a139721eba4a",
+          "replay:e8bc98741eff:replay_request:843caaa74c2d",
+          "replay:e8bc98741eff:replay_request_seqs_closed:2bfa66364c8c",
+          "replay:e8bc98741eff:replay_requests_closed:acc922ba3952",
+          "replay:e8bc98741eff:replay_run:ad8057bded65",
+          "replay:e8bc98741eff:replay_stability:555c8d99e7b2",
+          "replay:e8bc98741eff:replay_stability_closed:cafd259173e9",
+          "reviewer:claim-time:model_observed:5071ad5dc2c5",
+          "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+          "reviewer:claim-time:snapshot_observed:320fa56f8495",
+          "reviewer:e8bc98741eff:index_describes_replay:6da538f7902a",
+          "reviewer:e8bc98741eff:model_scope_exclusions_closed:62143215abdd",
+          "shen:e8bc98741eff:model_admissible:c88ec3adb7d6",
+          "shen:e8bc98741eff:model_admissible_closed:e42e24b4af61",
+          "shen:e8bc98741eff:model_describes_run:30e5416af7e4",
+          "shen:e8bc98741eff:model_effect_seq:8cc36ec3d9a2",
+          "shen:e8bc98741eff:model_effect_seq:9d0f6b87c294",
+          "shen:e8bc98741eff:model_effect_seqs_closed:53d4ce94a7bc",
+          "shen:e8bc98741eff:model_writes_closed:c0617349e17e"
         ],
         "forbidden_leaves": [],
         "discrepancies": [],
-        "missing_premises": [
-          {
-            "relation": "repeat_delete_not_found",
-            "reason": "the repeat of DELETE /api/issues/1 (req-5) was not judged not-found: PHP recorded an issue update for it"
-          }
-        ]
+        "missing_premises": []
       },
       "claim-repeat-delete-has-effects": {
         "semantic_verdict": "supported",
@@ -4865,7 +4893,9 @@
           "replay:e8bc98741eff:replay_request:079cade6b535",
           "replay:e8bc98741eff:replay_request:843caaa74c2d",
           "replay:e8bc98741eff:replay_request_seq:3b26a7492237",
-          "replay:e8bc98741eff:replay_request_seq:e8f6a28e8b2a"
+          "replay:e8bc98741eff:replay_request_seq:e8f6a28e8b2a",
+          "reviewer:e8bc98741eff:model_scope_exclusions_closed:62143215abdd",
+          "shen:e8bc98741eff:model_describes_run:30e5416af7e4"
         ],
         "refutation_leaves": [],
         "observed_leaves": [
@@ -4877,7 +4907,9 @@
           "replay:e8bc98741eff:replay_request:079cade6b535",
           "replay:e8bc98741eff:replay_request:843caaa74c2d",
           "replay:e8bc98741eff:replay_request_seq:3b26a7492237",
-          "replay:e8bc98741eff:replay_request_seq:e8f6a28e8b2a"
+          "replay:e8bc98741eff:replay_request_seq:e8f6a28e8b2a",
+          "reviewer:e8bc98741eff:model_scope_exclusions_closed:62143215abdd",
+          "shen:e8bc98741eff:model_describes_run:30e5416af7e4"
         ],
         "forbidden_leaves": [],
         "discrepancies": [

@@ -224,8 +224,9 @@ class PythonEvaluatorAgreesWithReviewedExpectations(unittest.TestCase):
         self.assertEqual(set(report.relation_rows("repeat_delete_any")), {(RUN, DELETE)})
         self.assertEqual(report.relation_rows("repeat_delete_not_found"), (),
                          "the negated premise fails: the repeat is not effect-free")
-        self.assertEqual(set(report.relation_rows("op_qualified")), {(INDEX, RUN, CREATE), (INDEX, RUN, CLOSE)},
-                         "the repeat gate is per op: create and close are untouched")
+        self.assertEqual(set(report.relation_rows("op_qualified")),
+                         {(INDEX, RUN, CREATE), (INDEX, RUN, CLOSE), (INDEX, RUN, DELETE)},
+                         "op_qualified_rt is not gated on the repeat: the repeat is its own claim")
         # the status pair is still 200/404, so no status violation was planted
         self.assertNotIn((RUN, REPEAT_DELETE, "php"), set(report.relation_rows("repeat_delete_violation")))
 

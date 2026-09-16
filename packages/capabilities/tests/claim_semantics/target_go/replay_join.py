@@ -65,7 +65,9 @@ _BLOCKING_ORDER = (
     # a receipt without the sequence/response/stability relations is blocked earlier when it
     # has a write-set gap, and here otherwise)
     ("effect_order_closed", False), ("effect_order_any", True), ("effect_order_exercised", False),
-    ("repeat_delete_closed", False), ("repeat_delete_any", True), ("oracle_stable", False),
+    # the repeat delete is its own claim (repeat_delete_not_found) and no premise of
+    # op_qualified_rt; the summary still reports its rows under "repeat_delete"
+    ("oracle_stable", False),
     ("kill_gap_closed", False), ("kill_closure_gap_any", True), ("index_describes_replay", False),
     ("op_declared", False),
 )

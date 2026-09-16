@@ -110,7 +110,9 @@ op_qualified_rt(IX,Run,Op)      :- index_describes_replay(IX,Run), replayed(Run,
                                    go_disagreement_closed(Run,Op),  !go_disagree_any(Run,Op),
                                    undeclared_writes_closed(Run,Op), !undeclared_any(Run,Op),
                                    post_state_gap_closed(Run,Op), !post_state_any(Run,Op),
-                                   kill_gap_closed(Run), !kill_closure_gap_any(Run,Op).
+                                   kill_gap_closed(Run), !kill_closure_gap_any(Run,Op),
+                                   effect_order_closed(Run,Op), !effect_order_any(Run,Op),
+                                   effect_order_exercised(Run,Op), oracle_stable(Run).
 op_qualified(IX,Run,Op)         :- op_declared(IX,Op), index_describes_replay(IX,Run), op_qualified_rt(IX,Run,Op).
 ```
 
@@ -229,12 +231,28 @@ Design points a reviewer should check:
   (`first_delete_committed`: 200 on both sides with an `issue` update on both)
   the claim `repeat_delete_not_found(run, target)` says the repeat answered
   404 on both sides and, under both closed effect tables, wrote nothing
-  (case 00).  `repeat_delete_violation(run, req, side)` is the negative shape
-  -- a status that is not 404 on either side, or any effect at all
-  (`side = "effects"`, case 18) -- and `op_qualified_rt` is gated on
-  `!repeat_delete_any(Run, Op)` under `repeat_delete_closed(Run, Op)`.
-  Reviewer exclusions deliberately do **not** apply here: a repeat delete that
-  touches anything is a finding.
+  *outside the reviewer's scope exclusions* (case 00).
+  `repeat_delete_violation(run, req, side)` is the negative shape -- a status
+  that is not 404 on either side, or any effect at all (`side = "effects"`,
+  case 18).  **The reviewer's scope exclusions apply here exactly as they do
+  to `undeclared_write`**: `repeat_delete_has_effect` joins
+  `model_describes_run(M, Run)`, `model_scope_excluded_closed(M)` and
+  `!model_scope_excluded(M, Tb)`, and its completeness
+  `repeat_delete_effects_closed(Run)` lists `model_scope_exclusions_closed(M)`
+  among its inputs so an unclosed exclusion set withholds the claim instead of
+  vacuously supporting it (cases 04, 14, 15).  The excluded tables are the
+  bookkeeping writes a system makes on *every* authenticated request -- a
+  session-token touch, a cache key, a job-status row -- and a repeat DELETE
+  that 404s still authenticates, so without the guard a correct port would
+  fail the claim on rows the reviewer already accepted (case 23).
+  **`op_qualified_rt` is deliberately *not* gated on the repeat.**  The repeat
+  is a claim of its own (`repeat_delete_not_found`); a second delete that
+  answers 200 or writes a business table is caught for the op through the
+  model -- the model's `Admissible` refuses the post-state, so
+  `php_model_disagree` / `go_model_disagree` blocks `op_qualified` -- not
+  through a second cross-request gate.  Case 18 is the shape: the repeat
+  violation holds, the per-target claim is unresolved, and all three ops still
+  qualify.
 * **Cross-run stability** (v1 ordering addendum).  `replay_stability(run,
   run_a, run_b, side, stable)` binds the receipt's run to a *selftest* of the
   same oracle: two further runs of the same tape whose provenance (oracle
