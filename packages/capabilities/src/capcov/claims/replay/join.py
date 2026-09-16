@@ -34,7 +34,8 @@ from typing import Any
 from ..ir import (Atom, Bundle, Claim, Constant, Context, DiagnosticRule, Evidence, OutputTemplate,
                   TemplateValue, Variable, canonical_json)
 from ..differential import CompiledKernelMismatch, DifferentialMismatch, compare, compare_three
-from ..souffle.compile import CompiledChecker
+from ..souffle import program_for_pack
+from ..souffle.compile import CompiledChecker, compile_program
 from ..static.certificate import certify, claim_conclusions, recheck
 from ..static.combine import combine
 from . import replay_facts
@@ -298,6 +299,11 @@ def evaluate_join(join: ReplayJoin, replay_root: str, *, kernels: str = "two",
     if kernels not in ("two", "three"):
         raise ValueError("kernels must be 'two' or 'three'")
     join.kernels = kernels
+    if kernels == "three" and checker is None:
+        # compile up front so the provenance of the binary that judged the
+        # receipt is recorded even when the caller did not supply a checker
+        checker = compile_program(program_for_pack(join.bundle), executable=executable,
+                                  cache_dir=cache_dir)
     join.checker = checker
     try:
         if kernels == "two":
@@ -340,6 +346,7 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
         "replay_bundle_digest": replay_facts.bundle_digest(join.exported.bundle),
         "combined_bundle_digest": replay_facts.bundle_digest(join.bundle),
         "model_absent": join.model_absent,
+        "kernels": ["python", "souffle"] + (["souffle-compiled"] if join.kernels == "three" else []),
         "synthetic_index": SYNTHETIC_INDEX,
         "assumptions": list(join.assumption_ids),
         "ops": list(join.ops),
@@ -413,6 +420,9 @@ def write_artifacts(join: ReplayJoin, out_dir: Path) -> dict[str, Any]:
         "contract_findings": list(join.contract_findings),
         "join": summary(join),
         "kernels": None if join.result is None and join.mismatch is None else _kernel_digests(join),
+        # the compiled checker's provenance verbatim: program, souffle bytes,
+        # compiler configuration and the sha256 of the binary that actually ran
+        "compiled": join.checker.provenance() if join.checker is not None else None,
         "certificates": {claim_id: {"sha256": hashlib.sha256(canonical_json(cert).encode()).hexdigest(),
                                     "leaves": len(cert["leaves"]), "nodes": cert["nodes"], "truncated": cert["truncated"]}
                          for claim_id, cert in join.certificates.items()},
