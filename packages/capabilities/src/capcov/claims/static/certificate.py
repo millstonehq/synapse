@@ -591,6 +591,12 @@ def recheck(bundle: Bundle, certificate: Mapping[str, Any], relations: Any = Non
                 if record.atom.relation != relation or not _same(attested, row):
                     problems.append(f"{path}: evidence {evidence_id!r} attests "
                                     f"{record.atom.relation}{_key(attested)}, not {relation}{_key(row)}")
+                if decl.producer_classes:
+                    producer_class = (record.source.split(" ", 1)[0] if record.source else "")
+                    if producer_class not in decl.producer_classes:
+                        problems.append(
+                            f"{path}: evidence {evidence_id!r} producer {producer_class!r} "
+                            f"is not admitted by {relation} {decl.producer_classes}")
                 leaves.add(evidence_id)
             return
         if node.get("kind") != "rule":

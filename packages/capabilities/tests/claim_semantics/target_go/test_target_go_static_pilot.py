@@ -39,13 +39,13 @@ import time
 import unittest
 from pathlib import Path
 
-from capcov.claims import (Atom, Bundle, Claim, Column, Constant, Context, Evidence,
-                           RelationDecl, Rule, Variable, canonical_json, digest as ir_digest)
+from capcov.claims import Claim, Constant, Context, canonical_json, digest as ir_digest
 from capcov.claims.differential import DifferentialMismatch, compare, run_python
 from capcov.claims.evaluator import ResourceLimits
 from capcov.claims.static import pilot, scip_facts
 from capcov.claims.static.certificate import certify, claim_conclusions, recheck, rules_digest
 from capcov.claims.static.combine import combine
+from capcov.claims.static.runtime_receipt import (load_runtime_receipt, runtime_bundle)
 from capcov.scip import runner
 
 try:
@@ -84,57 +84,6 @@ CONTROL = "control-route-reaches-send-due-digests"
 CLAIM_RUNTIME_SQL = "claim-runtime-route-belongs-to-index-with-terminal-sql-receipt"
 CLAIM_RUNTIME_CAUSAL_SQL = "claim-runtime-route-executed-sql-on-index"
 CERTIFIED_CLAIMS = (CLAIM_FIRST_PARTY, CLAIM_SQL, CLAIM_RUNTIME_SQL, CLAIM_RUNTIME_CAUSAL_SQL)
-
-TRACE_PRODUCER = "target-go-runtime-trace-v2"
-RUNTIME_TRACE_DECLS = (
-    RelationDecl("runtime_function_entered",
-                 (Column("run", "symbol", True), Column("request", "symbol", True), Column("symbol", "symbol")),
-                 producer_classes=(TRACE_PRODUCER,), context_indices=("run", "request")),
-    RelationDecl("runtime_sql_executed",
-                 (Column("run", "symbol", True), Column("request", "symbol", True), Column("tx", "symbol", True),
-                  Column("operation", "symbol"), Column("ordinal", "unsigned")),
-                 producer_classes=(TRACE_PRODUCER,), context_indices=("run", "request", "tx")),
-    RelationDecl("runtime_tx_committed",
-                 (Column("run", "symbol", True), Column("request", "symbol", True), Column("tx", "symbol", True)),
-                 producer_classes=(TRACE_PRODUCER,), context_indices=("run", "request", "tx")),
-    RelationDecl("runtime_route_completed",
-                 (Column("run", "symbol", True), Column("request", "symbol", True), Column("surface", "symbol", True)),
-                 producer_classes=(TRACE_PRODUCER,), context_indices=("run", "request", "surface")),
-)
-RUNTIME_CAUSAL_SQL = RelationDecl(
-    "runtime_route_reaches_sql_on_index",
-    (Column("index", "digest", True), Column("run", "symbol", True), Column("request", "symbol", True),
-     Column("surface", "symbol", True), Column("symbol", "symbol"), Column("tx", "symbol", True),
-     Column("operation", "symbol")),
-    modality="derived", binding="runtime", primitive=False,
-    context_indices=("index", "run", "request", "surface", "tx"))
-RUNTIME_CAUSAL_SQL_RULE = Rule(
-    Atom("runtime_route_reaches_sql_on_index",
-         (Variable("IX"), Variable("Run"), Variable("Request"), Variable("Surface"), Variable("Symbol"),
-          Variable("Tx"), Variable("Operation"))),
-    (Atom("runtime_route_observed", (Variable("Tenant"), Variable("Surface"), Variable("Request"), Variable("Run"))),
-     Atom("runtime_function_entered", (Variable("Run"), Variable("Request"), Variable("Symbol"))),
-     Atom("runtime_sql_executed", (Variable("Run"), Variable("Request"), Variable("Tx"), Variable("Operation"), Variable("Ordinal"))),
-     Atom("runtime_tx_committed", (Variable("Run"), Variable("Request"), Variable("Tx"))),
-     Atom("runtime_route_completed", (Variable("Run"), Variable("Request"), Variable("Surface"))),
-     Atom("index_describes_run", (Variable("IX"), Variable("Run"))),
-     Atom("scip_index", (Variable("IX"), Variable("Indexer"), Variable("Version"), Variable("Language"), Variable("Root"), Variable("Kind")))),
-    name="runtime_route_executes_committed_sql_on_index")
-
-RUNTIME_STATIC_SQL = RelationDecl(
-    "runtime_route_observed_on_index",
-    (Column("index", "digest", True), Column("tenant", "symbol", True),
-     Column("surface", "symbol", True), Column("run", "symbol", True)),
-    modality="derived", binding="runtime", primitive=False,
-    context_indices=("index", "tenant", "surface", "run"))
-RUNTIME_STATIC_SQL_RULE = Rule(
-    Atom("runtime_route_observed_on_index",
-         (Variable("IX"), Variable("T"), Variable("S"), Variable("Run"))),
-    (Atom("runtime_route_observed", (Variable("T"), Variable("S"), Variable("Request"), Variable("Run"))),
-     Atom("index_describes_run", (Variable("IX"), Variable("Run"))),
-     Atom("scip_index", (Variable("IX"), Variable("Indexer"), Variable("Version"),
-                         Variable("Language"), Variable("Root"), Variable("Kind")))),
-    name="runtime_route_matches_scip_index")
 
 INDEX_TIMEOUT = 20 * 60
 LIMITS = scip_facts.ExportLimits(documents=500, occurrences=200_000, rows=100_000)
@@ -390,85 +339,17 @@ class FgGoStaticPilotTest(unittest.TestCase):
         if not RUNTIME_RECEIPT_PATH:
             cls.runtime_receipt_sha256 = None
             return None
-        path = Path(RUNTIME_RECEIPT_PATH)
-        raw = path.read_bytes()
-        def unique(pairs):
-            value = {}
-            for key, item in pairs:
-                if key in value:
-                    raise ValueError(f"duplicate runtime receipt key: {key}")
-                value[key] = item
-            return value
-        value = json.loads(raw, object_pairs_hook=unique)
-        required = {"schema", "run", "candidate_commit", "tenant", "request_id", "surface",
-                    "http_status", "unsubscribe_http_status", "terminal_sql", "trace", "cleanup", "recorded_at"}
-        if set(value) != required or value["schema"] != "capcov-target-go-runtime-route/v2":
-            raise ValueError("invalid target-go runtime receipt schema")
-        if value["candidate_commit"] != cls.checkout.head or value["surface"] != SURFACE:
-            raise ValueError("runtime receipt does not describe the indexed checkout and surface")
-        if value["http_status"] != 200 or value["unsubscribe_http_status"] != 200:
-            raise ValueError("runtime route did not succeed")
-        if value["terminal_sql"] != {"notification_unsubscribed": 0,
-                                      "go_notification_confirmation_cancelled": 1}:
-            raise ValueError("runtime SQL terminal state differs")
-        if value["cleanup"] != {"status": "complete", "owned_resources_remaining": 0}:
-            raise ValueError("runtime fixture cleanup differs")
-        if not value["run"] or value["request_id"] != value["run"] + "-subscribe":
-            raise ValueError("runtime receipt identity differs")
-        expected_trace = [
-            {"kind": "route_entered", "request_id": value["request_id"], "symbol": SURFACE},
-            {"kind": "function_entered", "request_id": value["request_id"],
-             "symbol": "git.internal.example/org/target-go/internal/legacyissues.ChangeSubscription"},
-            {"kind": "sql_executed", "request_id": value["request_id"], "tx": "change-subscription",
-             "operation": "delete-notification-unsubscribed", "ordinal": 1},
-            {"kind": "sql_executed", "request_id": value["request_id"], "tx": "change-subscription",
-             "operation": "cancel-notification-confirmation", "ordinal": 2},
-            {"kind": "tx_committed", "request_id": value["request_id"], "tx": "change-subscription"},
-            {"kind": "route_completed", "request_id": value["request_id"], "symbol": SURFACE},
-        ]
-        if value["trace"] != expected_trace:
-            raise ValueError("runtime causal trace differs")
-        cls.runtime_receipt_sha256 = __import__("hashlib").sha256(raw).hexdigest()
-        return value
+        loaded = load_runtime_receipt(
+            RUNTIME_RECEIPT_PATH,
+            expected_commit=cls.checkout.head,
+            expected_surface=SURFACE)
+        cls.runtime_receipt_sha256 = loaded.sha256
+        return loaded
 
     @classmethod
     def _runtime_bundle(cls, decls):
-        value = cls.runtime_receipt
-        route_decl = decls["runtime_route_observed"]
-        route_values = [value["tenant"], value["surface"], value["request_id"], value["run"]]
-        route_atom = Atom("runtime_route_observed", tuple(
-            Constant(item, column.type) for item, column in zip(route_values, route_decl.columns)))
-        route_evidence = Evidence(
-            f"runtime:{value['run']}:runtime_route_observed:{scip_facts.row_digest('runtime_route_observed', route_values)[:12]}",
-            route_atom, Context.from_mapping({"tenant": value["tenant"], "surface": value["surface"],
-                                              "event": value["request_id"], "run": value["run"]}),
-            source=f"{TRACE_PRODUCER} receipt sha256:{cls.runtime_receipt_sha256}",
-            depends_on=(f"external:run:{value['run']}", f"external:git-commit:{value['candidate_commit']}"))
-        decls = {decl.name: decl for decl in RUNTIME_TRACE_DECLS}
-        facts = [route_atom]
-        evidence = [route_evidence]
-        trace_rows = (
-            ("runtime_function_entered", [value["run"], value["request_id"], value["trace"][1]["symbol"]]),
-            ("runtime_sql_executed", [value["run"], value["request_id"], "change-subscription",
-                                      "delete-notification-unsubscribed", 1]),
-            ("runtime_sql_executed", [value["run"], value["request_id"], "change-subscription",
-                                      "cancel-notification-confirmation", 2]),
-            ("runtime_tx_committed", [value["run"], value["request_id"], "change-subscription"]),
-            ("runtime_route_completed", [value["run"], value["request_id"], value["surface"]]),
-        )
-        for relation, values in trace_rows:
-            columns = decls[relation].columns
-            atom = Atom(relation, tuple(Constant(item, column.type)
-                                        for item, column in zip(values, columns)))
-            facts.append(atom)
-            evidence.append(Evidence(
-                f"runtime:{value['run']}:{relation}:{scip_facts.row_digest(relation, values)[:12]}",
-                atom, Context.from_mapping({column.name: item for item, column in zip(values, columns)
-                                            if column.context}),
-                source=f"{TRACE_PRODUCER} receipt sha256:{cls.runtime_receipt_sha256}",
-                depends_on=(f"external:run:{value['run']}", f"external:git-commit:{value['candidate_commit']}")))
-        return Bundle((RUNTIME_STATIC_SQL, RUNTIME_CAUSAL_SQL, *RUNTIME_TRACE_DECLS), facts=tuple(facts),
-                      rules=(RUNTIME_STATIC_SQL_RULE, RUNTIME_CAUSAL_SQL_RULE), evidence=tuple(evidence))
+        del decls  # declarations come from the shared receipt producer
+        return runtime_bundle(cls.runtime_receipt, sha256=cls.runtime_receipt_sha256)
 
     # -- helpers --------------------------------------------------------------
 

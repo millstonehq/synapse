@@ -5233,3 +5233,102 @@ first token of `Evidence.source`; `Evidence.kind` stays `fact`/`assumption`/`com
 (`source="target-go-runtime-trace-v2 receipt sha256:…"`, default kind), and the section 27 test
 now asserts `evidence-producer`. Integrator's runs after the fix: validation 23 + 4, replay 73,
 static corpus 18, static differential 18, evidence policy 5 all OK; target-go pilot gate with the Full regression on `dbd062b`: `Ran 1132 tests in 115.156s`, `OK (skipped=136)`.
+
+## 32. 2026-09-16 deepen: runtime join, Stage C why/why-not, producer authority
+
+Stacked on `experiment/claim-semantics` (`b9ced12`). Production `core/reconcile.py` and
+production `capcov` consumer commands were not touched.
+
+### What landed
+
+1. **Runtime join as a library path.** `claims/static/runtime_receipt.py` is the only admitted
+   importer of a retained `capcov-target-go-runtime-route/v2` receipt. It validates schema, identity,
+   HTTP/SQL terminal state, cleanup, and the ordered causal trace; it never synthesizes a fake
+   target-go run. The live pilot (`tests/claim_semantics/target_go/test_target_go_static_pilot.py`) now
+   calls this module and still skip-gates on `CAPCOV_GO_FIXTURE_ROOT` plus the pinned
+   scip-go/scip/go tools. `CAPCOV_TARGET_GO_RUNTIME_RECEIPT` remains the optional retained-artifact
+   gate; when set, the receipt's `candidate_commit` must equal the indexed HEAD.
+
+2. **Fixture-backed correspondence (no live target-go tree).**
+   `tests/claim_semantics/test_runtime_join_fixture.py` joins the committed real receipt
+   (`target_go/artifacts/runtime-recipient-route.json`, run `claims-runtime-trace-20260915-02`) to a
+   synthetic `scip_index` through `index_describes_run`. Both `runtime_route_observed_on_index`
+   and `runtime_route_reaches_sql_on_index` derive in the Python kernel when the witnesses
+   agree; a mismatched run stays `unresolved`, never `refuted`. The synthetic index digest is
+   `sha256("capcov-fixture-correspondence-index-v1")` and is explicitly not the target-go
+   `static-relations-v1` identity. Static and runtime certificates stay independent: the
+   runtime certificate's leaves are receipt + `index_describes_run`, never `scip_may_reference`.
+
+3. **Stage C ground why/why-not.** `claims/static/ground.py` answers `why`, `why_not`,
+   `impact`, and `shared_assumptions` against a kernel closure and the existing
+   `capcov-static-certificate-v1` artifact. The queries do not search the application, launch
+   Soufflé, or fold claims. `why_not` names the closest failed rule instantiation and records
+   whether a completeness witness for that premise is present; it never sets `refuted`.
+   `recheck` now also refuses a leaf whose `Evidence.source` token is not in the relation's
+   `producer_classes` (tamper / unauthorized producer). Tests:
+   `tests/claim_semantics/test_ground_certificate.py`.
+
+4. **Producer-class authority end-to-end.** The causal-trace primitives
+   (`runtime_function_entered`, `runtime_sql_executed`, `runtime_tx_committed`,
+   `runtime_route_completed`) still admit only `target-go-runtime-trace-v2`. An unauthorized
+   source (`generic-json`) fails `validate_bundle` with `evidence-producer` (≥4 issues),
+   `evaluate` returns `invalid-input` with an empty closure, and `run_python` /
+   `run_souffle` report `operational_failure=invalid-input`. `runtime_route_observed` stays
+   unconstrained so the go_app probe is unaffected. Tests:
+   `tests/claim_semantics/test_runtime_producer_authority.py`.
+
+Declarations for the trace primitives and `runtime_route_reaches_sql_on_index` now live in
+`runtime_receipt.py` and are imported by `scip_facts._DERIVED_TARGET_DECLS`, so the exporter
+stubs cannot drift from the producer path.
+
+### How to reproduce
+
+From `packages/capabilities` (Python-only; no target-go tree, no Soufflé):
+
+```sh
+PYTHONPATH="$PWD/src" python -m unittest \
+  tests.claim_semantics.test_runtime_join_fixture \
+  tests.claim_semantics.test_runtime_producer_authority \
+  tests.claim_semantics.test_ground_certificate \
+  tests.claim_semantics.test_validation_producer \
+  tests.claim_semantics.test_static_corpus_schema \
+  tests.claim_semantics.test_static_corpus_evaluation
+```
+
+Inside `nix develop` (Soufflé + optional live target-go):
+
+```sh
+PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -t .
+CAPCOV_GO_FIXTURE_ROOT=/path/to/target-go \
+CAPCOV_TARGET_GO_RUNTIME_RECEIPT="$PWD/tests/claim_semantics/target_go/artifacts/runtime-recipient-route.json" \
+PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p "test_target_go_static*.py" -t .
+```
+
+The committed receipt was produced at target-go `01fe913`. A live join against HEAD `7e339e0`
+fails closed on commit mismatch; that is the intended gate, not a defect.
+
+### What this environment ran (2026-09-16, Linux, no nix)
+
+`nix` and `souffle` were not on PATH. Python 3.12.3 ran the new modules plus the
+Python-only static corpus / validation / exporter / evidence-policy suites. Results:
+
+- `test_runtime_join_fixture`: 6 passed, 1 skipped (Soufflé dual-kernel)
+- `test_runtime_producer_authority`: 4 passed, 1 skipped (Soufflé unauthorized path)
+- `test_ground_certificate`: 10 passed
+- `test_static_corpus_schema` / `test_static_corpus_evaluation` (Python evaluator): passed;
+  Soufflé differential skipped
+- `target_go.test_target_go_static_pilot`: 10 skipped (`CAPCOV_GO_FIXTURE_ROOT` absent)
+- Pre-existing: `test_static_evidence_policy.test_both_kernels_agree_on_both_shapes` asserts
+  Soufflé on PATH (fails outside nix); `test_static_schema_package_data` install check fails
+  on this host's setuptools vs `project.license` — neither is caused by this deepen
+
+### Remaining limits
+
+- Dual-kernel agreement on the fixture join is implemented and skip-gated; it has not been
+  executed in this environment.
+- The live target-go pilot has not been re-run here (no checkout, no scip-go).
+- Why/why-not is a ground query over one closure, not a second claim-folding engine.
+  Alternative support beyond the canonical certificate path is not enumerated exhaustively.
+- `runtime_route_observed` remains unconstrained by design (two honest producers).
+- Production four-cell reconcile and production CLI are unchanged.
+

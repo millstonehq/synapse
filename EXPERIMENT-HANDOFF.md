@@ -1,7 +1,8 @@
-# Handoff: capcov claim semantics, SCIP → Datalog, and the target-go static pilot
+# Handoff: capcov claim semantics, SCIP → Datalog, and the target-go static/runtime pilot
 
-Written 2026-09-15 for the next agent. `EXPERIMENT-PLAN.md` is the authoritative,
-running record (sections 26–31 cover the last two days); this file is the short map.
+Written 2026-09-16. `EXPERIMENT-PLAN.md` is the authoritative running record
+(sections 26–32); this file is the short map. Section 32 is the 2026-09-16
+deepen (runtime join, Stage C why/why-not, producer-class authority).
 
 ## What exists and where
 
@@ -11,9 +12,10 @@ running record (sections 26–31 cover the last two days); this file is the shor
 | Two independent Datalog kernels | `claims/evaluator.py` (Python, indexed, semi-naive, proof-carrying), `claims/souffle.py` (Soufflé 2.5 subprocess, bounded) | Differentially compared on every corpus and adversarial case; disagreements produce a minimized replay bundle (`claims/differential.py`, `claims/shrinker.py`). |
 | SCIP → static facts | `claims/static/scip_facts.py` (exporter), `scip/runner.py` (`retain=True`), `claims/static/schema_static_v1.json` (frozen primitives) | Identity of a static bundle = sha256 of the exported relations (`static-relations-v1`); the index file digest is only a run receipt. |
 | Static rule pack + adversarial static corpus | `packages/capabilities/experiments/claim-semantics/static/` | 22 derived relations, 27 rules, 13 reviewed cases; both kernels agree on all 30 claims. |
-| Certificates | `claims/static/certificate.py` | Bounded backward chaining over either engine's rows; identical certificates from Python and Soufflé; `recheck` detects tampering. Ground checker with why/why-not (Stage C) is NOT done. |
+| Certificates + Stage C why/why-not | `claims/static/certificate.py`, `claims/static/ground.py` | Bounded backward chaining over either engine's rows; identical certificates from Python and Soufflé; `recheck` detects tampering **and** unauthorized producer tokens on leaves. `why` / `why_not` / `impact` / `shared_assumptions` are engine-independent and never upgrade unresolved to refuted. |
+| Retained runtime receipt path | `claims/static/runtime_receipt.py` | Loads schema `capcov-target-go-runtime-route/v2`; emits only `target-go-runtime-trace-v2` evidence; join rules `runtime_route_observed_on_index` and `runtime_route_reaches_sql_on_index`. Never synthesizes a fake target-go run. |
 | Cross-check vs. the production resolver | `tests/claim_semantics/test_static_crosscheck_fixpoint.py` | On the go_app fixture, Datalog `static_capability_op` equals `core/fixpoint.bind` with zero differences. |
-| target-go static pilot | `claims/static/pilot.py`, `tests/claim_semantics/target_go/`, section 30 | Real route → SQL path derived in both kernels with certificates; see below. |
+| target-go static + optional runtime pilot | `claims/static/pilot.py`, `tests/claim_semantics/target_go/`, section 30 / 32 | Real route → SQL path derived in both kernels with certificates. Runtime join is skip-gated on `CAPCOV_TARGET_GO_RUNTIME_RECEIPT` + live checkout; fixture-backed correspondence lives in `test_runtime_join_fixture.py` and does **not** require the target-go tree. |
 | Toolchain | `flake.nix` (pinned `scip` 0.9.0, `scip-go` 0.2.7, `souffle` 2.5, Go 1.27, Python 3.12), `tests/scip/canonicalize.jq`, `packages/capabilities/tests/fixtures/scip_go_app_index.json` | `nix flake check` includes a sandboxed scip-go index smoke. |
 | Performance | section 31, `packages/capabilities/benchmarks/claims_evaluator_bench.py`, `capcov/cas.py` | Equijoin 1,000 rows 85 s → 0.13 s; 200-node closure 226 s → 0.72 s. `cas.py` has no caller yet. PR #49 (upstream) covers incremental source hashing. |
 | Pi workflow driver | `.pi/workflows/capcov-experiment.json`, `.pi/extensions/capcov-experiment.ts`, `.pi/workflows/README.md` | Optional orchestration with gates and two reviewers; `CAPCOV_AGENT_BACKEND=codex` supported. Not required; see "How work actually got done". |
@@ -28,18 +30,39 @@ identical across engines; coverage 1,714/1,714 rooted edges, none unrooted on th
 Negative control (route → `SendDueDigests`) is `unresolved`, never `refuted`, because no
 call-graph completeness witness exists. The handler binding is a labelled assumption fact naming
 the router file:line (target-go's `net/http` mux does not match the go_app tree-sitter route query).
-No runtime join was made: there is no retained target-go receipt, and none was fabricated.
 
-Reproduce (about 2–3 minutes, network needed once for Go modules):
+A retained runtime receipt (schema v2, producer `target-go-runtime-trace-v2`) joins the run to the
+index through `index_describes_run` when `CAPCOV_TARGET_GO_RUNTIME_RECEIPT` is set and the receipt's
+`candidate_commit` matches the indexed HEAD. Both kernels then derive
+`runtime_route_reaches_sql_on_index` only when run/request/transaction/surface/index witnesses
+agree. The static certificate (handler → `Tx.ExecContext`) and the runtime certificate (receipt
+leaves + `index_describes_run`) are complementary; they are not one end-to-end proof.
+
+Reproduce the live pilot (about 2–3 minutes, network needed once for Go modules):
 
 ```sh
 cd packages/capabilities
 CAPCOV_GO_FIXTURE_ROOT=/Users/dev/fg/target-go \
+CAPCOV_TARGET_GO_RUNTIME_RECEIPT="$PWD/tests/claim_semantics/target_go/artifacts/runtime-recipient-route.json" \
 nix develop --no-update-lock-file --command bash -lc \
   'PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p "test_target_go_static*.py" -t .'
 ```
 
-Set `CAPCOV_GO_CACHE_ROOT` to a persistent directory to avoid re-downloading modules per run.
+The committed receipt was produced at target-go `01fe913`. Binding it to a different HEAD fails
+closed (commit mismatch). Set `CAPCOV_GO_CACHE_ROOT` to a persistent directory to avoid
+re-downloading modules per run.
+
+Reproduce the fixture-backed correspondence (no target-go tree, no scip-go):
+
+```sh
+cd packages/capabilities
+PYTHONPATH="$PWD/src" python -m unittest \
+  tests.claim_semantics.test_runtime_join_fixture \
+  tests.claim_semantics.test_runtime_producer_authority \
+  tests.claim_semantics.test_ground_certificate
+```
+
+Dual-kernel agreement on the fixture join skips unless `souffle` is on PATH (nix devShell).
 
 ## Two identity traps you will hit if you touch the exporter
 
@@ -53,18 +76,22 @@ Set `CAPCOV_GO_CACHE_ROOT` to a persistent directory to avoid re-downloading mod
 
 - Soufflé computes relational closure only; claim folding, quantifiers, diagnostics, and
   missing-premise rendering are shared Python policy, so differential agreement is weak evidence
-  for those. Engine-independent certificates exist for closure, not for that policy.
-- Producer-class authority (`RelationDecl.producer_classes`) is now enforced at evidence
+  for those. Engine-independent certificates exist for closure; why/why-not is also
+  engine-independent but is not a second claim-folding implementation.
+- Producer-class authority (`RelationDecl.producer_classes`) is enforced at evidence
   ingestion (`evidence-producer` in `claims/validation.py`: the first token of
   `Evidence.source` must be one of the relation's declared classes; an empty tuple is
-  unconstrained, so the frozen static schema is unaffected). Generic rules may still project
-  away non-context causal columns. Owner: `datalog-certificates`.
+  unconstrained, so the frozen static schema is unaffected) and again by `recheck` on
+  certificate leaves. The causal-trace primitives admit only `target-go-runtime-trace-v2`.
+  `runtime_route_observed` stays unconstrained (go_app probe + target-go receipt both write it).
 - Replay minimization is bounded (`max_steps=200`, `shrink_truncated` reported honestly).
 - `scip_references_closed` is emitted only when a tree-sitter call-site census is available;
   tree-sitter is not in the devShell, so on target-go every negative claim stays `unresolved`.
 - The experimental `capcov experiment claims validate|evaluate` CLI does not exist; the claims
-  package is library + tests only. Production commands are untouched.
-- Linux execution of the claim kernels is evaluation-only in the flake; all runs were aarch64-darwin.
+  package is library + tests only. Production commands and `core/reconcile.py` are untouched.
+- Linux execution of the claim kernels is evaluation-only in the flake; most recorded runs
+  were aarch64-darwin. The 2026-09-16 deepen ran on Linux without nix/Soufflé: Python-only
+  gates plus skip-guards. Dual-kernel fixture agreement still needs the pinned Soufflé.
 
 ## How work actually got done, and what to do next time
 
@@ -84,20 +111,11 @@ gate commands must use `PYTHONPATH="$PWD/src"` (absolute) because upstream tests
 
 ## Suggested next steps
 
-1. The first target-go runtime join now exists on `codex/fork-souffle-trial`: a real disposable
-   MariaDB receipt for the recipient route carries the nonce, tenant, request id, candidate
-   commit, HTTP results, terminal SQL state, and zero-resource cleanup. With
-   `CAPCOV_TARGET_GO_RUNTIME_RECEIPT` set to the retained artifact, both kernels support the
-   runtime-route/index claim through `index_describes_run`. The independent static certificate
-   still proves handler -> `Tx.ExecContext`; do not describe the two certificates as one
-   end-to-end proof. Next, promote the receipt producer in target-go and add producer authority.
-   The causal-trace follow-up records ordered route entry, `ChangeSubscription` entry, successful
-   SQL operations, transaction commit and route completion for one request. Both kernels derive
-   `runtime_route_reaches_sql_on_index` only when the run, request, transaction, surface and index
-   witnesses agree. Those primitive relations admit only the `target-go-runtime-trace-v2` producer
-   class. This closes the runtime route-to-SQL caveat for this pilot. Python still owns strict
-   ingestion, IR validation and certificate construction; retire it as an evaluator only after an
-   independent ground-certificate checker exists.
-2. `datalog-certificates`: ground checker + why/why-not, and enforce producer-class authority.
+1. Run the fixture join + producer-authority tests inside `nix develop` so Soufflé agrees on
+   the retained-receipt correspondence (skipped in the 2026-09-16 Linux environment).
+2. Run the live target-go pilot against a checkout whose HEAD equals the receipt's
+   `candidate_commit` (`01fe913` for the committed artifact).
 3. Decide whether the claims package goes to upstream `main` as an opt-in package PR.
 4. Wire `capcov/cas.py` into a consumer or drop it; it currently has no caller.
+5. Stage D Shen workbench remains open; Python still owns ingestion, IR validation, claim
+   folding, and certificate construction. Soufflé is not the sole evaluator.
