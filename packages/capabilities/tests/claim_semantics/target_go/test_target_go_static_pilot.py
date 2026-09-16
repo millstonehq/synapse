@@ -45,6 +45,7 @@ from capcov.claims.evaluator import ResourceLimits
 from capcov.claims.static import pilot, scip_facts
 from capcov.claims.static.certificate import certify, claim_conclusions, recheck, rules_digest
 from capcov.claims.static.combine import combine
+from capcov.claims.static.ground import shared_assumptions, why
 from capcov.claims.static.runtime_receipt import (load_runtime_receipt, runtime_bundle)
 from capcov.scip import runner
 
@@ -319,6 +320,7 @@ class FgGoStaticPilotTest(unittest.TestCase):
         verdicts = {c.key: {"semantic": c.semantic, "operational": c.operational, "basis": c.basis,
                             "missing_premises": list(c.missing_premises)} for c in report.claims}
         certificates: dict[str, dict] = {}
+        explanations: dict[str, dict] = {}
         chain: dict[str, list[list[str]]] = {}
         if cls.result is not None:
             for claim in cls.claims:
@@ -329,6 +331,10 @@ class FgGoStaticPilotTest(unittest.TestCase):
                     continue
                 cert = certify(cls.bundle, relations, claim.relation, rows[0])
                 certificates[claim.id] = cert
+                explanation = why(cls.bundle, relations, claim.relation, rows[0])
+                explanation["shared_assumptions"] = list(shared_assumptions(cls.bundle, cert))
+                explanations[claim.id] = {key: value for key, value in explanation.items()
+                                          if key != "certificate"}
                 chain[claim.id] = [list(edge) for edge in _edge_chain(cert["derivation"] or {}, [])]
                 (cls.out_dir / f"certificate-{claim.id}.json").write_text(
                     json.dumps(cert, indent=1, sort_keys=True) + "\n", encoding="utf-8")
@@ -378,6 +384,7 @@ class FgGoStaticPilotTest(unittest.TestCase):
                                         "steps": cert["steps"], "nodes": cert["nodes"],
                                         "leaves": len(cert["leaves"]), "truncated": cert["truncated"]}
                              for claim_id, cert in certificates.items()},
+            "explanations": explanations,
             "coverage": {**cls.coverage.receipt(), "route_closure_symbols": len(closure),
                          "unrooted_on_route_closure": unrooted_closure, "deep_unresolved": deep_unresolved},
             "outcome": outcome, "outcome_reasons": reasons,

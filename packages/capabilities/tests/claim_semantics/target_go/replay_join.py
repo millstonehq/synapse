@@ -32,6 +32,7 @@ from capcov.claims.differential import DifferentialMismatch, compare  # noqa: E4
 from capcov.claims.replay import replay_facts  # noqa: E402
 from capcov.claims.static.certificate import certify, claim_conclusions, recheck  # noqa: E402
 from capcov.claims.static.combine import combine  # noqa: E402
+from capcov.claims.static.ground import shared_assumptions, why, why_not  # noqa: E402
 
 try:
     from ..replay_rules.adapter import pack_bundle
@@ -148,6 +149,11 @@ def blocking_premise(relations, run: str, op: str, index: str = SYNTHETIC_INDEX)
         if not is_blocker and not present:
             return {"relation": name, "holds": False}
     return {"relation": "op_qualified_rt", "holds": False}
+
+
+def _explanation_summary(explanation: dict[str, Any]) -> dict[str, Any]:
+    """Persist the reviewable proof walk, not a duplicate embedded certificate."""
+    return {key: value for key, value in explanation.items() if key != "certificate"}
 
 
 def _fact(decls, relation: str, values: dict[str, Any], evidence_id: str, source: str, *,
@@ -354,6 +360,17 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
                  "exclusions_applied": applied,
                  "assumption_leaves": len(assumption_leaves),
                  "assumption_leaf_ids": assumption_leaves}
+        target = (SYNTHETIC_INDEX, join.run, op)
+        if qualified.get("semantic") == "supported":
+            explanation = why(join.bundle, relations, "op_qualified", target)
+            explanation["shared_assumptions"] = list(
+                shared_assumptions(join.bundle, explanation["certificate"]))
+        else:
+            # Explain the actual gate body.  Asking why-not of the thin
+            # op_qualified wrapper would only say op_qualified_rt is absent
+            # and hide the useful missing or blocking premise beneath it.
+            explanation = why_not(join.bundle, relations, "op_qualified_rt", target)
+        entry["explanation"] = _explanation_summary(explanation)
         if blocking and blocking["relation"] == "undeclared_any":
             entry["blocked_by"] = "blocked by undeclared writes: " + json.dumps(tables, sort_keys=True)
             entry["undeclared_tables"] = tables
