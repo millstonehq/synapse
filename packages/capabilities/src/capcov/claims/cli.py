@@ -20,12 +20,26 @@ The assumption registry (``claims/assumptions.py``) is reached the same way::
 
 ``registry`` judges a replay receipt with the target-go join and prints the A2
 registry document; ``invalidate`` additionally withdraws each ``--drop``
-assumption (an ``asm:`` id or the evidence id of an assumption row), prints one
-A3 document per drop and, with ``--out``, writes ``assumptions.json`` and
+assumption (an ``asm:`` id or the evidence id of an assumption row -- either
+way every record attesting that assumption is withdrawn), prints one A3
+document per drop and, with ``--out``, writes ``assumptions.json`` and
 ``invalidation-<id12>.json`` beside the join's ``receipt.json``.  Exit 0 when
 the documents were produced, 2 for a refusal (the exporter refused the receipt,
 an unknown id, or a withdrawal that would refute a claim), 3 when the two
 kernels disagree on the withdrawn bundle (the replay path is printed).
+
+Two shapes a consumer has to know, stated here because they are the contract:
+
+* stdout is a **wrapper**, not a bare document: ``{"registry": <A2>}`` for
+  ``registry`` and ``{"registry": <A2>, "invalidations": [<A3>, ...]}`` for
+  ``invalidate``.  ``--out DIR`` writes the bare documents as files.
+* ``--receipt`` is optional and **defaults to the committed fixture receipt**
+  (``CAPCOV_REPLAY_RECEIPT_DIR`` overrides it).  A bare invocation therefore
+  judges the fixture rather than refusing; pass ``--receipt`` to judge a run.
+
+Both assumption commands import the target-go join from ``tests/claim_semantics``
+beside this package, so they run from a source checkout and not from an
+installed wheel (``_join_module`` refuses with exit 2 when it is absent).
 """
 from __future__ import annotations
 
@@ -83,7 +97,11 @@ def _common(parser: argparse.ArgumentParser, *, need_row: bool) -> None:
 
 
 def _join_module():
-    """The target-go replay join lives beside its fixtures, under ``tests/claim_semantics``."""
+    """The target-go replay join lives beside its fixtures, under ``tests/claim_semantics``.
+
+    Source-checkout only, deliberately: the join carries the experiment's
+    fixtures and is not part of the installed package.
+    """
     tests = Path(__file__).resolve().parents[3] / "tests" / "claim_semantics"
     if not (tests / "target_go" / "replay_join.py").is_file():
         raise FileNotFoundError(f"the replay join was not found under {tests}")
@@ -95,6 +113,7 @@ def _join_module():
 
 def _assumptions(args: argparse.Namespace) -> int:
     """``claims assumptions registry|invalidate`` over a replay receipt directory."""
+    import shutil
     import tempfile
 
     from .assumptions import InvalidationError
@@ -109,33 +128,51 @@ def _assumptions(args: argparse.Namespace) -> int:
     if receipt is None or not (receipt / "receipt.json").is_file():
         _emit({"refusal": "no receipt directory (pass --receipt DIR)"}, args.out)
         return 2
+    owned = args.replay_root is None
     replay_root = args.replay_root or tempfile.mkdtemp(prefix="capcov-assumptions-")
+    # a kernel disagreement is the one outcome whose evidence lives in the
+    # replay root, so that is the one case an owned temporary root survives
+    keep = False
     try:
-        join = replay_join.build(receipt)
-        if join.bundle is None:
-            _emit({"refusal": "the exporter refused the receipt",
-                   "contract_findings": list(join.contract_findings)}, args.out)
-            return 2
-        replay_join.evaluate_join(join, replay_root)
-        if join.mismatch is not None:
-            _emit({"kernel_mismatch": "the kernels disagree on the join",
-                   "replay": str(join.mismatch.replay_path)}, args.out)
+        try:
+            join = replay_join.build(receipt)
+            if join.bundle is None:
+                _emit({"refusal": "the exporter refused the receipt",
+                       "contract_findings": list(join.contract_findings)}, args.out)
+                return 2
+            replay_join.evaluate_join(join, replay_root)
+            if join.mismatch is not None:
+                keep = True
+                _emit({"kernel_mismatch": "the kernels disagree on the join",
+                       "replay": str(join.mismatch.replay_path)}, args.out)
+                return 3
+            document: dict[str, Any] = {"registry": replay_join.assumption_registry(join)}
+            if args.command == "invalidate":
+                document["invalidations"] = [replay_join.invalidate(join, drop, replay_root).as_dict()
+                                             for drop in args.drop]
+        except DifferentialMismatch as exc:
+            keep = True
+            _emit({"kernel_mismatch": "the kernels disagree on the withdrawn bundle",
+                   "replay": str(exc.result.replay_path)}, args.out)
             return 3
-        document: dict[str, Any] = {"registry": replay_join.assumption_registry(join)}
-        if args.command == "invalidate":
-            document["invalidations"] = [replay_join.invalidate(join, drop, replay_root).as_dict()
-                                         for drop in args.drop]
-    except DifferentialMismatch as exc:
-        _emit({"kernel_mismatch": "the kernels disagree on the withdrawn bundle",
-               "replay": str(exc.result.replay_path)}, args.out)
-        return 3
-    except InvalidationError as exc:
-        _emit({"refusal": str(exc)}, args.out)
-        return 2
-    if args.out:
-        replay_join.write_artifacts(join, Path(args.out))
-    _emit(document, None)
-    return 0
+        except AssertionError as exc:
+            # certify_claims: the kernels agree on the rows but not on the claim
+            # rows or the certificates of the withdrawn bundle -- a judge with
+            # two answers has none, so this is exit 3 like any other mismatch
+            keep = True
+            _emit({"kernel_mismatch": "the kernels disagree on the claims of the withdrawn bundle",
+                   "error": str(exc), "replay": replay_root}, args.out)
+            return 3
+        except (InvalidationError, ValidationError) as exc:
+            _emit({"refusal": str(exc)}, args.out)
+            return 2
+        if args.out:
+            replay_join.write_artifacts(join, Path(args.out))
+        _emit(document, None)
+        return 0
+    finally:
+        if owned and not keep:
+            shutil.rmtree(replay_root, ignore_errors=True)
 
 
 def main(argv: list[str]) -> int:
