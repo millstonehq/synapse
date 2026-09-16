@@ -4,8 +4,8 @@ The validated pack (replay or static) translates to a Souffle program whose
 text is fact-independent (``program_for_pack``).  ``compile_program``
 compiles that program once with ``souffle --no-preprocessor -j1 -o`` into a
 native binary cached by ``compile_key`` = sha256 of (schema, program digest,
-souffle executable sha256, compile flags), and records ``provenance.json``
-next to it.  ``run_compiled`` then executes the binary on a bundle's TSV facts
+souffle executable sha256, compile flags, ``souffle-compile.py`` sha256), and
+records ``provenance.json`` next to it.  ``run_compiled`` then executes the binary on a bundle's TSV facts
 through the same temp-root / parse / claim-fold path the interpreter uses
 (``souffle._execute``), so the two Souffle kernels differ only in the process
 that computes the closure.
@@ -106,10 +106,18 @@ class CompiledChecker:
 
 
 def compile_key(program_digest: str, souffle_sha256: str,
-                flags: Iterable[str] = COMPILE_FLAGS) -> str:
-    """64-hex identity of a compiled checker: program, compiler bytes and flags."""
+                flags: Iterable[str] = COMPILE_FLAGS, *,
+                compiler_config_sha256: str = "") -> str:
+    """64-hex identity of a compiled checker: program, compiler and flags.
+
+    ``compiler_config_sha256`` is the sha256 of ``souffle-compile.py``, which
+    embeds the C++ toolchain the binary is actually built with: two toolchains
+    that share a souffle executable are two cache entries, and the recorded
+    ``compile_key`` binds the compiler as well as the program.
+    """
     basis = {"schema": PROGRAM_SCHEMA, "program_digest": program_digest,
-             "souffle_sha256": souffle_sha256, "compile_flags": list(flags)}
+             "souffle_sha256": souffle_sha256, "compile_flags": list(flags),
+             "compiler_config_sha256": compiler_config_sha256}
     return hashlib.sha256(canonical_json(basis).encode("utf-8")).hexdigest()
 
 
@@ -256,7 +264,8 @@ def compile_program(program: SouffleProgram, *, executable: str = "souffle",
     souffle_sha256 = identity["sha256"]
     souffle_path = identity["path"]
     compiler_config = _compiler_config_sha256(resolved)
-    key = compile_key(program.program_digest, souffle_sha256, COMPILE_FLAGS)
+    key = compile_key(program.program_digest, souffle_sha256, COMPILE_FLAGS,
+                      compiler_config_sha256=compiler_config)
     expected = {
         "schema": PROGRAM_SCHEMA, "compile_key": key, "program_digest": program.program_digest,
         "souffle_sha256": souffle_sha256, "souffle_version": _souffle_version(resolved),

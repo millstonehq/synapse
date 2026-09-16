@@ -117,9 +117,13 @@ class CompileKeyTests(unittest.TestCase):
         self.assertNotEqual(base, compiled.compile_key("c" * 64, souffle_sha))
         self.assertNotEqual(base, compiled.compile_key(program, "c" * 64))
         self.assertNotEqual(base, compiled.compile_key(program, souffle_sha, ("--no-preprocessor", "-j2", "-o")))
+        # the C++ toolchain is part of the identity: souffle-compile.py embeds it
+        self.assertNotEqual(base, compiled.compile_key(program, souffle_sha,
+                                                       compiler_config_sha256="d" * 64))
         expected = hashlib.sha256(canonical_json({
             "schema": "capcov-souffle-compiled-v1", "program_digest": program,
             "souffle_sha256": souffle_sha, "compile_flags": ["--no-preprocessor", "-j1", "-o"],
+            "compiler_config_sha256": "",
         }).encode("utf-8")).hexdigest()
         self.assertEqual(base, expected)
         self.assertEqual(souffle.PROGRAM_SCHEMA, "capcov-souffle-compiled-v1")
@@ -211,7 +215,9 @@ class CompileProgramTests(unittest.TestCase):
         self.assertEqual(_FakeCompiler.calls, [[str(self.executable), "--no-preprocessor", "-j1", "-o",
                                                 "checker", "program.dl"]])
         souffle_sha = hashlib.sha256(b"fake souffle bytes\n").hexdigest()
-        key = compiled.compile_key(self.program.program_digest, souffle_sha)
+        config_sha = hashlib.sha256(b"compiler = '/fake/clang++'\n").hexdigest()
+        key = compiled.compile_key(self.program.program_digest, souffle_sha,
+                                   compiler_config_sha256=config_sha)
         entry = self.cache_dir / f"compiled-{key}"
         self.assertEqual(sorted(p.name for p in entry.iterdir()), ["checker", "provenance.json"])
         self.assertEqual(Path(checker.binary_path), entry / "checker")
