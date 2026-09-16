@@ -681,3 +681,37 @@ def same_artifact(a: dict, b: dict) -> tuple[bool, str]:
         f"static ran against {ah or '<none>'}, runtime against {bh or '<none>'}. "
         "Re-run both against the same tree; a diff across two trees is not a finding."
     )
+
+# --- SCIP fact exporter helpers (experiment/claim-semantics) -----------------
+# The static-claim exporter needs the file list itself (which files *should*
+# have been indexed) and the tree digest, walking the tree exactly once and
+# exactly the way the digest did.  Built on ``snapshot_tree`` so the incremental
+# cache and the digest formula are shared, not duplicated.
+
+def patterns_for(language: str) -> tuple[str, ...]:
+    """The glob set a tree of ``language`` is hashed over.
+
+    Raises ``KeyError`` for a language with no pattern set rather than falling
+    back to the Python default: hashing a Go tree as ``**/*.py`` yields the
+    empty manifest, a digest that would agree across every Go tree.
+    """
+    if language not in LANGUAGE_PATTERNS:
+        raise KeyError(language)
+    return (LANGUAGE_PATTERNS[language],)
+
+
+def tree_manifest(
+    root: Path, patterns: tuple[str, ...] = DEFAULT_PATTERNS, *,
+    cache_dir: Path | str | None = None,
+) -> list[tuple[str, str]]:
+    """The sorted ``(tree-relative posix path, sha256)`` manifest ``tree_sha256``
+    hashes, from one snapshot walk."""
+    return list(snapshot_tree(root, patterns, cache_dir=cache_dir).entries)
+
+
+def manifest_sha256(entries: list[tuple[str, str]]) -> str:
+    """The tree digest of a ``tree_manifest``: sha256 over ``"<path> <sha256>"``
+    lines sorted by path -- the formula ``snapshot_tree`` uses, so a consumer
+    holding the manifest reproduces the digest without a second walk."""
+    manifest = "\n".join(sorted(set(f"{rel} {digest}" for rel, digest in entries)))
+    return hashlib.sha256(manifest.encode()).hexdigest()
