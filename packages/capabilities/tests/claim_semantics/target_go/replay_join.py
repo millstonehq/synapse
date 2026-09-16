@@ -27,7 +27,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from capcov.claims import (Atom, Bundle, Claim, Constant, Context, DiagnosticRule, Evidence,  # noqa: E402
-                           OutputTemplate, TemplateValue, canonical_json)
+                           OutputTemplate, TemplateValue, Variable, canonical_json)
 from capcov.claims.differential import DifferentialMismatch, compare  # noqa: E402
 from capcov.claims.replay import replay_facts  # noqa: E402
 from capcov.claims.static.certificate import certify, claim_conclusions, recheck  # noqa: E402
@@ -50,6 +50,17 @@ REASONS = {
     "model_observed": "the receipt names no model, so the reviewer has no model digest to observe",
     "model_admissible_closed": "the receipt names no model, so no admissible-state set is closed",
 }
+UNDECLARED_REASON = "blocked by undeclared writes: PHP or Go wrote a table the model's closed write set does not declare for this op"
+# The premises op_qualified_rt needs, in the order a reviewer checks them; the
+# first one that fails (or the first "any" that holds) is the blocking premise.
+_BLOCKING_ORDER = (
+    ("replay_run_current", False), ("model_describes_run", False), ("replayed", False), ("op_exercised", False),
+    ("corpus_constrains", False), ("php_disagreement_closed", False), ("php_disagree_any", True),
+    ("go_disagreement_closed", False), ("go_disagree_any", True), ("undeclared_writes_closed", False),
+    ("undeclared_any", True), ("post_state_gap_closed", False), ("post_state_any", True),
+    ("kill_gap_closed", False), ("kill_closure_gap_any", True), ("index_describes_replay", False),
+    ("op_declared", False),
+)
 
 
 def receipt_dir() -> Path | None:
@@ -59,6 +70,51 @@ def receipt_dir() -> Path | None:
 
 def _row_id(prefix: str, segment: str, relation: str, row: list[Any]) -> str:
     return f"{prefix}:{segment}:{relation}:{replay_facts.row_digest(relation, row)[:12]}"
+
+
+def _values(decls, relation: str, row) -> dict[str, Any]:
+    return dict(zip((column.name for column in decls[relation].columns), row))
+
+
+def undeclared_tables(relations, decls, run: str, op: str) -> dict[str, list[str]]:
+    """Per side, the tables ``undeclared_write(run, op, _)`` names that that side wrote for a request of ``op``."""
+    rows = dict(relations) if not isinstance(relations, dict) else relations
+    undeclared = {r[2] for r in rows.get("undeclared_write", ()) if r[0] == run and r[1] == op}
+    requests = {r[1] for r in rows.get("replay_request", ()) if r[0] == run and r[4] == op}
+    out = {}
+    for side in ("php", "go"):
+        written = {r[2] for r in rows.get(f"{side}_effect", ()) if r[0] == run and r[1] in requests}
+        out[side] = sorted(undeclared & written)
+    return out
+
+
+def blocking_premise(relations, run: str, op: str, index: str = SYNTHETIC_INDEX) -> dict[str, Any] | None:
+    """The first premise of op_qualified that blocks ``op`` in ``run``, or ``None`` when it is qualified."""
+    rows = dict(relations) if not isinstance(relations, dict) else relations
+    if any(r[0] == index and r[1] == run and r[2] == op for r in rows.get("op_qualified", ())):
+        return None
+
+    def holds(name: str) -> bool:
+        for r in rows.get(name, ()):
+            if name == "op_declared" and r == (index, op):
+                return True
+            if name == "index_describes_replay" and r == (index, run):
+                return True
+            if name in ("replay_run_current", "kill_gap_closed") and r == (run,):
+                return True
+            if name == "model_describes_run" and r[1] == run:
+                return True
+            if r[:2] == (run, op):
+                return True
+        return False
+
+    for name, is_blocker in _BLOCKING_ORDER:
+        present = holds(name)
+        if is_blocker and present:
+            return {"relation": name, "holds": True}
+        if not is_blocker and not present:
+            return {"relation": name, "holds": False}
+    return {"relation": "op_qualified_rt", "holds": False}
 
 
 def _fact(decls, relation: str, values: dict[str, Any], evidence_id: str, source: str, *,
@@ -138,13 +194,36 @@ def build(directory: Path) -> ReplayJoin:
     present = {record.atom.relation: record.id for record in exported.bundle.evidence
                if record.atom.relation in MODEL_WITNESSES}
     present.update({record.atom.relation: record.id for _, record in additions if record.atom.relation in MODEL_WITNESSES})
+    # the effect rows the model's closed write set does not cover, per op (what
+    # the undeclared_write rules will derive from), so the why-not can name them
+    exported_rows = {name: [] for name in ("replay_request", "php_effect", "go_effect", "model_writes", "model_writes_closed")}
+    evidence_of: dict[tuple[str, tuple], str] = {}
+    for record in exported.bundle.evidence:
+        if record.atom.relation in exported_rows:
+            row = tuple(term.value for term in record.atom.terms)
+            exported_rows[record.atom.relation].append(row)
+            evidence_of[(record.atom.relation, row)] = record.id
+    declared = {(r[1], r[2]) for r in exported_rows["model_writes"]}
+    closed_ops = {r[1] for r in exported_rows["model_writes_closed"]}
     claims, diagnostics, outputs = [], [], []
     for op in ops:
         qualified = Claim("op_qualified", (Constant(SYNTHETIC_INDEX, "digest"), Constant(run, "symbol"), Constant(op, "symbol")),
                           Context.from_mapping({"index": SYNTHETIC_INDEX, "run": run}), id=join.claim_id("qualified", op))
         constrains = Claim("corpus_constrains", (Constant(run, "symbol"), Constant(op, "symbol")),
                            Context.from_mapping({"run": run}), id=join.claim_id("corpus-constrains", op))
-        claims.extend([qualified, constrains])
+        undeclared = Claim("undeclared_write", (Constant(run, "symbol"), Constant(op, "symbol"), Variable("table")),
+                           Context.from_mapping({"run": run}), id=join.claim_id("undeclared-write", op))
+        claims.extend([qualified, constrains, undeclared])
+        requests = {r[1] for r in exported_rows["replay_request"] if r[4] == op}
+        offending = [evidence_of[(side, row)] for side in ("php_effect", "go_effect") for row in exported_rows[side]
+                     if row[1] in requests and op in closed_ops and (op, row[2]) not in declared]
+        if offending:
+            for side in ("php_effect", "go_effect"):
+                diagnostics.append(DiagnosticRule(side, "observation", "complete", ("run",), claim_id=qualified.id))
+            outputs.append(OutputTemplate(
+                "missing_premise", qualified.id, relation="model_writes",
+                fields=(("reason", TemplateValue("constant", "", "symbol", UNDECLARED_REASON)),),
+                requires_any_evidence=tuple(sorted(offending)), when_claim="unresolved"))
         for relation in MODEL_WITNESSES:
             context = ("run",) if relation != "model_observed" else ()
             diagnostics.append(DiagnosticRule(relation, "observation", "complete", context, claim_id=qualified.id))
@@ -206,14 +285,25 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
         "assumptions": list(join.assumption_ids),
         "ops": list(join.ops),
     }
+    relations = dict(join.report().relations) if join.report() is not None else {}
     for op in join.ops:
         constrains = join.verdict(join.claim_id("corpus-constrains", op)) or {}
         qualified = join.verdict(join.claim_id("qualified", op)) or {}
-        out[op] = {"corpus_constrains": constrains.get("semantic") == "supported",
-                   "op_qualified": qualified.get("semantic"),
-                   "operational": qualified.get("operational"),
-                   "missing_premise": [json.loads(item)["relation"] if item.startswith("{") else item
-                                       for item in qualified.get("missing_premises", [])]}
+        undeclared = join.verdict(join.claim_id("undeclared-write", op)) or {}
+        blocking = blocking_premise(relations, join.run, op) if relations else None
+        tables = undeclared_tables(relations, None, join.run, op) if relations else {}
+        entry = {"corpus_constrains": constrains.get("semantic") == "supported",
+                 "op_qualified": qualified.get("semantic"),
+                 "operational": qualified.get("operational"),
+                 # template-rendered absent leaves; the evaluator's claim-id fallback is never reported here
+                 "missing_premise": [json.loads(item)["relation"] for item in qualified.get("missing_premises", [])
+                                     if item.startswith("{")],
+                 "undeclared_write": undeclared.get("semantic"),
+                 "blocking_premise": blocking}
+        if blocking and blocking["relation"] == "undeclared_any":
+            entry["blocked_by"] = "blocked by undeclared writes: " + json.dumps(tables, sort_keys=True)
+            entry["undeclared_tables"] = tables
+        out[op] = entry
     return out
 
 
@@ -250,4 +340,4 @@ def write_artifacts(join: ReplayJoin, out_dir: Path) -> dict[str, Any]:
 
 
 __all__ = ["RECEIPT_DIR_ENV", "OUT_ENV", "SYNTHETIC_INDEX", "ReplayJoin", "receipt_dir", "build", "evaluate_join",
-           "summary", "write_artifacts"]
+           "summary", "write_artifacts", "blocking_premise", "undeclared_tables"]

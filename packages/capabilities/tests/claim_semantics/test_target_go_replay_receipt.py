@@ -142,6 +142,13 @@ class _JoinCase(unittest.TestCase):
     out_dir: Path
     join: replay_join.ReplayJoin
 
+    def _undeclared(self) -> dict[str, dict[str, list[str]]]:
+        relations = dict(self.join.result.python.relations)
+        return {op: replay_join.undeclared_tables(relations, None, self.join.run, op) for op in self.join.ops}
+
+    def _expect_qualified(self, op: str) -> bool:
+        return not any(self._undeclared()[op].values())
+
     @classmethod
     def _setup(cls, directory: Path, out_dir: Path) -> None:
         cls.directory = directory
@@ -217,10 +224,77 @@ class _JoinCase(unittest.TestCase):
             if entry.claim.relation == "corpus_constrains":
                 self.assertEqual(sorted(entry.result.support), self.join.certificates[entry.claim.id]["leaves"])
 
+    def check_agreement_and_corpus_hygiene(self) -> None:
+        self._evaluated()
+        relations = dict(self.join.result.python.relations)
+        self.assertEqual(relations["php_model_disagree"], ())
+        self.assertEqual(relations["go_model_disagree"], ())
+        self.assertEqual(relations["surviving_mutant"], ())
+        self.assertEqual(relations["post_state_gap"], ())
+        self.assertEqual(relations["kill_closure_gap"], ())
+        self.assertEqual(relations["replay_run_current"], ((self.join.run,),))
+        for op in self.join.ops:
+            self.assertIn((self.join.run, op), set(relations["op_exercised"]))
+            self.assertIn((self.join.run, op), set(relations["php_disagreement_closed"]))
+            self.assertIn((self.join.run, op), set(relations["undeclared_writes_closed"]))
+
+    def check_undeclared_writes(self) -> None:
+        """The companion undeclared_write claim states the actual write-set gap, side by side."""
+        self._evaluated()
+        relations = dict(self.join.result.python.relations)
+        for op in self.join.ops:
+            claim_id = self.join.claim_id("undeclared-write", op)
+            tables = self._undeclared()[op]
+            derived = {row[2] for row in relations["undeclared_write"] if row[1] == op}
+            print(f"\n{self.join.receipt_dir.name} {op}: undeclared tables php={tables['php']} go={tables['go']}")
+            with self.subTest(op=op):
+                verdicts = {report.backend: next(c.semantic for c in report.claims if c.key == claim_id)
+                            for report in (self.join.result.python, self.join.result.souffle)}
+                if derived:
+                    self.assertEqual(set(verdicts.values()), {"supported"}, verdicts)
+                    self.assertTrue(tables["php"] or tables["go"])
+                    self.assertEqual(set(tables["php"]) | set(tables["go"]), derived)
+                    self.assertNotIn("issue", derived, "the model declares the issue write")
+                    for side in ("php", "go"):
+                        self.assertTrue(set(tables[side]) <= derived)
+                    self.assertIn(claim_id, self.join.certificates)
+                    blocking = replay_join.blocking_premise(relations, self.join.run, op)
+                    self.assertEqual(blocking, {"relation": "undeclared_any", "holds": True})
+                else:
+                    self.assertEqual(set(verdicts.values()), {"unresolved"}, verdicts)
+                    self.assertEqual(tables, {"php": [], "go": []})
+
+    def check_not_qualified_naming_the_blocker(self) -> None:
+        """Where the write-set gap exists, op_qualified is unresolved and the why-not names it."""
+        self._evaluated()
+        for op in self.join.ops:
+            if self._expect_qualified(op):
+                continue
+            claim_id = self.join.claim_id("qualified", op)
+            with self.subTest(op=op):
+                for report in (self.join.result.python, self.join.result.souffle):
+                    claim = next(c for c in report.claims if c.key == claim_id)
+                    self.assertEqual((claim.semantic, claim.operational), ("unresolved", "complete"), report.backend)
+                    named = [json.loads(item)["relation"] for item in claim.missing_premises if item.startswith("{")]
+                    self.assertEqual(named, ["model_writes"], claim.missing_premises)
+                    self.assertFalse(any(item.startswith("claim:") for item in claim.missing_premises),
+                                     "the evaluator's claim-id fallback must not be the why-not")
+                entry = replay_join.summary(self.join)[op]
+                self.assertEqual(entry["op_qualified"], "unresolved")
+                self.assertEqual(entry["missing_premise"], ["model_writes"])
+                self.assertEqual(entry["blocking_premise"], {"relation": "undeclared_any", "holds": True})
+                self.assertTrue(entry["blocked_by"].startswith("blocked by undeclared writes: "))
+                self.assertEqual(entry["undeclared_tables"], self._undeclared()[op])
+        self.assertEqual({row[2] for row in dict(self.join.result.python.relations)["op_qualified"]},
+                         {op for op in self.join.ops if self._expect_qualified(op)})
+
     def check_qualified(self) -> None:
         self._evaluated()
         by_id = {record.id: record for record in self.join.bundle.evidence}
         for op in self.join.ops:
+            if not self._expect_qualified(op):
+                self.skipTest(f"{op}: awaiting model write-set for PHP bookkeeping tables "
+                              f"(undeclared: {self._undeclared()[op]})")
             claim_id = self.join.claim_id("qualified", op)
             with self.subTest(op=op):
                 for report in (self.join.result.python, self.join.result.souffle):
@@ -250,8 +324,17 @@ class _JoinCase(unittest.TestCase):
                 self.assertNotIn(value, text)
         if self.join.result is not None:
             for op in self.join.ops:
-                self.assertTrue(document["join"][op]["corpus_constrains"])
-                self.assertEqual(document["join"][op]["op_qualified"], "supported")
+                entry = document["join"][op]
+                self.assertTrue(entry["corpus_constrains"])
+                if self._expect_qualified(op):
+                    self.assertEqual(entry["op_qualified"], "supported")
+                    self.assertIsNone(entry["blocking_premise"])
+                else:
+                    self.assertEqual(entry["op_qualified"], "unresolved")
+                    self.assertEqual(entry["blocking_premise"]["relation"], "undeclared_any")
+                    self.assertEqual(entry["missing_premise"], ["model_writes"])
+                    self.assertIn("blocked by undeclared writes: ", entry["blocked_by"])
+                    self.assertNotIn("claim:", json.dumps(entry))
 
 
 class FixtureJoinTest(_JoinCase):
@@ -273,6 +356,12 @@ class FixtureJoinTest(_JoinCase):
 
     def test_qualified(self) -> None:
         self.check_qualified()
+        self.assertEqual(self._undeclared(), {op: {"php": [], "go": []} for op in self.join.ops})
+
+    def test_hygiene_and_no_undeclared_writes(self) -> None:
+        self.check_agreement_and_corpus_hygiene()
+        self.check_undeclared_writes()
+        self.check_not_qualified_naming_the_blocker()
 
     def test_artifacts(self) -> None:
         self.check_artifacts()
@@ -293,8 +382,10 @@ class FixtureJoinTest(_JoinCase):
             if entry.claim.relation == "op_qualified":
                 self.assertEqual(entry.result.semantic.value, "unresolved")
                 self.assertEqual([item["relation"] for item in entry.result.missing_premises], ["model_observed"])
-            else:
+            elif entry.claim.relation == "corpus_constrains":
                 self.assertEqual(entry.result.semantic.value, "supported")
+            else:  # the undeclared_write companion: nothing undeclared on the clean fixture
+                self.assertEqual(entry.result.semantic.value, "unresolved")
 
 
 @unittest.skipUnless(RECEIPT_DIR is not None, f"needs {replay_join.RECEIPT_DIR_ENV}")
@@ -319,7 +410,20 @@ class RealReceiptTest(_JoinCase):
     def test_the_corpus_constrains_every_replayed_op_in_both_kernels(self) -> None:
         self.check_corpus_constrains()
 
+    def test_php_and_go_agree_with_the_model_and_no_mutant_survives(self) -> None:
+        self.check_agreement_and_corpus_hygiene()
+
+    def test_undeclared_writes_are_the_actual_write_set_gap_per_side(self) -> None:
+        self.check_undeclared_writes()
+        tables = self._undeclared()["delete-issue"]
+        self.assertTrue(tables["php"], "PHP bookkeeping writes the model does not declare")
+        self.assertTrue(tables["go"], "Go bookkeeping writes the model does not declare")
+
+    def test_delete_issue_is_not_qualified_and_the_why_not_names_the_undeclared_writes(self) -> None:
+        self.check_not_qualified_naming_the_blocker()
+
     def test_delete_issue_is_qualified_with_leaves_from_every_producer(self) -> None:
+        # conditional: passes only once the model's write set covers the bookkeeping tables
         self.check_qualified()
 
     def test_artifacts_carry_digests_and_verdicts_only(self) -> None:
