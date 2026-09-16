@@ -1125,6 +1125,167 @@ capcov experiment claims shen why-not ...
 
 **Exit criterion:** Shen performs real elaboration and search, emits a portable certificate, and the independent checker catches planted invalid certificates. Concrete tooling failure is reported as a failed milestone, never mocked.
 
+### 2026-09-15 Stage D record — executable Shen workbench
+
+**Status: milestone met on the pinned runtime; no part mocked.** The Shen side
+elaborates the rule pack, runs the structural authority checks, computes the
+stratified closure of the bundle's ground facts, searches a bounded derivation,
+emits a `capcov-static-certificate-v1` certificate that the independent Python
+checker accepts unchanged, and emits bounded why-not alternatives. Python only
+translates (`claims/shen.py`); `evaluator.py` is used by the tests solely as the
+comparison oracle for the Python extractor's certificate, never by the adapter.
+
+Files: `packages/capabilities/shen/claim-workbench.shen` (runtime, elaboration,
+closure, derivation search, why-not), `shen/rule-authority.shen` (authority
+checks, frozen elaborated pack), `shen/certificate-output.shen` (certificate and
+envelope rendering); `src/capcov/claims/shen.py` (transport: `authority`,
+`evaluate`, `derive`, `why_not`, `ShenUnavailable`, `ShenFailure`,
+`NotDerivable`); `src/capcov/claims/cli.py` wired only through the new
+top-level `experiment` pre-parse dispatch in `src/capcov/cli.py`
+(`capcov experiment claims shen authority|evaluate|why-not`; production
+argparse untouched, `tests/test_cli_engine.py` 19 tests OK, 1 skipped);
+`tests/claim_semantics/test_shen_workbench.py`, `test_shen_transport.py`.
+
+Runtime provenance (recorded by every run in `provenance.runtime`):
+
+- shen-go built from `pyrex41/shen-go` `c12933d`, binary
+  `/Users/dev/projects/capcov/.capcov/shen-go-c12933d/shen-go`, sha256
+  `05cac13837e0a78ca207030540721468e13d910979692cb9c1c4b9280f72a29d`;
+  `--version` prints `42 (port ("Go" "1.0.0-rc1") implementation ("AOT+interpreter" "go1.27.0"))`.
+- launcher `pyrex41/bifrost` `3027741c6e8830f01c0c4ce23cc615134d73481b` at
+  `/Users/dev/.local/bin/bifrost`; invocation form, used consistently:
+  `BIFROST_SHEN_GO=<binary> bifrost run --impl shen-go --raw <driver.shen>`
+  (`--raw` because the launcher otherwise trims output; result block delimited
+  by whole-line markers `<<<CAPCOV-SHEN-JSON-BEGIN>>>` / `...-END>>>`).
+- every call: stdin `/dev/null`, stdout/stderr captured, own process group,
+  hard timeout (default 60 s, `CAPCOV_SHEN_TIMEOUT` / `timeout=` override),
+  `SIGKILL` to the whole group on expiry, one fresh temp directory per call.
+  Timeout, non-zero exit, missing/duplicate/unparsable result block and Shen
+  side `capcov-*` errors are named `ShenFailure` kinds; a missing launcher or
+  binary is `ShenUnavailable`. Nothing falls back.
+- The devShell's own `shen` (flake pin `610ba42`) was not used.
+
+Recorded hashes for the go_app run (fixture digest
+`50e642610e13c00fc06eefbfe9c507897fed049da9c9532f5a8b0a1614f1cdb7`, rules
+digest `3c7c80822404fc2ef221b91edd209db7ea8e73a40122a9f9764be20398a4d36c`;
+`go_app.go_app_bundle()` reproduces the handoff bundle byte-for-byte and the
+tests pin both digests):
+
+| hash | value |
+|---|---|
+| canonical JSON input (derive, row 0 `... api/GetJob() -> gorm/DB#Create()`) | `3ca01c34045e17cdf9f2488fa3c7a7b1d4c5d729bf5c09da7f824ad4d067fe15` |
+| generated Shen driver (same run, 88,782 bytes) | `1b95687a076b2d476e7e5ac6121a9f5b3c43605fa1560cd07b6c4b8aa1b1ff88` |
+| runtime binary | `05cac13837e0a78ca207030540721468e13d910979692cb9c1c4b9280f72a29d` |
+| frozen elaborated pack printed back by Shen (go_app bundle: 70 relations, 29 rules) | sha256 `537bd2e0cc8d47388f97f752311fbd25c622d269b7b0278869040d112e2ffac6`, Shen checksum `ck2-666418996-496367451` |
+| frozen elaborated pack, rules-static-v1 alone (73 relations, 27 rules) | sha256 `f6e865ae4e61190ba1501d8e0109451b9ee7096b6d1f5d03ab2a969adc88ce2f`, Shen checksum `ck2-2118177021-2102950502` |
+
+Each derive run has its own input/driver hashes (rows 1-4:
+`71d67798…`/`47d2211a…`, `d1ab3aee…`/`b126fe4c…`, `dbcdf58c…`/`9aff86ea…`,
+`66d9fc37…`/`5091d1a3…`); the authority run over the go_app bundle recorded
+input `8f81f438…`, driver `cf54f0e7…`.
+
+Results (`test_shen*.py`, 22 tests, 46.7 s wall in the devShell, all pass):
+
+- (a) authority: rules-static-v1 accepted, every rule passes all eight
+  per-rule checks; the go_app bundle, all 14 corpus packs and two static
+  review cases accepted; Shen's elaborated rule order equals the bundle's
+  canonical order and Shen's canonical rendering of every rule equals
+  Python's `canonical_json`; one planted bad rule per check id
+  (`undeclared-relation`, `ungrounded-conclusion-variable`,
+  `ungrounded-side-condition-variable`, `context-index-loss`,
+  `unsupported-context-widening`, `negative-conclusion-without-completeness`,
+  `declaration-promoted-to-effect`, `non-linear-recursion`) is rejected on
+  exactly that rule.
+- (b) derive: all 5 `static_reaches` rows yield certificates that
+  `certificate.recheck` accepts (`ok=True`, no problems, nothing unchecked)
+  and that equal the Python extractor's certificate **in full** (derivation,
+  leaves, witnesses, absent, steps 2/2/1/1/0, nesting, and node counts
+  57/55/37/37/15 — the search mirrors `certificate.py` tick for tick).
+- (c) planted invalid certificates (substituted leaf, dropped evidence,
+  wrong `rules_digest`, extra premise step, wrong conclusion row) are rejected.
+- (d) negative control (`... -> nowhere/Missing()`): outcome `negative`, no
+  certificate, why-not with 6 alternatives each naming a missing premise
+  (nested one level: the missing `static_edge` is explained by its missing
+  `scip_may_reference`), `truncated: false`; `derive` raises `NotDerivable`.
+- (e) fake launchers: timeout (killed at 2 s, group reaped), non-zero exit,
+  three malformed-output shapes, Shen error payload classification, and a
+  disagreeing elaborated-pack checksum each produce the named failure;
+  missing launcher/binary is `ShenUnavailable`; `max_nodes=3` yields a
+  truncated certificate that recheck rejects.
+- (f) frozen pack: a renamed rule and a wrong checksum are refused with
+  `frozen-pack-mismatch` before any request is served.
+- CLI: `capcov experiment claims shen authority --bundle` exits 0 with the
+  JSON document; a missing runtime exits 3 with `operational_failure`.
+- Full regression in the devShell with `BIFROST_SHEN_GO` set (the Shen tests
+  included): 1075 tests, 135 skipped, OK, 132–148 s wall. With `BIFROST_SHEN_GO`
+  unset the 20 runtime-backed Shen tests skip; with `CAPCOV_SHEN_REQUIRED=1`
+  they error instead (verified: `FAILED (errors=2)` at import).
+
+Timings (one bifrost + shen-go process per call, cold bootstrap ≈ 0.65 s):
+authority 0.95–1.08 s (pack), 1.04 s (go_app bundle), 0.73–0.79 s (corpus);
+derive 1.15–1.33 s per row (Shen work 3930–3968 ticks; inside Shen the
+closure of 276 facts/29 rules takes ≈1.1 s and the search ≈0.75 s); why-not
+1.26 s. Peak RSS was not re-measured here (integrator: ≈80 MB).
+
+Fail-closed manifest line (a missing runtime is an error, never a skip):
+
+```sh
+cd packages/capabilities && CAPCOV_SHEN_REQUIRED=1 BIFROST_SHEN_GO=/Users/dev/projects/capcov/.capcov/shen-go-c12933d/shen-go PATH="$HOME/.local/bin:$PATH" nix develop --no-update-lock-file .. --command bash -lc 'PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p "test_shen*.py" -t .'
+```
+
+Runtime findings that shaped the implementation (all diagnosed on the pinned
+binary, none worked around by mocking):
+
+- Every string primitive (`pos`, `tlstr`, `explode`) is O(length) per call,
+  so a byte walk over a long string is quadratic; `pr`/`output` of one
+  70 KB string takes 4.7 s. The workbench renders JSON as a flat chunk list,
+  prints chunk by chunk, walks only short strings, memoises string escapes and
+  byte lists, and orders rows by comparing rendered values natively and
+  byte-comparing only the first differing value.
+- `mod` costs ≈110 µs per call even on tiny operands and is inexact near
+  2^53; `div` ≈47 µs. Neither is used on any hot path: the frozen-pack
+  checksum is `a ← (4a + k + 1) mod (2^31-1)`, `b ← (3b + k + 1) mod
+  (2^31-19)` reduced by at most four exact subtractions (Python recomputes
+  it in `pack_checksum` and refuses a disagreement). It is a change-detection
+  fingerprint, not a cryptographic hash; the SHA-256 of the printed-back
+  text is recorded beside it.
+- `trap-error` under a deep call stack is very expensive (a per-chunk handler
+  turned a 30 KB checksum into 36 s); the only handlers left are the
+  top-level one and the two around the search.
+- The runtime echoes the value of every top-level form it loads (including
+  the marker string literal and, unwrapped, the entire fact list); data forms
+  are wrapped to return `ok` and markers are matched as whole lines.
+- Numbers are float64: floats and integers ≥ 2^53 are refused at translation
+  (`invalid-input`) rather than transported inexactly; `str` cannot print
+  pairs, so row hash keys use the JSON renderer.
+- The "known memory allocation crash" warned about by Shen-Backpressure was
+  not observed in the more than one hundred workbench runs made here (all bounded by the
+  per-call timeout and process-group kill, which are the mitigation); the
+  integrator's 300-call probe likewise saw none.
+
+Honest limits:
+
+- The authority checks are structural: they inspect declarations and rule
+  shapes only. Compatibility-witness matching is by target-set membership
+  (looser than the Python validator's typed-position matching);
+  `context-index-loss` accepts a constant head context as an explicit
+  constructor unless a premise binds that index to something else (the
+  corpus's per-claim ground rules rely on this); the diagnostic policy is not
+  consulted, so a negated premise without an exact scoped completeness
+  witness always fails the check.
+- Aggregation rules pass through authority (the aggregation variable counts
+  as grounded) but closure/derive refuse them with `unsupported-construct`;
+  non-linear recursion and unstratifiable negation are refused likewise.
+- Bounds: `max_depth` 64 and `max_nodes` 10,000 (certificate parity with
+  Python), a 3,000,000-tick work budget over closure and search
+  (`resource-exhausted`), why-not capped at 16 alternatives and nesting depth
+  2 with an explicit `truncated` flag; the certificate `nodes` count follows
+  Python's tick discipline exactly.
+- A row that is in the closure but that no rule application re-derives is
+  reported as `inconsistent-closure`, never certified.
+- Souffle is not involved in this stage; certificate parity is against the
+  Python extractor over the Python kernel's closure.
+
 ## 19. Stage E — First-projection specialization
 
 Define the reference interpreter as an executable expression/relational-plan AST:

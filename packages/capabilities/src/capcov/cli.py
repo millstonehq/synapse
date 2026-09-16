@@ -663,6 +663,12 @@ def main(argv: list[str] | None = None) -> int:
         from .features.cli import main as features_main
 
         return features_main(actual[1:])
+    if actual and actual[0] == "experiment":
+        # Experimental namespace (EXPERIMENT-PLAN section 18); production
+        # commands and their argparse below are untouched.
+        from .claims.cli import main as experiment_main
+
+        return experiment_main(actual[1:])
     parser = argparse.ArgumentParser(prog="capcov", description=__doc__)
     parser.add_argument("--quiet", action="store_true")
     sub = parser.add_subparsers(dest="cmd", required=True)
