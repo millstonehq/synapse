@@ -61,9 +61,16 @@ _BLOCKING_ORDER = (
     ("go_disagreement_closed", False), ("go_disagree_any", True), ("undeclared_writes_closed", False),
     ("model_scope_exclusions_closed", False), ("undeclared_any", True),
     ("post_state_gap_closed", False), ("post_state_any", True),
+    # ordering, cross-request and cross-run gates (after the write-set and post-state gates:
+    # a receipt without the sequence/response/stability relations is blocked earlier when it
+    # has a write-set gap, and here otherwise)
+    ("effect_order_closed", False), ("effect_order_any", True), ("effect_order_exercised", False),
+    ("repeat_delete_closed", False), ("repeat_delete_any", True), ("oracle_stable", False),
     ("kill_gap_closed", False), ("kill_closure_gap_any", True), ("index_describes_replay", False),
     ("op_declared", False),
 )
+# per-run relations of _BLOCKING_ORDER whose only column is the run
+_RUN_ONLY = ("replay_run_current", "kill_gap_closed", "oracle_stable")
 
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -132,7 +139,7 @@ def blocking_premise(relations, run: str, op: str, index: str = SYNTHETIC_INDEX)
                 return True
             if name == "index_describes_replay" and r == (index, run):
                 return True
-            if name in ("replay_run_current", "kill_gap_closed") and r == (run,):
+            if name in _RUN_ONLY and r == (run,):
                 return True
             if name == "model_describes_run" and r[1] == run:
                 return True
@@ -371,6 +378,22 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
             # and hide the useful missing or blocking premise beneath it.
             explanation = why_not(join.bundle, relations, "op_qualified_rt", target)
         entry["explanation"] = _explanation_summary(explanation)
+        requests = {r[1] for r in relations.get("replay_request", ()) if r[0] == join.run and r[4] == op}
+        # the ordering, cross-request and cross-run rows of this op's requests (digest-free, reportable)
+        entry["effect_order"] = {
+            "violations": sorted([list(r[1:]) for r in relations.get("effect_order_violation", ())
+                                  if r[0] == join.run and r[2] in requests], key=canonical_json),
+            "respected": sorted([list(r[1:]) for r in relations.get("effect_order_respected", ())
+                                 if r[0] == join.run and r[2] in requests], key=canonical_json),
+            "exercised": (join.run, op) in set(relations.get("effect_order_exercised", ())),
+        }
+        entry["repeat_delete"] = {
+            "repeats": sorted([list(r[1:]) for r in relations.get("repeat_delete", ())
+                               if r[0] == join.run and r[1] in requests], key=canonical_json),
+            "violations": sorted([list(r[1:]) for r in relations.get("repeat_delete_violation", ())
+                                  if r[0] == join.run and r[1] in requests], key=canonical_json),
+            "not_found": sorted([r[1] for r in relations.get("repeat_delete_not_found", ()) if r[0] == join.run]),
+        }
         if blocking and blocking["relation"] == "undeclared_any":
             entry["blocked_by"] = "blocked by undeclared writes: " + json.dumps(tables, sort_keys=True)
             entry["undeclared_tables"] = tables
@@ -379,6 +402,11 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
                                                    + ", ".join(applied))
         out[op] = entry
     out["exclusions"] = exclusions(relations, join.run) if relations else []
+    out["stability"] = {
+        "rows": sorted([list(r[1:]) for r in relations.get("replay_stability", ()) if r[0] == join.run], key=canonical_json),
+        "oracle_stable": (join.run,) in set(relations.get("oracle_stable", ())),
+        "oracle_unstable": (join.run,) in set(relations.get("oracle_unstable", ())),
+    } if relations else {}
     return out
 
 

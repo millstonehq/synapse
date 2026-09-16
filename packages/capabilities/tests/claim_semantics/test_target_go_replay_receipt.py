@@ -445,7 +445,7 @@ class FixtureJoinTest(_JoinCase):
 
     def test_export(self) -> None:
         self.check_export()
-        self.assertEqual(self.join.ops, (fixture_cases.CLOSE, fixture_cases.CREATE))
+        self.assertEqual(self.join.ops, (fixture_cases.DELETE, fixture_cases.CLOSE, fixture_cases.CREATE))
 
     def test_kernels(self) -> None:
         self.check_kernels()
@@ -469,6 +469,20 @@ class FixtureJoinTest(_JoinCase):
         for op in self.join.ops:
             self.assertEqual(summary[op]["exclusions_applied"], [])
             self.assertEqual(summary[op]["assumption_leaves"], 0)
+
+    def test_the_order_repeat_and_stability_verdicts_are_reported(self) -> None:
+        summary = replay_join.summary(self.join)
+        self.assertEqual(summary["stability"],
+                         {"rows": [["run-fixture-1a", "run-fixture-1b", "php", "true"]],
+                          "oracle_stable": True, "oracle_unstable": False})
+        for op in self.join.ops:
+            self.assertEqual(summary[op]["effect_order"]["violations"], [], op)
+            self.assertTrue(summary[op]["effect_order"]["exercised"], op)
+        delete = summary[fixture_cases.DELETE]
+        self.assertEqual(delete["repeat_delete"]["repeats"],
+                         [[fixture_cases.REPEAT_DELETE, fixture_cases.DELETE_TARGET]])
+        self.assertEqual(delete["repeat_delete"]["violations"], [])
+        self.assertEqual(delete["repeat_delete"]["not_found"], [fixture_cases.DELETE_TARGET])
 
     def test_artifacts(self) -> None:
         self.check_artifacts()
@@ -541,6 +555,18 @@ class RealReceiptTest(_JoinCase):
             self.assertEqual(entry["qualified_under_exclusions"],
                              "qualified under 4 reviewer exclusions: authentication, go_issue_outbox, jobs_statuses, redis")
             self.assertEqual(self._undeclared()["delete-issue"], {"php": [], "go": []})
+            # the ordering and cross-run gates the qualification now also passes
+            self.assertEqual(entry["effect_order"]["violations"], [])
+            self.assertEqual(entry["effect_order"]["respected"], [["go", "owner"], ["php", "owner"]])
+            self.assertTrue(entry["effect_order"]["exercised"])
+            summary = replay_join.summary(self.join)
+            self.assertEqual(summary["stability"]["oracle_stable"], True)
+            self.assertEqual(summary["stability"]["oracle_unstable"], False)
+            [row] = summary["stability"]["rows"]
+            self.assertEqual(row[2:], ["php", "true"])
+            self.assertEqual(len(row), 4, "(run_a, run_b, side, stable) after the run column")
+            # the committed receipt predates the repeat request: no repeat rows to judge
+            self.assertEqual(entry["repeat_delete"], {"repeats": [], "violations": [], "not_found": []})
 
     def test_artifacts_carry_digests_and_verdicts_only(self) -> None:
         self.check_artifacts()
@@ -570,6 +596,10 @@ class UnqualifiedFixtureTest(_JoinCase):
         entry = summary["delete-issue"]
         self.assertEqual(set(entry["exclusions_applied"]), {"authentication", "jobs_statuses", "redis", "go_issue_outbox"})
         self.assertEqual(entry["assumption_leaves"], 4)
+        # the earlier receipt carries none of the ordering relations, and is blocked before
+        # they would be reached: the write-set gap is still the blocking premise
+        self.assertEqual(summary["stability"], {"rows": [], "oracle_stable": False, "oracle_unstable": False})
+        self.assertEqual(entry["effect_order"], {"violations": [], "respected": [], "exercised": False})
         tables = self._undeclared()["delete-issue"]
         self.assertEqual(set(tables["php"]), {"entity_statistics", "mongo:issue"}, "PHP business writes the model does not declare")
         self.assertEqual(set(tables["go"]), {"entity_statistics", "mongo:issue"}, "Go business writes the model does not declare")

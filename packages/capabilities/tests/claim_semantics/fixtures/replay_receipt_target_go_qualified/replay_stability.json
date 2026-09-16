@@ -1,0 +1,12 @@
+{
+  "producer": "replay fg-replay v1",
+  "rows": [
+    {
+      "run": "eca6e7930af3",
+      "run_a": "183aac240a6d",
+      "run_b": "9fb93efece74",
+      "side": "php",
+      "stable": "true"
+    }
+  ]
+}
