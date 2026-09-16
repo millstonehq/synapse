@@ -4941,6 +4941,8 @@
           "replay:69ea64e80298:replay_request:843caaa74c2d",
           "replay:69ea64e80298:replay_request_seq:3b26a7492237",
           "replay:69ea64e80298:replay_request_seq:e8f6a28e8b2a",
+          "replay:69ea64e80298:replay_request_seqs_closed:2bfa66364c8c",
+          "replay:69ea64e80298:replay_requests_closed:acc922ba3952",
           "reviewer:69ea64e80298:model_scope_exclusions_closed:62143215abdd",
           "shen:69ea64e80298:model_describes_run:30e5416af7e4"
         ],
@@ -4959,6 +4961,8 @@
           "replay:69ea64e80298:replay_request:843caaa74c2d",
           "replay:69ea64e80298:replay_request_seq:3b26a7492237",
           "replay:69ea64e80298:replay_request_seq:e8f6a28e8b2a",
+          "replay:69ea64e80298:replay_request_seqs_closed:2bfa66364c8c",
+          "replay:69ea64e80298:replay_requests_closed:acc922ba3952",
           "reviewer:69ea64e80298:model_scope_exclusions_closed:62143215abdd",
           "shen:69ea64e80298:model_describes_run:30e5416af7e4"
         ],

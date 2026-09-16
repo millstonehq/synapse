@@ -8,7 +8,7 @@ census is qualified by this replay*.  The replay harness is a producer of
 observations, never an oracle; the judge is these rules.
 
 * `rules-replay-v1.json` - the rule pack in raw IR JSON wire form.
-* `cases/NN-*.json` - one positive control (`00`) and nineteen adversarial
+* `cases/NN-*.json` - one positive control (`00`) and twenty-one adversarial
   shapes (the numbering is not contiguous: the gaps are the rejected cases);
   `rejected/NN-*.json` are the cases the ingestion boundary must refuse.
 * `expected.json` / `rejected.json` - the per-claim review tables duplicated
@@ -226,9 +226,16 @@ Design points a reviewer should check:
   seq, target)` gives the tape its order and its targets (`target` is the HTTP
   method and raw path, so two requests aimed at one resource share it), and
   `php_response` / `go_response(run, req, status)` the status each system
-  returned.  `repeat_delete(run, req, target)` is a later request for a target
-  an earlier request already addressed; when the first one committed
-  (`first_delete_committed`: 200 on both sides with an `issue` update on both)
+  returned.  `delete_target(run, req, seq, tenant, target)` carries the tenant
+  the request was served for, and `repeat_delete(run, req, target)` -- a later
+  request for a target an earlier request already addressed -- joins the two
+  positions on `(tenant, target)`, so the same path under two tenants is two
+  resources, not a repeat.  `first_delete_committed(run, req, target)` names
+  the *first* delete of that `(tenant, target)`: the negated
+  `earlier_delete(run, tenant, target, seq)` under `earlier_delete_closed(run)`
+  refuses to read a later committing delete as the commit (case 24), and the
+  request must have answered 200 on both sides *and* written an `issue` update
+  on both (case 25).  When it did,
   the claim `repeat_delete_not_found(run, target)` says the repeat answered
   404 on both sides and, under both closed effect tables, wrote nothing
   *outside the reviewer's scope exclusions* (case 00).

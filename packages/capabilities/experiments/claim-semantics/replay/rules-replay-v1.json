@@ -1204,6 +1204,11 @@
         },
         {
           "context": false,
+          "name": "tenant",
+          "type": "symbol"
+        },
+        {
+          "context": false,
           "name": "target",
           "type": "symbol"
         }
@@ -1228,6 +1233,72 @@
         {
           "context": true,
           "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "tenant",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "target",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "seq",
+          "type": "unsigned"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "earlier_delete",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "earlier_delete",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "earlier_delete_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
           "type": "symbol"
         },
         {
@@ -5960,11 +6031,116 @@
             "variable": "Seq"
           },
           {
+            "variable": "Tenant"
+          },
+          {
             "variable": "T"
           }
         ]
       },
       "name": "delete_target"
+    },
+    {
+      "body": [
+        {
+          "relation": "delete_target",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req1"
+            },
+            {
+              "variable": "Seq1"
+            },
+            {
+              "variable": "Tenant"
+            },
+            {
+              "variable": "T"
+            }
+          ]
+        },
+        {
+          "relation": "delete_target",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req2"
+            },
+            {
+              "variable": "Seq"
+            },
+            {
+              "variable": "Tenant"
+            },
+            {
+              "variable": "T"
+            }
+          ]
+        },
+        {
+          "comparison": {
+            "left": {
+              "variable": "Seq1"
+            },
+            "operator": "<",
+            "right": {
+              "variable": "Seq"
+            }
+          }
+        }
+      ],
+      "head": {
+        "relation": "earlier_delete",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Tenant"
+          },
+          {
+            "variable": "T"
+          },
+          {
+            "variable": "Seq"
+          }
+        ]
+      },
+      "name": "earlier_delete"
+    },
+    {
+      "body": [
+        {
+          "relation": "replay_requests_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "replay_request_seqs_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "earlier_delete_closed",
+        "terms": [
+          {
+            "variable": "Run"
+          }
+        ]
+      },
+      "name": "earlier_delete_closed"
     },
     {
       "body": [
@@ -5981,7 +6157,36 @@
               "variable": "Seq"
             },
             {
+              "variable": "Tenant"
+            },
+            {
               "variable": "T"
+            }
+          ]
+        },
+        {
+          "relation": "earlier_delete_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "earlier_delete",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Tenant"
+            },
+            {
+              "variable": "T"
+            },
+            {
+              "variable": "Seq"
             }
           ]
         },
@@ -6073,6 +6278,9 @@
             "variable": "Run"
           },
           {
+            "variable": "Req"
+          },
+          {
             "variable": "T"
           }
         ]
@@ -6088,10 +6296,13 @@
               "variable": "Run"
             },
             {
-              "variable": "R1"
+              "variable": "Req1"
             },
             {
               "variable": "S1"
+            },
+            {
+              "variable": "Tenant"
             },
             {
               "variable": "T"
@@ -6109,6 +6320,9 @@
             },
             {
               "variable": "S2"
+            },
+            {
+              "variable": "Tenant"
             },
             {
               "variable": "T"
@@ -6382,6 +6596,9 @@
               "variable": "Run"
             },
             {
+              "variable": "ReqF"
+            },
+            {
               "variable": "T"
             }
           ]
@@ -6473,6 +6690,9 @@
               "variable": "Run"
             },
             {
+              "variable": "ReqF"
+            },
+            {
               "variable": "T"
             }
           ]
@@ -6544,6 +6764,9 @@
               "variable": "Run"
             },
             {
+              "variable": "ReqF"
+            },
+            {
               "variable": "T"
             }
           ]
@@ -6613,6 +6836,9 @@
           "terms": [
             {
               "variable": "Run"
+            },
+            {
+              "variable": "ReqF"
             },
             {
               "variable": "T"

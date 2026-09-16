@@ -106,7 +106,8 @@ class AdversarialReplayCasesInBothEngines(unittest.TestCase):
                      # the ordering, repeat-delete and cross-run shapes
                      "17-effect-order-violation": 2, "18-repeat-delete-with-effects": 3, "19-unstable-oracle": 0,
                      "20-missing-stability-closure": 0, "21-missing-effect-seq-closure": 0,
-                     "23-repeat-delete-excluded-write": 3}
+                     "23-repeat-delete-excluded-write": 3, "24-repeat-before-the-commit": 3,
+                     "25-first-delete-not-committed": 2}
         # one derived row per shape the new rules are there to catch, in both kernels
         planted = {"17-effect-order-violation": ("effect_order_violation", 1),
                    "18-repeat-delete-with-effects": ("repeat_delete_violation", 1),
@@ -131,7 +132,8 @@ class AdversarialReplayCasesInBothEngines(unittest.TestCase):
                     self.assertEqual(len(relations["repeat_delete_not_found"]),
                                      0 if stem in ("04-missing-model-witness", "10-missing-effects-closure",
                                                    "14-exclusions-not-closed", "15-no-exclusions-no-closure",
-                                                   "18-repeat-delete-with-effects") else 1, stem)
+                                                   "18-repeat-delete-with-effects", "24-repeat-before-the-commit",
+                                                   "25-first-delete-not-committed") else 1, stem)
 
     def test_certificates_from_both_closures_agree_on_every_derived_claim_row(self) -> None:
         self.assertTrue(self.results, "no differential results; is souffle on PATH?")

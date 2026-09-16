@@ -37,7 +37,8 @@ DERIVED = {
     "model_scope_excluded", "model_scope_excluded_closed", "exclusion_applied",
     # ordering, repeat-delete and cross-run stability (v1 ordering addendum)
     "effect_order_violation", "effect_order_respected", "effect_order_any", "effect_order_exercised",
-    "effect_order_closed", "delete_target", "first_delete_committed", "repeat_delete",
+    "effect_order_closed", "delete_target", "earlier_delete", "earlier_delete_closed",
+    "first_delete_committed", "repeat_delete",
     "repeat_delete_has_effect", "repeat_delete_effects_closed", "repeat_delete_not_found",
     "repeat_delete_violation", "repeat_delete_any", "repeat_delete_closed",
     "oracle_unstable", "oracle_unstable_closed", "oracle_stable",
@@ -48,7 +49,8 @@ COMPLETENESS = {"requested_closed": "requested", "op_surviving_closed": "op_has_
                 "go_observed_closed": "go_observed", "post_state_gap_closed": "post_state_any",
                 "kill_gap_closed": "kill_closure_gap_any", "model_scope_excluded_closed": "model_scope_excluded",
                 "effect_order_closed": "effect_order_any", "repeat_delete_effects_closed": "repeat_delete_has_effect",
-                "repeat_delete_closed": "repeat_delete_any", "oracle_unstable_closed": "oracle_unstable"}
+                "repeat_delete_closed": "repeat_delete_any", "oracle_unstable_closed": "oracle_unstable",
+                "earlier_delete_closed": "earlier_delete"}
 EVIDENCE_ID = re.compile(r"^(replay|php|go|shen|mut|reviewer):([0-9a-f]{12}|claim-time):([a-z_]+):([0-9a-f]{12})$")
 CLAIM_TIME_RELATIONS = {"run_nonce_observed", "snapshot_observed", "model_observed", "op_declared"}
 
@@ -169,6 +171,7 @@ class ReplayRulePackTests(unittest.TestCase):
             ("post_state_gap", "php_observed"), ("post_state_gap", "go_observed"),
             ("op_qualified_rt", "effect_order_any"),
             ("repeat_delete_not_found", "repeat_delete_has_effect"),
+            ("first_delete_committed", "earlier_delete"),
             ("repeat_delete_has_effect", "model_scope_excluded"), ("oracle_stable", "oracle_unstable")})
         witnesses = {item["completes"] for item in self.declarations.values() if item["modality"] == "completeness"}
         self.assertTrue({target for _, target in negated} <= witnesses)
@@ -257,7 +260,7 @@ class ReplayCaseTests(unittest.TestCase):
         self.assertEqual([path.stem for path in self.paths], list(case_builder.BUILDERS))
         self.assertEqual(sorted({path.name[:2] for path in self.paths}),
                          ["00", "01", "02", "03", "04", "05", "06", "08", "09", "10", "11", "13", "14", "15",
-                          "17", "18", "19", "20", "21", "23"])
+                          "17", "18", "19", "20", "21", "23", "24", "25"])
         self.assertEqual([path.stem for path in case_paths(REJECTED_DIR)],
                          ["07-producer-class-violation", "12-closure-producer-violation",
                           "16-exclusion-producer-violation", "22-effect-seq-producer-violation"])

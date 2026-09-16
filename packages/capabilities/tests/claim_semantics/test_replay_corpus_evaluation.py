@@ -14,10 +14,12 @@ import unittest
 
 try:
     from .replay_rules.adapter import CASES_DIR, case_paths, load_case, load_pack, read_json
-    from .replay_rules.cases import CLOSE, CREATE, DELETE, DELETE_TARGET, INDEX, REPEAT_DELETE, RUN
+    from .replay_rules.cases import (CLOSE, CREATE, DELETE, DELETE_TARGET, FIRST_DELETE, INDEX, REPEAT_DELETE,
+                                     RUN)
 except ImportError:  # unittest discover -s imports this directory as top-level
     from replay_rules.adapter import CASES_DIR, case_paths, load_case, load_pack, read_json
-    from replay_rules.cases import CLOSE, CREATE, DELETE, DELETE_TARGET, INDEX, REPEAT_DELETE, RUN
+    from replay_rules.cases import (CLOSE, CREATE, DELETE, DELETE_TARGET, FIRST_DELETE, INDEX, REPEAT_DELETE,
+                                    RUN)
 
 from capcov.claims import canonical_json
 from capcov.claims.differential import DifferentialMismatch, compare
@@ -97,7 +99,10 @@ class PythonEvaluatorAgreesWithReviewedExpectations(unittest.TestCase):
                          {(RUN, op) for op in (CREATE, CLOSE, DELETE)})
         # the repeat delete: req-5 repeats req-4's target, 404 on both sides, no effect
         self.assertEqual(set(report.relation_rows("repeat_delete")), {(RUN, REPEAT_DELETE, DELETE_TARGET)})
-        self.assertEqual(set(report.relation_rows("first_delete_committed")), {(RUN, DELETE_TARGET)})
+        self.assertEqual(set(report.relation_rows("first_delete_committed")), {(RUN, FIRST_DELETE, DELETE_TARGET)},
+                         "req-4 is the first delete of the target, not merely a committing one")
+        self.assertEqual(report.relation_rows("earlier_delete"), ((RUN, "tenant-a", DELETE_TARGET, 5),),
+                         "only req-5 has a delete of the same target before it")
         self.assertEqual(set(report.relation_rows("repeat_delete_not_found")), {(RUN, DELETE_TARGET)})
         self.assertEqual(set(report.relation_rows("repeat_delete_closed")),
                          {(RUN, op) for op in (CREATE, CLOSE, DELETE)})
@@ -244,6 +249,26 @@ class PythonEvaluatorAgreesWithReviewedExpectations(unittest.TestCase):
         self.assertEqual(set(self._report("18-repeat-delete-with-effects").relation_rows("repeat_delete_has_effect")),
                          {(RUN, REPEAT_DELETE)})
 
+    def test_the_first_delete_is_the_first_one_and_a_committed_one(self) -> None:
+        inverted = self._report("24-repeat-before-the-commit")
+        self.assertEqual(set(inverted.relation_rows("earlier_delete")),
+                         {(RUN, "tenant-a", DELETE_TARGET, 5)},
+                         "req-4 now sits at tape position 5, behind the 404")
+        self.assertEqual(inverted.relation_rows("first_delete_committed"), (),
+                         "the first delete of the target answered 404; the committing one is not the first")
+        self.assertEqual(inverted.relation_rows("repeat_delete_violation"), (),
+                         "no violation is reported against a tape whose first delete never committed")
+        self.assertEqual(inverted.relation_rows("repeat_delete_not_found"), ())
+        self.assertEqual(set(inverted.relation_rows("op_qualified")),
+                         {(INDEX, RUN, op) for op in (CREATE, CLOSE, DELETE)})
+
+        uncommitted = self._report("25-first-delete-not-committed")
+        self.assertEqual(uncommitted.relation_rows("first_delete_committed"), (),
+                         "a 200 whose side wrote no issue update did not commit the delete")
+        self.assertEqual(uncommitted.relation_rows("repeat_delete_not_found"), ())
+        self.assertEqual(set(uncommitted.relation_rows("repeat_delete")), {(RUN, REPEAT_DELETE, DELETE_TARGET)})
+        self.assertEqual(set(uncommitted.relation_rows("op_qualified")), {(INDEX, RUN, CREATE), (INDEX, RUN, CLOSE)})
+
     def test_an_unstable_oracle_disqualifies_every_op_of_the_run(self) -> None:
         report = self._report("19-unstable-oracle")
         self.assertEqual(report.relation_rows("oracle_unstable"), ((RUN,),))
@@ -315,6 +340,31 @@ class PackMutationsFailTheCorpus(unittest.TestCase):
         self.assertEqual(self._repeat_claim_verdict(self._mutated(drop_guard)), "unresolved")
         # and the guard does not excuse a write to a table the reviewer did not exclude
         self.assertEqual(self._repeat_claim_verdict(load_pack(), "18-repeat-delete-with-effects"), "unresolved")
+
+    def test_the_first_delete_conditions_are_load_bearing(self) -> None:
+        def relations(pack, stem):
+            report = evaluate(load_case(CASES_DIR / f"{stem}.json", pack))
+            self.assertEqual(report.status.value, "complete", report.message)
+            return report
+
+        def drop_earlier_delete(pack):
+            rule = next(r for r in pack["rules"] if r["name"] == "first_delete_committed")
+            rule["body"] = [a for a in rule["body"]
+                            if a.get("relation") not in {"earlier_delete", "earlier_delete_closed"}]
+        # without the "no earlier delete" condition the pack reads the tape of case 24
+        # backwards: the committing delete becomes the repeat and is reported as a violation
+        mutated = relations(self._mutated(drop_earlier_delete), "24-repeat-before-the-commit")
+        self.assertEqual(len(mutated.relation_rows("first_delete_committed")), 1)
+        self.assertEqual({row[2] for row in mutated.relation_rows("repeat_delete_violation")}, {"php", "go", "effects"})
+
+        def drop_effect_premises(pack):
+            rule = next(r for r in pack["rules"] if r["name"] == "first_delete_committed")
+            rule["body"] = [a for a in rule["body"] if a.get("relation") not in {"php_effect", "go_effect"}]
+        # without them a 200 that wrote no issue update would count as a commit and
+        # license the repeat claim (case 25)
+        self.assertEqual(self._repeat_claim_verdict(load_pack(), "25-first-delete-not-committed"), "unresolved")
+        self.assertEqual(self._repeat_claim_verdict(self._mutated(drop_effect_premises),
+                                                    "25-first-delete-not-committed"), "supported")
 
     def test_dropping_the_gate_from_op_qualified_rt_flips_the_case(self) -> None:
         def drop_gate(pack):

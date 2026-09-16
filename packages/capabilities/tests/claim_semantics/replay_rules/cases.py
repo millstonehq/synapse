@@ -888,6 +888,99 @@ def build_23() -> dict[str, Any]:
                  notes, facts, claims, outputs)
 
 
+def _swap_tape_seq(req_a: str, req_b: str) -> Edit:
+    """Swap the tape position of two requests (the repeat was sent before the commit)."""
+    def edit(document: Any) -> Any:
+        rows = {row["req"]: row for row in document["rows"]}
+        rows[req_a]["seq"], rows[req_b]["seq"] = rows[req_b]["seq"], rows[req_a]["seq"]
+        return document
+    return edit
+
+
+def build_24() -> dict[str, Any]:
+    with variant({"replay_request_seq": _swap_tape_seq(FIRST_DELETE, REPEAT_DELETE)}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    tape = find_id(facts, "replay_request_seq", req=FIRST_DELETE)
+    seen = observation("replay_request_seq", ["run"], {"column": "req", "operator": "=", "value": FIRST_DELETE})
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "issues.create is untouched by the tape order of the two deletes and qualifies as in the control.",
+        CLOSE: "issues.close is untouched by the tape order of the two deletes and qualifies as in the control.",
+        DELETE: "delete-issue still qualifies: op_qualified_rt reads the requests, not their order relative to one "
+                "another, and every per-request premise is the control's."})
+    not_found = _claim("claim-repeat-delete-not-found", "repeat_delete_not_found", ["run", "target"],
+                       [RUN, DELETE_TARGET], {"run": RUN},
+                       "the 404 (req-5) now sits at tape position 4 and the committing 200 (req-4) at position 5: "
+                       "the first delete of the target did not commit, and the one that did is not the first, so "
+                       "first_delete_committed derives for neither and the claim has nothing to say.", [seen])
+    claims.append(not_found)
+    outputs.append(missing(not_found["id"], "first_delete_committed",
+                           "the first delete of " + DELETE_TARGET + " (req-5, tape position 4) answered 404 and wrote "
+                           "nothing; req-4 committed but an earlier delete of the same target precedes it",
+                           requires=[tape]))
+    notes = [
+        "replay_request_seq.json swaps the tape positions of req-4 and req-5; every other observation, including both "
+        "response rows and every effect row, is the control's.",
+        "repeat_delete_not_found is unresolved: first_delete_committed names the *first* delete of a (tenant, target) "
+        "-- the negated earlier_delete under earlier_delete_closed -- so a later committing delete cannot stand in "
+        "for it.  Without that condition req-4 would be read as the commit and req-4 itself as the repeat, and the "
+        "pack would report status and effect violations against a tape it had misread.",
+        "All three op_qualified claims are supported: the repeat is its own claim and no premise of op_qualified_rt "
+        "reads the tape order.",
+    ]
+    return _case("24-repeat-before-the-commit", "The repeat of the delete sits before the commit in the tape", None,
+                 notes, facts, claims, outputs)
+
+
+def _drop_rows(**columns: Any) -> Edit:
+    """Drop every row matching ``columns``."""
+    def edit(document: Any) -> Any:
+        document["rows"] = [row for row in document["rows"]
+                            if any(row.get(k) != v for k, v in columns.items())]
+        return document
+    return edit
+
+
+def build_25() -> dict[str, Any]:
+    with variant({"go_effect": _drop_rows(req=FIRST_DELETE, table="issue"),
+                  "go_effect_seq": _drop_rows(req=FIRST_DELETE, table="issue")}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    php_issue = find_id(facts, "php_effect", req=FIRST_DELETE, table="issue")
+    seen = observation("php_effect", ["run"], {"column": "req", "operator": "=", "value": FIRST_DELETE})
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "issues.create is untouched and qualifies as in the control.",
+        CLOSE: "issues.close is untouched and qualifies as in the control.",
+        DELETE: "req-4 answered 200 on both sides, but Go recorded no issue update for it: the only request of "
+                "delete-issue that could demonstrate the model's declared order no longer does so on the Go side, so "
+                "effect_order_exercised(delete-issue) fails and the op is unresolved."},
+        extra_diagnostics={DELETE: [seen]})
+    not_found = _claim("claim-repeat-delete-not-found", "repeat_delete_not_found", ["run", "target"],
+                       [RUN, DELETE_TARGET], {"run": RUN},
+                       "req-5 repeats req-4 and answers 404 on both sides with no effect, but req-4 is not a "
+                       "committed delete: a 200 whose side wrote no issue update did not soft-delete the issue.",
+                       [seen])
+    claims.append(not_found)
+    outputs.append(missing("claim-qualified-delete", "effect_order_respected",
+                           "Go recorded no issue update for req-4, the only request of delete-issue whose effects the "
+                           "model puts in a declared order, so no side pair demonstrates that order",
+                           requires=[php_issue]))
+    outputs.append(missing(not_found["id"], "first_delete_committed",
+                           "req-4 answered 200 on both sides but Go recorded no issue update for it, so the first "
+                           "delete of " + DELETE_TARGET + " is not a committed one", requires=[php_issue]))
+    notes = [
+        "go_effect.json and go_effect_seq.json lose req-4's issue update; PHP's is untouched, both responses stay "
+        "200/404 and no table is added, so neither undeclared_write nor a status violation fires.",
+        "repeat_delete_not_found is unresolved: first_delete_committed reads a 200 *and* an issue update on both "
+        "sides, which is what 'committed' means -- without the effect premises a 200 that changed nothing would "
+        "license the claim.",
+        "op_qualified(delete-issue) is unresolved too, but for the order gate: req-4 is the op's only ordered "
+        "request and Go no longer demonstrates the declared order for it.",
+    ]
+    return _case("25-first-delete-not-committed", "The first delete answers 200 but Go writes no issue update", None,
+                 notes, facts, claims, outputs)
+
+
 def build_19() -> dict[str, Any]:
     with variant({"replay_stability": _edit_row(0, stable="false")}) as root:
         exported, _ = exported_facts(root)
@@ -1060,6 +1153,8 @@ BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "20-missing-stability-closure": build_20,
     "21-missing-effect-seq-closure": build_21,
     "23-repeat-delete-excluded-write": build_23,
+    "24-repeat-before-the-commit": build_24,
+    "25-first-delete-not-committed": build_25,
 }
 REJECTED_BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "07-producer-class-violation": build_rejected_07,
@@ -1120,6 +1215,15 @@ REVIEW: dict[str, dict[str, tuple[str, str, list[str], list[str]]]] = {
                            "claim-oracle-unstable": ("supported", "complete", [], ["oracle-unstable"])},
     "20-missing-stability-closure": _all_ops("replay_stability_closed"),
     "21-missing-effect-seq-closure": _all_ops("php_effect_seqs_closed"),
+    "24-repeat-before-the-commit": {"claim-qualified-create": SUPPORTED, "claim-qualified-close": SUPPORTED,
+                                   "claim-qualified-delete": SUPPORTED,
+                                   "claim-repeat-delete-not-found": ("unresolved", "complete",
+                                                                     ["first_delete_committed"], [])},
+    "25-first-delete-not-committed": {"claim-qualified-create": SUPPORTED, "claim-qualified-close": SUPPORTED,
+                                      "claim-qualified-delete": ("unresolved", "complete",
+                                                                 ["effect_order_respected"], []),
+                                      "claim-repeat-delete-not-found": ("unresolved", "complete",
+                                                                        ["first_delete_committed"], [])},
     "23-repeat-delete-excluded-write": {"claim-qualified-create": SUPPORTED, "claim-qualified-close": SUPPORTED,
                                         "claim-qualified-delete": SUPPORTED,
                                         "claim-repeat-delete-not-found": SUPPORTED,
