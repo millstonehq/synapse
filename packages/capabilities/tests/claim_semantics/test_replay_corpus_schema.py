@@ -257,7 +257,7 @@ class ReplayCaseTests(unittest.TestCase):
         self.assertEqual([path.stem for path in self.paths], list(case_builder.BUILDERS))
         self.assertEqual(sorted({path.name[:2] for path in self.paths}),
                          ["00", "01", "02", "03", "04", "05", "06", "08", "09", "10", "11", "13", "14", "15",
-                          "17", "18", "19", "20", "21"])
+                          "17", "18", "19", "20", "21", "23"])
         self.assertEqual([path.stem for path in case_paths(REJECTED_DIR)],
                          ["07-producer-class-violation", "12-closure-producer-violation",
                           "16-exclusion-producer-violation", "22-effect-seq-producer-violation"])

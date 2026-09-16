@@ -832,6 +832,62 @@ def build_18() -> dict[str, Any]:
                  "repeat-delete-with-effects", notes, facts, claims, outputs)
 
 
+# the repeat's bookkeeping write: the session-token touch every authenticated request
+# makes, on a table the reviewer excluded from the write-set judgement
+EXCLUDED_REPEAT_EFFECT = {"req": REPEAT_DELETE, "run": RUN, "table": "authentication", "kind": "update",
+                          "pk": hashlib.sha256(b"rules-replay-v1 session row of the replay actor").hexdigest(),
+                          "cols_digest": hashlib.sha256(b"rules-replay-v1 session token expiry touched").hexdigest()}
+EXCLUDED_REPEAT_EFFECT_SEQ = {"req": REPEAT_DELETE, "run": RUN, "seq": 1, "table": "authentication", "kind": "update",
+                              "pk": EXCLUDED_REPEAT_EFFECT["pk"]}
+
+
+def build_23() -> dict[str, Any]:
+    with variant({"php_effect": _append_row(**EXCLUDED_REPEAT_EFFECT),
+                  "php_effect_seq": _append_row(**EXCLUDED_REPEAT_EFFECT_SEQ),
+                  "go_effect": _append_row(**EXCLUDED_REPEAT_EFFECT),
+                  "go_effect_seq": _append_row(**EXCLUDED_REPEAT_EFFECT_SEQ)}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    go_row = find_id(facts, "go_effect", req=REPEAT_DELETE)
+    exclusion = find_id(facts, "model_scope_exclusion", table="authentication")
+    req5 = observation("php_effect", ["run"], {"column": "req", "operator": "=", "value": REPEAT_DELETE})
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "issues.create is untouched by the repeat's session touch and qualifies as in the control.",
+        CLOSE: "issues.close is untouched by the repeat's session touch and qualifies as in the control.",
+        DELETE: "delete-issue qualifies as in the control: authentication is a reviewer-excluded table, so neither "
+                "undeclared_write nor repeat_delete_has_effect derives from the touch."},
+        extra_diagnostics={DELETE: [req5]})
+    not_found = _claim("claim-repeat-delete-not-found", "repeat_delete_not_found", ["run", "target"],
+                       [RUN, DELETE_TARGET], {"run": RUN},
+                       "req-5 repeats req-4's committed delete, answers 404 on both sides and, under both closed "
+                       "effect tables and the reviewer's closed exclusion set, wrote nothing outside those "
+                       "exclusions: its only rows are the authentication touch both systems make on every "
+                       "authenticated request.", [req5])
+    claims.append(not_found)
+    companion = _claim("claim-session-touch-excluded", "exclusion_applied", ["run", "op", "table"],
+                       [RUN, DELETE, "authentication"], {"run": RUN},
+                       "the repeat's authentication row joins the reviewer's exclusion of authentication for this "
+                       "model; the assumption row is a leaf of this certificate.",
+                       [observation("model_scope_exclusion", [], {"column": "table", "operator": "=",
+                                                                  "value": "authentication"})])
+    claims.append(companion)
+    outputs.append(discrepancy(companion["id"], "write-excluded-by-reviewer", [go_row, exclusion],
+                               table="authentication"))
+    notes = [
+        "php_effect / go_effect (and both sequences, to stay coherent) gain an authentication update for req-5, the "
+        "repeat of req-4's DELETE: the session-token touch every authenticated request makes, whatever it answers.  "
+        "The reviewer's exclusion file already names authentication.",
+        "All three op_qualified claims are supported and so is repeat_delete_not_found: repeat_delete_has_effect "
+        "joins !model_scope_excluded on the written table, so an excluded bookkeeping row is not a finding.  Without "
+        "that guard this receipt -- the shape a correct port produces, since a 404 repeat still authenticates -- "
+        "would defeat the per-target claim (contrast case 18, where the repeat writes issue).",
+        "The companion exclusion_applied claim is supported and cites the exclusion assumption as a leaf, as in "
+        "case 13; the negated atom in repeat_delete_has_effect carries none.",
+    ]
+    return _case("23-repeat-delete-excluded-write", "The repeat delete touches only a reviewer-excluded table", None,
+                 notes, facts, claims, outputs)
+
+
 def build_19() -> dict[str, Any]:
     with variant({"replay_stability": _edit_row(0, stable="false")}) as root:
         exported, _ = exported_facts(root)
@@ -1003,6 +1059,7 @@ BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "19-unstable-oracle": build_19,
     "20-missing-stability-closure": build_20,
     "21-missing-effect-seq-closure": build_21,
+    "23-repeat-delete-excluded-write": build_23,
 }
 REJECTED_BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "07-producer-class-violation": build_rejected_07,
@@ -1063,6 +1120,11 @@ REVIEW: dict[str, dict[str, tuple[str, str, list[str], list[str]]]] = {
                            "claim-oracle-unstable": ("supported", "complete", [], ["oracle-unstable"])},
     "20-missing-stability-closure": _all_ops("replay_stability_closed"),
     "21-missing-effect-seq-closure": _all_ops("php_effect_seqs_closed"),
+    "23-repeat-delete-excluded-write": {"claim-qualified-create": SUPPORTED, "claim-qualified-close": SUPPORTED,
+                                        "claim-qualified-delete": SUPPORTED,
+                                        "claim-repeat-delete-not-found": SUPPORTED,
+                                        "claim-session-touch-excluded": ("supported", "complete", [],
+                                                                         ["write-excluded-by-reviewer"])},
 }
 # Evidence a derivation must not use, per case: the lying witness of 08.
 FORBIDDEN: dict[str, Callable[[list[dict[str, Any]]], list[str]]] = {

@@ -8,9 +8,9 @@ census is qualified by this replay*.  The replay harness is a producer of
 observations, never an oracle; the judge is these rules.
 
 * `rules-replay-v1.json` - the rule pack in raw IR JSON wire form.
-* `cases/NN-*.json` - one positive control (`00`) and seventeen adversarial
-  shapes; `rejected/NN-*.json` are the cases the ingestion boundary must
-  refuse.
+* `cases/NN-*.json` - one positive control (`00`) and nineteen adversarial
+  shapes (the numbering is not contiguous: the gaps are the rejected cases);
+  `rejected/NN-*.json` are the cases the ingestion boundary must refuse.
 * `expected.json` / `rejected.json` - the per-claim review tables duplicated
   from every case, and what the rejected case would have yielded.
 

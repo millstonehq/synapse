@@ -105,7 +105,8 @@ class AdversarialReplayCasesInBothEngines(unittest.TestCase):
                      "13-excluded-undeclared-write": 3, "14-exclusions-not-closed": 0, "15-no-exclusions-no-closure": 0,
                      # the ordering, repeat-delete and cross-run shapes
                      "17-effect-order-violation": 2, "18-repeat-delete-with-effects": 3, "19-unstable-oracle": 0,
-                     "20-missing-stability-closure": 0, "21-missing-effect-seq-closure": 0}
+                     "20-missing-stability-closure": 0, "21-missing-effect-seq-closure": 0,
+                     "23-repeat-delete-excluded-write": 3}
         # one derived row per shape the new rules are there to catch, in both kernels
         planted = {"17-effect-order-violation": ("effect_order_violation", 1),
                    "18-repeat-delete-with-effects": ("repeat_delete_violation", 1),

@@ -230,6 +230,20 @@ class PythonEvaluatorAgreesWithReviewedExpectations(unittest.TestCase):
         # the status pair is still 200/404, so no status violation was planted
         self.assertNotIn((RUN, REPEAT_DELETE, "php"), set(report.relation_rows("repeat_delete_violation")))
 
+    def test_an_excluded_bookkeeping_write_on_the_repeat_is_not_a_finding(self) -> None:
+        report = self._report("23-repeat-delete-excluded-write")
+        self.assertEqual(report.relation_rows("repeat_delete_has_effect"), (),
+                         "authentication is a reviewer-excluded table: the touch is not an effect the claim counts")
+        self.assertEqual(report.relation_rows("repeat_delete_violation"), ())
+        self.assertEqual(set(report.relation_rows("repeat_delete_not_found")), {(RUN, DELETE_TARGET)})
+        self.assertEqual(set(report.relation_rows("exclusion_applied")), {(RUN, DELETE, "authentication")})
+        self.assertEqual(report.relation_rows("undeclared_write"), ())
+        self.assertEqual(set(report.relation_rows("op_qualified")),
+                         {(INDEX, RUN, op) for op in (CREATE, CLOSE, DELETE)})
+        # the same row on a table the reviewer did not exclude is case 18's finding
+        self.assertEqual(set(self._report("18-repeat-delete-with-effects").relation_rows("repeat_delete_has_effect")),
+                         {(RUN, REPEAT_DELETE)})
+
     def test_an_unstable_oracle_disqualifies_every_op_of_the_run(self) -> None:
         report = self._report("19-unstable-oracle")
         self.assertEqual(report.relation_rows("oracle_unstable"), ((RUN,),))
@@ -280,6 +294,27 @@ class PackMutationsFailTheCorpus(unittest.TestCase):
 
     def test_the_reviewed_pack_leaves_the_planted_gap_unresolved(self) -> None:
         self.assertEqual(self._create_verdict(load_pack()), "unresolved")
+
+    def _repeat_claim_verdict(self, pack, stem: str = "23-repeat-delete-excluded-write") -> str:
+        report = evaluate(load_case(CASES_DIR / f"{stem}.json", pack))
+        self.assertEqual(report.status.value, "complete", report.message)
+        return next(entry.result.semantic.value for entry in report.claims
+                    if entry.claim.id == "claim-repeat-delete-not-found")
+
+    def test_dropping_the_exclusion_guard_from_the_repeat_flips_the_excluded_write_case(self) -> None:
+        # the guard the live systems need: a 404 repeat still authenticates, so both
+        # sides write the excluded session row and nothing else
+        self.assertEqual(self._repeat_claim_verdict(load_pack()), "supported")
+
+        def drop_guard(pack):
+            for name in ("repeat_delete_has_effect_php", "repeat_delete_has_effect_go"):
+                rule = next(r for r in pack["rules"] if r["name"] == name)
+                rule["body"] = [a for a in rule["body"]
+                                if a.get("relation") not in {"model_describes_run", "model_scope_excluded_closed",
+                                                             "model_scope_excluded"}]
+        self.assertEqual(self._repeat_claim_verdict(self._mutated(drop_guard)), "unresolved")
+        # and the guard does not excuse a write to a table the reviewer did not exclude
+        self.assertEqual(self._repeat_claim_verdict(load_pack(), "18-repeat-delete-with-effects"), "unresolved")
 
     def test_dropping_the_gate_from_op_qualified_rt_flips_the_case(self) -> None:
         def drop_gate(pack):
