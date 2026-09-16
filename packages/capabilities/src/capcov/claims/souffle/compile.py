@@ -21,7 +21,7 @@ built from another program is refused (``CompiledProgramMismatch``).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 import json
 import os
@@ -73,9 +73,11 @@ class CompiledChecker:
     compile_key: str
     compiler_config_sha256: str
     compile_seconds: float = 0.0
-    cache_hit: bool = False
+    cache_hit: bool = field(default=False, compare=False)
     """True when this checker came from the cache rather than a fresh compile.
-    Recorded for benchmarks and never part of ``provenance()``."""
+    How the checker was obtained, not what it is: it is neither part of
+    ``provenance()`` nor of equality, so a cached checker equals the freshly
+    compiled one it reproduces."""
 
     @property
     def runtime(self) -> str:

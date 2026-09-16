@@ -212,6 +212,8 @@ class CompileProgramTests(unittest.TestCase):
         second = self._compile()
         self.assertEqual(len(_FakeCompiler.calls), 1)
         self.assertEqual(first, second)
+        self.assertFalse(first.cache_hit)
+        self.assertTrue(second.cache_hit)
 
     def test_a_corrupted_checker_byte_forces_a_recompile(self) -> None:
         checker = self._compile()
@@ -259,7 +261,12 @@ class CompileProgramTests(unittest.TestCase):
                                             prune=False)
             self._compile(prune=False)
         self.assertEqual(len(_FakeCompiler.calls), 3)
+        # a cached checker is the checker it reproduces: cache_hit records how
+        # it was obtained and is deliberately outside equality and provenance
         self.assertEqual(kept, checker)
+        self.assertEqual(kept.provenance(), checker.provenance())
+        self.assertTrue(kept.cache_hit)
+        self.assertFalse(checker.cache_hit)
         self.assertEqual(len(list(self.cache_dir.glob("compiled-*"))), 2)
 
     def test_compiler_failure_is_a_compile_error_with_stderr(self) -> None:
