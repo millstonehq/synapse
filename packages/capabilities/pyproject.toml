@@ -81,3 +81,4 @@ where = ["src"]
 # installed distribution must carry the JSON next to the module.
 [tool.setuptools.package-data]
 "capcov.claims.static" = ["*.json"]
+"capcov.claims.replay" = ["*.json"]
