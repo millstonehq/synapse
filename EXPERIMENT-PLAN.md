@@ -5232,6 +5232,4 @@ first token of `Evidence.source`; `Evidence.kind` stays `fact`/`assumption`/`com
 `compatibility`. The kind-based check is removed, the runtime evidence is relabelled
 (`source="target-go-runtime-trace-v2 receipt sha256:…"`, default kind), and the section 27 test
 now asserts `evidence-producer`. Integrator's runs after the fix: validation 23 + 4, replay 73,
-static corpus 18, static differential 18, evidence policy 5 all OK; target-go pilot gate with the
-real runtime receipt `Ran 10 tests in 142.9s`, `OK`; full regression recorded below.
-
+static corpus 18, static differential 18, evidence policy 5 all OK; target-go pilot gate with the Full regression on `dbd062b`: `Ran 1132 tests in 115.156s`, `OK (skipped=136)`.
