@@ -14,10 +14,10 @@ import unittest
 
 try:
     from .replay_rules.adapter import CASES_DIR, case_paths, load_case, load_pack, read_json
-    from .replay_rules.cases import CLOSE, CREATE, INDEX, RUN
+    from .replay_rules.cases import CLOSE, CREATE, DELETE, DELETE_TARGET, INDEX, REPEAT_DELETE, RUN
 except ImportError:  # unittest discover -s imports this directory as top-level
     from replay_rules.adapter import CASES_DIR, case_paths, load_case, load_pack, read_json
-    from replay_rules.cases import CLOSE, CREATE, INDEX, RUN
+    from replay_rules.cases import CLOSE, CREATE, DELETE, DELETE_TARGET, INDEX, REPEAT_DELETE, RUN
 
 from capcov.claims import canonical_json
 from capcov.claims.differential import DifferentialMismatch, compare
@@ -69,32 +69,53 @@ class PythonEvaluatorAgreesWithReviewedExpectations(unittest.TestCase):
                                                           "unresolved", missing)
                         self.assertEqual([item["relation"] for item in rendered_missing], sorted(missing))
 
-    def test_control_case_qualifies_exactly_the_two_declared_ops(self) -> None:
+    def test_control_case_qualifies_exactly_the_three_declared_ops(self) -> None:
         report = self._report("00-positive-control")
-        self.assertEqual(set(report.relation_rows("op_qualified")), {(INDEX, RUN, CREATE), (INDEX, RUN, CLOSE)})
+        every_op = {(INDEX, RUN, op) for op in (CREATE, CLOSE, DELETE)}
+        self.assertEqual(set(report.relation_rows("op_qualified")), every_op)
         self.assertEqual(set(report.relation_rows("op_qualified_rt")), set(report.relation_rows("op_qualified")))
-        self.assertEqual(set(report.relation_rows("replayed")), {(RUN, CREATE), (RUN, CLOSE)})
-        self.assertEqual(set(report.relation_rows("corpus_constrains")), {(RUN, CREATE), (RUN, CLOSE)})
-        self.assertEqual(len(report.relation_rows("php_model_agree")), 3)
-        self.assertEqual(len(report.relation_rows("go_model_agree")), 3)
+        self.assertEqual(set(report.relation_rows("replayed")), {(RUN, op) for op in (CREATE, CLOSE, DELETE)})
+        self.assertEqual(set(report.relation_rows("corpus_constrains")), {(RUN, op) for op in (CREATE, CLOSE, DELETE)})
+        self.assertEqual(len(report.relation_rows("php_model_agree")), 5)
+        self.assertEqual(len(report.relation_rows("go_model_agree")), 5)
         for empty in ("php_model_disagree", "go_model_disagree", "undeclared_write", "surviving_mutant",
                       "kill_closure_gap", "replay_run_stale", "php_disagree_any", "go_disagree_any", "undeclared_any"):
             self.assertEqual(report.relation_rows(empty), (), empty)
         self.assertEqual(report.relation_rows("replay_run_current"), ((RUN,),))
+
+    def test_control_case_derives_the_order_repeat_and_stability_verdicts(self) -> None:
+        report = self._report("00-positive-control")
+        for empty in ("effect_order_violation", "effect_order_any", "repeat_delete_has_effect",
+                      "repeat_delete_violation", "repeat_delete_any", "oracle_unstable"):
+            self.assertEqual(report.relation_rows(empty), (), empty)
+        # the order is not merely unviolated, it is exercised on both sides
+        self.assertEqual(set(report.relation_rows("effect_order_respected")),
+                         {(RUN, side, req) for side in ("php", "go") for req in ("req-1", "req-2", "req-4")})
+        self.assertEqual(set(report.relation_rows("effect_order_exercised")),
+                         {(RUN, op) for op in (CREATE, CLOSE, DELETE)})
+        self.assertEqual(set(report.relation_rows("effect_order_closed")),
+                         {(RUN, op) for op in (CREATE, CLOSE, DELETE)})
+        # the repeat delete: req-5 repeats req-4's target, 404 on both sides, no effect
+        self.assertEqual(set(report.relation_rows("repeat_delete")), {(RUN, REPEAT_DELETE, DELETE_TARGET)})
+        self.assertEqual(set(report.relation_rows("first_delete_committed")), {(RUN, DELETE_TARGET)})
+        self.assertEqual(set(report.relation_rows("repeat_delete_not_found")), {(RUN, DELETE_TARGET)})
+        self.assertEqual(set(report.relation_rows("repeat_delete_closed")),
+                         {(RUN, op) for op in (CREATE, CLOSE, DELETE)})
+        self.assertEqual(report.relation_rows("oracle_stable"), ((RUN,),))
 
     def test_planted_faults_derive_exactly_their_blocker(self) -> None:
         report = self._report("01-planted-disagreement")
         self.assertEqual(len(report.relation_rows("php_model_disagree")), 1)
         self.assertEqual(report.relation_rows("go_model_disagree"), ())
         self.assertEqual(set(report.relation_rows("php_disagree_any")), {(RUN, CLOSE)})
-        self.assertEqual(set(report.relation_rows("op_qualified")), {(INDEX, RUN, CREATE)})
+        self.assertEqual(set(report.relation_rows("op_qualified")), {(INDEX, RUN, CREATE), (INDEX, RUN, DELETE)})
         report = self._report("02-planted-undeclared-write")
         self.assertEqual(set(report.relation_rows("undeclared_write")), {(RUN, CLOSE, "audit_log")})
-        self.assertEqual(set(report.relation_rows("op_qualified")), {(INDEX, RUN, CREATE)})
+        self.assertEqual(set(report.relation_rows("op_qualified")), {(INDEX, RUN, CREATE), (INDEX, RUN, DELETE)})
         report = self._report("03-surviving-mutant")
         self.assertEqual(set(report.relation_rows("surviving_mutant")), {(RUN, CLOSE, "m-2")})
-        self.assertEqual(set(report.relation_rows("corpus_constrains")), {(RUN, CREATE)})
-        self.assertEqual(set(report.relation_rows("op_qualified")), {(INDEX, RUN, CREATE)})
+        self.assertEqual(set(report.relation_rows("corpus_constrains")), {(RUN, CREATE), (RUN, DELETE)})
+        self.assertEqual(set(report.relation_rows("op_qualified")), {(INDEX, RUN, CREATE), (INDEX, RUN, DELETE)})
 
     def test_missing_witnesses_leave_no_derived_rows_behind(self) -> None:
         report = self._report("04-missing-model-witness")
@@ -106,7 +127,7 @@ class PythonEvaluatorAgreesWithReviewedExpectations(unittest.TestCase):
         report = self._report("05-missing-snapshot-witness")
         self.assertEqual(report.relation_rows("replay_run_current"), ())
         self.assertEqual(report.relation_rows("replay_run_stale"), ())
-        self.assertEqual(len(report.relation_rows("php_model_agree")), 3)
+        self.assertEqual(len(report.relation_rows("php_model_agree")), 5)
         self.assertEqual(report.relation_rows("op_qualified"), ())
 
     def test_open_tables_block_closure_without_touching_the_observations(self) -> None:
@@ -114,17 +135,20 @@ class PythonEvaluatorAgreesWithReviewedExpectations(unittest.TestCase):
         self.assertEqual(report.relation_rows("php_effects_closed"), ())
         self.assertEqual(report.relation_rows("go_effects_closed"), ((RUN,),))
         self.assertEqual(report.relation_rows("undeclared_writes_closed"), ())
-        self.assertEqual(set(report.relation_rows("php_disagreement_closed")), {(RUN, CREATE), (RUN, CLOSE)})
-        self.assertEqual(set(report.relation_rows("corpus_constrains")), {(RUN, CREATE), (RUN, CLOSE)})
+        self.assertEqual(set(report.relation_rows("php_disagreement_closed")),
+                         {(RUN, op) for op in (CREATE, CLOSE, DELETE)})
+        self.assertEqual(set(report.relation_rows("corpus_constrains")),
+                         {(RUN, op) for op in (CREATE, CLOSE, DELETE)})
         self.assertEqual(report.relation_rows("undeclared_write"), ())
         self.assertEqual(report.relation_rows("op_qualified"), ())
         report = self._report("11-missing-admissible-closure")
         self.assertEqual(report.relation_rows("model_admissible_closed"), ())
         self.assertEqual(len(report.relation_rows("model_describes_run")), 1)
-        self.assertEqual(len(report.relation_rows("php_model_agree")), 3)
+        self.assertEqual(len(report.relation_rows("php_model_agree")), 5)
         self.assertEqual(report.relation_rows("php_model_disagree"), ())
         self.assertEqual(report.relation_rows("php_disagreement_closed"), ())
-        self.assertEqual(set(report.relation_rows("undeclared_writes_closed")), {(RUN, CREATE), (RUN, CLOSE)})
+        self.assertEqual(set(report.relation_rows("undeclared_writes_closed")),
+                         {(RUN, op) for op in (CREATE, CLOSE, DELETE)})
         self.assertEqual(report.relation_rows("op_qualified"), ())
 
     def test_reviewer_exclusions_are_explicit_and_closed_or_nothing(self) -> None:
@@ -133,7 +157,8 @@ class PythonEvaluatorAgreesWithReviewedExpectations(unittest.TestCase):
                          {"authentication", "redis", "audit_log"})
         self.assertEqual(set(report.relation_rows("exclusion_applied")), {(RUN, CLOSE, "audit_log")})
         self.assertEqual(report.relation_rows("undeclared_write"), ())
-        self.assertEqual(set(report.relation_rows("op_qualified")), {(INDEX, RUN, CREATE), (INDEX, RUN, CLOSE)})
+        self.assertEqual(set(report.relation_rows("op_qualified")),
+                         {(INDEX, RUN, op) for op in (CREATE, CLOSE, DELETE)})
         # the same write without the exclusion (case 02) blocks the op
         self.assertEqual(set(self._report("02-planted-undeclared-write").relation_rows("undeclared_write")),
                          {(RUN, CLOSE, "audit_log")})
@@ -157,11 +182,13 @@ class PythonEvaluatorAgreesWithReviewedExpectations(unittest.TestCase):
     def test_lying_closure_poisons_the_run_and_exposes_the_gap(self) -> None:
         report = self._report("08-lying-closure")
         self.assertEqual(set(report.relation_rows("kill_closure_gap")), {(RUN, "m-1", "req-9")})
-        self.assertEqual(set(report.relation_rows("mutant_killed_in")), {(RUN, "m-1"), (RUN, "m-2")})
+        self.assertEqual(set(report.relation_rows("mutant_killed_in")), {(RUN, "m-1"), (RUN, "m-2"), (RUN, "m-3")})
         self.assertEqual(report.relation_rows("surviving_mutant"), ())
-        # without the contradiction gate the lie would qualify both ops
-        self.assertEqual(set(report.relation_rows("corpus_constrains")), {(RUN, CREATE), (RUN, CLOSE)})
-        self.assertEqual(set(report.relation_rows("kill_closure_gap_any")), {(RUN, CREATE), (RUN, CLOSE)})
+        # without the contradiction gate the lie would qualify every op
+        self.assertEqual(set(report.relation_rows("corpus_constrains")),
+                         {(RUN, op) for op in (CREATE, CLOSE, DELETE)})
+        self.assertEqual(set(report.relation_rows("kill_closure_gap_any")),
+                         {(RUN, op) for op in (CREATE, CLOSE, DELETE)})
         self.assertEqual(report.relation_rows("kill_gap_closed"), ((RUN,),))
         self.assertEqual(report.relation_rows("op_qualified"), ())
 
@@ -174,7 +201,67 @@ class PythonEvaluatorAgreesWithReviewedExpectations(unittest.TestCase):
         self.assertIn((RUN, CREATE), set(report.relation_rows("op_exercised")))
         self.assertIn((RUN, CREATE), set(report.relation_rows("php_disagreement_closed")))
         self.assertEqual(report.relation_rows("php_disagree_any"), ())
-        self.assertEqual(set(report.relation_rows("op_qualified")), {(INDEX, RUN, CLOSE)})
+        self.assertEqual(set(report.relation_rows("op_qualified")), {(INDEX, RUN, CLOSE), (INDEX, RUN, DELETE)})
+
+
+    def test_order_violation_blocks_only_the_op_whose_request_is_out_of_order(self) -> None:
+        report = self._report("17-effect-order-violation")
+        self.assertEqual(set(report.relation_rows("effect_order_violation")),
+                         {(RUN, "go", "req-1", "issue", "entity_statistics")},
+                         "the model puts issue before entity_statistics; Go observed the reverse")
+        self.assertEqual(set(report.relation_rows("effect_order_any")), {(RUN, CREATE)})
+        self.assertEqual(set(report.relation_rows("op_qualified")), {(INDEX, RUN, CLOSE), (INDEX, RUN, DELETE)})
+        # the folded effect tables are identical to the control's: only the order differs
+        control = self._report("00-positive-control")
+        for relation in ("php_effect_seq", "go_effect", "php_effect", "undeclared_write"):
+            self.assertEqual(set(report.relation_rows(relation)), set(control.relation_rows(relation)), relation)
+        self.assertNotEqual(set(report.relation_rows("go_effect_seq")), set(control.relation_rows("go_effect_seq")))
+
+    def test_a_repeat_delete_that_writes_is_a_violation_and_defeats_the_claim(self) -> None:
+        report = self._report("18-repeat-delete-with-effects")
+        self.assertEqual(set(report.relation_rows("repeat_delete_has_effect")), {(RUN, REPEAT_DELETE)})
+        self.assertEqual(set(report.relation_rows("repeat_delete_violation")), {(RUN, REPEAT_DELETE, "effects")})
+        self.assertEqual(set(report.relation_rows("repeat_delete_any")), {(RUN, DELETE)})
+        self.assertEqual(report.relation_rows("repeat_delete_not_found"), (),
+                         "the negated premise fails: the repeat is not effect-free")
+        self.assertEqual(set(report.relation_rows("op_qualified")), {(INDEX, RUN, CREATE), (INDEX, RUN, CLOSE)},
+                         "the repeat gate is per op: create and close are untouched")
+        # the status pair is still 200/404, so no status violation was planted
+        self.assertNotIn((RUN, REPEAT_DELETE, "php"), set(report.relation_rows("repeat_delete_violation")))
+
+    def test_an_unstable_oracle_disqualifies_every_op_of_the_run(self) -> None:
+        report = self._report("19-unstable-oracle")
+        self.assertEqual(report.relation_rows("oracle_unstable"), ((RUN,),))
+        self.assertEqual(report.relation_rows("oracle_stable"), ())
+        self.assertEqual(report.relation_rows("op_qualified"), ())
+        # everything else about the run still derives: only the cross-run verdict changed
+        self.assertEqual(set(report.relation_rows("corpus_constrains")),
+                         {(RUN, op) for op in (CREATE, CLOSE, DELETE)})
+        self.assertEqual(report.relation_rows("effect_order_violation"), ())
+        self.assertEqual(set(report.relation_rows("repeat_delete_not_found")), {(RUN, DELETE_TARGET)})
+
+    def test_an_open_new_table_blocks_the_gate_that_needs_it_and_no_other(self) -> None:
+        stability = self._report("20-missing-stability-closure")
+        self.assertEqual(stability.relation_rows("replay_stability_closed"), ())
+        self.assertEqual(stability.relation_rows("oracle_stable"), ())
+        self.assertEqual(stability.relation_rows("oracle_unstable"), (),
+                         "the row says stable = true; it is the closure that is missing")
+        self.assertEqual(set(stability.relation_rows("effect_order_closed")),
+                         {(RUN, op) for op in (CREATE, CLOSE, DELETE)})
+        self.assertEqual(stability.relation_rows("op_qualified"), ())
+
+        sequence = self._report("21-missing-effect-seq-closure")
+        self.assertEqual(sequence.relation_rows("php_effect_seqs_closed"), ())
+        self.assertEqual(sequence.relation_rows("go_effect_seqs_closed"), ((RUN,),))
+        self.assertEqual(sequence.relation_rows("effect_order_closed"), ())
+        self.assertEqual(sequence.relation_rows("effect_order_violation"), (),
+                         "the rows are all there and all in order; only the closure is absent")
+        self.assertEqual(sequence.relation_rows("oracle_stable"), ((RUN,),))
+        self.assertEqual(sequence.relation_rows("op_qualified"), ())
+        for entry in evaluate(load_case(CASES_DIR / "21-missing-effect-seq-closure.json", self.pack)).claims:
+            if entry.claim.id.startswith("claim-qualified-"):
+                self.assertEqual([item["relation"] for item in entry.result.missing_premises],
+                                 ["php_effect_seqs_closed"], entry.claim.id)
 
 
 class PackMutationsFailTheCorpus(unittest.TestCase):

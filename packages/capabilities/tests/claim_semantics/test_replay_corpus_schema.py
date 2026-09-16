@@ -35,12 +35,20 @@ DERIVED = {
     "corpus_constrains", "kill_closure_gap", "php_disagree_any", "go_disagree_any", "undeclared_any",
     "php_disagreement_closed", "go_disagreement_closed", "undeclared_writes_closed", "op_qualified",
     "model_scope_excluded", "model_scope_excluded_closed", "exclusion_applied",
+    # ordering, repeat-delete and cross-run stability (v1 ordering addendum)
+    "effect_order_violation", "effect_order_respected", "effect_order_any", "effect_order_exercised",
+    "effect_order_closed", "delete_target", "first_delete_committed", "repeat_delete",
+    "repeat_delete_has_effect", "repeat_delete_effects_closed", "repeat_delete_not_found",
+    "repeat_delete_violation", "repeat_delete_any", "repeat_delete_closed",
+    "oracle_unstable", "oracle_unstable_closed", "oracle_stable",
 }
 COMPLETENESS = {"requested_closed": "requested", "op_surviving_closed": "op_has_surviving_mutant",
                 "php_disagreement_closed": "php_disagree_any", "go_disagreement_closed": "go_disagree_any",
                 "undeclared_writes_closed": "undeclared_any", "php_observed_closed": "php_observed",
                 "go_observed_closed": "go_observed", "post_state_gap_closed": "post_state_any",
-                "kill_gap_closed": "kill_closure_gap_any", "model_scope_excluded_closed": "model_scope_excluded"}
+                "kill_gap_closed": "kill_closure_gap_any", "model_scope_excluded_closed": "model_scope_excluded",
+                "effect_order_closed": "effect_order_any", "repeat_delete_effects_closed": "repeat_delete_has_effect",
+                "repeat_delete_closed": "repeat_delete_any", "oracle_unstable_closed": "oracle_unstable"}
 EVIDENCE_ID = re.compile(r"^(replay|php|go|shen|mut|reviewer):([0-9a-f]{12}|claim-time):([a-z_]+):([0-9a-f]{12})$")
 CLAIM_TIME_RELATIONS = {"run_nonce_observed", "snapshot_observed", "model_observed", "op_declared"}
 
@@ -102,7 +110,8 @@ class ReplayRulePackTests(unittest.TestCase):
                     self.assertEqual(item["context_indices"], ["model"])
                 else:
                     self.assertEqual(item["context_indices"], ["run"])
-        self.assertEqual({name for name, item in derived.items() if item["modality"] == "claim"}, {"op_qualified"})
+        self.assertEqual({name for name, item in derived.items() if item["modality"] == "claim"},
+                         {"op_qualified", "repeat_delete_not_found"})
         self.assertEqual({name: item["completes"] for name, item in derived.items()
                           if item["modality"] == "completeness"}, COMPLETENESS)
         self.assertEqual({item["modality"] for item in derived.values()}, {"derived", "completeness", "claim"})
@@ -157,7 +166,9 @@ class ReplayRulePackTests(unittest.TestCase):
             ("op_qualified_rt", "php_disagree_any"), ("op_qualified_rt", "go_disagree_any"),
             ("op_qualified_rt", "undeclared_any"), ("op_qualified_rt", "post_state_any"),
             ("op_qualified_rt", "kill_closure_gap_any"), ("undeclared_write", "model_scope_excluded"),
-            ("post_state_gap", "php_observed"), ("post_state_gap", "go_observed")})
+            ("post_state_gap", "php_observed"), ("post_state_gap", "go_observed"),
+            ("op_qualified_rt", "effect_order_any"), ("op_qualified_rt", "repeat_delete_any"),
+            ("repeat_delete_not_found", "repeat_delete_has_effect"), ("oracle_stable", "oracle_unstable")})
         witnesses = {item["completes"] for item in self.declarations.values() if item["modality"] == "completeness"}
         self.assertTrue({target for _, target in negated} <= witnesses)
 
@@ -244,10 +255,11 @@ class ReplayCaseTests(unittest.TestCase):
     def test_case_numbers_cover_the_control_and_the_adversarial_shapes(self) -> None:
         self.assertEqual([path.stem for path in self.paths], list(case_builder.BUILDERS))
         self.assertEqual(sorted({path.name[:2] for path in self.paths}),
-                         ["00", "01", "02", "03", "04", "05", "06", "08", "09", "10", "11", "13", "14", "15"])
+                         ["00", "01", "02", "03", "04", "05", "06", "08", "09", "10", "11", "13", "14", "15",
+                          "17", "18", "19", "20", "21"])
         self.assertEqual([path.stem for path in case_paths(REJECTED_DIR)],
                          ["07-producer-class-violation", "12-closure-producer-violation",
-                          "16-exclusion-producer-violation"])
+                          "16-exclusion-producer-violation", "22-effect-seq-producer-violation"])
         self.assertEqual([path.stem for path in case_paths(REJECTED_DIR)], list(case_builder.REJECTED_BUILDERS))
 
     def test_every_case_regenerates_identically_from_the_exporter(self) -> None:

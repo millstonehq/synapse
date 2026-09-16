@@ -88,8 +88,9 @@ class ReplayEvidencePolicyTest(unittest.TestCase):
         self.assertEqual(report.relation_rows("op_qualified"), ())
         self.assertEqual(report.relation_rows("snapshot_observed"), ())
         # every other input to qualification is present: the closures are the only gap
-        self.assertEqual(len(report.relation_rows("php_model_agree")), 3)
-        self.assertEqual(set(report.relation_rows("corpus_constrains")), {(cases.RUN, cases.CREATE), (cases.RUN, cases.CLOSE)})
+        self.assertEqual(len(report.relation_rows("php_model_agree")), 5)
+        self.assertEqual(set(report.relation_rows("corpus_constrains")),
+                         {(cases.RUN, op) for op in (cases.CREATE, cases.CLOSE, cases.DELETE)})
         self.assertEqual(report.relation_rows("php_disagreement_closed"), ())
         active = {record.id for record in bundle.evidence}
         rendered = render_outputs(bundle, CLAIM_ID, active, None, "unresolved", {"replay_run_current"})
@@ -112,7 +113,7 @@ class ReplayEvidencePolicyTest(unittest.TestCase):
         self.assertTrue({"replay", "php", "go", "shen", "mut", "reviewer", "php-census"} <= classes)
         self.assertIn("snapshot_observed", {leaf.split(":")[2] for leaf in leaves})
         self.assertEqual(set(report.relation_rows("op_qualified")),
-                         {(cases.INDEX, cases.RUN, cases.CREATE), (cases.INDEX, cases.RUN, cases.CLOSE)})
+                         {(cases.INDEX, cases.RUN, op) for op in (cases.CREATE, cases.CLOSE, cases.DELETE)})
         proof = VerifiedProofEvidence.from_bundle(bundle, CLAIM_ID, leaves)
         rendered = render_outputs(bundle, CLAIM_ID, set(by_id), proof, "supported")
         observed = {item["evidence_id"] for item in rendered if item["kind"] == "observed"}
