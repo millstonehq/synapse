@@ -10,6 +10,10 @@ a schema version, not a patch.
 retain=True)`` or ``normalize_scip_json(..., retain=True)``) plus the
 tree-sitter side's raw discover dict into a validated claims ``Bundle`` of facts
 and evidence keyed by that index's digest.
+
+``runtime_receipt`` imports a retained target-go runtime receipt as typed evidence
+and the static/runtime join rules.  ``certificate`` / ``ground`` re-derive and
+explain engine-independent certificates (Stage C why / why-not).
 """
 
 from __future__ import annotations

@@ -107,6 +107,8 @@ from ..ir import (Atom, Bundle, Column, Constant, Context, Evidence,
                   RelationDecl, TypeName, canonical_json, digest as ir_digest)
 from ..validation import ValidationError, assert_valid
 from . import load_static_schema
+from .runtime_receipt import (RUNTIME_ROUTE_OBSERVED, RUNTIME_ROUTE_REACHES_SQL,
+                              TRACE_PRIMITIVE_DECLS)
 
 EXPORT_VERSION = "v1"
 EXPORTER = "capcov.claims.static.scip_facts"
@@ -196,34 +198,9 @@ _DERIVED_TARGET_DECLS = (
                   Column("dst", "symbol")),
                  modality="derived", binding="static", primitive=False,
                  context_indices=("index",)),
-    RelationDecl("runtime_route_observed",
-                 (Column("tenant", "symbol", True), Column("surface", "symbol", True),
-                  Column("event", "symbol", True), Column("run", "symbol", True)),
-                 context_indices=("tenant", "surface", "event", "run")),
-    RelationDecl("runtime_function_entered",
-                 (Column("run", "symbol", True), Column("request", "symbol", True),
-                  Column("symbol", "symbol")),
-                 producer_classes=("target-go-runtime-trace-v2",), context_indices=("run", "request")),
-    RelationDecl("runtime_sql_executed",
-                 (Column("run", "symbol", True), Column("request", "symbol", True),
-                  Column("tx", "symbol", True), Column("operation", "symbol"),
-                  Column("ordinal", "unsigned")),
-                 producer_classes=("target-go-runtime-trace-v2",), context_indices=("run", "request", "tx")),
-    RelationDecl("runtime_tx_committed",
-                 (Column("run", "symbol", True), Column("request", "symbol", True),
-                  Column("tx", "symbol", True)),
-                 producer_classes=("target-go-runtime-trace-v2",), context_indices=("run", "request", "tx")),
-    RelationDecl("runtime_route_completed",
-                 (Column("run", "symbol", True), Column("request", "symbol", True),
-                  Column("surface", "symbol", True)),
-                 producer_classes=("target-go-runtime-trace-v2",), context_indices=("run", "request", "surface")),
-    RelationDecl("runtime_route_reaches_sql_on_index",
-                 (Column("index", "digest", True), Column("run", "symbol", True),
-                  Column("request", "symbol", True), Column("surface", "symbol", True),
-                  Column("symbol", "symbol"), Column("tx", "symbol", True),
-                  Column("operation", "symbol")),
-                 modality="derived", binding="runtime", primitive=False,
-                 context_indices=("index", "run", "request", "surface", "tx")),
+    RUNTIME_ROUTE_OBSERVED,
+    *TRACE_PRIMITIVE_DECLS,
+    RUNTIME_ROUTE_REACHES_SQL,
 )
 STUB_RELATIONS = frozenset(decl.name for decl in _DERIVED_TARGET_DECLS)
 
