@@ -5699,3 +5699,22 @@ negated instance but of the projection's absence, which the companion certificat
 `capcov-static-certificate-v2` that additionally records negation witnesses (the complement basis
 rows) is backlog, to be taken up only if a consumer needs one certificate to be self-contained.
 
+### 2026-09-16 full-coverage replay receipt integrated (shen1, `c701706`)
+
+`experiment/replay-claims-rewritten` `c701706` (`b37a84a` commits the scrubbed full-coverage
+receipt — target run `eca6e793…`, model digest `08380c9c…`, `model_writes` now declaring
+`entity_statistics`, `issue`, `mongo:issue` — as `fixtures/replay_receipt_target_go_qualified/`,
+the earlier receipt renamed to `…_unqualified/` and kept as the negative path; `c701706` makes the
+qualified fixture the default) merged as `f35547b`, no conflicts, zero identifier hits. shen1 also
+fixed a real defect on the way: `evaluate_join` kept only the last row's certificate for the open
+`exclusion_applied` claim, so assumption leaves were undercounted (1 instead of 4); it now emits
+one certificate per row.
+
+Integrator's runs on `f35547b`: replay 79 OK; receipt suite 22 OK with no skips; live pilot at
+`01fe913` with the route trace receipt `Ran 10 tests in 136.2s OK`, `replay_join.status =
+complete`, `delete-issue.op_qualified = supported`, `operational = complete`, `missing_premise =
+[]`, exclusions applied `authentication, go_issue_outbox, jobs_statuses, redis`. This is the first
+run in which the replay judge qualifies the real op end to end; the qualification rests on four
+reviewer exclusions carried as assumption leaves, and the pilot receipt says so. Full regression
+bound to `f35547b`: `Ran 1206 tests in 102.5s`, `OK (skipped=153)`.
+
