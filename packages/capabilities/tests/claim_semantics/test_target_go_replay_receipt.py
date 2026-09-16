@@ -408,7 +408,8 @@ class _JoinCase(unittest.TestCase):
                 self.assertTrue(set(explanation["shared_assumptions"]) & set(self.join.assumption_ids))
         self.assertEqual({row[2] for row in dict(self.join.result.python.relations)["op_qualified"]}, set(self.join.ops))
 
-    def check_artifacts(self) -> None:
+    def check_artifact_hygiene(self) -> dict:
+        """The artifact contract every receipt owes: a join receipt, no paths, no source."""
         self._exported()
         written = sorted(p.name for p in self.out_dir.iterdir())
         self.assertIn("receipt.json", written)
@@ -421,6 +422,10 @@ class _JoinCase(unittest.TestCase):
         for value in self.join.receipt.get("receipts", {}).values():
             if isinstance(value, str) and value.startswith("/"):
                 self.assertNotIn(value, text)
+        return document
+
+    def check_artifacts(self) -> None:
+        document = self.check_artifact_hygiene()
         if self.join.result is not None:
             for op in self.join.ops:
                 entry = document["join"][op]
@@ -565,17 +570,93 @@ class RealReceiptTest(_JoinCase):
             [row] = summary["stability"]["rows"]
             self.assertEqual(row[2:], ["php", "true"])
             self.assertEqual(len(row), 4, "(run_a, run_b, side, stable) after the run column")
-            # TODO(four-request run): the committed receipt is a three-request run that
-            # predates the repeat request, so there is nothing for the repeat rules to
-            # judge here.  This asserts the *empty* shape, which is the inverse of the
-            # open item -- repeat_delete_not_found(run, DELETE /.../issues/<id>) supported
-            # on a live four-request tape.  The claim has never been evaluated against a
-            # real receipt; cases 00, 18 and 23-25 are synthetic.  Replace this assertion
-            # with the positive one when that run exists, do not delete it.
+            # TODO(four-request run): this receipt is a three-request run that predates
+            # the repeat request, so there is nothing for the repeat rules to judge here.
+            # The positive shape lives on the four-request receipt (RepeatTapeReceiptTest,
+            # fixtures/replay_receipt_target_go_repeat), whose op_qualified is unresolved
+            # for want of a mutant re-baseline; when that tape is re-baselined and its
+            # selftest runs, the two fixtures should become one.
             self.assertEqual(entry["repeat_delete"], {"repeats": [], "violations": [], "not_found": []})
 
     def test_artifacts_carry_digests_and_verdicts_only(self) -> None:
         self.check_artifacts()
+
+
+class RepeatTapeReceiptTest(_JoinCase):
+    """The four-request run: the repeat DELETE executed against the incumbent for real.
+
+    This is the receipt the cross-request claim was written for.  ``op_qualified`` is
+    unresolved on it and says so at ``corpus_constrains`` -- no mutant was re-baselined
+    on this tape and no selftest ran -- which is exactly why it is kept separately from
+    the qualified three-request fixture rather than replacing it.
+    """
+
+    TARGET = "DELETE /api/cloud/project/21/issues/31"
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._setup(replay_join.REPEAT_RECEIPT_DIR, Path(tempfile.mkdtemp(prefix="capcov-repeat-replay-out-")))
+
+    def test_export_and_kernels(self) -> None:
+        self.check_export()
+        self.check_kernels()
+        self.assertEqual(self.join.receipt["run"], "271d2dde86a0")
+        self.assertEqual(self.join.ops, ("delete-issue",))
+        relations = dict(self.join.result.python.relations)
+        self.assertEqual({row[1] for row in relations["replay_request"]},
+                         {"owner", "forbidden", "missing", "repeat"})
+
+    def test_the_repeat_delete_claim_holds_on_real_rows(self) -> None:
+        self._evaluated()
+        relations = dict(self.join.result.python.relations)
+        run = self.join.run
+        self.assertEqual(relations["repeat_delete"], ((run, "repeat", self.TARGET),))
+        self.assertEqual(relations["first_delete_committed"], ((run, "owner", self.TARGET),),
+                         "owner is the first delete of the target and the one that committed")
+        self.assertEqual(relations["earlier_delete"], ((run, "oracle", self.TARGET, 4),))
+        self.assertEqual(relations["repeat_delete_not_found"], ((run, self.TARGET),))
+        self.assertEqual(relations["repeat_delete_violation"], ())
+        self.assertEqual(relations["repeat_delete_has_effect"], ())
+        # what the systems actually did: the repeat answered 404 and wrote nothing at all,
+        # not even the bookkeeping rows the 403 request writes.  The exclusion guard on
+        # repeat_delete_has_effect is therefore not what carries the claim here (case 23
+        # is the shape that exercises it); the claim rests on empty effect tables.
+        self.assertEqual({row[2] for row in relations["php_response"] if row[1] == "repeat"}, {404})
+        self.assertEqual({row[2] for row in relations["go_response"] if row[1] == "repeat"}, {404})
+        for side in ("php", "go"):
+            self.assertEqual([row for row in relations[f"{side}_effect"] if row[1] == "repeat"], [],
+                             f"{side} recorded an effect for the repeat")
+            self.assertEqual([row for row in relations[f"{side}_effect_seq"] if row[1] == "repeat"], [])
+            self.assertTrue([row for row in relations[f"{side}_effect"] if row[1] == "forbidden"],
+                            f"{side} does write bookkeeping rows on the 403, which is why the guard exists")
+
+    def test_the_op_is_unresolved_and_says_where(self) -> None:
+        self._evaluated()
+        summary = replay_join.summary(self.join)
+        entry = summary["delete-issue"]
+        self.assertEqual(entry["op_qualified"], "unresolved")
+        self.assertEqual(entry["operational"], "complete")
+        self.assertEqual(entry["blocking_premise"], {"relation": "corpus_constrains", "holds": False},
+                         "no mutant was re-baselined on this tape")
+        self.assertFalse(entry["corpus_constrains"])
+        self.assertEqual(summary["stability"], {"rows": [], "oracle_stable": False, "oracle_unstable": False},
+                         "the selftest did not run on this tape")
+        # the gates that did run on it
+        self.assertEqual(entry["effect_order"], {"violations": [], "respected": [["go", "owner"], ["php", "owner"]],
+                                                 "exercised": True})
+        self.assertEqual(entry["repeat_delete"], {"repeats": [["repeat", self.TARGET]], "violations": [],
+                                                  "not_found": [self.TARGET]})
+        self.assertEqual(set(entry["exclusions_applied"]),
+                         {"authentication", "go_issue_outbox", "jobs_statuses", "redis"})
+
+    def test_artifacts(self) -> None:
+        document = self.check_artifact_hygiene()
+        entry = document["join"]["delete-issue"]
+        self.assertEqual(entry["op_qualified"], "unresolved")
+        self.assertEqual(entry["blocking_premise"], {"relation": "corpus_constrains", "holds": False})
+        self.assertFalse(entry["corpus_constrains"])
+        self.assertEqual(entry["repeat_delete"]["not_found"], [self.TARGET])
+        self.assertNotIn("claim:", json.dumps(entry))
 
 
 class UnqualifiedFixtureTest(_JoinCase):

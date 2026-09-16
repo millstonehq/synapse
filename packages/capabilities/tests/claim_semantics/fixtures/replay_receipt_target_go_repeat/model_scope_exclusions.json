@@ -1,0 +1,31 @@
+{
+  "producer": "reviewer Reuben Brooks 2026-09-16 model:08380c9c336d run:271d2dde86a0",
+  "reviewed_against": {
+    "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+    "run": "271d2dde86a0"
+  },
+  "reviewed_at": "2026-09-16",
+  "reviewer": "Reuben Brooks",
+  "rows": [
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "reason": "session token expiry touch on every authenticated request; not an issue-domain effect",
+      "table": "authentication"
+    },
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "reason": "Laravel queue job bookkeeping",
+      "table": "jobs_statuses"
+    },
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "reason": "cache and Horizon queue keys",
+      "table": "redis"
+    },
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "reason": "candidate's transactional outbox; delivered effects are compared, the outbox row itself is infrastructure",
+      "table": "go_issue_outbox"
+    }
+  ]
+}

@@ -304,14 +304,24 @@ Design points a reviewer should check:
   `effect_order_violation` rules are the same shape over `php_effect_seq` and
   `go_effect_seq` and the pack lint checks both, but the PHP leg is exercised
   by symmetry, not by a case of its own.
-* **`repeat_delete_not_found` has never been evaluated against a real
-  receipt.**  Cases 00, 18 and 23-25 are synthetic edits of
-  `fixtures/replay_receipt_min`; the committed target-go receipt is a
-  three-request run whose tape has no repeat, so the receipt suite asserts the
-  *empty* repeat shape (marked `TODO(four-request run)` in
-  `test_target_go_replay_receipt`).  A live four-request run is the open item,
-  and it is the only thing that will show whether the real repeat writes only
-  excluded tables.
+* **What the real repeat actually did.**  `repeat_delete_not_found` is judged
+  against real rows on `fixtures/replay_receipt_target_go_repeat` (run
+  `271d2dde86a0`), the four-request tape -- owner 200, forbidden 403, missing
+  404, repeat 404 -- in which the repeat was executed against the incumbent for
+  the first time.  The claim is **supported** there: `owner` is the first
+  delete of the target and committed, the repeat answered 404 on both sides,
+  and both effect tables are empty for it.  Note what that means for the
+  exclusion guard: this repeat wrote *nothing at all*, not even the
+  bookkeeping rows the 403 request writes, so the guard is not what carries
+  the claim on this receipt -- case 23 is the shape that exercises it, and the
+  guard is what keeps a system that does touch its session row on a 404 from
+  failing the claim.  `op_qualified` on that receipt is unresolved at
+  `corpus_constrains`: no mutant was re-baselined on the four-request tape and
+  the selftest did not run, so `closed.mutant_kills` and
+  `closed.replay_stability` are false.  Re-baselining the mutants on this tape
+  and running the selftest is the open item; the three-request
+  `..._qualified` fixture stays the one where `op_qualified` is supported, and
+  its tape has no repeat (marked `TODO(four-request run)` there).
 
 ## One observation per key
 
