@@ -470,6 +470,41 @@
       "binding": "runtime",
       "columns": [
         {
+          "context": true,
+          "name": "model",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "reason",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "model"
+      ],
+      "finite": false,
+      "modality": "assumption",
+      "name": "model_scope_exclusion",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
           "context": false,
           "name": "run",
           "type": "symbol"
@@ -783,6 +818,31 @@
       "primitive": true,
       "producer_classes": [
         "mut"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "model",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "model_scope_exclusion",
+      "context_indices": [
+        "model"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "model_scope_exclusions_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
       ]
     },
     {

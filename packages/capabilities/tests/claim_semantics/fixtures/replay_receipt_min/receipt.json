@@ -3,6 +3,7 @@
     "go_effects": true,
     "go_post_states": true,
     "model_admissible": true,
+    "model_scope_exclusions": true,
     "mutant_kills": true,
     "php_effects": true,
     "php_post_states": true,
