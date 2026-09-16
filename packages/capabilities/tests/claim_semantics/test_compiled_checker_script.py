@@ -171,13 +171,25 @@ class CompiledCheckerScriptTests(unittest.TestCase):
         # the replayed op itself is still judged and still supported
         self.assertEqual(document["ops"]["delete-issue"]["op_qualified"]["semantic"], "supported")
 
-    def test_no_required_op_judges_and_exits_zero(self) -> None:
+    def test_no_required_op_derives_the_verdict_from_every_replayed_op(self) -> None:
+        """A verdict over zero requirements would be vacuous; every replayed op decides it."""
         completed, out = self.judge(replay_join.UNQUALIFIED_RECEIPT_DIR, "no-requirement")
+        self.assertEqual(completed.returncode, 1, completed.stderr[-2000:])
+        document = json.loads((out / "judge.json").read_text())
+        self.assertEqual(document["required_ops"], [])
+        self.assertEqual(document["verdict"], "not-supported")
+        self.assertEqual(document["exit_code"], 1)
+        self.assertEqual(document["unmet_ops"], ["delete-issue"])
+        self.assertEqual(document["ops"]["delete-issue"]["op_qualified"]["semantic"], "unresolved")
+        self.assertTrue(document["kernels"]["matched"], "the kernels still agree")
+
+        # the qualified receipt needs no requirement to be judged supported
+        completed, out = self.judge(replay_join.COMMITTED_RECEIPT_DIR, "no-requirement-qualified")
         self.assertEqual(completed.returncode, 0, completed.stderr[-2000:])
         document = json.loads((out / "judge.json").read_text())
         self.assertEqual(document["required_ops"], [])
         self.assertEqual(document["verdict"], "supported")
-        self.assertEqual(document["ops"]["delete-issue"]["op_qualified"]["semantic"], "unresolved")
+        self.assertEqual(set(document), JUDGE_KEYS)
 
     def test_an_extra_receipt_key_is_a_contract_finding_and_exits_three(self) -> None:
         copy = self.workspace / "receipt-with-extra-key"

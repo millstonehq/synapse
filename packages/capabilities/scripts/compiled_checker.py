@@ -20,6 +20,10 @@ Exit codes (``judge``)::
     3  the receipt does not meet the exporter's contract (a contract finding)
     4  the toolchain is unavailable (no souffle, no souffle-compile.py)
 
+Without ``--require-op`` the verdict is derived from every replayed op rather
+than from an empty requirement: a verdict over zero requirements would be
+vacuously ``supported``, which no party has asserted.
+
 The compiled binary is a third independent evaluator with recorded provenance,
 never a replacement for the interpreter or the Python kernel: a compiled-side
 failure is a named failure, never a fallback, and ``judge`` exits non-zero
@@ -171,6 +175,20 @@ def _op_is_supported(entry: dict[str, Any]) -> bool:
     return entry["verdict"] == VERDICT_SUPPORTED
 
 
+def _unmet_ops(replayed: dict[str, Any], required: list[str]) -> list[str]:
+    """The ops the verdict turns on that are not op_qualified supported/complete.
+
+    With ``--require-op`` those are exactly the required ops (an op that was
+    never replayed is unmet).  With none, the verdict is derived from every
+    replayed op instead of from an empty requirement: ``supported`` over zero
+    requirements is a vacuous truth no party has asserted, and a caller that
+    reads ``.verdict`` would take it for a positive judgement of the receipt.
+    """
+    if required:
+        return [op for op in required if op not in replayed or not _op_is_supported(replayed[op])]
+    return [op for op in sorted(replayed) if not _op_is_supported(replayed[op])]
+
+
 def judge(args: argparse.Namespace) -> int:
     receipt_dir = Path(args.receipt)
     out_dir = Path(args.out)
@@ -225,12 +243,14 @@ def judge(args: argparse.Namespace) -> int:
     replay_join.write_artifacts(join, out_dir)
     document = _judge_document(join, required, verdict=VERDICT_SUPPORTED, exit_code=EXIT_OK,
                                program_digest=program_digest, findings=join.contract_findings)
-    unmet = [op for op in required
-             if op not in document["ops"] or not _op_is_supported(document["ops"][op])]
-    if unmet:
+    unmet = _unmet_ops(document["ops"], required)
+    judged = required or sorted(document["ops"])
+    if unmet or not judged:
         document["verdict"] = VERDICT_NOT_SUPPORTED
         document["exit_code"] = EXIT_NOT_SUPPORTED
         document["unmet_ops"] = unmet
+        if not judged:
+            document["message"] = "no op was replayed and none was required; nothing is supported"
     _write_json(out_dir / JUDGE_FILE, document)
     for op, entry in sorted(document["ops"].items()):
         print(f"{op}: {entry['verdict']} op_qualified={entry['op_qualified']['semantic']}"
@@ -241,7 +261,10 @@ def judge(args: argparse.Namespace) -> int:
     print(f"verdict={document['verdict']} kernels_matched={document['kernels']['matched']}"
           f" binary={binary[:12]}")
     if unmet:
-        print(f"required ops not supported: {', '.join(unmet)}", file=sys.stderr)
+        label = "required" if required else "replayed"
+        print(f"{label} ops not supported: {', '.join(unmet)}", file=sys.stderr)
+    elif not judged:
+        print(document["message"], file=sys.stderr)
     return int(document["exit_code"])
 
 
@@ -369,7 +392,8 @@ def build_parser() -> argparse.ArgumentParser:
     judge_parser.add_argument("--souffle", default="souffle", help="the souffle executable")
     judge_parser.add_argument("--require-supported", "--require-op", action="append", default=[],
                               metavar="OP", dest="require_supported",
-                              help="an op that must be op_qualified supported/complete (repeatable)")
+                              help="an op that must be op_qualified supported/complete "
+                                   "(repeatable; with none, every replayed op must be)")
     judge_parser.set_defaults(handler=judge)
 
     bench_parser = subparsers.add_parser("bench", help="time the interpreter against the binary")
