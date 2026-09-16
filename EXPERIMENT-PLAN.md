@@ -5352,8 +5352,8 @@ target-go pilot gate on `e80003f`/`7c781e4` (integrator's rerun, PR #49 artifact
 
 ### 2026-09-15 replay judge (shen1 session) integrated; Shen runtime aligned
 
-The `shen1` session built an executable the target system domain model in Shen (target-go worktree,
-branch `feat/TICKET-0000-model-shen`) whose admissible-state sets, effect lists, and declared
+The `shen1` session built an executable domain model of the candidate in Shen (on the
+candidate's model branch) whose admissible-state sets, effect lists, and declared
 write-sets become `model_admissible`, `model_effect`, `model_writes` facts with honest
 completeness witnesses, consumed by a PHP-vs-Go-vs-model binlog replay runner. On the capcov
 side that work is `experiment/replay-claims` (pushed to the pyrex41 fork at `e373bb3`, off this
