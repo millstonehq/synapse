@@ -212,7 +212,9 @@ def observation(trigger: str, context: list[str], predicate: dict[str, Any] | No
 # suppressed by the witness's presence (excludes_evidence).
 WITNESS_DIAGNOSTICS = [observation("model_describes_run", ["run"]), observation("run_nonce_observed", []),
                        observation("snapshot_observed", []), observation("model_observed", []),
-                       observation("php_post_states_closed", ["run"]), observation("go_post_states_closed", ["run"])]
+                       observation("php_post_states_closed", ["run"]), observation("go_post_states_closed", ["run"]),
+                       observation("php_effects_closed", ["run"]), observation("go_effects_closed", ["run"]),
+                       observation("model_admissible_closed", ["run"])]
 WITNESS_REASONS = {
     "model_describes_run": "no model_describes_run witness binds the receipt's model to the run",
     "run_nonce_observed": "the reviewer did not observe the run's nonce",
@@ -220,6 +222,9 @@ WITNESS_REASONS = {
     "model_observed": "the reviewer did not observe the model digest",
     "php_post_states_closed": "the harness did not close the PHP post-state table for the run",
     "go_post_states_closed": "the harness did not close the Go post-state table for the run",
+    "php_effects_closed": "the harness did not close the PHP effect table for the run",
+    "go_effects_closed": "the harness did not close the Go effect table for the run",
+    "model_admissible_closed": "the model runner did not close the admissible-state set for the run and model",
 }
 
 
@@ -544,6 +549,55 @@ def build_09() -> dict[str, Any]:
                  "post-state-omitted", notes, facts, claims, outputs)
 
 
+def _open(*keys: str) -> Edit:
+    def edit(document: Any) -> Any:
+        for key in keys:
+            document["closed"][key] = False
+        return document
+    return edit
+
+
+def build_10() -> dict[str, Any]:
+    with variant({"receipt": _open("php_effects")}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "closed.php_effects is false, so no php_effects_closed witness is exported; undeclared_writes_closed "
+                "lists it as an input and does not derive, so op_qualified_rt cannot derive although every "
+                "observation agrees and every other closure holds.",
+        CLOSE: "As for issues.create."}, absent=("php_effects_closed",))
+    notes = [
+        "receipt.json says closed.php_effects = false; php_effect.json is the control's (three rows) and every "
+        "other closure, witness and observation is present.  go_effects stays closed so exactly one leaf is absent.",
+        "Both op_qualified claims are unresolved with php_effects_closed as the only missing premise: an open effect "
+        "table cannot license !undeclared_any.",
+    ]
+    return _case("10-missing-effects-closure", "The PHP effect table is not closed", None, notes, facts, claims,
+                 outputs)
+
+
+def build_11() -> dict[str, Any]:
+    with variant({"receipt": _open("model_admissible")}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "model_describes_run is present and every post-state is admitted, but closed.model_admissible is "
+                "false: without model_admissible_closed neither php_model_disagree nor php_disagreement_closed "
+                "can derive, so agreement is observed yet cannot be closed and op_qualified_rt cannot derive.",
+        CLOSE: "As for issues.create."}, absent=("model_admissible_closed",))
+    companion = _claim("claim-php-agrees-req-1", "php_model_agree", ["run", "req"], [RUN, "req-1"], {"run": RUN},
+                       "Agreement needs only the model witness and an admissible row, both present.")
+    claims.append(companion)
+    notes = [
+        "receipt.json says closed.model_admissible = false; model_admissible.json and model_describes_run are the "
+        "control's, distinguishing this case from 04 where the compatibility witness itself is absent.",
+        "Both op_qualified claims are unresolved with model_admissible_closed as the only missing premise while the "
+        "php_model_agree companion is supported: observed agreement is not closed agreement.",
+    ]
+    return _case("11-missing-admissible-closure", "The model's admissible-state set is not closed", None, notes,
+                 facts, claims, outputs)
+
+
 def build_rejected_12() -> dict[str, Any]:
     case = build_00()
     case["id"] = "12-closure-producer-violation"
@@ -594,6 +648,8 @@ BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "06-stale-replay": build_06,
     "08-lying-closure": build_08,
     "09-missing-post-state": build_09,
+    "10-missing-effects-closure": build_10,
+    "11-missing-admissible-closure": build_11,
 }
 REJECTED_BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "07-producer-class-violation": build_rejected_07,
@@ -627,6 +683,11 @@ REVIEW: dict[str, dict[str, tuple[str, str, list[str], list[str]]]] = {
     "09-missing-post-state": {"claim-qualified-create": ("unresolved", "complete", ["php_post_state"], []),
                               "claim-qualified-close": ("supported", "complete", [], []),
                               "claim-req-3-php-post-state-gap": ("supported", "complete", [], ["post-state-missing"])},
+    "10-missing-effects-closure": {"claim-qualified-create": ("unresolved", "complete", ["php_effects_closed"], []),
+                                   "claim-qualified-close": ("unresolved", "complete", ["php_effects_closed"], [])},
+    "11-missing-admissible-closure": {"claim-qualified-create": ("unresolved", "complete", ["model_admissible_closed"], []),
+                                      "claim-qualified-close": ("unresolved", "complete", ["model_admissible_closed"], []),
+                                      "claim-php-agrees-req-1": ("supported", "complete", [], [])},
 }
 # Evidence a derivation must not use, per case: the lying witness of 08.
 FORBIDDEN: dict[str, Callable[[list[dict[str, Any]]], list[str]]] = {

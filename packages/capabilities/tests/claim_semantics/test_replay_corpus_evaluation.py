@@ -109,6 +109,24 @@ class PythonEvaluatorAgreesWithReviewedExpectations(unittest.TestCase):
         self.assertEqual(len(report.relation_rows("php_model_agree")), 3)
         self.assertEqual(report.relation_rows("op_qualified"), ())
 
+    def test_open_tables_block_closure_without_touching_the_observations(self) -> None:
+        report = self._report("10-missing-effects-closure")
+        self.assertEqual(report.relation_rows("php_effects_closed"), ())
+        self.assertEqual(report.relation_rows("go_effects_closed"), ((RUN,),))
+        self.assertEqual(report.relation_rows("undeclared_writes_closed"), ())
+        self.assertEqual(set(report.relation_rows("php_disagreement_closed")), {(RUN, CREATE), (RUN, CLOSE)})
+        self.assertEqual(set(report.relation_rows("corpus_constrains")), {(RUN, CREATE), (RUN, CLOSE)})
+        self.assertEqual(report.relation_rows("undeclared_write"), ())
+        self.assertEqual(report.relation_rows("op_qualified"), ())
+        report = self._report("11-missing-admissible-closure")
+        self.assertEqual(report.relation_rows("model_admissible_closed"), ())
+        self.assertEqual(len(report.relation_rows("model_describes_run")), 1)
+        self.assertEqual(len(report.relation_rows("php_model_agree")), 3)
+        self.assertEqual(report.relation_rows("php_model_disagree"), ())
+        self.assertEqual(report.relation_rows("php_disagreement_closed"), ())
+        self.assertEqual(set(report.relation_rows("undeclared_writes_closed")), {(RUN, CREATE), (RUN, CLOSE)})
+        self.assertEqual(report.relation_rows("op_qualified"), ())
+
     def test_stale_case_derives_replay_run_stale_and_not_replay_run_current(self) -> None:
         report = self._report("06-stale-replay")
         self.assertEqual(report.relation_rows("replay_run_current"), ())

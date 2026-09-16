@@ -219,7 +219,7 @@ class ReplayCaseTests(unittest.TestCase):
     def test_case_numbers_cover_the_control_and_the_adversarial_shapes(self) -> None:
         self.assertEqual([path.stem for path in self.paths], list(case_builder.BUILDERS))
         self.assertEqual(sorted({path.name[:2] for path in self.paths}),
-                         ["00", "01", "02", "03", "04", "05", "06", "08", "09"])
+                         ["00", "01", "02", "03", "04", "05", "06", "08", "09", "10", "11"])
         self.assertEqual([path.stem for path in case_paths(REJECTED_DIR)],
                          ["07-producer-class-violation", "12-closure-producer-violation"])
         self.assertEqual([path.stem for path in case_paths(REJECTED_DIR)], list(case_builder.REJECTED_BUILDERS))

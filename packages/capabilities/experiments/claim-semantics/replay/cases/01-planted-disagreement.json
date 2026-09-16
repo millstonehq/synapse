@@ -1242,6 +1242,30 @@
           "context_indices": [
             "run"
           ]
+        },
+        {
+          "trigger_relation": "php_effects_closed",
+          "effect": "observation",
+          "operational_status": "complete",
+          "context_indices": [
+            "run"
+          ]
+        },
+        {
+          "trigger_relation": "go_effects_closed",
+          "effect": "observation",
+          "operational_status": "complete",
+          "context_indices": [
+            "run"
+          ]
+        },
+        {
+          "trigger_relation": "model_admissible_closed",
+          "effect": "observation",
+          "operational_status": "complete",
+          "context_indices": [
+            "run"
+          ]
         }
       ],
       "reading": "issues.create is untouched by the planted disagreement and qualifies as in the control."
@@ -1303,6 +1327,30 @@
         },
         {
           "trigger_relation": "go_post_states_closed",
+          "effect": "observation",
+          "operational_status": "complete",
+          "context_indices": [
+            "run"
+          ]
+        },
+        {
+          "trigger_relation": "php_effects_closed",
+          "effect": "observation",
+          "operational_status": "complete",
+          "context_indices": [
+            "run"
+          ]
+        },
+        {
+          "trigger_relation": "go_effects_closed",
+          "effect": "observation",
+          "operational_status": "complete",
+          "context_indices": [
+            "run"
+          ]
+        },
+        {
+          "trigger_relation": "model_admissible_closed",
           "effect": "observation",
           "operational_status": "complete",
           "context_indices": [
@@ -1435,6 +1483,48 @@
     },
     {
       "kind": "missing_premise",
+      "claim_id": "claim-qualified-create",
+      "relation": "php_effects_closed",
+      "fields": {
+        "reason": {
+          "value": "the harness did not close the PHP effect table for the run"
+        }
+      },
+      "when_claim": "unresolved",
+      "excludes_evidence": [
+        "replay:4a8d3817dd2d:php_effects_closed:c69d8dda2898"
+      ]
+    },
+    {
+      "kind": "missing_premise",
+      "claim_id": "claim-qualified-create",
+      "relation": "go_effects_closed",
+      "fields": {
+        "reason": {
+          "value": "the harness did not close the Go effect table for the run"
+        }
+      },
+      "when_claim": "unresolved",
+      "excludes_evidence": [
+        "replay:4a8d3817dd2d:go_effects_closed:741c700022f7"
+      ]
+    },
+    {
+      "kind": "missing_premise",
+      "claim_id": "claim-qualified-create",
+      "relation": "model_admissible_closed",
+      "fields": {
+        "reason": {
+          "value": "the model runner did not close the admissible-state set for the run and model"
+        }
+      },
+      "when_claim": "unresolved",
+      "excludes_evidence": [
+        "shen:4a8d3817dd2d:model_admissible_closed:e42e24b4af61"
+      ]
+    },
+    {
+      "kind": "missing_premise",
       "claim_id": "claim-qualified-close",
       "relation": "model_describes_run",
       "fields": {
@@ -1520,6 +1610,48 @@
     {
       "kind": "missing_premise",
       "claim_id": "claim-qualified-close",
+      "relation": "php_effects_closed",
+      "fields": {
+        "reason": {
+          "value": "the harness did not close the PHP effect table for the run"
+        }
+      },
+      "when_claim": "unresolved",
+      "excludes_evidence": [
+        "replay:4a8d3817dd2d:php_effects_closed:c69d8dda2898"
+      ]
+    },
+    {
+      "kind": "missing_premise",
+      "claim_id": "claim-qualified-close",
+      "relation": "go_effects_closed",
+      "fields": {
+        "reason": {
+          "value": "the harness did not close the Go effect table for the run"
+        }
+      },
+      "when_claim": "unresolved",
+      "excludes_evidence": [
+        "replay:4a8d3817dd2d:go_effects_closed:741c700022f7"
+      ]
+    },
+    {
+      "kind": "missing_premise",
+      "claim_id": "claim-qualified-close",
+      "relation": "model_admissible_closed",
+      "fields": {
+        "reason": {
+          "value": "the model runner did not close the admissible-state set for the run and model"
+        }
+      },
+      "when_claim": "unresolved",
+      "excludes_evidence": [
+        "shen:4a8d3817dd2d:model_admissible_closed:e42e24b4af61"
+      ]
+    },
+    {
+      "kind": "missing_premise",
+      "claim_id": "claim-qualified-close",
       "relation": "php_model_agree",
       "fields": {
         "reason": {
@@ -1557,11 +1689,14 @@
         "refutation_leaves": [],
         "observed_leaves": [
           "php:4a8d3817dd2d:php_post_state:bf4fa2a7dfa8",
+          "replay:4a8d3817dd2d:go_effects_closed:741c700022f7",
           "replay:4a8d3817dd2d:go_post_states_closed:d399545a4a0d",
+          "replay:4a8d3817dd2d:php_effects_closed:c69d8dda2898",
           "replay:4a8d3817dd2d:php_post_states_closed:563c8b6a1be0",
           "reviewer:claim-time:model_observed:5071ad5dc2c5",
           "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
           "reviewer:claim-time:snapshot_observed:320fa56f8495",
+          "shen:4a8d3817dd2d:model_admissible_closed:e42e24b4af61",
           "shen:4a8d3817dd2d:model_describes_run:30e5416af7e4"
         ],
         "forbidden_leaves": [],

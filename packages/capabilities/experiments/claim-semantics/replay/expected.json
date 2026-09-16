@@ -128,11 +128,14 @@
           "refutation_leaves": [],
           "observed_leaves": [
             "php:4a8d3817dd2d:php_post_state:bf4fa2a7dfa8",
+            "replay:4a8d3817dd2d:go_effects_closed:741c700022f7",
             "replay:4a8d3817dd2d:go_post_states_closed:d399545a4a0d",
+            "replay:4a8d3817dd2d:php_effects_closed:c69d8dda2898",
             "replay:4a8d3817dd2d:php_post_states_closed:563c8b6a1be0",
             "reviewer:claim-time:model_observed:5071ad5dc2c5",
             "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
             "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:4a8d3817dd2d:model_admissible_closed:e42e24b4af61",
             "shen:4a8d3817dd2d:model_describes_run:30e5416af7e4"
           ],
           "forbidden_leaves": [],
@@ -232,11 +235,14 @@
           "refutation_leaves": [],
           "observed_leaves": [
             "go:43348f75c0d7:go_effect:7b9df5f1c2d2",
+            "replay:43348f75c0d7:go_effects_closed:741c700022f7",
             "replay:43348f75c0d7:go_post_states_closed:d399545a4a0d",
+            "replay:43348f75c0d7:php_effects_closed:c69d8dda2898",
             "replay:43348f75c0d7:php_post_states_closed:563c8b6a1be0",
             "reviewer:claim-time:model_observed:5071ad5dc2c5",
             "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
             "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:43348f75c0d7:model_admissible_closed:e42e24b4af61",
             "shen:43348f75c0d7:model_describes_run:30e5416af7e4"
           ],
           "forbidden_leaves": [],
@@ -338,11 +344,14 @@
           "refutation_leaves": [],
           "observed_leaves": [
             "mut:d779fd984460:mutant:48053510584a",
+            "replay:d779fd984460:go_effects_closed:741c700022f7",
             "replay:d779fd984460:go_post_states_closed:d399545a4a0d",
+            "replay:d779fd984460:php_effects_closed:c69d8dda2898",
             "replay:d779fd984460:php_post_states_closed:563c8b6a1be0",
             "reviewer:claim-time:model_observed:5071ad5dc2c5",
             "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
             "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:d779fd984460:model_admissible_closed:e42e24b4af61",
             "shen:d779fd984460:model_describes_run:30e5416af7e4"
           ],
           "forbidden_leaves": [],
@@ -443,11 +452,14 @@
           "support_leaves": [],
           "refutation_leaves": [],
           "observed_leaves": [
+            "replay:4e86bd0674ff:go_effects_closed:741c700022f7",
             "replay:4e86bd0674ff:go_post_states_closed:d399545a4a0d",
+            "replay:4e86bd0674ff:php_effects_closed:c69d8dda2898",
             "replay:4e86bd0674ff:php_post_states_closed:563c8b6a1be0",
             "reviewer:claim-time:model_observed:5071ad5dc2c5",
             "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
-            "reviewer:claim-time:snapshot_observed:320fa56f8495"
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:4e86bd0674ff:model_admissible_closed:e42e24b4af61"
           ],
           "forbidden_leaves": [],
           "discrepancies": [],
@@ -464,11 +476,14 @@
           "support_leaves": [],
           "refutation_leaves": [],
           "observed_leaves": [
+            "replay:4e86bd0674ff:go_effects_closed:741c700022f7",
             "replay:4e86bd0674ff:go_post_states_closed:d399545a4a0d",
+            "replay:4e86bd0674ff:php_effects_closed:c69d8dda2898",
             "replay:4e86bd0674ff:php_post_states_closed:563c8b6a1be0",
             "reviewer:claim-time:model_observed:5071ad5dc2c5",
             "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
-            "reviewer:claim-time:snapshot_observed:320fa56f8495"
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:4e86bd0674ff:model_admissible_closed:e42e24b4af61"
           ],
           "forbidden_leaves": [],
           "discrepancies": [],
@@ -504,10 +519,13 @@
           "support_leaves": [],
           "refutation_leaves": [],
           "observed_leaves": [
+            "replay:4e86bd0674ff:go_effects_closed:741c700022f7",
             "replay:4e86bd0674ff:go_post_states_closed:d399545a4a0d",
+            "replay:4e86bd0674ff:php_effects_closed:c69d8dda2898",
             "replay:4e86bd0674ff:php_post_states_closed:563c8b6a1be0",
             "reviewer:claim-time:model_observed:5071ad5dc2c5",
             "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "shen:4e86bd0674ff:model_admissible_closed:e42e24b4af61",
             "shen:4e86bd0674ff:model_describes_run:30e5416af7e4"
           ],
           "forbidden_leaves": [],
@@ -525,10 +543,13 @@
           "support_leaves": [],
           "refutation_leaves": [],
           "observed_leaves": [
+            "replay:4e86bd0674ff:go_effects_closed:741c700022f7",
             "replay:4e86bd0674ff:go_post_states_closed:d399545a4a0d",
+            "replay:4e86bd0674ff:php_effects_closed:c69d8dda2898",
             "replay:4e86bd0674ff:php_post_states_closed:563c8b6a1be0",
             "reviewer:claim-time:model_observed:5071ad5dc2c5",
             "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "shen:4e86bd0674ff:model_admissible_closed:e42e24b4af61",
             "shen:4e86bd0674ff:model_describes_run:30e5416af7e4"
           ],
           "forbidden_leaves": [],
@@ -550,11 +571,14 @@
           "support_leaves": [],
           "refutation_leaves": [],
           "observed_leaves": [
+            "replay:4e86bd0674ff:go_effects_closed:741c700022f7",
             "replay:4e86bd0674ff:go_post_states_closed:d399545a4a0d",
+            "replay:4e86bd0674ff:php_effects_closed:c69d8dda2898",
             "replay:4e86bd0674ff:php_post_states_closed:563c8b6a1be0",
             "reviewer:claim-time:model_observed:5071ad5dc2c5",
             "reviewer:claim-time:run_nonce_observed:2c36174f502d",
             "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:4e86bd0674ff:model_admissible_closed:e42e24b4af61",
             "shen:4e86bd0674ff:model_describes_run:30e5416af7e4"
           ],
           "forbidden_leaves": [],
@@ -572,11 +596,14 @@
           "support_leaves": [],
           "refutation_leaves": [],
           "observed_leaves": [
+            "replay:4e86bd0674ff:go_effects_closed:741c700022f7",
             "replay:4e86bd0674ff:go_post_states_closed:d399545a4a0d",
+            "replay:4e86bd0674ff:php_effects_closed:c69d8dda2898",
             "replay:4e86bd0674ff:php_post_states_closed:563c8b6a1be0",
             "reviewer:claim-time:model_observed:5071ad5dc2c5",
             "reviewer:claim-time:run_nonce_observed:2c36174f502d",
             "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:4e86bd0674ff:model_admissible_closed:e42e24b4af61",
             "shen:4e86bd0674ff:model_describes_run:30e5416af7e4"
           ],
           "forbidden_leaves": [],
@@ -615,11 +642,14 @@
           "refutation_leaves": [],
           "observed_leaves": [
             "mut:1802bdc9a439:mutant_killed:6c2d4b9b4cf1",
+            "replay:1802bdc9a439:go_effects_closed:741c700022f7",
             "replay:1802bdc9a439:go_post_states_closed:d399545a4a0d",
+            "replay:1802bdc9a439:php_effects_closed:c69d8dda2898",
             "replay:1802bdc9a439:php_post_states_closed:563c8b6a1be0",
             "reviewer:claim-time:model_observed:5071ad5dc2c5",
             "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
             "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:1802bdc9a439:model_admissible_closed:e42e24b4af61",
             "shen:1802bdc9a439:model_describes_run:30e5416af7e4"
           ],
           "forbidden_leaves": [],
@@ -638,11 +668,14 @@
           "refutation_leaves": [],
           "observed_leaves": [
             "mut:1802bdc9a439:mutant_killed:6c2d4b9b4cf1",
+            "replay:1802bdc9a439:go_effects_closed:741c700022f7",
             "replay:1802bdc9a439:go_post_states_closed:d399545a4a0d",
+            "replay:1802bdc9a439:php_effects_closed:c69d8dda2898",
             "replay:1802bdc9a439:php_post_states_closed:563c8b6a1be0",
             "reviewer:claim-time:model_observed:5071ad5dc2c5",
             "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
             "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:1802bdc9a439:model_admissible_closed:e42e24b4af61",
             "shen:1802bdc9a439:model_describes_run:30e5416af7e4"
           ],
           "forbidden_leaves": [],
@@ -744,12 +777,15 @@
           "support_leaves": [],
           "refutation_leaves": [],
           "observed_leaves": [
+            "replay:10a3565c188e:go_effects_closed:741c700022f7",
             "replay:10a3565c188e:go_post_states_closed:d399545a4a0d",
+            "replay:10a3565c188e:php_effects_closed:c69d8dda2898",
             "replay:10a3565c188e:php_post_states_closed:563c8b6a1be0",
             "replay:10a3565c188e:replay_request:0978f89fd323",
             "reviewer:claim-time:model_observed:5071ad5dc2c5",
             "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
             "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:10a3565c188e:model_admissible_closed:e42e24b4af61",
             "shen:10a3565c188e:model_describes_run:30e5416af7e4"
           ],
           "forbidden_leaves": [],
@@ -783,6 +819,128 @@
               "side": "php"
             }
           ],
+          "missing_premises": []
+        }
+      }
+    },
+    "10-missing-effects-closure": {
+      "claims": {
+        "claim-qualified-close": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "complete",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "replay:1b7d9ae0174f:go_effects_closed:741c700022f7",
+            "replay:1b7d9ae0174f:go_post_states_closed:d399545a4a0d",
+            "replay:1b7d9ae0174f:php_post_states_closed:563c8b6a1be0",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:1b7d9ae0174f:model_admissible_closed:e42e24b4af61",
+            "shen:1b7d9ae0174f:model_describes_run:30e5416af7e4"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "php_effects_closed",
+              "reason": "the harness did not close the PHP effect table for the run"
+            }
+          ]
+        },
+        "claim-qualified-create": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "complete",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "replay:1b7d9ae0174f:go_effects_closed:741c700022f7",
+            "replay:1b7d9ae0174f:go_post_states_closed:d399545a4a0d",
+            "replay:1b7d9ae0174f:php_post_states_closed:563c8b6a1be0",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:1b7d9ae0174f:model_admissible_closed:e42e24b4af61",
+            "shen:1b7d9ae0174f:model_describes_run:30e5416af7e4"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "php_effects_closed",
+              "reason": "the harness did not close the PHP effect table for the run"
+            }
+          ]
+        }
+      }
+    },
+    "11-missing-admissible-closure": {
+      "claims": {
+        "claim-qualified-close": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "complete",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "replay:5f8877e08487:go_effects_closed:741c700022f7",
+            "replay:5f8877e08487:go_post_states_closed:d399545a4a0d",
+            "replay:5f8877e08487:php_effects_closed:c69d8dda2898",
+            "replay:5f8877e08487:php_post_states_closed:563c8b6a1be0",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:5f8877e08487:model_describes_run:30e5416af7e4"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "model_admissible_closed",
+              "reason": "the model runner did not close the admissible-state set for the run and model"
+            }
+          ]
+        },
+        "claim-qualified-create": {
+          "semantic_verdict": "unresolved",
+          "operational_status": "complete",
+          "support_leaves": [],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "replay:5f8877e08487:go_effects_closed:741c700022f7",
+            "replay:5f8877e08487:go_post_states_closed:d399545a4a0d",
+            "replay:5f8877e08487:php_effects_closed:c69d8dda2898",
+            "replay:5f8877e08487:php_post_states_closed:563c8b6a1be0",
+            "reviewer:claim-time:model_observed:5071ad5dc2c5",
+            "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
+            "reviewer:claim-time:snapshot_observed:320fa56f8495",
+            "shen:5f8877e08487:model_describes_run:30e5416af7e4"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
+          "missing_premises": [
+            {
+              "relation": "model_admissible_closed",
+              "reason": "the model runner did not close the admissible-state set for the run and model"
+            }
+          ]
+        },
+        "claim-php-agrees-req-1": {
+          "semantic_verdict": "supported",
+          "operational_status": "complete",
+          "support_leaves": [
+            "php:5f8877e08487:php_post_state:cb69b5673861",
+            "shen:5f8877e08487:model_admissible:bbd809734048",
+            "shen:5f8877e08487:model_describes_run:30e5416af7e4"
+          ],
+          "refutation_leaves": [],
+          "observed_leaves": [
+            "php:5f8877e08487:php_post_state:cb69b5673861",
+            "shen:5f8877e08487:model_admissible:bbd809734048",
+            "shen:5f8877e08487:model_describes_run:30e5416af7e4"
+          ],
+          "forbidden_leaves": [],
+          "discrepancies": [],
           "missing_premises": []
         }
       }
