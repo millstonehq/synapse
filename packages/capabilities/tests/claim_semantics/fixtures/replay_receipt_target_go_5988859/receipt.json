@@ -62,7 +62,7 @@
       }
     },
     "target_go_dirty": false,
-    "fixture_note": "Committed fixture: real target-go replay run 333072ef11f5 at target-go integrate/TICKET-0000-replay-model (go_commit b18bfe0..5988859 exporter); synthetic oracle seed data (tenant oracle); local evidence paths replaced by <evidence>/.",
+    "fixture_note": "Committed fixture: a real replay run 333072ef11f5 of the candidate service (exporter at 5988859) over synthetic oracle seed data; local evidence paths replaced by <evidence>/ and the tenant symbol renamed to `oracle` for publication.",
     "go_binary_sha256": "72d1bb55ed65628d4ddb5aa2920eb7e04606485521ca45f66381778a35fc7171",
     "go_evidence_dir": "<evidence>/a99a3ced7525",
     "go_run_id": "a99a3ced7525",
