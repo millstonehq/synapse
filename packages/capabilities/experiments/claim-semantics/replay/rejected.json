@@ -7,13 +7,18 @@
       "validation_issues": [
         "evidence-producer",
         "evidence-producer",
+        "evidence-producer",
+        "evidence-producer",
         "evidence-producer"
       ],
       "relabelled_relation": "php_post_state",
       "relabelled_source": "shen shen-model-host v1",
       "unvalidated_verdicts": {
+        "claim-qualified-close": "supported",
         "claim-qualified-create": "supported",
-        "claim-qualified-close": "supported"
+        "claim-qualified-delete": "supported",
+        "claim-oracle-stable": "supported",
+        "claim-repeat-delete-not-found": "supported"
       }
     },
     "12-closure-producer-violation": {
@@ -23,8 +28,11 @@
       "relabelled_relation": "model_admissible_closed",
       "relabelled_source": "replay capcov.claims.replay.replay_facts model-admissible-closed-v1",
       "unvalidated_verdicts": {
+        "claim-qualified-close": "supported",
         "claim-qualified-create": "supported",
-        "claim-qualified-close": "supported"
+        "claim-qualified-delete": "supported",
+        "claim-oracle-stable": "supported",
+        "claim-repeat-delete-not-found": "supported"
       }
     },
     "16-exclusion-producer-violation": {
@@ -35,8 +43,31 @@
       "relabelled_relation": "model_scope_exclusion",
       "relabelled_source": "replay capcov.claims.replay.replay_facts 2026-09-16 model:5f0d985d02df run:run-fixture-1",
       "unvalidated_verdicts": {
+        "claim-qualified-close": "supported",
         "claim-qualified-create": "supported",
-        "claim-qualified-close": "supported"
+        "claim-qualified-delete": "supported",
+        "claim-oracle-stable": "supported",
+        "claim-repeat-delete-not-found": "supported"
+      }
+    },
+    "22-effect-seq-producer-violation": {
+      "validation_issues": [
+        "evidence-producer",
+        "evidence-producer",
+        "evidence-producer",
+        "evidence-producer",
+        "evidence-producer",
+        "evidence-producer",
+        "evidence-producer"
+      ],
+      "relabelled_relation": "php_effect_seq",
+      "relabelled_source": "shen shen-model-host v1",
+      "unvalidated_verdicts": {
+        "claim-qualified-close": "supported",
+        "claim-qualified-create": "supported",
+        "claim-qualified-delete": "supported",
+        "claim-oracle-stable": "supported",
+        "claim-repeat-delete-not-found": "supported"
       }
     }
   }

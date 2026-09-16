@@ -45,8 +45,13 @@ NONCE = RECEIPT["nonce"]
 SNAPSHOT = RECEIPT["snapshot"]
 # The synthetic PHP census index the op_declared rows and index_describes_replay bind to.
 INDEX = hashlib.sha256(b"rules-replay-v1 synthetic php census index").hexdigest()
-CREATE, CLOSE = "issues.create", "issues.close"
-OPS = (CREATE, CLOSE)
+CREATE, CLOSE, DELETE = "issues.create", "issues.close", "delete-issue"
+OPS = (CREATE, CLOSE, DELETE)
+# the claim-id suffix of each op (claim-qualified-<suffix>)
+SUFFIX = {CREATE: "create", CLOSE: "close", DELETE: "delete"}
+# the delete-issue pair of the fixture: req-4 commits the delete, req-5 repeats it (404, no effects)
+DELETE_TARGET = "DELETE /api/issues/1"
+FIRST_DELETE, REPEAT_DELETE = "req-4", "req-5"
 OTHER_NONCE = hashlib.sha256(b"rules-replay-v1 another nonce").hexdigest()
 DISAGREEING_STATE = hashlib.sha256(b"rules-replay-v1 php post-state outside the model").hexdigest()
 
@@ -54,6 +59,10 @@ REVIEWER_SOURCE = "reviewer claim-time observation"
 CENSUS_SOURCE = "php-census target-cloud route census v1"
 REJECTED_SOURCE = "shen shen-model-host v1"
 REJECTED_CLOSURE_SOURCE = "replay capcov.claims.replay.replay_facts model-admissible-closed-v1"
+
+
+def claim_id_for(op: str) -> str:
+    return f"claim-qualified-{SUFFIX[op]}"
 
 Edit = Callable[[Any], Any]
 
@@ -194,7 +203,7 @@ def _claim(claim_id: str, relation: str, arg_order: list[str], args: list[Any], 
 
 
 def qualified_claim(op: str, reading: str, diagnostics: list[dict[str, Any]]) -> dict[str, Any]:
-    return _claim(f"claim-qualified-{op.split('.')[1]}", "op_qualified", ["index", "run", "op"],
+    return _claim(claim_id_for(op), "op_qualified", ["index", "run", "op"],
                   [INDEX, RUN, op], {"index": INDEX, "run": RUN}, reading, diagnostics)
 
 
@@ -215,7 +224,11 @@ WITNESS_DIAGNOSTICS = [observation("model_describes_run", ["run"]), observation(
                        observation("php_post_states_closed", ["run"]), observation("go_post_states_closed", ["run"]),
                        observation("php_effects_closed", ["run"]), observation("go_effects_closed", ["run"]),
                        observation("model_admissible_closed", ["run"]),
-                       observation("model_scope_exclusions_closed", [])]
+                       observation("model_scope_exclusions_closed", []),
+                       observation("php_effect_seqs_closed", ["run"]), observation("go_effect_seqs_closed", ["run"]),
+                       observation("model_effect_seqs_closed", ["run"]), observation("replay_request_seqs_closed", ["run"]),
+                       observation("php_responses_closed", ["run"]), observation("go_responses_closed", ["run"]),
+                       observation("replay_stability_closed", ["run"])]
 WITNESS_REASONS = {
     "model_describes_run": "no model_describes_run witness binds the receipt's model to the run",
     "run_nonce_observed": "the reviewer did not observe the run's nonce",
@@ -227,6 +240,13 @@ WITNESS_REASONS = {
     "go_effects_closed": "the harness did not close the Go effect table for the run",
     "model_admissible_closed": "the model runner did not close the admissible-state set for the run and model",
     "model_scope_exclusions_closed": "the reviewer did not close the model-scope exclusion set for the model",
+    "php_effect_seqs_closed": "the harness did not close the PHP per-statement effect sequence for the run",
+    "go_effect_seqs_closed": "the harness did not close the Go per-statement effect sequence for the run",
+    "model_effect_seqs_closed": "the model runner did not close the model's effect order for the run and model",
+    "replay_request_seqs_closed": "the harness did not close the tape order for the run",
+    "php_responses_closed": "the harness did not close the PHP response table for the run",
+    "go_responses_closed": "the harness did not close the Go response table for the run",
+    "replay_stability_closed": "the harness did not close the cross-run stability table for the run (no bound selftest)",
 }
 
 
@@ -315,20 +335,41 @@ def build_00() -> dict[str, Any]:
     facts = exported + reviewer_facts() + census_facts()
     claims, outputs = _both_qualified(facts, {
         CREATE: "issues.create is declared by the census, replayed (req-1, req-3), exercised with PHP/Go post-states "
-                "the model admits, has no disagreement, no undeclared write and no surviving mutant (m-1 killed by req-1).",
-        CLOSE: "issues.close is declared, replayed by req-2, agreed by PHP/Go/model, writes only the declared table "
-               "and its mutant m-2 is killed by req-2."})
+                "the model admits, has no disagreement, no undeclared write and no surviving mutant (m-1 killed by req-1); "
+                "req-1 writes issue then entity_statistics on both sides in the model's declared order.",
+        CLOSE: "issues.close is declared, replayed by req-2, agreed by PHP/Go/model, writes only the declared tables "
+               "in the declared order and its mutant m-2 is killed by req-2.",
+        DELETE: "delete-issue is declared, replayed by req-4 (200, issue then entity_statistics) and repeated by req-5 "
+                "(404, no effects); m-3 is killed by req-4, the repeat is not-found on both sides and the PHP oracle "
+                "is stable across the bound selftest."})
+    stability = find_id(facts, "replay_stability")
+    claims.append(_claim("claim-repeat-delete-not-found", "repeat_delete_not_found", ["run", "target"],
+                         [RUN, DELETE_TARGET], {"run": RUN},
+                         "req-5 repeats req-4's target after req-4 committed (200 on both sides with an issue update); "
+                         "both sides answered 404 and, under both closed effect tables, recorded no effect for req-5.",
+                         [observation("php_response", ["run"], {"column": "req", "operator": "=", "value": REPEAT_DELETE}),
+                          observation("go_response", ["run"], {"column": "req", "operator": "=", "value": REPEAT_DELETE})]))
+    claims.append(_claim("claim-oracle-stable", "oracle_stable", ["run"], [RUN], {"run": RUN},
+                         "the bound selftest (two fresh PHP runs of the tape) agreed on status and net SQL effects for "
+                         "every request; the stability table is closed and carries no unstable row.",
+                         [observation("replay_stability", ["run"])]))
     notes = [
-        "The receipt is the fixture unchanged: one run, two ops, three requests, PHP/Go/model agreeing row for row, "
-        "two mutants both killed, every closure witness present.",
-        "The reviewer observed the run's nonce, snapshot and model, and the PHP census declares both ops for the synthetic "
-        "index; index_describes_replay binds that index to the run, which is the only static/runtime join in the pack.",
+        "The receipt is the fixture unchanged: one run, three ops, five requests (req-4 deletes issue 1, req-5 repeats "
+        "the delete), PHP/Go/model agreeing row for row and statement for statement, three mutants all killed, "
+        "the PHP selftest stable, every closure witness present.",
+        "The reviewer observed the run's nonce, snapshot and model, and the PHP census declares all three ops for the "
+        "synthetic index; index_describes_replay binds that index to the run, which is the only static/runtime join "
+        "in the pack.",
         "op_qualified support for issues.create uses req-1 (the canonical proof is the shortest, then lexically least, "
-        "so req-1 is chosen over req-3 for replayed/op_exercised); leaves span the replay, php, go, shen, mut, "
-        "reviewer and php-census producer classes.",
+        "so req-1 is chosen over req-3 for replayed/op_exercised and for effect_order_exercised); leaves span the "
+        "replay, php, go, shen, mut, reviewer and php-census producer classes and include the php/go/model effect "
+        "sequences and the stability row.",
+        "The per-target claim repeat_delete_not_found(run, " + DELETE_TARGET + ") is supported from the tape order, "
+        "both 200/404 response pairs, req-4's issue update on both sides and both effect closures; oracle_stable "
+        "is supported from the stability row and its closure.",
         "Every missing_premise template is excluded by the witness row it names, so none renders.",
     ]
-    return _case("00-positive-control", "Positive control: both ops qualify from a clean receipt", None, notes,
+    return _case("00-positive-control", "Positive control: all three ops qualify from a clean receipt", None, notes,
                  facts, claims, outputs)
 
 
@@ -340,7 +381,8 @@ def build_01() -> dict[str, Any]:
     claims, outputs = _both_qualified(facts, {
         CREATE: "issues.create is untouched by the planted disagreement and qualifies as in the control.",
         CLOSE: "req-2's PHP post-state is not in the model's closed admissible set, so php_model_disagree derives, "
-               "php_disagree_any(issues.close) holds and the negation in op_qualified_rt fails."},
+               "php_disagree_any(issues.close) holds and the negation in op_qualified_rt fails.",
+        DELETE: "delete-issue is untouched by the planted disagreement and qualifies as in the control."},
         extra_diagnostics={CLOSE: [observation("php_post_state", ["run"],
                                                {"column": "req", "operator": "=", "value": "req-2"})]})
     outputs.append(missing("claim-qualified-close", "php_model_agree",
@@ -374,7 +416,8 @@ def build_02() -> dict[str, Any]:
     claims, outputs = _both_qualified(facts, {
         CREATE: "issues.create is untouched by the undeclared write and qualifies as in the control.",
         CLOSE: "Go wrote audit_log while serving req-2; model_writes is closed for (model, issues.close) and does not "
-               "declare audit_log, so undeclared_write derives and undeclared_any(issues.close) blocks qualification."},
+               "declare audit_log, so undeclared_write derives and undeclared_any(issues.close) blocks qualification.",
+        DELETE: "delete-issue is untouched by the undeclared write and qualifies as in the control."},
         extra_diagnostics={CLOSE: [observation("go_effect", ["run"],
                                                {"column": "table", "operator": "=", "value": "audit_log"})]})
     outputs.append(missing("claim-qualified-close", "model_writes",
@@ -406,7 +449,8 @@ def build_03() -> dict[str, Any]:
     claims, outputs = _both_qualified(facts, {
         CREATE: "issues.create keeps its killed mutant m-1 and qualifies as in the control.",
         CLOSE: "mutant m-2 of issues.close has no mutant_killed row while mutant_kills_closed is asserted, so "
-               "surviving_mutant derives, op_has_surviving_mutant holds and corpus_constrains fails."},
+               "surviving_mutant derives, op_has_surviving_mutant holds and corpus_constrains fails.",
+        DELETE: "delete-issue keeps its killed mutant m-3 and qualifies as in the control."},
         extra_diagnostics={CLOSE: [observation("mutant", [],
                                                {"column": "mutant", "operator": "=", "value": "m-2"})]})
     outputs.append(missing("claim-qualified-close", "mutant_killed",
@@ -434,7 +478,8 @@ def build_04() -> dict[str, Any]:
     claims, outputs = _both_qualified(facts, {
         CREATE: "Without model_describes_run no model-scoped relation joins the run: no agreement, no closure, no "
                 "corpus, so op_qualified_rt cannot derive.",
-        CLOSE: "As for issues.create: the model witness is the missing premise."},
+        CLOSE: "As for issues.create: the model witness is the missing premise.",
+        DELETE: "As for issues.create."},
         absent=("model_describes_run",))
     companion = _claim("claim-php-agrees-req-1", "php_model_agree", ["run", "req"], [RUN, "req-1"], {"run": RUN},
                        "Even plain agreement needs the compatibility witness; without it no php_model_* row exists.")
@@ -454,12 +499,12 @@ def build_05() -> dict[str, Any]:
         exported, _ = exported_facts(root)
     facts = exported + reviewer_facts(snapshot=None) + census_facts()
     reason = "the run's snapshot digest was not observed, so replay_run_current does not hold"
-    override = {op: {"snapshot_observed": missing(f"claim-qualified-{op.split('.')[1]}", "replay_run_current", reason)}
+    override = {op: {"snapshot_observed": missing(claim_id_for(op), "replay_run_current", reason)}
                 for op in OPS}
     claims, outputs = _both_qualified(facts, {
         CREATE: "replay_run_current needs run_nonce_observed, snapshot_observed and model_observed; the snapshot witness "
                 "is absent, so every *_closed relation of the run is absent and op_qualified_rt cannot derive.",
-        CLOSE: "As for issues.create."}, override=override)
+        CLOSE: "As for issues.create.", DELETE: "As for issues.create."}, override=override)
     notes = [
         "The receipt is the control; the reviewer's snapshot_observed row is not added.",
         "Both op_qualified claims are unresolved with replay_run_current as the missing premise (reason: snapshot not "
@@ -474,12 +519,12 @@ def build_06() -> dict[str, Any]:
     facts = exported + reviewer_facts(nonce=OTHER_NONCE) + census_facts()
     nonce_id = find_id(facts, "run_nonce_observed")
     reason = "the observed nonce differs from the run's nonce, so the replay is stale rather than current"
-    override = {op: {"run_nonce_observed": missing(f"claim-qualified-{op.split('.')[1]}", "replay_run_current", reason,
+    override = {op: {"run_nonce_observed": missing(claim_id_for(op), "replay_run_current", reason,
                                                     requires=[nonce_id])} for op in OPS}
     claims, outputs = _both_qualified(facts, {
         CREATE: "run_nonce_observed names another nonce: replay_run_stale derives (operational status stale) and "
                 "replay_run_current does not, so no closure and no qualification.",
-        CLOSE: "As for issues.create."},
+        CLOSE: "As for issues.create.", DELETE: "As for issues.create."},
         extra_diagnostics={op: [observation("replay_run_stale", ["run"], status="stale")] for op in OPS},
         override=override)
     companion = _claim("claim-run-stale", "replay_run_stale", ["run", "nonce", "observed"],
@@ -508,11 +553,12 @@ def build_08() -> dict[str, Any]:
                 "kill_closure_gap derives, kill_closure_gap_any poisons every op of the run (the per-run "
                 "mutant_kills_closed witness is demonstrably wrong) and the gate in op_qualified_rt fails.",
         CLOSE: "issues.close's own mutant m-2 is honestly killed by req-2, but its qualification rests on the same "
-               "contradicted per-run kill closure, so it is unresolved too."},
+               "contradicted per-run kill closure, so it is unresolved too.",
+        DELETE: "As for issues.close: m-3 is honestly killed by req-4, the per-run kill closure is still contradicted."},
         extra_diagnostics={op: [observation("mutant_killed", ["run"],
                                             {"column": "mutant", "operator": "=", "value": "m-1"})] for op in OPS})
     for op in OPS:
-        outputs.append(missing(f"claim-qualified-{op.split('.')[1]}", "replay_request", reason, requires=[kill]))
+        outputs.append(missing(claim_id_for(op), "replay_request", reason, requires=[kill]))
     companion = _claim("claim-kill-outside-corpus", "kill_closure_gap", ["run", "mutant", "req"], [RUN, "m-1", "req-9"],
                        {"run": RUN}, "mutant_kills_closed and replay_requests_closed are both asserted, yet the kill "
                                      "names req-9 which requested/replay_request does not contain.")
@@ -542,7 +588,8 @@ def build_09() -> dict[str, Any]:
         CREATE: "req-1 still agrees on both sides, so op_exercised(issues.create) holds; req-3's PHP post-state is "
                 "omitted while php_post_states_closed is asserted, so post_state_gap(req-3, php) derives, "
                 "post_state_any(issues.create) holds and the gate in op_qualified_rt fails.",
-        CLOSE: "issues.close (req-2) is fully observed and qualifies as in the control."},
+        CLOSE: "issues.close (req-2) is fully observed and qualifies as in the control.",
+        DELETE: "delete-issue (req-4, req-5) is fully observed and qualifies as in the control."},
         extra_diagnostics={CREATE: [observation("replay_request", ["run"],
                                                 {"column": "req", "operator": "=", "value": "req-3"})]})
     outputs.append(missing("claim-qualified-create", "php_post_state",
@@ -578,7 +625,7 @@ def build_10() -> dict[str, Any]:
         CREATE: "closed.php_effects is false, so no php_effects_closed witness is exported; undeclared_writes_closed "
                 "lists it as an input and does not derive, so op_qualified_rt cannot derive although every "
                 "observation agrees and every other closure holds.",
-        CLOSE: "As for issues.create."}, absent=("php_effects_closed",))
+        CLOSE: "As for issues.create.", DELETE: "As for issues.create."}, absent=("php_effects_closed",))
     notes = [
         "receipt.json says closed.php_effects = false; php_effect.json is the control's (three rows) and every "
         "other closure, witness and observation is present.  go_effects stays closed so exactly one leaf is absent.",
@@ -597,7 +644,7 @@ def build_11() -> dict[str, Any]:
         CREATE: "model_describes_run is present and every post-state is admitted, but closed.model_admissible is "
                 "false: without model_admissible_closed neither php_model_disagree nor php_disagreement_closed "
                 "can derive, so agreement is observed yet cannot be closed and op_qualified_rt cannot derive.",
-        CLOSE: "As for issues.create."}, absent=("model_admissible_closed",))
+        CLOSE: "As for issues.create.", DELETE: "As for issues.create."}, absent=("model_admissible_closed",))
     companion = _claim("claim-php-agrees-req-1", "php_model_agree", ["run", "req"], [RUN, "req-1"], {"run": RUN},
                        "Agreement needs only the model witness and an admissible row, both present.")
     claims.append(companion)
@@ -626,7 +673,8 @@ def build_13() -> dict[str, Any]:
         CREATE: "issues.create is untouched and qualifies as in the control.",
         CLOSE: "Go wrote audit_log for req-2 exactly as in case 02, but the reviewer's closed exclusion set names "
                "audit_log, so !model_scope_excluded fails, undeclared_write does not derive and issues.close "
-               "qualifies under that reviewer assumption."})
+               "qualifies under that reviewer assumption.",
+        DELETE: "delete-issue is untouched and qualifies as in the control."})
     companion = _claim("claim-audit-log-excluded", "exclusion_applied", ["run", "op", "table"], [RUN, CLOSE, "audit_log"],
                        {"run": RUN}, "The go_effect audit_log row for req-2 joins the reviewer's exclusion of audit_log "
                                      "for this model; the assumption row is a leaf of this certificate.",
@@ -656,7 +704,8 @@ def build_14() -> dict[str, Any]:
     claims, outputs = _both_qualified(facts, {
         CREATE: "The exclusion file is present but closed.model_scope_exclusions is false: no "
                 "model_scope_exclusions_closed witness, so undeclared_writes_closed cannot derive for any op.",
-        CLOSE: "As for issues.create; the audit_log exclusion row exists but an unclosed set licenses nothing."},
+        CLOSE: "As for issues.create; the audit_log exclusion row exists but an unclosed set licenses nothing.",
+        DELETE: "As for issues.create."},
         absent=("model_scope_exclusions_closed",))
     notes = [
         "Case 13's receipt with closed.model_scope_exclusions = false: the exclusion rows are exported (as assumptions) "
@@ -675,7 +724,7 @@ def build_15() -> dict[str, Any]:
     claims, outputs = _both_qualified(facts, {
         CREATE: "No exclusion file and no closure: even a receipt whose every write is declared (the control's) "
                 "cannot be judged free of undeclared writes without a closed exclusion set.",
-        CLOSE: "As for issues.create."},
+        CLOSE: "As for issues.create.", DELETE: "As for issues.create."},
         absent=("model_scope_exclusions_closed",))
     notes = [
         "The control receipt without model_scope_exclusions.json and with closed.model_scope_exclusions = false.",
@@ -684,6 +733,192 @@ def build_15() -> dict[str, Any]:
     ]
     return _case("15-no-exclusions-no-closure", "Neither exclusions nor a closed exclusion set", None, notes, facts,
                  claims, outputs)
+
+
+def _swap_seq(req: str, table_a: str, table_b: str) -> Edit:
+    """Swap the ``seq`` of two effect-sequence rows of one request (the side observed them the other way round)."""
+    def edit(document: Any) -> Any:
+        rows = {row["table"]: row for row in document["rows"] if row["req"] == req}
+        rows[table_a]["seq"], rows[table_b]["seq"] = rows[table_b]["seq"], rows[table_a]["seq"]
+        return document
+    return edit
+
+
+def build_17() -> dict[str, Any]:
+    with variant({"go_effect_seq": _swap_seq("req-1", "issue", "entity_statistics")}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    go_issue = find_id(facts, "go_effect_seq", req="req-1", table="issue")
+    go_stats = find_id(facts, "go_effect_seq", req="req-1", table="entity_statistics")
+    req1 = observation("go_effect_seq", ["run"], {"column": "req", "operator": "=", "value": "req-1"})
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "The model declares issue before entity_statistics for req-1 and PHP observed that order, but Go's "
+                "per-statement sequence has entity_statistics (seq 1) before issue (seq 2): effect_order_violation "
+                "derives for (go, req-1), effect_order_any(issues.create) holds and the negation in op_qualified_rt "
+                "fails; req-3 has a single effect and cannot exercise the order either.",
+        CLOSE: "issues.close (req-2) is observed in the declared order on both sides and qualifies as in the control.",
+        DELETE: "delete-issue (req-4) is observed in the declared order on both sides and qualifies as in the control."},
+        extra_diagnostics={CREATE: [req1]})
+    outputs.append(missing("claim-qualified-create", "effect_order_respected",
+                           "Go wrote entity_statistics before issue for req-1, the reverse of the model's declared order",
+                           requires=[go_stats]))
+    companion = _claim("claim-go-order-violated-req-1", "effect_order_violation",
+                       ["run", "side", "req", "table_a", "table_b"], [RUN, "go", "req-1", "issue", "entity_statistics"],
+                       {"run": RUN},
+                       "model_effect_seq places issue (seq 1) before entity_statistics (seq 2) for req-1 and go_effect_seq "
+                       "places entity_statistics (seq 1) before issue (seq 2): the same table/kind pair, the opposite order.",
+                       [req1])
+    claims.append(companion)
+    outputs.append(discrepancy(companion["id"], "effect-order-violated", [go_issue, go_stats], req="req-1", side="go"))
+    notes = [
+        "go_effect_seq.json swaps the seq of req-1's issue and entity_statistics rows; go_effect.json (the folded net "
+        "effects) is unchanged, so no other rule sees a difference: the order is the only fault.",
+        "op_qualified(issues.create) is unresolved with effect_order_respected as the missing premise, triggered by the "
+        "swapped entity_statistics row; issues.close and delete-issue are supported.",
+        "The companion effect_order_violation claim is supported from the model_describes_run witness, the two model "
+        "sequence rows and the two Go sequence rows; its discrepancy output renders effect-order-violated.  The join "
+        "is on (table, kind) only: the model's entity_statistics pk is a domain id, the systems' pk a row id.",
+    ]
+    return _case("17-effect-order-violation", "Go writes the declared tables of issues.create in the wrong order",
+                 "effect-order-violated", notes, facts, claims, outputs)
+
+
+REPEAT_EFFECT = {"req": REPEAT_DELETE, "run": RUN, "table": "issue", "kind": "update",
+                 "pk": "286bbc3165c77702a9a2c88c60a87d0cdb9f625f8d8b6863a90f25a9b6c07ceb",
+                 "cols_digest": hashlib.sha256(b"rules-replay-v1 issue touched again by the repeat delete").hexdigest()}
+REPEAT_EFFECT_SEQ = {"req": REPEAT_DELETE, "run": RUN, "seq": 1, "table": "issue", "kind": "update", "pk": REPEAT_EFFECT["pk"]}
+
+
+def build_18() -> dict[str, Any]:
+    with variant({"php_effect": _append_row(**REPEAT_EFFECT), "php_effect_seq": _append_row(**REPEAT_EFFECT_SEQ)}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    php_row = find_id(facts, "php_effect", req=REPEAT_DELETE)
+    req5 = observation("php_effect", ["run"], {"column": "req", "operator": "=", "value": REPEAT_DELETE})
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "issues.create is untouched by the repeat's effect and qualifies as in the control.",
+        CLOSE: "issues.close is untouched by the repeat's effect and qualifies as in the control.",
+        DELETE: "req-5 repeats the committed delete of " + DELETE_TARGET + " and still answers 404 on both sides, but PHP "
+                "recorded an issue update for it: repeat_delete_has_effect derives, repeat_delete_violation(req-5, "
+                "effects) holds, repeat_delete_any(delete-issue) blocks the gate and repeat_delete_not_found does not "
+                "derive (the negated premise fails)."},
+        extra_diagnostics={DELETE: [req5]})
+    outputs.append(missing("claim-qualified-delete", "repeat_delete_not_found",
+                           "the repeat of " + DELETE_TARGET + " (req-5) was not judged not-found: PHP recorded an issue "
+                           "update for it", requires=[php_row]))
+    violation = _claim("claim-repeat-delete-has-effects", "repeat_delete_violation", ["run", "req", "side"],
+                       [RUN, REPEAT_DELETE, "effects"], {"run": RUN},
+                       "req-5 is a later request for req-4's target, req-4 committed (200 on both sides with an issue "
+                       "update on both), and php_effect carries an issue update for req-5.", [req5])
+    claims.append(violation)
+    outputs.append(discrepancy(violation["id"], "repeat-delete-with-effects", [php_row], req=REPEAT_DELETE, table="issue"))
+    not_found = _claim("claim-repeat-delete-not-found", "repeat_delete_not_found", ["run", "target"], [RUN, DELETE_TARGET],
+                       {"run": RUN}, "The responses are 404 on both sides and the effect tables are closed, but the "
+                                     "negated repeat_delete_has_effect(run, req-5) fails on the PHP row.", [req5])
+    claims.append(not_found)
+    outputs.append(missing(not_found["id"], "repeat_delete_has_effect",
+                           "PHP recorded an issue update for req-5, so the repeat is not effect-free: the negated "
+                           "premise !repeat_delete_has_effect(run, req-5) fails", requires=[php_row]))
+    notes = [
+        "php_effect.json (and php_effect_seq.json, to stay coherent) gain an issue update for req-5, the repeat of "
+        "req-4's DELETE; responses stay 200/404 and the write is a declared table, so undeclared_write does not fire.",
+        "op_qualified(delete-issue) is unresolved with repeat_delete_not_found as the missing premise, triggered by the "
+        "PHP row; issues.create and issues.close are supported (the repeat gate is per op).",
+        "The companion repeat_delete_violation(run, req-5, effects) is supported (discrepancy "
+        "repeat-delete-with-effects); the companion repeat_delete_not_found is unresolved, its missing premise naming "
+        "the negated repeat_delete_has_effect that the PHP row defeats.  Reviewer exclusions do not apply to this rule "
+        "by design: a repeat delete that touches anything is a finding.",
+    ]
+    return _case("18-repeat-delete-with-effects", "The repeat delete answers 404 but PHP writes the issue again",
+                 "repeat-delete-with-effects", notes, facts, claims, outputs)
+
+
+def build_19() -> dict[str, Any]:
+    with variant({"replay_stability": _edit_row(0, stable="false")}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    stability = find_id(facts, "replay_stability")
+    reason = "the bound PHP selftest is unstable (a request differed in status or net SQL effects between two fresh runs)"
+    seen = observation("replay_stability", ["run"])
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "The bound selftest reports stable = false: oracle_unstable derives, so oracle_stable (which negates it "
+                "under replay_stability_closed) does not, and op_qualified_rt cannot derive for any op of the run.",
+        CLOSE: "As for issues.create.", DELETE: "As for issues.create."},
+        extra_diagnostics={op: [seen] for op in OPS})
+    for op in OPS:
+        outputs.append(missing(claim_id_for(op), "oracle_stable", reason, requires=[stability]))
+    companion = _claim("claim-oracle-unstable", "oracle_unstable", ["run"], [RUN], {"run": RUN},
+                       "replay_stability carries a row with stable = false for the run.", [seen])
+    claims.append(companion)
+    outputs.append(discrepancy(companion["id"], "oracle-unstable", [stability], side="php"))
+    notes = [
+        "replay_stability.json row 0 says stable = false (the two selftest runs disagreed); closed.replay_stability "
+        "stays true, every observation of the run itself is the control's.",
+        "All three op_qualified claims are unresolved with oracle_stable as the missing premise, triggered by the "
+        "unstable row: an oracle that does not reproduce itself qualifies nothing, however well PHP, Go and the model "
+        "agree in this one run.",
+        "The companion oracle_unstable claim is supported from the stability row alone (discrepancy oracle-unstable).",
+    ]
+    return _case("19-unstable-oracle", "The bound selftest says the PHP oracle is unstable", "oracle-unstable",
+                 notes, facts, claims, outputs)
+
+
+def build_20() -> dict[str, Any]:
+    with variant({"receipt": _open("replay_stability")}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "closed.replay_stability is false (no selftest bound to the run, or its provenance differs): no "
+                "replay_stability_closed witness, so oracle_stable cannot derive and op_qualified_rt cannot derive.",
+        CLOSE: "As for issues.create.", DELETE: "As for issues.create."},
+        absent=("replay_stability_closed",))
+    notes = [
+        "receipt.json says closed.replay_stability = false; the stability row is still exported (stable = true) but an "
+        "unclosed table licenses neither the negation of oracle_unstable nor oracle_stable itself.",
+        "All three op_qualified claims are unresolved with replay_stability_closed as the only missing premise.",
+    ]
+    return _case("20-missing-stability-closure", "The cross-run stability table is not closed", None, notes, facts,
+                 claims, outputs)
+
+
+def build_21() -> dict[str, Any]:
+    with variant({"receipt": _open("php_effect_seqs")}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "closed.php_effect_seqs is false: no php_effect_seqs_closed witness, so effect_order_closed lists an "
+                "absent input and does not derive; !effect_order_any is unlicensed and op_qualified_rt cannot derive "
+                "although every sequence row is present and in order.",
+        CLOSE: "As for issues.create.", DELETE: "As for issues.create."},
+        absent=("php_effect_seqs_closed",))
+    notes = [
+        "receipt.json says closed.php_effect_seqs = false; php_effect_seq.json is the control's (seven rows) and "
+        "every other closure is present.  go_effect_seqs and model_effect_seqs stay closed so exactly one leaf is absent.",
+        "All three op_qualified claims are unresolved with php_effect_seqs_closed as the only missing premise: an "
+        "open sequence cannot license !effect_order_any.",
+    ]
+    return _case("21-missing-effect-seq-closure", "The PHP per-statement effect sequence is not closed", None, notes,
+                 facts, claims, outputs)
+
+
+def build_rejected_22() -> dict[str, Any]:
+    case = build_00()
+    case["id"] = "22-effect-seq-producer-violation"
+    case["title"] = "Positive control whose php_effect_seq rows claim the shen producer class"
+    case["provenance"]["seeded_fault"] = "effect-seq-producer-violation"
+    relabelled = 0
+    for entry in case["facts"]:
+        if entry["relation"] == "php_effect_seq":
+            entry["source"] = REJECTED_SOURCE
+            relabelled += 1
+    assert relabelled == 7
+    case["review_notes"] = [
+        "The facts are the control's; only the seven php_effect_seq evidence sources name the shen class, i.e. the "
+        "model host reporting PHP's statement order on PHP's behalf.",
+        "load_case refuses the file (evidence-producer: php_effect_seq admits php); evaluated unvalidated every claim "
+        "of the control would be supported (rejected.json).",
+    ]
+    return case
 
 
 REJECTED_EXCLUSION_SOURCE = "replay capcov.claims.replay.replay_facts 2026-09-16 model:" + MODEL[:12] + " run:" + RUN
@@ -704,7 +939,7 @@ def build_rejected_16() -> dict[str, Any]:
         "The facts are the control's; only the two model_scope_exclusion assumptions name the replay class, i.e. the "
         "harness excluding tables from the write-set judgement on the reviewer's behalf.",
         "load_case refuses the file (evidence-producer: model_scope_exclusion admits reviewer); evaluated unvalidated "
-        "both op_qualified verdicts would be supported (rejected.json).",
+        "all three op_qualified verdicts would be supported (rejected.json).",
     ]
     return case
 
@@ -724,7 +959,7 @@ def build_rejected_12() -> dict[str, Any]:
         "The facts are the control's; only the model_admissible_closed witness names the replay class, i.e. the "
         "harness closing the model runner's admissible set on its behalf.",
         "load_case refuses the file (evidence-producer: model_admissible_closed admits shen); evaluated unvalidated "
-        "both op_qualified verdicts would be supported (rejected.json).",
+        "all three op_qualified verdicts would be supported (rejected.json).",
     ]
     return case
 
@@ -739,12 +974,12 @@ def build_rejected_07() -> dict[str, Any]:
         if entry["relation"] == "php_post_state":
             entry["source"] = REJECTED_SOURCE
             relabelled += 1
-    assert relabelled == 3
+    assert relabelled == 5
     case["review_notes"] = [
-        "The facts are the control's; only the three php_post_state evidence sources name the shen class.",
-        "load_case refuses the file (evidence-producer); validate_bundle on the unvalidated bundle reports exactly three "
-        "evidence-producer issues; the closure and both op_qualified verdicts are otherwise those of the control, which "
-        "is why validation is the sole barrier (rejected.json).",
+        "The facts are the control's; only the five php_post_state evidence sources name the shen class.",
+        "load_case refuses the file (evidence-producer); validate_bundle on the unvalidated bundle reports exactly five "
+        "evidence-producer issues; the closure and all three op_qualified verdicts are otherwise those of the control, "
+        "which is why validation is the sole barrier (rejected.json).",
     ]
     return case
 
@@ -764,52 +999,71 @@ BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "13-excluded-undeclared-write": build_13,
     "14-exclusions-not-closed": build_14,
     "15-no-exclusions-no-closure": build_15,
+    "17-effect-order-violation": build_17,
+    "18-repeat-delete-with-effects": build_18,
+    "19-unstable-oracle": build_19,
+    "20-missing-stability-closure": build_20,
+    "21-missing-effect-seq-closure": build_21,
 }
 REJECTED_BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "07-producer-class-violation": build_rejected_07,
     "12-closure-producer-violation": build_rejected_12,
     "16-exclusion-producer-violation": build_rejected_16,
+    "22-effect-seq-producer-violation": build_rejected_22,
 }
 
 # The reviewer's table: claim -> (verdict, status, missing-premise relations, discrepancy kinds).
+SUPPORTED = ("supported", "complete", [], [])
+
+
+def _all_ops(missing_relation: str, status: str = "complete") -> dict[str, tuple[str, str, list[str], list[str]]]:
+    """Every op_qualified claim unresolved with the same run-wide missing premise."""
+    return {claim_id_for(op): ("unresolved", status, [missing_relation], []) for op in OPS}
+
+
 REVIEW: dict[str, dict[str, tuple[str, str, list[str], list[str]]]] = {
-    "00-positive-control": {"claim-qualified-create": ("supported", "complete", [], []),
-                            "claim-qualified-close": ("supported", "complete", [], [])},
-    "01-planted-disagreement": {"claim-qualified-create": ("supported", "complete", [], []),
+    "00-positive-control": {"claim-qualified-create": SUPPORTED, "claim-qualified-close": SUPPORTED,
+                            "claim-qualified-delete": SUPPORTED,
+                            "claim-repeat-delete-not-found": SUPPORTED, "claim-oracle-stable": SUPPORTED},
+    "01-planted-disagreement": {"claim-qualified-create": SUPPORTED,
                                 "claim-qualified-close": ("unresolved", "complete", ["php_model_agree"], []),
+                                "claim-qualified-delete": SUPPORTED,
                                 "claim-php-disagrees-req-2": ("supported", "complete", [], ["php-state-outside-model"])},
-    "02-planted-undeclared-write": {"claim-qualified-create": ("supported", "complete", [], []),
+    "02-planted-undeclared-write": {"claim-qualified-create": SUPPORTED,
                                     "claim-qualified-close": ("unresolved", "complete", ["model_writes"], []),
+                                    "claim-qualified-delete": SUPPORTED,
                                     "claim-undeclared-audit-log": ("supported", "complete", [], ["undeclared-table"])},
-    "03-surviving-mutant": {"claim-qualified-create": ("supported", "complete", [], []),
+    "03-surviving-mutant": {"claim-qualified-create": SUPPORTED,
                             "claim-qualified-close": ("unresolved", "complete", ["mutant_killed"], []),
+                            "claim-qualified-delete": SUPPORTED,
                             "claim-m2-survives": ("supported", "complete", [], ["mutant-not-killed"])},
-    "04-missing-model-witness": {"claim-qualified-create": ("unresolved", "complete", ["model_describes_run"], []),
-                                 "claim-qualified-close": ("unresolved", "complete", ["model_describes_run"], []),
+    "04-missing-model-witness": {**_all_ops("model_describes_run"),
                                  "claim-php-agrees-req-1": ("unresolved", "complete", ["model_describes_run"], [])},
-    "05-missing-snapshot-witness": {"claim-qualified-create": ("unresolved", "complete", ["replay_run_current"], []),
-                                    "claim-qualified-close": ("unresolved", "complete", ["replay_run_current"], [])},
-    "06-stale-replay": {"claim-qualified-create": ("unresolved", "stale", ["replay_run_current"], []),
-                        "claim-qualified-close": ("unresolved", "stale", ["replay_run_current"], []),
-                        "claim-run-stale": ("supported", "complete", [], [])},
-    "08-lying-closure": {"claim-qualified-create": ("unresolved", "complete", ["replay_request"], []),
-                         "claim-qualified-close": ("unresolved", "complete", ["replay_request"], []),
+    "05-missing-snapshot-witness": _all_ops("replay_run_current"),
+    "06-stale-replay": {**_all_ops("replay_run_current", "stale"), "claim-run-stale": SUPPORTED},
+    "08-lying-closure": {**_all_ops("replay_request"),
                          "claim-kill-outside-corpus": ("supported", "complete", [], ["kill-outside-replayed-requests"])},
     "09-missing-post-state": {"claim-qualified-create": ("unresolved", "complete", ["php_post_state"], []),
-                              "claim-qualified-close": ("supported", "complete", [], []),
+                              "claim-qualified-close": SUPPORTED, "claim-qualified-delete": SUPPORTED,
                               "claim-req-3-php-post-state-gap": ("supported", "complete", [], ["post-state-missing"])},
-    "10-missing-effects-closure": {"claim-qualified-create": ("unresolved", "complete", ["php_effects_closed"], []),
-                                   "claim-qualified-close": ("unresolved", "complete", ["php_effects_closed"], [])},
-    "11-missing-admissible-closure": {"claim-qualified-create": ("unresolved", "complete", ["model_admissible_closed"], []),
-                                      "claim-qualified-close": ("unresolved", "complete", ["model_admissible_closed"], []),
-                                      "claim-php-agrees-req-1": ("supported", "complete", [], [])},
-    "13-excluded-undeclared-write": {"claim-qualified-create": ("supported", "complete", [], []),
-                                     "claim-qualified-close": ("supported", "complete", [], []),
+    "10-missing-effects-closure": _all_ops("php_effects_closed"),
+    "11-missing-admissible-closure": {**_all_ops("model_admissible_closed"), "claim-php-agrees-req-1": SUPPORTED},
+    "13-excluded-undeclared-write": {"claim-qualified-create": SUPPORTED, "claim-qualified-close": SUPPORTED,
+                                     "claim-qualified-delete": SUPPORTED,
                                      "claim-audit-log-excluded": ("supported", "complete", [], ["write-excluded-by-reviewer"])},
-    "14-exclusions-not-closed": {"claim-qualified-create": ("unresolved", "complete", ["model_scope_exclusions_closed"], []),
-                                 "claim-qualified-close": ("unresolved", "complete", ["model_scope_exclusions_closed"], [])},
-    "15-no-exclusions-no-closure": {"claim-qualified-create": ("unresolved", "complete", ["model_scope_exclusions_closed"], []),
-                                    "claim-qualified-close": ("unresolved", "complete", ["model_scope_exclusions_closed"], [])},
+    "14-exclusions-not-closed": _all_ops("model_scope_exclusions_closed"),
+    "15-no-exclusions-no-closure": _all_ops("model_scope_exclusions_closed"),
+    "17-effect-order-violation": {"claim-qualified-create": ("unresolved", "complete", ["effect_order_respected"], []),
+                                  "claim-qualified-close": SUPPORTED, "claim-qualified-delete": SUPPORTED,
+                                  "claim-go-order-violated-req-1": ("supported", "complete", [], ["effect-order-violated"])},
+    "18-repeat-delete-with-effects": {"claim-qualified-create": SUPPORTED, "claim-qualified-close": SUPPORTED,
+                                      "claim-qualified-delete": ("unresolved", "complete", ["repeat_delete_not_found"], []),
+                                      "claim-repeat-delete-has-effects": ("supported", "complete", [], ["repeat-delete-with-effects"]),
+                                      "claim-repeat-delete-not-found": ("unresolved", "complete", ["repeat_delete_has_effect"], [])},
+    "19-unstable-oracle": {**_all_ops("oracle_stable"),
+                           "claim-oracle-unstable": ("supported", "complete", [], ["oracle-unstable"])},
+    "20-missing-stability-closure": _all_ops("replay_stability_closed"),
+    "21-missing-effect-seq-closure": _all_ops("php_effect_seqs_closed"),
 }
 # Evidence a derivation must not use, per case: the lying witness of 08.
 FORBIDDEN: dict[str, Callable[[list[dict[str, Any]]], list[str]]] = {
