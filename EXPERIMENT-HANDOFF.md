@@ -12,6 +12,8 @@ running record (sections 26–31 cover the last two days); this file is the shor
 | SCIP → static facts | `claims/static/scip_facts.py` (exporter), `scip/runner.py` (`retain=True`), `claims/static/schema_static_v1.json` (frozen primitives) | Identity of a static bundle = sha256 of the exported relations (`static-relations-v1`); the index file digest is only a run receipt. |
 | Static rule pack + adversarial static corpus | `packages/capabilities/experiments/claim-semantics/static/` | 22 derived relations, 27 rules, 13 reviewed cases; both kernels agree on all 30 claims. |
 | Certificates | `claims/static/certificate.py` | Bounded backward chaining over either engine's rows; identical certificates from Python and Soufflé; `recheck` detects tampering. Ground checker with why/why-not (Stage C) is NOT done. |
+| Shen semantic workbench (Stage D) | `packages/capabilities/shen/{rule-authority,claim-workbench,certificate-output}.shen`, `claims/shen.py`, `claims/cli.py` (`capcov experiment claims shen authority\|evaluate\|why-not`) | shen-go `c12933d` driven through bifrost (`BIFROST_SHEN_GO`), hard per-call timeouts. Elaborates the rule pack, runs 8 per-rule + 2 pack-level authority checks, derives conclusions with bounded search, emits `capcov-static-certificate-v1` certificates that `recheck` accepts and that equal the Python extractor's in full on go_app; bounded why-not. Aggregation rules and non-linear recursion are refused as `unsupported-construct`. |
+| Replay judge (shen1 session) | `claims/replay/`, `experiments/claim-semantics/replay/`, `tests/claim_semantics/test_replay_*` | Receipt directory → strict bundle; rule pack with owned witnesses and contradiction detectors; reviewed corpus, certificates identical from both kernels. Schema is v1-draft until a receipt-backed run lands. The Shen domain model it consumes is a fact PRODUCER (below the IR); Stage D is the rule workbench (above it). |
 | Cross-check vs. the production resolver | `tests/claim_semantics/test_static_crosscheck_fixpoint.py` | On the go_app fixture, Datalog `static_capability_op` equals `core/fixpoint.bind` with zero differences. |
 | target-go static pilot | `claims/static/pilot.py`, `tests/claim_semantics/target_go/`, section 30 | Real route → SQL path derived in both kernels with certificates; see below. |
 | Toolchain | `flake.nix` (pinned `scip` 0.9.0, `scip-go` 0.2.7, `souffle` 2.5, Go 1.27, Python 3.12), `tests/scip/canonicalize.jq`, `packages/capabilities/tests/fixtures/scip_go_app_index.json` | `nix flake check` includes a sandboxed scip-go index smoke. |
@@ -28,7 +30,7 @@ identical across engines; coverage 1,714/1,714 rooted edges, none unrooted on th
 Negative control (route → `SendDueDigests`) is `unresolved`, never `refuted`, because no
 call-graph completeness witness exists. The handler binding is a labelled assumption fact naming
 the router file:line (target-go's `net/http` mux does not match the go_app tree-sitter route query).
-No runtime join was made: there is no retained target-go receipt, and none was fabricated.
+Runtime join (later the same day, from the synapse-capcov PR branch): a retained receipt (`capcov-target-go-runtime-route/v2`, target-go candidate `01fe913`, disposable subscription-link fixture) preserves one request id across route entry → `ChangeSubscription` → two SQL operations → commit; it joins the exact index through `index_describes_run` and `runtime_route_reaches_sql_on_index` derives in both kernels. Static and runtime certificates stay complementary. Reproduce with `CAPCOV_TARGET_GO_RUNTIME_RECEIPT` pointing at `tests/claim_semantics/target_go/artifacts/runtime-recipient-route.json` and `CAPCOV_GO_FIXTURE_ROOT` at the `target-go-capcov-claims-runtime` worktree.
 
 Reproduce (about 2–3 minutes, network needed once for Go modules):
 
@@ -40,6 +42,16 @@ nix develop --no-update-lock-file --command bash -lc \
 ```
 
 Set `CAPCOV_GO_CACHE_ROOT` to a persistent directory to avoid re-downloading modules per run.
+
+## Repositories
+
+`origin` = millstonehq/synapse (production `main`, PR #50 targets it). `pyrex41/synapse-capcov` is
+GitHub's registered fork and the PR head repo; other agents push to its `experiment/claim-semantics`.
+`pyrex41/synapse` is a separate repo whose `main` mirrors the experiment head. Push to both.
+
+Open PRs to know about (2026-09-16): upstream #50 (this line → `main`); fork `synapse-capcov`
+#1 (same branch → fork `main`, stale body), #2 (perf, superseded by upstream #49), #3 (a Cursor
+agent's deepen branch targeting this line; see the plan's section 26 for its disposition).
 
 ## Two identity traps you will hit if you touch the exporter
 
@@ -62,8 +74,8 @@ Set `CAPCOV_GO_CACHE_ROOT` to a persistent directory to avoid re-downloading mod
 - Replay minimization is bounded (`max_steps=200`, `shrink_truncated` reported honestly).
 - `scip_references_closed` is emitted only when a tree-sitter call-site census is available;
   tree-sitter is not in the devShell, so on target-go every negative claim stays `unresolved`.
-- The experimental `capcov experiment claims validate|evaluate` CLI does not exist; the claims
-  package is library + tests only. Production commands are untouched.
+- The experimental CLI exists only for the Shen workbench (`capcov experiment claims shen …`);
+  `validate|evaluate` for the kernels is still library-only. Production commands are untouched.
 - Linux execution of the claim kernels is evaluation-only in the flake; all runs were aarch64-darwin.
 
 ## How work actually got done, and what to do next time
@@ -98,6 +110,7 @@ gate commands must use `PYTHONPATH="$PWD/src"` (absolute) because upstream tests
    class. This closes the runtime route-to-SQL caveat for this pilot. Python still owns strict
    ingestion, IR validation and certificate construction; retire it as an evaluator only after an
    independent ground-certificate checker exists.
-2. `datalog-certificates`: ground checker + why/why-not, and enforce producer-class authority.
+2. `datalog-certificates`: the ground checker for replay (Stage D gives why/why-not for the
+   static pack; producer-class authority is enforced, see Known limits).
 3. Decide whether the claims package goes to upstream `main` as an opt-in package PR.
 4. Wire `capcov/cas.py` into a consumer or drop it; it currently has no caller.

@@ -1279,6 +1279,11 @@ capcov experiment claims shen why-not ...
 
 ### 2026-09-15 Stage D record — executable Shen workbench
 
+Integrated into `experiment/claim-semantics` as merge `114a35a` (2026-09-16); the go_app bundle
+digest this record pins was re-pinned in `86b2fe1` because the runtime-join merge (`5c22a89`) had
+changed the exported bundle after this branch was cut (rules digest unchanged). See the
+2026-09-16 integration record at the end of section 26.
+
 **Status: milestone met on the pinned runtime; no part mocked.** The Shen side
 elaborates the rule pack, runs the structural authority checks, computes the
 stratified closure of the bundle's ground facts, searches a bounded derivation,
@@ -5394,3 +5399,55 @@ first token of `Evidence.source`; `Evidence.kind` stays `fact`/`assumption`/`com
 (`source="target-go-runtime-trace-v2 receipt sha256:…"`, default kind), and the section 27 test
 now asserts `evidence-producer`. Integrator's runs after the fix: validation 23 + 4, replay 73,
 static corpus 18, static differential 18, evidence policy 5 all OK; target-go pilot gate with the Full regression on `dbd062b`: `Ran 1132 tests in 115.156s`, `OK (skipped=136)`.
+
+### 2026-09-16 Stage D and the receipt-backed replay judge integrated; remote PRs noted
+
+Stage D (`agent/shen-workbench` `36dc528`, section 18 record) merged as `114a35a` with no
+conflicts. On the merged tree its suite failed 7 of 22: `test_fixture_is_the_handoff_bundle`
+and every certificate `bundle_digest` compared against the pinned go_app digest
+`50e64261…cdb7`, while the tree computes `7e5a0b1f…d092`. Cause, not a defect: Stage D was cut
+from `3e8a5f8`, and the runtime-join merge `5c22a89` later added five declarations to
+`schema_static_v1.json` and `index_describes_run` emission to the exporter, which are part of
+the go_app bundle; the rules digest `3c7c8082…d36c` is unchanged. Re-pinned in `86b2fe1`; the
+untracked handoff fixtures under `.capcov/shen-handoff/` were regenerated from the same bundle
+(certificate rechecks `ok=True`). After the re-pin: Shen suite `Ran 22 tests … OK` with
+`CAPCOV_SHEN_REQUIRED=1` against `.capcov/shen-go-c12933d/shen-go`.
+
+shen1's receipt-backed replay judge (`pyrex41/synapse` `experiment/replay-claims` `623cb4f`;
+adds `c9dbc88` real-receipt join + pilot join and `623cb4f` honest-verdict assertions; no schema
+change beyond `e373bb3`, `schema_replay_v1` now receipt-backed) merged as `86b2fe1`. One
+conflict, in the target-go static pilot: both lines had recorded a runtime join under the receipt key
+`runtime_join` — this line's route trace receipt (`CAPCOV_TARGET_GO_RUNTIME_RECEIPT`, `5c22a89`) and
+shen1's replay-judge receipt directory (`CAPCOV_REPLAY_RECEIPT_DIR`). They are different joins
+(route→SQL causal trace on the exact index vs. replay corpus constraint and op qualification), so
+both are kept: `runtime_join` stays the route trace and `replay_join` records the judge. shen1's
+pilot assertion had required `op_qualified == "supported"`, which their own `623cb4f` receipt
+suite contradicts for the real receipt; the pilot now accepts exactly the two shapes that suite
+asserts (qualified with no missing premise, or `unresolved` with `missing_premise ==
+["model_writes"]`, `blocking_premise.relation == "undeclared_any"` and the write-set gap named).
+
+Integrator's runs on the merged tree (aarch64-darwin, `nix develop --no-update-lock-file`):
+replay 73 OK; validation section 27, 23 OK; static corpus 18 OK; static differential 18 OK;
+production CLI back-compat 19 OK (1 skipped); manifest checks (`test-capcov-experiment.mjs`,
+`test-capcov-runtime.mjs`) ok; shen1's receipt suite 17 OK (8 skipped without a receipt
+directory; 1 skipped with `CAPCOV_REPLAY_RECEIPT_DIR` = their `target-go-5988859-model` receipts,
+read only). target-go pilot with `CAPCOV_GO_FIXTURE_ROOT=/Users/dev/fg/.worktrees/target-go-capcov-claims-runtime`
+(`01fe913`), the committed route receipt, and that replay receipt directory: `Ran 10 tests in
+205.9s OK`; identity pin held; receipt `runtime_join.run = claims-runtime-trace-20260915-02`,
+`replay_join = {status: complete, ops: [delete-issue], run: 333072ef11f5}` with
+`delete-issue.op_qualified = unresolved`, blocked by undeclared writes (go: authentication,
+entity_statistics, go_issue_outbox, mongo:issue, redis; php: authentication, entity_statistics,
+jobs_statuses, mongo:issue, redis) — recorded as-is. Full regression on the working tree that
+became `86b2fe1` (before the final pilot-assertion edit): `Ran 1171 tests in 125.5s`, `OK
+(skipped=161)`; a second run bound to `86b2fe1` itself is recorded below when it completes.
+
+Remote PRs at this point (2026-09-16): upstream `millstonehq/synapse` #50 (this line → `main`,
+head `b9ced12` before this push, CLEAN, 3 comments, 0 reviews) and #36 (`feat/python-route-source-identity`,
+not ours). Registered fork `pyrex41/synapse-capcov`: #1 (this branch → fork `main`, stale
+Stage 0 body), #2 (`perf/incremental-source-snapshots` → fork `main`, superseded by upstream #49
+merged), and #3 (`cursor/claim-semantics-deepen-7cc3` `78341c3` → this branch, a Cursor agent's
+"runtime join, Stage C why/why-not, producer authority", based on `b9ced12`, run without nix,
+Soufflé or target-go; overlaps the runtime join and producer authority already on this line and adds
+`claims/static/ground.py` and `runtime_receipt.py`). `pyrex41/synapse` has only dependabot PRs.
+Disposition of #3 is recorded in the next entry.
+
