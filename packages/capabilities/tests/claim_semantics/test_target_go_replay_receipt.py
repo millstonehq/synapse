@@ -196,6 +196,9 @@ class _JoinCase(unittest.TestCase):
                 self.assertIn(":assumed:", record.id)
                 self.assertIn(record.atom.relation, {"op_declared", "index_describes_replay"})
         self.assertEqual(len(self.join.assumption_ids), 1 + len(self.join.ops))
+        # the registry is additive: the evidence-id list the summary always carried stays
+        self.assertEqual(replay_join.summary(self.join)["assumption_ids"], list(self.join.assumption_ids))
+        self.assertEqual(len(replay_join.summary(self.join)["assumption_ids"]), 1 + len(self.join.ops))
 
     def check_kernels(self) -> None:
         self._evaluated()
@@ -409,7 +412,27 @@ class _JoinCase(unittest.TestCase):
         for value in self.join.receipt.get("receipts", {}).values():
             if isinstance(value, str) and value.startswith("/"):
                 self.assertNotIn(value, text)
+        self.assertIn("assumptions.json", written)
+        registry = json.loads((self.out_dir / "assumptions.json").read_text())
+        self.assertEqual(document["assumptions"]["registry"], "assumptions.json")
+        registered = {entry["assumption_id"]: entry for entry in registry["assumptions"]}
+        self.assertEqual(len(registered), len(registry["assumptions"]), "one entry per assumption id")
         if self.join.result is not None:
+            kinds = {record.id: record.kind for record in self.join.bundle.evidence}
+            by_evidence = {entry["evidence_id"]: entry for entry in registry["assumptions"]}
+            for op in self.join.ops:
+                # every assumption op_qualified positively rests on is registered as carrying it
+                # (an unresolved op certifies no row, so there is nothing to carry)
+                certificate = self.join.certificates.get(self.join.claim_id("qualified", op))
+                if certificate is None:
+                    self.assertFalse(self._expect_qualified(op))
+                    continue
+                for leaf in certificate["leaves"]:
+                    if kinds.get(leaf) != "assumption":
+                        continue
+                    self.assertIn(leaf, by_evidence)
+                    self.assertIn(self.join.claim_id("qualified", op),
+                                  {carrier["claim_id"] for carrier in by_evidence[leaf]["carried_by"]})
             for op in self.join.ops:
                 entry = document["join"][op]
                 self.assertTrue(entry["corpus_constrains"])
