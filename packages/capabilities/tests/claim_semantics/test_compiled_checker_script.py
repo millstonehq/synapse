@@ -218,6 +218,19 @@ class CompiledCheckerScriptTests(unittest.TestCase):
         self.assertIn("contract finding", completed.stderr)
         self.assertNotIn("Traceback", completed.stderr)
 
+    def test_an_unwritable_output_directory_blames_the_judge_not_the_receipt(self) -> None:
+        """The judge's own I/O is an unavailable environment (4), not a contract finding (3)."""
+        blocker = self.workspace / "out-is-a-file"
+        blocker.write_text("", encoding="utf-8")
+        completed = self.run_script(
+            "--receipt", str(replay_join.COMMITTED_RECEIPT_DIR), "--out", str(blocker),
+            "--cache-dir", str(self.cache), "--souffle", "souffle",
+            "--require-supported", "delete-issue")
+        self.assertEqual(completed.returncode, 4, completed.stderr[-2000:])
+        self.assertIn("judge environment unavailable", completed.stderr)
+        self.assertNotIn("contract finding", completed.stderr)
+        self.assertNotIn("Traceback", completed.stderr)
+
     def test_an_absent_souffle_is_unavailable_and_exits_four(self) -> None:
         out = self.out("unavailable")
         completed = self.run_script(

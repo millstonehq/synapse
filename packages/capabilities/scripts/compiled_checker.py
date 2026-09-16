@@ -18,7 +18,8 @@ Exit codes (``judge``)::
     1  a required op is not supported, not complete, or not replayed at all
     2  the kernels disagree, or the compiled kernel could not be built
     3  the receipt does not meet the exporter's contract (a contract finding)
-    4  the toolchain is unavailable (no souffle, no souffle-compile.py)
+    4  the toolchain or the judge's own environment is unavailable (no souffle,
+       no souffle-compile.py, an unwritable cache or output directory)
 
 Without ``--require-op`` the verdict is derived from every replayed op rather
 than from an empty requirement: a verdict over zero requirements would be
@@ -189,11 +190,26 @@ def _unmet_ops(replayed: dict[str, Any], required: list[str]) -> list[str]:
     return [op for op in sorted(replayed) if not _op_is_supported(replayed[op])]
 
 
+def _read_join(receipt_dir: Path) -> replay_join.ReplayJoin:
+    """Build the join; the receipt's own I/O errors are the receipt's contract.
+
+    Only a read of the receipt directory maps OSError to a contract finding.
+    The judge's own I/O (its cache, its output directory) stays an environment
+    failure, so an unwritable disk is never reported as a finding against the
+    receipt.
+    """
+    try:
+        return replay_join.build(receipt_dir)
+    except OSError as exc:
+        raise replay_facts.ExportInputError(
+            f"receipt directory could not be read: {receipt_dir}: {exc}") from exc
+
+
 def judge(args: argparse.Namespace) -> int:
     receipt_dir = Path(args.receipt)
     out_dir = Path(args.out)
     required = list(dict.fromkeys(args.require_supported))
-    join = replay_join.build(receipt_dir)
+    join = _read_join(receipt_dir)
     if join.bundle is None:
         document = _judge_document(join, required, verdict=VERDICT_CONTRACT_FINDING,
                                    exit_code=EXIT_CONTRACT, program_digest=None,
@@ -313,8 +329,12 @@ def bench(args: argparse.Namespace) -> int:
     source = Path(args.receipt)
     workspace = Path(tempfile.mkdtemp(prefix="capcov-bench-receipt-"))
     try:
-        rows_in = _scaled_receipt(source, workspace / "receipt", args.scale)
-        join = replay_join.build(workspace / "receipt")
+        try:
+            rows_in = _scaled_receipt(source, workspace / "receipt", args.scale)
+        except OSError as exc:
+            raise replay_facts.ExportInputError(
+                f"receipt directory could not be read: {source}: {exc}") from exc
+        join = _read_join(workspace / "receipt")
         if join.bundle is None:
             print(f"contract finding: {join.contract_findings}", file=sys.stderr)
             return EXIT_CONTRACT
@@ -435,10 +455,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"contract finding: {exc}", file=sys.stderr)
         return EXIT_CONTRACT
     except OSError as exc:
-        # an unreadable or absent receipt directory is a contract finding, not a
-        # verdict and not a traceback
-        print(f"contract finding: {exc}", file=sys.stderr)
-        return EXIT_CONTRACT
+        # An unreadable receipt is a contract finding, raised as one where the
+        # receipt is read.  What is left here is the judge's own I/O -- its
+        # cache, its output directory -- which is an unavailable environment,
+        # never a finding against the receipt and never a traceback.
+        print(f"judge environment unavailable: {exc}", file=sys.stderr)
+        return EXIT_UNAVAILABLE
 
 
 if __name__ == "__main__":
