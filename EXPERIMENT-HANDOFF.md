@@ -138,6 +138,9 @@ Operational notes: pin the devShell with a GC root before long runs
 (`nix build --no-update-lock-file .#devShells.aarch64-darwin.default --out-link .capcov/devshell-gcroot`);
 gate commands must use `PYTHONPATH="$PWD/src"` (absolute) because upstream tests spawn
 `python -m capcov` from a temporary cwd; macOS has no `timeout`.
+When other agents share the machine, wrap every heavy step (nix builds, indexers, full
+snapshots, full suites) in `packages/capabilities/scripts/with-heavy-lock.py --label … --` (upstream
+PR #51) and run them one at a time; the host kills background work when memory runs low.
 
 ## Suggested next steps
 

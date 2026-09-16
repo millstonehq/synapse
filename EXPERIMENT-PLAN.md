@@ -5753,3 +5753,26 @@ run in which the replay judge qualifies the real op end to end; the qualificatio
 reviewer exclusions carried as assumption leaves, and the pilot receipt says so. Full regression
 bound to `f35547b`: `Ran 1206 tests in 102.5s`, `OK (skipped=153)`.
 
+### 2026-09-16 explain-evidence merge verified; snapshot blob index and heavy-work lock (upstream PR #51)
+
+`pyrex41/synapse-capcov` `experiment/claim-semantics` `1e6656b` (another session: `why`/`why_not`
+explanations for every certified pilot claim and for the replay join's `op_qualified`, persisted
+in the pilot receipt under `explanations` and per op under `explanation`, without duplicating the
+certificate) merged as `300f6d2`. Verified under heavy contention: receipt suite 22 OK, replay 79
+OK, ground 10 OK, full regression bound to `300f6d2` `Ran 1206 tests in 528.3s`, `OK
+(skipped=153)`; live pilot at `01fe913` with the route trace receipt `Ran 10 tests in 416.7s OK`,
+explanations present for all four certified claims, `delete-issue` `op_qualified = supported` with
+`explanation.holds = True` and two shared assumptions.
+
+Performance follow-up to section 31, delivered upstream as PR #51 (`perf/blob-keyed-snapshot-cache`
+`0ba637e`, CI CLEAN including the pinned Nix toolchain job): `artifacts.snapshot_tree` gains a
+machine-wide digest index keyed by git blob id, so a fresh worktree of a known commit re-hashes
+only what git reports modified (measured on two Go worktrees at different commits: 166 of 169
+digests reused with zero reads, digest equal to the exact walk); the digest formula, and therefore
+every identity pinned on this line, is unchanged (static differential 18, crosscheck 5, exporter
+48, corpus 18 OK on a merge of the change onto this head). It cannot help untracked trees; the
+24,675-file PHP oracle copy that triggered the incident is untracked and snapshotted from a
+per-run temporary root. `scripts/with-heavy-lock.py` serializes disk-heavy steps across agents;
+this session's devShell runs were killed twice by the host's low-memory guard while seven of
+shen1's units ran unwrapped, and shen1 has adopted the lock for every later stage.
+
