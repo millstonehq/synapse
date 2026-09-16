@@ -2804,7 +2804,8 @@ the driver alone records the checkpoint hash in `task-completed`. Owners of defe
 | deferred item | owning task |
 |---|---|
 | Soufflé-side provenance / engine-independent certificates | `scip-datalog-differential` (extractor), `datalog-certificates` (checker) |
-| producer-class authority; causal-identity projection in generic rules | `datalog-certificates` |
+| producer-class authority | **closed** by `6605d44` (cherry-picked from shen1's `experiment/replay-claims` e45384d): `evidence-producer` at ingestion; `ebb5897` (e7f624b) makes fact attribution unconditional |
+| causal-identity projection in generic rules | `datalog-certificates` |
 | unconditional replay minimality | not required (bounded shrinking with `shrink_truncated`) |
 | installed-wheel inclusion of `claims/static/schema_static_v1.json` | `scip-datalog-differential` (owns `pyproject.toml`, `MANIFEST.in`) |
 | experimental `capcov experiment claims validate/evaluate` CLI | `datalog-evaluation` (owns `capcov/cli.py`, `claims/cli.py`) |

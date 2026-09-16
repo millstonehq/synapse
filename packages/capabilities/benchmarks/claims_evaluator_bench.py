@@ -18,7 +18,18 @@ import time
 import tracemalloc
 
 from capcov.claims.evaluator import ResourceLimits, evaluate
-from capcov.claims.ir import Atom, Bundle, Claim, Column, Constant, RelationDecl, Rule, Variable
+from capcov.claims.ir import Atom, Bundle, Claim, Column, Constant, Evidence, RelationDecl, Rule, Variable
+
+
+def _with_evidence(relations, facts, rules, claims) -> Bundle:
+    """Attach one evidence record per fact.
+
+    Validation attributes every fact to evidence unconditionally (section 27),
+    so a benchmark bundle carries synthetic producer records; their cost is part
+    of what is measured, as it is in real bundles.
+    """
+    evidence = tuple(Evidence(f"bench:{fact.relation}:{i}", fact, source="bench") for i, fact in enumerate(facts))
+    return Bundle(relations, tuple(facts), tuple(rules), tuple(claims), evidence=evidence)
 
 
 def _sym(name: str) -> Column:
@@ -30,7 +41,7 @@ def bundle_one_hop(n: int) -> Bundle:
                  RelationDecl("r", (_sym("s"), _sym("d")), modality="derived", primitive=False))
     facts = tuple(Atom("e", (Constant(f"n{i}"), Constant(f"n{i + 1}"))) for i in range(n))
     rule = Rule(Atom("r", (Variable("S"), Variable("D"))), (Atom("e", (Variable("S"), Variable("D"))),), name="hop")
-    return Bundle(relations, facts, (rule,), (Claim("r", (Constant("n0"), Constant("n1")), id="c"),))
+    return _with_evidence(relations, facts, (rule,), (Claim("r", (Constant("n0"), Constant("n1")), id="c"),))
 
 
 def bundle_equijoin(n: int) -> Bundle:
@@ -42,7 +53,7 @@ def bundle_equijoin(n: int) -> Bundle:
         facts.append(Atom("b", (Constant(f"y{i}"), Constant(f"z{i}"))))
     rule = Rule(Atom("j", (Variable("X"), Variable("Z"))),
                 (Atom("a", (Variable("X"), Variable("Y"))), Atom("b", (Variable("Y"), Variable("Z")))), name="join")
-    return Bundle(relations, tuple(facts), (rule,), (Claim("j", (Constant("x0"), Constant("z0")), id="c"),))
+    return _with_evidence(relations, facts, (rule,), (Claim("j", (Constant("x0"), Constant("z0")), id="c"),))
 
 
 def bundle_chain_closure(n: int) -> Bundle:
@@ -52,7 +63,7 @@ def bundle_chain_closure(n: int) -> Bundle:
     rules = (Rule(Atom("r", (Variable("S"), Variable("D"))), (Atom("e", (Variable("S"), Variable("D"))),), name="base"),
              Rule(Atom("r", (Variable("S"), Variable("D"))),
                   (Atom("r", (Variable("S"), Variable("M"))), Atom("e", (Variable("M"), Variable("D")))), name="step"))
-    return Bundle(relations, facts, rules, (Claim("r", (Constant("n0"), Constant(f"n{n}")), id="c"),))
+    return _with_evidence(relations, facts, rules, (Claim("r", (Constant("n0"), Constant(f"n{n}")), id="c"),))
 
 
 CASES = {
