@@ -5537,7 +5537,7 @@ read only). target-go pilot with `CAPCOV_GO_FIXTURE_ROOT=/Users/dev/fg/.worktree
 entity_statistics, go_issue_outbox, mongo:issue, redis; php: authentication, entity_statistics,
 jobs_statuses, mongo:issue, redis) — recorded as-is. Full regression on the working tree that
 became `86b2fe1` (before the final pilot-assertion edit): `Ran 1171 tests in 125.5s`, `OK
-(skipped=161)`; a second run bound to `86b2fe1` itself is recorded below when it completes.
+(skipped=161)`; bound to `86b2fe1` itself: `Ran 1171 tests in 109.3s`, `OK (skipped=161)`.
 
 Remote PRs at this point (2026-09-16): upstream `millstonehq/synapse` #50 (this line → `main`,
 head `b9ced12` before this push, CLEAN, 3 comments, 0 reviews) and #36 (`feat/python-route-source-identity`,
@@ -5548,4 +5548,58 @@ merged), and #3 (`cursor/claim-semantics-deepen-7cc3` `78341c3` → this branch,
 Soufflé or target-go; overlaps the runtime join and producer authority already on this line and adds
 `claims/static/ground.py` and `runtime_receipt.py`). `pyrex41/synapse` has only dependabot PRs.
 Disposition of #3 is recorded in the next entry (section 32 above is PR #3's own record).
+
+### 2026-09-16 PR #3 (Cursor agent deepen) integrated
+
+`pyrex41/synapse-capcov` PR #3, `cursor/claim-semantics-deepen-7cc3` `78341c3` (one commit on
+`b9ced12`, +1222/−186, 11 files; its own record is section 32 above). What it adds: Stage C
+ground `why`/`why_not`/`impact`/`shared_assumptions` over `capcov-static-certificate-v1`
+artifacts (`claims/static/ground.py`); the retained-receipt loader and trace declarations moved
+into `claims/static/runtime_receipt.py` (the exporter's stub declarations now import them, so
+they cannot drift); `recheck` refusing a leaf whose `Evidence.source` producer token is not in
+the relation's `producer_classes`; fixture-backed runtime-join correspondence against a synthetic
+index (explicitly not the target-go identity). It overlaps the runtime join and producer authority
+already on this line but changes neither contract: `runtime_route_observed` stays unconstrained,
+the trace primitives admit only `target-go-runtime-trace-v2`, `Evidence.kind` stays untouched.
+
+Its environment was Linux without nix, Soufflé or an target-go checkout, so its Soufflé-dependent
+tests and the live pilot were skip-gated there. Verified here first on its own head in a
+throwaway worktree (`nix develop`, aarch64-darwin): the three new modules `Ran 24 tests … OK`
+with Soufflé present; the whole `tests/claim_semantics` directory `Ran 356 tests … OK
+(skipped=11)`; go_app bundle digest `7e5a0b1f…d092` and rules digest `3c7c8082…d36c`
+unchanged, so the Stage D pin survives. Merged as `8829591` onto `45ca81f`. Conflicts were
+only in the two markdown files (both sides kept; the handoff's live-pilot recipe now names the
+target-go worktree at the receipt's candidate commit `01fe913`, because `/Users/dev/fg/target-go`
+HEAD fails closed on the commit mismatch — correct behaviour, wrong recipe).
+
+One latent defect surfaced on the first real run: PR #3 trimmed the pilot's `capcov.claims`
+import to the names its refactor still used but left the static-only branch's `Bundle(())`, so
+`setUpClass` raised `NameError: name 'Bundle' is not defined`. Skip-gating hid it in the
+authoring environment. Import restored in the merge commit; an AST scan of the module finds no
+other undefined name. Merged-tree runs: Shen 22 OK (`CAPCOV_SHEN_REQUIRED=1`); PR #3 modules
+9 + 5 + 10 OK; static differential 18 OK; evidence policy 5 OK; shen1's receipt suite 17 OK
+(1 skipped) against the real receipt directory; validation section 27, 23 OK; production CLI
+19 OK (1 skipped); manifest checks ok; target-go pilot with the route trace receipt and the replay
+receipt directory `Ran 10 tests in 193.3s OK`, receipt `outcome supported`,
+`runtime_join.run = claims-runtime-trace-20260915-02`, `replay_join.status = complete`,
+`delete-issue.op_qualified = unresolved`. Full regression on the merged working tree before the
+one-line import fix (index tree `2ee50f3`): `Ran 1195 tests in 232.1s`, `OK (skipped=161)`.
+Bound to `8829591` itself: `Ran 1195 tests in 133.5s`, `OK (skipped=161)`.
+
+### 2026-09-16 shen1's committed replay receipt fixture integrated
+
+`pyrex41/synapse` `experiment/replay-claims` `b8c781a` merged as `4933f0e`, no conflicts. It
+commits the real, conforming target-go replay receipt (candidate `5988859`, run `333072ef11f5`,
+synthetic oracle seed only, local evidence paths scrubbed to `<evidence>/` inside the
+identity-excluded `receipts` block, with a `fixture_note`) under
+`tests/claim_semantics/fixtures/replay_receipt_target_go_5988859/`, and `replay_join.receipt_dir()`
+now defaults to that directory when `CAPCOV_REPLAY_RECEIPT_DIR` is unset (the env var still
+overrides). Integrator's checks: the fixture contains no absolute local paths and no
+credential-shaped keys; receipt suite with no env `Ran 17 tests … OK (skipped=1)` (the
+conditional full-span skip awaits target-go's model write-set); replay suite 73 OK; target-go pilot
+with the route trace receipt and no replay env `Ran 10 tests in 256.4s OK`, receipt
+`replay_join = {status: complete, run: 333072ef11f5}`, `delete-issue.op_qualified = unresolved`
+— the pilot's replay half is now exercised on every real run, not only when a work directory is
+named. Full regression bound to `4933f0e`: `Ran 1195 tests in 106.8s`, `OK (skipped=154)` — seven
+fewer skips than on `8829591`, exactly the receipt suite now running un-gated.
 
