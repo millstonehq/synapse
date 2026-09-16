@@ -100,7 +100,7 @@ class AdversarialReplayCasesInBothEngines(unittest.TestCase):
         self.assertTrue(self.results, "no differential results; is souffle on PATH?")
         qualified = {"00-positive-control": 2, "01-planted-disagreement": 1, "02-planted-undeclared-write": 1,
                      "03-surviving-mutant": 1, "04-missing-model-witness": 0, "05-missing-snapshot-witness": 0,
-                     "06-stale-replay": 0, "08-lying-closure": 2, "09-missing-post-state": 1}
+                     "06-stale-replay": 0, "08-lying-closure": 0, "09-missing-post-state": 1}
         for stem, (_, result) in sorted(self.results.items()):
             for report in (result.python, result.souffle):
                 relations = dict(report.relations)
@@ -132,26 +132,29 @@ class AdversarialReplayCasesInBothEngines(unittest.TestCase):
                         certified += 1
         self.assertGreaterEqual(certified, 12)
 
-    def test_the_rejected_case_would_be_supported_were_it_not_for_producer_authority(self) -> None:
-        table = read_json(REJECTED_PATH)["cases"]["07-producer-class-violation"]
-        path = REJECTED_DIR / "07-producer-class-violation.json"
-        lenient = load_case(path, self.pack, validate=False)
-        self.assertEqual([issue.code for issue in validate_bundle(lenient)], table["validation_issues"])
-        # the public entry point fails closed
-        report = evaluate(lenient)
-        self.assertEqual(report.status.value, "invalid-input")
-        self.assertTrue(all(entry.result.operational.value == "invalid-input" for entry in report.claims))
-        # the engine itself, run without the validation boundary, would qualify both ops
-        engine = _Engine(lenient, ResourceLimits())
-        engine.run()
-        verdicts = {claim.id: engine.evaluate_claim(index, claim).result.semantic.value
-                    for index, claim in enumerate(lenient.claims)}
-        self.assertEqual(verdicts, table["unvalidated_verdicts"])
-        self.assertEqual({v for v in verdicts.values()}, {"supported"})
-        control, _ = self.results.get("00-positive-control", (None, None))
-        if control is not None:
-            self.assertEqual(set(engine._canonical_rows("op_qualified")),
-                             set(evaluate(control).relation_rows("op_qualified")))
+    def test_each_rejected_case_would_be_supported_were_it_not_for_producer_authority(self) -> None:
+        tables = read_json(REJECTED_PATH)["cases"]
+        self.assertEqual(set(tables), {path.stem for path in case_paths(REJECTED_DIR)})
+        for path in case_paths(REJECTED_DIR):
+            table = tables[path.stem]
+            with self.subTest(case=path.stem):
+                lenient = load_case(path, self.pack, validate=False)
+                self.assertEqual([issue.code for issue in validate_bundle(lenient)], table["validation_issues"])
+                # the public entry point fails closed
+                report = evaluate(lenient)
+                self.assertEqual(report.status.value, "invalid-input")
+                self.assertTrue(all(entry.result.operational.value == "invalid-input" for entry in report.claims))
+                # the engine itself, run without the validation boundary, would qualify both ops
+                engine = _Engine(lenient, ResourceLimits())
+                engine.run()
+                verdicts = {claim.id: engine.evaluate_claim(index, claim).result.semantic.value
+                            for index, claim in enumerate(lenient.claims)}
+                self.assertEqual(verdicts, table["unvalidated_verdicts"])
+                self.assertEqual({v for v in verdicts.values()}, {"supported"})
+                control, _ = self.results.get("00-positive-control", (None, None))
+                if control is not None:
+                    self.assertEqual(set(engine._canonical_rows("op_qualified")),
+                                     set(evaluate(control).relation_rows("op_qualified")))
 
 
 if __name__ == "__main__":

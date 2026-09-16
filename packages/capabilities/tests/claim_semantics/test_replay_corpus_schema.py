@@ -30,7 +30,7 @@ DERIVED = {
     "replay_run_current", "replay_run_stale", "requested", "requested_closed", "replayed",
     "php_model_agree", "php_model_disagree", "go_model_agree", "go_model_disagree", "op_exercised",
     "php_observed", "go_observed", "php_observed_closed", "go_observed_closed", "post_state_gap",
-    "post_state_any", "post_state_gap_closed",
+    "post_state_any", "post_state_gap_closed", "kill_closure_gap_any", "kill_gap_closed",
     "undeclared_write", "surviving_mutant", "op_has_surviving_mutant", "op_surviving_closed",
     "corpus_constrains", "kill_closure_gap", "php_disagree_any", "go_disagree_any", "undeclared_any",
     "php_disagreement_closed", "go_disagreement_closed", "undeclared_writes_closed", "op_qualified",
@@ -38,7 +38,8 @@ DERIVED = {
 COMPLETENESS = {"requested_closed": "requested", "op_surviving_closed": "op_has_surviving_mutant",
                 "php_disagreement_closed": "php_disagree_any", "go_disagreement_closed": "go_disagree_any",
                 "undeclared_writes_closed": "undeclared_any", "php_observed_closed": "php_observed",
-                "go_observed_closed": "go_observed", "post_state_gap_closed": "post_state_any"}
+                "go_observed_closed": "go_observed", "post_state_gap_closed": "post_state_any",
+                "kill_gap_closed": "kill_closure_gap_any"}
 EVIDENCE_ID = re.compile(r"^(replay|php|go|shen|mut|reviewer):([0-9a-f]{12}|claim-time):([a-z_]+):([0-9a-f]{12})$")
 CLAIM_TIME_RELATIONS = {"run_nonce_observed", "snapshot_observed", "model_observed", "op_declared"}
 
@@ -152,6 +153,7 @@ class ReplayRulePackTests(unittest.TestCase):
             ("corpus_constrains", "op_has_surviving_mutant"), ("kill_closure_gap", "requested"),
             ("op_qualified_rt", "php_disagree_any"), ("op_qualified_rt", "go_disagree_any"),
             ("op_qualified_rt", "undeclared_any"), ("op_qualified_rt", "post_state_any"),
+            ("op_qualified_rt", "kill_closure_gap_any"),
             ("post_state_gap", "php_observed"), ("post_state_gap", "go_observed")})
         witnesses = {item["completes"] for item in self.declarations.values() if item["modality"] == "completeness"}
         self.assertTrue({target for _, target in negated} <= witnesses)
@@ -176,6 +178,25 @@ class ReplayRulePackTests(unittest.TestCase):
         self.assertEqual(frozen["php_post_states_closed"]["completes"], "php_post_state")
         self.assertEqual(frozen["go_post_states_closed"]["completes"], "go_post_state")
 
+    def test_every_witness_and_compatibility_relation_is_owned_by_the_class_that_vouches_for_it(self) -> None:
+        frozen = {item["name"]: item for item in self.pack["primitives"]}
+        owners = {"replay_requests_closed": "replay", "php_effects_closed": "replay", "go_effects_closed": "replay",
+                  "php_post_states_closed": "replay", "go_post_states_closed": "replay", "mutant_kills_closed": "replay",
+                  "model_admissible_closed": "shen", "model_writes_closed": "shen", "model_describes_run": "shen",
+                  "mutants_closed": "mut", "index_describes_replay": "reviewer"}
+        for name, owner in owners.items():
+            self.assertEqual(frozen[name]["producer_classes"], [owner], name)
+        self.assertEqual([name for name, item in frozen.items() if not item["producer_classes"]], [])
+        # the contradiction gate: a lying per-run kill closure poisons every op of the run
+        rules = {rule["name"]: rule for rule in self.pack["rules"]}
+        self.assertEqual([atom["relation"] for atom in _atoms(rules["kill_gap_closed"])],
+                         ["mutant_kills_closed", "replay_requests_closed"])
+        self.assertEqual([atom["relation"] for atom in _atoms(rules["kill_closure_gap_any"])],
+                         ["replayed", "kill_closure_gap"])
+        gate = [atom for atom in _atoms(rules["op_qualified_rt"]) if atom["relation"] == "kill_closure_gap_any"]
+        self.assertEqual([atom.get("negated") for atom in gate], [True])
+        self.assertIn("kill_gap_closed", [atom["relation"] for atom in _atoms(rules["op_qualified_rt"])])
+
     def test_the_static_join_is_isolated_in_the_claim_rule(self) -> None:
         for rule in self.pack["rules"]:
             static = [atom["relation"] for atom in _atoms(rule)
@@ -199,7 +220,9 @@ class ReplayCaseTests(unittest.TestCase):
         self.assertEqual([path.stem for path in self.paths], list(case_builder.BUILDERS))
         self.assertEqual(sorted({path.name[:2] for path in self.paths}),
                          ["00", "01", "02", "03", "04", "05", "06", "08", "09"])
-        self.assertEqual([path.stem for path in case_paths(REJECTED_DIR)], ["07-producer-class-violation"])
+        self.assertEqual([path.stem for path in case_paths(REJECTED_DIR)],
+                         ["07-producer-class-violation", "12-closure-producer-violation"])
+        self.assertEqual([path.stem for path in case_paths(REJECTED_DIR)], list(case_builder.REJECTED_BUILDERS))
 
     def test_every_case_regenerates_identically_from_the_exporter(self) -> None:
         for path in [*self.paths, *case_paths(REJECTED_DIR)]:
@@ -326,6 +349,12 @@ class ReplayCaseTests(unittest.TestCase):
         self.assertTrue(set(gap["support_leaves"]) & set(gap["forbidden_leaves"]))
         self.assertEqual({leaf.split(":")[2] for leaf in gap["forbidden_leaves"]}, {"mutant_kills_closed"})
         self.assertEqual(lying["provenance"]["seeded_fault"], "lying-completeness-witness")
+        # the contradicted closure never supports a qualification
+        for claim_id in ("claim-qualified-create", "claim-qualified-close"):
+            outcome = lying["expected"]["claims"][claim_id]
+            self.assertEqual(outcome["semantic_verdict"], "unresolved")
+            self.assertEqual(outcome["support_leaves"], [])
+            self.assertEqual([item["relation"] for item in outcome["missing_premises"]], ["replay_request"])
 
     def test_expected_table_duplicates_each_case(self) -> None:
         table = read_json(EXPECTED_PATH)
@@ -388,28 +417,32 @@ class ReplayCaseTests(unittest.TestCase):
         self.assertTrue({"replay", "php", "go", "shen", "mut", "reviewer", "php-census"} <= classes)
         self.assertEqual(table["06-stale-replay"]["claims"]["claim-qualified-close"]["operational_status"], "stale")
 
-    def test_the_rejected_case_is_refused_at_ingestion_by_the_producer_class_alone(self) -> None:
+    def test_each_rejected_case_is_refused_at_ingestion_by_the_producer_class_alone(self) -> None:
         table = read_json(REJECTED_PATH)
         self.assertEqual(table["rule_pack"], "rules-replay-v1")
-        path = REJECTED_DIR / "07-producer-class-violation.json"
-        case = read_json(path)
-        entry = table["cases"][case["id"]]
-        with self.assertRaises(BundleIngestionError) as ctx:
-            load_case(path, self.pack)
-        self.assertIn("evidence-producer", str(ctx.exception))
-        lenient = load_case(path, self.pack, validate=False)
-        self.assertEqual([issue.code for issue in validate_bundle(lenient)], entry["validation_issues"])
-        relabelled = [f for f in case["facts"] if f["source"] == entry["relabelled_source"]]
-        self.assertEqual({f["relation"] for f in relabelled}, {entry["relabelled_relation"]})
-        self.assertEqual(len(relabelled), len(entry["validation_issues"]))
+        self.assertEqual(set(table["cases"]), {path.stem for path in case_paths(REJECTED_DIR)})
         control = read_json(CASES_DIR / "00-positive-control.json")
-        differing = [(a, b) for a, b in zip(control["facts"], case["facts"]) if a != b]
-        self.assertEqual(len(differing), 3)
-        for a, b in differing:
-            self.assertEqual({**a, "source": b["source"]}, b)
-        self.assertEqual(control["claims"], case["claims"])
-        self.assertEqual(control["outputs"], case["outputs"])
-        self.assertNotIn("expected", case)
+        for path in case_paths(REJECTED_DIR):
+            case = read_json(path)
+            entry = table["cases"][case["id"]]
+            with self.subTest(case=path.name):
+                with self.assertRaises(BundleIngestionError) as ctx:
+                    load_case(path, self.pack)
+                self.assertIn("evidence-producer", str(ctx.exception))
+                lenient = load_case(path, self.pack, validate=False)
+                self.assertEqual([issue.code for issue in validate_bundle(lenient)], entry["validation_issues"])
+                relabelled = [f for f in case["facts"] if f["source"] == entry["relabelled_source"]]
+                self.assertEqual({f["relation"] for f in relabelled}, {entry["relabelled_relation"]})
+                self.assertEqual(len(relabelled), len(entry["validation_issues"]))
+                admitted = self.declarations[entry["relabelled_relation"]]["producer_classes"]
+                self.assertNotIn(entry["relabelled_source"].split(" ", 1)[0], admitted)
+                differing = [(a, b) for a, b in zip(control["facts"], case["facts"]) if a != b]
+                self.assertEqual(len(differing), len(entry["validation_issues"]))
+                for a, b in differing:
+                    self.assertEqual({**a, "source": b["source"]}, b)
+                self.assertEqual(control["claims"], case["claims"])
+                self.assertEqual(control["outputs"], case["outputs"])
+                self.assertNotIn("expected", case)
 
 
 if __name__ == "__main__":

@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "id": "08-lying-closure",
-  "title": "mutant_kills_closed asserted over a kill outside the replayed requests",
+  "id": "12-closure-producer-violation",
+  "title": "Positive control whose model_admissible_closed witness is emitted by the harness",
   "rule_pack": "rules-replay-v1",
   "provenance": {
     "kind": "synthetic",
     "source": "replay_facts.export_bundle over an edit of tests/claim_semantics/fixtures/replay_receipt_min",
-    "seeded_fault": "lying-completeness-witness"
+    "seeded_fault": "closure-producer-violation"
   },
   "context": {
     "run": "run-fixture-1",
@@ -14,13 +14,12 @@
     "index": "1a741e9712491dba5cf03bb8d27001081b9d17280014e4805c4dcbe9f7d0124b"
   },
   "review_notes": [
-    "mutant_killed.json row 0 names req-9; replay_request.json is unchanged and the receipt still asserts replay_requests and mutant_kills closed.",
-    "The kill_closure_gap claim is supported and its support includes the mutant_kills_closed witness that the harness should have withheld; that witness is listed under forbidden_leaves (seeded_fault lying-completeness-witness).",
-    "Both op_qualified claims are unresolved: kill_gap_closed holds (kills and requests both closed) and kill_closure_gap_any(run, op) holds for every replayed op, so the contradiction gate fails; the missing premise names replay_request (the req-9 the kill relies on), triggered by the m-1 kill row."
+    "The facts are the control's; only the model_admissible_closed witness names the replay class, i.e. the harness closing the model runner's admissible set on its behalf.",
+    "load_case refuses the file (evidence-producer: model_admissible_closed admits shen); evaluated unvalidated both op_qualified verdicts would be supported (rejected.json)."
   ],
   "facts": [
     {
-      "id": "reviewer:1802bdc9a439:index_describes_replay:6da538f7902a",
+      "id": "reviewer:4e86bd0674ff:index_describes_replay:6da538f7902a",
       "kind": "fact",
       "relation": "index_describes_replay",
       "arg_order": [
@@ -39,12 +38,12 @@
       "provenance": {
         "depends_on": [
           "external:index:1a741e9712491dba5cf03bb8d27001081b9d17280014e4805c4dcbe9f7d0124b",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "mut:1802bdc9a439:mutant:dcabe2e5666c",
+      "id": "mut:4e86bd0674ff:mutant:dcabe2e5666c",
       "kind": "fact",
       "relation": "mutant",
       "arg_order": [
@@ -68,7 +67,7 @@
       }
     },
     {
-      "id": "mut:1802bdc9a439:mutant:48053510584a",
+      "id": "mut:4e86bd0674ff:mutant:48053510584a",
       "kind": "fact",
       "relation": "mutant",
       "arg_order": [
@@ -92,7 +91,7 @@
       }
     },
     {
-      "id": "shen:1802bdc9a439:model_writes:07a5f6712679",
+      "id": "shen:4e86bd0674ff:model_writes:07a5f6712679",
       "kind": "fact",
       "relation": "model_writes",
       "arg_order": [
@@ -116,7 +115,7 @@
       }
     },
     {
-      "id": "shen:1802bdc9a439:model_writes:bc72d89af35f",
+      "id": "shen:4e86bd0674ff:model_writes:bc72d89af35f",
       "kind": "fact",
       "relation": "model_writes",
       "arg_order": [
@@ -140,7 +139,7 @@
       }
     },
     {
-      "id": "shen:1802bdc9a439:model_writes_closed:6425563e0740",
+      "id": "shen:4e86bd0674ff:model_writes_closed:6425563e0740",
       "kind": "fact",
       "relation": "model_writes_closed",
       "arg_order": [
@@ -162,7 +161,7 @@
       }
     },
     {
-      "id": "shen:1802bdc9a439:model_writes_closed:0b12b0ac957d",
+      "id": "shen:4e86bd0674ff:model_writes_closed:0b12b0ac957d",
       "kind": "fact",
       "relation": "model_writes_closed",
       "arg_order": [
@@ -184,7 +183,7 @@
       }
     },
     {
-      "id": "mut:1802bdc9a439:mutants_closed:d76a11a716ff",
+      "id": "mut:4e86bd0674ff:mutants_closed:d76a11a716ff",
       "kind": "fact",
       "relation": "mutants_closed",
       "arg_order": [
@@ -206,7 +205,7 @@
       }
     },
     {
-      "id": "mut:1802bdc9a439:mutants_closed:e0260c65efbe",
+      "id": "mut:4e86bd0674ff:mutants_closed:e0260c65efbe",
       "kind": "fact",
       "relation": "mutants_closed",
       "arg_order": [
@@ -228,7 +227,7 @@
       }
     },
     {
-      "id": "shen:1802bdc9a439:model_describes_run:30e5416af7e4",
+      "id": "shen:4e86bd0674ff:model_describes_run:30e5416af7e4",
       "kind": "fact",
       "relation": "model_describes_run",
       "arg_order": [
@@ -247,12 +246,12 @@
       "provenance": {
         "depends_on": [
           "external:model:5f0d985d02df45b3790e120f9809e5d4af85edef8079b84b08f5bfdf8439e156",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "shen:1802bdc9a439:model_admissible:bbd809734048",
+      "id": "shen:4e86bd0674ff:model_admissible:bbd809734048",
       "kind": "fact",
       "relation": "model_admissible",
       "arg_order": [
@@ -274,13 +273,13 @@
       "provenance": {
         "depends_on": [
           "external:model:5f0d985d02df45b3790e120f9809e5d4af85edef8079b84b08f5bfdf8439e156",
-          "replay:1802bdc9a439:replay_request:b67ffd90fbf2",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:b67ffd90fbf2",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "shen:1802bdc9a439:model_admissible:390a5bcaf435",
+      "id": "shen:4e86bd0674ff:model_admissible:390a5bcaf435",
       "kind": "fact",
       "relation": "model_admissible",
       "arg_order": [
@@ -302,13 +301,13 @@
       "provenance": {
         "depends_on": [
           "external:model:5f0d985d02df45b3790e120f9809e5d4af85edef8079b84b08f5bfdf8439e156",
-          "replay:1802bdc9a439:replay_request:e1b3e116da62",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:e1b3e116da62",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "shen:1802bdc9a439:model_admissible:d9d0f794addd",
+      "id": "shen:4e86bd0674ff:model_admissible:d9d0f794addd",
       "kind": "fact",
       "relation": "model_admissible",
       "arg_order": [
@@ -330,13 +329,13 @@
       "provenance": {
         "depends_on": [
           "external:model:5f0d985d02df45b3790e120f9809e5d4af85edef8079b84b08f5bfdf8439e156",
-          "replay:1802bdc9a439:replay_request:0978f89fd323",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:0978f89fd323",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "shen:1802bdc9a439:model_effect:14f8979119a8",
+      "id": "shen:4e86bd0674ff:model_effect:14f8979119a8",
       "kind": "fact",
       "relation": "model_effect",
       "arg_order": [
@@ -364,13 +363,13 @@
       "provenance": {
         "depends_on": [
           "external:model:5f0d985d02df45b3790e120f9809e5d4af85edef8079b84b08f5bfdf8439e156",
-          "replay:1802bdc9a439:replay_request:b67ffd90fbf2",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:b67ffd90fbf2",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "shen:1802bdc9a439:model_effect:c45906d6b7cb",
+      "id": "shen:4e86bd0674ff:model_effect:c45906d6b7cb",
       "kind": "fact",
       "relation": "model_effect",
       "arg_order": [
@@ -398,13 +397,13 @@
       "provenance": {
         "depends_on": [
           "external:model:5f0d985d02df45b3790e120f9809e5d4af85edef8079b84b08f5bfdf8439e156",
-          "replay:1802bdc9a439:replay_request:e1b3e116da62",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:e1b3e116da62",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "shen:1802bdc9a439:model_effect:dd4508e69f10",
+      "id": "shen:4e86bd0674ff:model_effect:dd4508e69f10",
       "kind": "fact",
       "relation": "model_effect",
       "arg_order": [
@@ -432,13 +431,13 @@
       "provenance": {
         "depends_on": [
           "external:model:5f0d985d02df45b3790e120f9809e5d4af85edef8079b84b08f5bfdf8439e156",
-          "replay:1802bdc9a439:replay_request:0978f89fd323",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:0978f89fd323",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "shen:1802bdc9a439:model_admissible_closed:e42e24b4af61",
+      "id": "shen:4e86bd0674ff:model_admissible_closed:e42e24b4af61",
       "kind": "fact",
       "relation": "model_admissible_closed",
       "arg_order": [
@@ -452,16 +451,16 @@
       "context": {
         "run": "run-fixture-1"
       },
-      "source": "shen capcov.claims.replay.replay_facts model-admissible-closed-v1",
+      "source": "replay capcov.claims.replay.replay_facts model-admissible-closed-v1",
       "provenance": {
         "depends_on": [
           "external:model:5f0d985d02df45b3790e120f9809e5d4af85edef8079b84b08f5bfdf8439e156",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "mut:1802bdc9a439:mutant_killed:6c2d4b9b4cf1",
+      "id": "mut:4e86bd0674ff:mutant_killed:ae7c53ffc992",
       "kind": "fact",
       "relation": "mutant_killed",
       "arg_order": [
@@ -472,7 +471,7 @@
       "args": [
         "run-fixture-1",
         "m-1",
-        "req-9"
+        "req-1"
       ],
       "context": {
         "run": "run-fixture-1"
@@ -480,12 +479,13 @@
       "source": "mut shen-mutator v1",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:b67ffd90fbf2",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "mut:1802bdc9a439:mutant_killed:7f186340484e",
+      "id": "mut:4e86bd0674ff:mutant_killed:7f186340484e",
       "kind": "fact",
       "relation": "mutant_killed",
       "arg_order": [
@@ -504,13 +504,13 @@
       "source": "mut shen-mutator v1",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_request:e1b3e116da62",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:e1b3e116da62",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "replay:1802bdc9a439:replay_run:ad8057bded65",
+      "id": "replay:4e86bd0674ff:replay_run:ad8057bded65",
       "kind": "fact",
       "relation": "replay_run",
       "arg_order": [
@@ -543,7 +543,7 @@
       }
     },
     {
-      "id": "go:1802bdc9a439:go_post_state:b10fe6120345",
+      "id": "go:4e86bd0674ff:go_post_state:b10fe6120345",
       "kind": "fact",
       "relation": "go_post_state",
       "arg_order": [
@@ -562,13 +562,13 @@
       "source": "go target-go go00000000000000000000000000000000000001",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_request:b67ffd90fbf2",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:b67ffd90fbf2",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "go:1802bdc9a439:go_post_state:8cd0fcfad011",
+      "id": "go:4e86bd0674ff:go_post_state:8cd0fcfad011",
       "kind": "fact",
       "relation": "go_post_state",
       "arg_order": [
@@ -587,13 +587,13 @@
       "source": "go target-go go00000000000000000000000000000000000001",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_request:e1b3e116da62",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:e1b3e116da62",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "go:1802bdc9a439:go_post_state:36a8b17f9da0",
+      "id": "go:4e86bd0674ff:go_post_state:36a8b17f9da0",
       "kind": "fact",
       "relation": "go_post_state",
       "arg_order": [
@@ -612,13 +612,13 @@
       "source": "go target-go go00000000000000000000000000000000000001",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_request:0978f89fd323",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:0978f89fd323",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "php:1802bdc9a439:php_post_state:cb69b5673861",
+      "id": "php:4e86bd0674ff:php_post_state:cb69b5673861",
       "kind": "fact",
       "relation": "php_post_state",
       "arg_order": [
@@ -637,13 +637,13 @@
       "source": "php target-cloud php0000000000000000000000000000000000001",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_request:b67ffd90fbf2",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:b67ffd90fbf2",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "php:1802bdc9a439:php_post_state:61c03708afcd",
+      "id": "php:4e86bd0674ff:php_post_state:61c03708afcd",
       "kind": "fact",
       "relation": "php_post_state",
       "arg_order": [
@@ -662,13 +662,13 @@
       "source": "php target-cloud php0000000000000000000000000000000000001",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_request:e1b3e116da62",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:e1b3e116da62",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "php:1802bdc9a439:php_post_state:811ecd651a8b",
+      "id": "php:4e86bd0674ff:php_post_state:811ecd651a8b",
       "kind": "fact",
       "relation": "php_post_state",
       "arg_order": [
@@ -687,13 +687,13 @@
       "source": "php target-cloud php0000000000000000000000000000000000001",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_request:0978f89fd323",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:0978f89fd323",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "go:1802bdc9a439:go_effect:9d9d13f9570f",
+      "id": "go:4e86bd0674ff:go_effect:9d9d13f9570f",
       "kind": "fact",
       "relation": "go_effect",
       "arg_order": [
@@ -718,13 +718,13 @@
       "source": "go target-go go00000000000000000000000000000000000001",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_request:b67ffd90fbf2",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:b67ffd90fbf2",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "go:1802bdc9a439:go_effect:ddd2ebfb2e0c",
+      "id": "go:4e86bd0674ff:go_effect:ddd2ebfb2e0c",
       "kind": "fact",
       "relation": "go_effect",
       "arg_order": [
@@ -749,13 +749,13 @@
       "source": "go target-go go00000000000000000000000000000000000001",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_request:e1b3e116da62",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:e1b3e116da62",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "go:1802bdc9a439:go_effect:380ff969f30c",
+      "id": "go:4e86bd0674ff:go_effect:380ff969f30c",
       "kind": "fact",
       "relation": "go_effect",
       "arg_order": [
@@ -780,13 +780,13 @@
       "source": "go target-go go00000000000000000000000000000000000001",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_request:0978f89fd323",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:0978f89fd323",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "php:1802bdc9a439:php_effect:2e0e92b9bd7f",
+      "id": "php:4e86bd0674ff:php_effect:2e0e92b9bd7f",
       "kind": "fact",
       "relation": "php_effect",
       "arg_order": [
@@ -811,13 +811,13 @@
       "source": "php target-cloud php0000000000000000000000000000000000001",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_request:b67ffd90fbf2",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:b67ffd90fbf2",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "php:1802bdc9a439:php_effect:ffb3c20eefc7",
+      "id": "php:4e86bd0674ff:php_effect:ffb3c20eefc7",
       "kind": "fact",
       "relation": "php_effect",
       "arg_order": [
@@ -842,13 +842,13 @@
       "source": "php target-cloud php0000000000000000000000000000000000001",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_request:e1b3e116da62",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:e1b3e116da62",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "php:1802bdc9a439:php_effect:24587857befa",
+      "id": "php:4e86bd0674ff:php_effect:24587857befa",
       "kind": "fact",
       "relation": "php_effect",
       "arg_order": [
@@ -873,13 +873,13 @@
       "source": "php target-cloud php0000000000000000000000000000000000001",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_request:0978f89fd323",
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_request:0978f89fd323",
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "replay:1802bdc9a439:replay_request:b67ffd90fbf2",
+      "id": "replay:4e86bd0674ff:replay_request:b67ffd90fbf2",
       "kind": "fact",
       "relation": "replay_request",
       "arg_order": [
@@ -902,12 +902,12 @@
       "source": "replay capcov.claims.replay.replay_facts v1",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "replay:1802bdc9a439:replay_request:e1b3e116da62",
+      "id": "replay:4e86bd0674ff:replay_request:e1b3e116da62",
       "kind": "fact",
       "relation": "replay_request",
       "arg_order": [
@@ -930,12 +930,12 @@
       "source": "replay capcov.claims.replay.replay_facts v1",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "replay:1802bdc9a439:replay_request:0978f89fd323",
+      "id": "replay:4e86bd0674ff:replay_request:0978f89fd323",
       "kind": "fact",
       "relation": "replay_request",
       "arg_order": [
@@ -958,12 +958,12 @@
       "source": "replay capcov.claims.replay.replay_facts v1",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "replay:1802bdc9a439:go_effects_closed:741c700022f7",
+      "id": "replay:4e86bd0674ff:go_effects_closed:741c700022f7",
       "kind": "fact",
       "relation": "go_effects_closed",
       "arg_order": [
@@ -978,12 +978,12 @@
       "source": "replay capcov.claims.replay.replay_facts go-effects-closed-v1",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "replay:1802bdc9a439:go_post_states_closed:d399545a4a0d",
+      "id": "replay:4e86bd0674ff:go_post_states_closed:d399545a4a0d",
       "kind": "fact",
       "relation": "go_post_states_closed",
       "arg_order": [
@@ -998,12 +998,12 @@
       "source": "replay capcov.claims.replay.replay_facts go-post-states-closed-v1",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "replay:1802bdc9a439:mutant_kills_closed:5ec55c452bcf",
+      "id": "replay:4e86bd0674ff:mutant_kills_closed:5ec55c452bcf",
       "kind": "fact",
       "relation": "mutant_kills_closed",
       "arg_order": [
@@ -1018,12 +1018,12 @@
       "source": "replay capcov.claims.replay.replay_facts mutant-kills-closed-v1",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "replay:1802bdc9a439:php_effects_closed:c69d8dda2898",
+      "id": "replay:4e86bd0674ff:php_effects_closed:c69d8dda2898",
       "kind": "fact",
       "relation": "php_effects_closed",
       "arg_order": [
@@ -1038,12 +1038,12 @@
       "source": "replay capcov.claims.replay.replay_facts php-effects-closed-v1",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "replay:1802bdc9a439:php_post_states_closed:563c8b6a1be0",
+      "id": "replay:4e86bd0674ff:php_post_states_closed:563c8b6a1be0",
       "kind": "fact",
       "relation": "php_post_states_closed",
       "arg_order": [
@@ -1058,12 +1058,12 @@
       "source": "replay capcov.claims.replay.replay_facts php-post-states-closed-v1",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
     {
-      "id": "replay:1802bdc9a439:replay_requests_closed:acc922ba3952",
+      "id": "replay:4e86bd0674ff:replay_requests_closed:acc922ba3952",
       "kind": "fact",
       "relation": "replay_requests_closed",
       "arg_order": [
@@ -1078,7 +1078,7 @@
       "source": "replay capcov.claims.replay.replay_facts requests-closed-v1",
       "provenance": {
         "depends_on": [
-          "replay:1802bdc9a439:replay_run:ad8057bded65"
+          "replay:4e86bd0674ff:replay_run:ad8057bded65"
         ]
       }
     },
@@ -1241,22 +1241,9 @@
           "context_indices": [
             "run"
           ]
-        },
-        {
-          "trigger_relation": "mutant_killed",
-          "effect": "observation",
-          "operational_status": "complete",
-          "context_indices": [
-            "run"
-          ],
-          "predicate": {
-            "column": "mutant",
-            "operator": "=",
-            "value": "m-1"
-          }
         }
       ],
-      "reading": "m-1 is recorded as killed by req-9, a request the closed replay_request set does not contain; kill_closure_gap derives, kill_closure_gap_any poisons every op of the run (the per-run mutant_kills_closed witness is demonstrably wrong) and the gate in op_qualified_rt fails."
+      "reading": "issues.create is declared by the census, replayed (req-1, req-3), exercised with PHP/Go post-states the model admits, has no disagreement, no undeclared write and no surviving mutant (m-1 killed by req-1)."
     },
     {
       "id": "claim-qualified-close",
@@ -1320,44 +1307,9 @@
           "context_indices": [
             "run"
           ]
-        },
-        {
-          "trigger_relation": "mutant_killed",
-          "effect": "observation",
-          "operational_status": "complete",
-          "context_indices": [
-            "run"
-          ],
-          "predicate": {
-            "column": "mutant",
-            "operator": "=",
-            "value": "m-1"
-          }
         }
       ],
-      "reading": "issues.close's own mutant m-2 is honestly killed by req-2, but its qualification rests on the same contradicted per-run kill closure, so it is unresolved too."
-    },
-    {
-      "id": "claim-kill-outside-corpus",
-      "relation": "kill_closure_gap",
-      "arg_order": [
-        "run",
-        "mutant",
-        "req"
-      ],
-      "args": [
-        "run-fixture-1",
-        "m-1",
-        "req-9"
-      ],
-      "context": {
-        "run": "run-fixture-1"
-      },
-      "quantifier": "exists",
-      "domain": null,
-      "mappings": [],
-      "diagnostics": [],
-      "reading": "mutant_kills_closed and replay_requests_closed are both asserted, yet the kill names req-9 which requested/replay_request does not contain."
+      "reading": "issues.close is declared, replayed by req-2, agreed by PHP/Go/model, writes only the declared table and its mutant m-2 is killed by req-2."
     }
   ],
   "outputs": [
@@ -1372,7 +1324,7 @@
       },
       "when_claim": "unresolved",
       "excludes_evidence": [
-        "shen:1802bdc9a439:model_describes_run:30e5416af7e4"
+        "shen:4e86bd0674ff:model_describes_run:30e5416af7e4"
       ]
     },
     {
@@ -1428,7 +1380,7 @@
       },
       "when_claim": "unresolved",
       "excludes_evidence": [
-        "replay:1802bdc9a439:php_post_states_closed:563c8b6a1be0"
+        "replay:4e86bd0674ff:php_post_states_closed:563c8b6a1be0"
       ]
     },
     {
@@ -1442,7 +1394,7 @@
       },
       "when_claim": "unresolved",
       "excludes_evidence": [
-        "replay:1802bdc9a439:go_post_states_closed:d399545a4a0d"
+        "replay:4e86bd0674ff:go_post_states_closed:d399545a4a0d"
       ]
     },
     {
@@ -1456,7 +1408,7 @@
       },
       "when_claim": "unresolved",
       "excludes_evidence": [
-        "shen:1802bdc9a439:model_describes_run:30e5416af7e4"
+        "shen:4e86bd0674ff:model_describes_run:30e5416af7e4"
       ]
     },
     {
@@ -1512,7 +1464,7 @@
       },
       "when_claim": "unresolved",
       "excludes_evidence": [
-        "replay:1802bdc9a439:php_post_states_closed:563c8b6a1be0"
+        "replay:4e86bd0674ff:php_post_states_closed:563c8b6a1be0"
       ]
     },
     {
@@ -1526,132 +1478,8 @@
       },
       "when_claim": "unresolved",
       "excludes_evidence": [
-        "replay:1802bdc9a439:go_post_states_closed:d399545a4a0d"
-      ]
-    },
-    {
-      "kind": "missing_premise",
-      "claim_id": "claim-qualified-create",
-      "relation": "replay_request",
-      "fields": {
-        "reason": {
-          "value": "mutant m-1 is recorded as killed by req-9, which is not a replayed request: the run's kill closure is contradicted"
-        }
-      },
-      "when_claim": "unresolved",
-      "requires_all_evidence": [
-        "mut:1802bdc9a439:mutant_killed:6c2d4b9b4cf1"
-      ]
-    },
-    {
-      "kind": "missing_premise",
-      "claim_id": "claim-qualified-close",
-      "relation": "replay_request",
-      "fields": {
-        "reason": {
-          "value": "mutant m-1 is recorded as killed by req-9, which is not a replayed request: the run's kill closure is contradicted"
-        }
-      },
-      "when_claim": "unresolved",
-      "requires_all_evidence": [
-        "mut:1802bdc9a439:mutant_killed:6c2d4b9b4cf1"
-      ]
-    },
-    {
-      "kind": "discrepancy",
-      "claim_id": "claim-kill-outside-corpus",
-      "when_claim": "supported",
-      "fields": {
-        "kind": {
-          "value": "kill-outside-replayed-requests"
-        },
-        "mutant": {
-          "value": "m-1"
-        },
-        "req": {
-          "value": "req-9"
-        }
-      },
-      "requires_all_evidence": [
-        "mut:1802bdc9a439:mutant_killed:6c2d4b9b4cf1",
-        "replay:1802bdc9a439:mutant_kills_closed:5ec55c452bcf"
+        "replay:4e86bd0674ff:go_post_states_closed:d399545a4a0d"
       ]
     }
-  ],
-  "expected": {
-    "claims": {
-      "claim-qualified-close": {
-        "semantic_verdict": "unresolved",
-        "operational_status": "complete",
-        "support_leaves": [],
-        "refutation_leaves": [],
-        "observed_leaves": [
-          "mut:1802bdc9a439:mutant_killed:6c2d4b9b4cf1",
-          "replay:1802bdc9a439:go_post_states_closed:d399545a4a0d",
-          "replay:1802bdc9a439:php_post_states_closed:563c8b6a1be0",
-          "reviewer:claim-time:model_observed:5071ad5dc2c5",
-          "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
-          "reviewer:claim-time:snapshot_observed:320fa56f8495",
-          "shen:1802bdc9a439:model_describes_run:30e5416af7e4"
-        ],
-        "forbidden_leaves": [],
-        "discrepancies": [],
-        "missing_premises": [
-          {
-            "relation": "replay_request",
-            "reason": "mutant m-1 is recorded as killed by req-9, which is not a replayed request: the run's kill closure is contradicted"
-          }
-        ]
-      },
-      "claim-qualified-create": {
-        "semantic_verdict": "unresolved",
-        "operational_status": "complete",
-        "support_leaves": [],
-        "refutation_leaves": [],
-        "observed_leaves": [
-          "mut:1802bdc9a439:mutant_killed:6c2d4b9b4cf1",
-          "replay:1802bdc9a439:go_post_states_closed:d399545a4a0d",
-          "replay:1802bdc9a439:php_post_states_closed:563c8b6a1be0",
-          "reviewer:claim-time:model_observed:5071ad5dc2c5",
-          "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
-          "reviewer:claim-time:snapshot_observed:320fa56f8495",
-          "shen:1802bdc9a439:model_describes_run:30e5416af7e4"
-        ],
-        "forbidden_leaves": [],
-        "discrepancies": [],
-        "missing_premises": [
-          {
-            "relation": "replay_request",
-            "reason": "mutant m-1 is recorded as killed by req-9, which is not a replayed request: the run's kill closure is contradicted"
-          }
-        ]
-      },
-      "claim-kill-outside-corpus": {
-        "semantic_verdict": "supported",
-        "operational_status": "complete",
-        "support_leaves": [
-          "mut:1802bdc9a439:mutant_killed:6c2d4b9b4cf1",
-          "replay:1802bdc9a439:mutant_kills_closed:5ec55c452bcf",
-          "replay:1802bdc9a439:replay_requests_closed:acc922ba3952"
-        ],
-        "refutation_leaves": [],
-        "observed_leaves": [
-          "mut:1802bdc9a439:mutant_killed:6c2d4b9b4cf1",
-          "replay:1802bdc9a439:mutant_kills_closed:5ec55c452bcf",
-          "replay:1802bdc9a439:replay_requests_closed:acc922ba3952"
-        ],
-        "forbidden_leaves": [
-          "replay:1802bdc9a439:mutant_kills_closed:5ec55c452bcf"
-        ],
-        "discrepancies": [
-          {
-            "kind": "kill-outside-replayed-requests",
-            "mutant": "m-1",
-            "req": "req-9"
-          }
-        ],
-        "missing_premises": []
-      }
-    }
-  }
+  ]
 }

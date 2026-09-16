@@ -53,6 +53,7 @@ DISAGREEING_STATE = hashlib.sha256(b"rules-replay-v1 php post-state outside the 
 REVIEWER_SOURCE = "reviewer claim-time observation"
 CENSUS_SOURCE = "php-census target-cloud route census v1"
 REJECTED_SOURCE = "shen shen-model-host v1"
+REJECTED_CLOSURE_SOURCE = "replay capcov.claims.replay.replay_facts model-admissible-closed-v1"
 
 Edit = Callable[[Any], Any]
 
@@ -475,11 +476,17 @@ def build_08() -> dict[str, Any]:
     facts = exported + reviewer_facts() + census_facts()
     kill = find_id(facts, "mutant_killed", mutant="m-1")
     closed = find_id(facts, "mutant_kills_closed")
+    reason = "mutant m-1 is recorded as killed by req-9, which is not a replayed request: the run's kill closure is contradicted"
     claims, outputs = _both_qualified(facts, {
-        CREATE: "m-1 is recorded as killed by req-9, a request the closed replay_request set does not contain; the "
-                "projection mutant_killed_in still holds, so corpus_constrains and op_qualified derive from the lying "
-                "mutant_kills_closed witness (seeded fault).",
-        CLOSE: "issues.close is as in the control but its support also rests on the same mutant_kills_closed witness."})
+        CREATE: "m-1 is recorded as killed by req-9, a request the closed replay_request set does not contain; "
+                "kill_closure_gap derives, kill_closure_gap_any poisons every op of the run (the per-run "
+                "mutant_kills_closed witness is demonstrably wrong) and the gate in op_qualified_rt fails.",
+        CLOSE: "issues.close's own mutant m-2 is honestly killed by req-2, but its qualification rests on the same "
+               "contradicted per-run kill closure, so it is unresolved too."},
+        extra_diagnostics={op: [observation("mutant_killed", ["run"],
+                                            {"column": "mutant", "operator": "=", "value": "m-1"})] for op in OPS})
+    for op in OPS:
+        outputs.append(missing(f"claim-qualified-{op.split('.')[1]}", "replay_request", reason, requires=[kill]))
     companion = _claim("claim-kill-outside-corpus", "kill_closure_gap", ["run", "mutant", "req"], [RUN, "m-1", "req-9"],
                        {"run": RUN}, "mutant_kills_closed and replay_requests_closed are both asserted, yet the kill "
                                      "names req-9 which requested/replay_request does not contain.")
@@ -490,9 +497,11 @@ def build_08() -> dict[str, Any]:
         "mutant_killed.json row 0 names req-9; replay_request.json is unchanged and the receipt still asserts "
         "replay_requests and mutant_kills closed.",
         "The kill_closure_gap claim is supported and its support includes the mutant_kills_closed witness that the "
-        "harness should have withheld; that witness is listed under forbidden_leaves for every claim it supports.",
-        "op_qualified for both ops is supported from the same witness: what the rules derive from deliberately wrong "
-        "input, labelled seeded_fault lying-completeness-witness.",
+        "harness should have withheld; that witness is listed under forbidden_leaves (seeded_fault "
+        "lying-completeness-witness).",
+        "Both op_qualified claims are unresolved: kill_gap_closed holds (kills and requests both closed) and "
+        "kill_closure_gap_any(run, op) holds for every replayed op, so the contradiction gate fails; the missing "
+        "premise names replay_request (the req-9 the kill relies on), triggered by the m-1 kill row.",
     ]
     return _case("08-lying-closure", "mutant_kills_closed asserted over a kill outside the replayed requests",
                  "lying-completeness-witness", notes, facts, claims, outputs)
@@ -535,6 +544,26 @@ def build_09() -> dict[str, Any]:
                  "post-state-omitted", notes, facts, claims, outputs)
 
 
+def build_rejected_12() -> dict[str, Any]:
+    case = build_00()
+    case["id"] = "12-closure-producer-violation"
+    case["title"] = "Positive control whose model_admissible_closed witness is emitted by the harness"
+    case["provenance"]["seeded_fault"] = "closure-producer-violation"
+    relabelled = 0
+    for entry in case["facts"]:
+        if entry["relation"] == "model_admissible_closed":
+            entry["source"] = REJECTED_CLOSURE_SOURCE
+            relabelled += 1
+    assert relabelled == 1
+    case["review_notes"] = [
+        "The facts are the control's; only the model_admissible_closed witness names the replay class, i.e. the "
+        "harness closing the model runner's admissible set on its behalf.",
+        "load_case refuses the file (evidence-producer: model_admissible_closed admits shen); evaluated unvalidated "
+        "both op_qualified verdicts would be supported (rejected.json).",
+    ]
+    return case
+
+
 def build_rejected_07() -> dict[str, Any]:
     case = build_00()
     case["id"] = "07-producer-class-violation"
@@ -568,6 +597,7 @@ BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
 }
 REJECTED_BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "07-producer-class-violation": build_rejected_07,
+    "12-closure-producer-violation": build_rejected_12,
 }
 
 # The reviewer's table: claim -> (verdict, status, missing-premise relations, discrepancy kinds).
@@ -591,8 +621,8 @@ REVIEW: dict[str, dict[str, tuple[str, str, list[str], list[str]]]] = {
     "06-stale-replay": {"claim-qualified-create": ("unresolved", "stale", ["replay_run_current"], []),
                         "claim-qualified-close": ("unresolved", "stale", ["replay_run_current"], []),
                         "claim-run-stale": ("supported", "complete", [], [])},
-    "08-lying-closure": {"claim-qualified-create": ("supported", "complete", [], []),
-                         "claim-qualified-close": ("supported", "complete", [], []),
+    "08-lying-closure": {"claim-qualified-create": ("unresolved", "complete", ["replay_request"], []),
+                         "claim-qualified-close": ("unresolved", "complete", ["replay_request"], []),
                          "claim-kill-outside-corpus": ("supported", "complete", [], ["kill-outside-replayed-requests"])},
     "09-missing-post-state": {"claim-qualified-create": ("unresolved", "complete", ["php_post_state"], []),
                               "claim-qualified-close": ("supported", "complete", [], []),

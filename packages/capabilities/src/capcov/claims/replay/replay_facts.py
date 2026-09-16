@@ -101,8 +101,14 @@ EVIDENCE
 Ids are ``<prefix>:<replay12>:<relation>:<row12>`` where ``prefix`` is the
 evidence-id prefix of the relation's producer class (``EVIDENCE_PREFIXES``:
 ``replay``, ``php``, ``go``, ``shen``, ``mut``, ``reviewer``; the ``php-census``
-class shares the ``php`` prefix; witnesses and compatibility rows, which no
-producer class owns, use ``replay``) and ``row12 =
+class shares the ``php`` prefix).  Every relation of the frozen schema is
+owned: the harness (``replay``) owns the request, effect, post-state and kill
+closures, the model runner (``shen``) owns ``model_admissible_closed``,
+``model_writes_closed`` and ``model_describes_run``, the mutation tool
+(``mut``) owns ``mutants_closed`` and the reviewer owns
+``index_describes_replay`` -- so a runner cannot emit another producer's
+closure and the validator refuses one that tries (``evidence-producer``).
+A relation that declared no class would use the ``replay`` prefix.  ``row12 =
 sha256(canonical_json([relation, row]))[:12]``.
 
 ``Evidence.source`` is the producer string and its first whitespace-delimited

@@ -591,7 +591,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "replay"
+      ]
     },
     {
       "binding": "runtime",
@@ -614,7 +616,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "replay"
+      ]
     },
     {
       "binding": "runtime",
@@ -637,7 +641,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "replay"
+      ]
     },
     {
       "binding": "runtime",
@@ -715,7 +721,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "shen"
+      ]
     },
     {
       "binding": "runtime",
@@ -743,7 +751,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "shen"
+      ]
     },
     {
       "binding": "runtime",
@@ -771,7 +781,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "mut"
+      ]
     },
     {
       "binding": "runtime",
@@ -794,7 +806,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "replay"
+      ]
     },
     {
       "binding": "runtime",
@@ -845,7 +859,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "shen"
+      ]
     },
     {
       "binding": "runtime",
@@ -882,7 +898,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "reviewer"
+      ]
     }
   ],
   "schema_version": 1

@@ -743,6 +743,57 @@
       ],
       "finite": false,
       "modality": "derived",
+      "name": "kill_closure_gap_any",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "kill_closure_gap_any",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "kill_gap_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
       "name": "php_disagree_any",
       "nonempty": false,
       "polarity": "positive",
@@ -1517,7 +1568,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "replay"
+      ]
     },
     {
       "binding": "runtime",
@@ -1540,7 +1593,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "replay"
+      ]
     },
     {
       "binding": "runtime",
@@ -1563,7 +1618,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "replay"
+      ]
     },
     {
       "binding": "runtime",
@@ -1641,7 +1698,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "shen"
+      ]
     },
     {
       "binding": "runtime",
@@ -1669,7 +1728,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "shen"
+      ]
     },
     {
       "binding": "runtime",
@@ -1697,7 +1758,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "mut"
+      ]
     },
     {
       "binding": "runtime",
@@ -1720,7 +1783,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "replay"
+      ]
     },
     {
       "binding": "runtime",
@@ -1771,7 +1836,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "shen"
+      ]
     },
     {
       "binding": "runtime",
@@ -1808,7 +1875,9 @@
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,
-      "producer_classes": []
+      "producer_classes": [
+        "reviewer"
+      ]
     }
   ],
   "primitives_source": "packages/capabilities/src/capcov/claims/replay/schema_replay_v1.json",
@@ -3181,6 +3250,76 @@
     {
       "body": [
         {
+          "relation": "replayed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "kill_closure_gap",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Mu"
+            },
+            {
+              "variable": "Req"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "kill_closure_gap_any",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "kill_closure_gap_any"
+    },
+    {
+      "body": [
+        {
+          "relation": "mutant_kills_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "replay_requests_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "kill_gap_closed",
+        "terms": [
+          {
+            "variable": "Run"
+          }
+        ]
+      },
+      "name": "kill_gap_closed"
+    },
+    {
+      "body": [
+        {
           "relation": "replay_request",
           "terms": [
             {
@@ -3664,6 +3803,26 @@
         {
           "negated": true,
           "relation": "post_state_any",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "kill_gap_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "kill_closure_gap_any",
           "terms": [
             {
               "variable": "Run"

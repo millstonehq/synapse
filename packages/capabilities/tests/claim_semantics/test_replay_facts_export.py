@@ -153,10 +153,14 @@ class BundleShapeTest(_Exported):
             "php_post_state": "php", "go_effect": "go", "go_post_state": "go",
             "model_effect": "shen", "model_admissible": "shen", "model_writes": "shen",
             "mutant": "mut", "mutant_killed": "mut",
-            # witnesses and compatibility rows are owned by no producer class
-            "replay_requests_closed": "replay", "php_effects_closed": "replay",
-            "model_describes_run": "replay", "index_describes_replay": "replay",
+            # witnesses and compatibility rows are owned by the class that vouches for them
+            "replay_requests_closed": "replay", "php_effects_closed": "replay", "go_effects_closed": "replay",
+            "php_post_states_closed": "replay", "go_post_states_closed": "replay", "mutant_kills_closed": "replay",
+            "model_admissible_closed": "shen", "model_writes_closed": "shen", "model_describes_run": "shen",
+            "mutants_closed": "mut", "index_describes_replay": "reviewer",
         }
+        self.assertTrue(all(decl.producer_classes for decl in decls.values() if decl.primitive),
+                        "every frozen primitive relation names its producer class")
         for record in self.bundle.evidence:
             row = [t.value for t in record.atom.terms]
             decl = decls[record.atom.relation]
@@ -687,7 +691,7 @@ class ProducerAuthorityTest(_Exported):
         # owned witness (the post-state closures belong to the harness) does not
         decls = {r.name: r for r in self.bundle.relations}
         owned = sorted(name for name, decl in decls.items() if name.endswith("_closed") and decl.producer_classes)
-        self.assertTrue({"php_post_states_closed", "go_post_states_closed"} <= set(owned))
+        self.assertEqual(set(owned), {name for name in decls if name.endswith("_closed")})
         for record in raw["evidence"]:
             if record["atom"]["relation"] == "php_effect":
                 record["source"] = "php target-cloud x"
