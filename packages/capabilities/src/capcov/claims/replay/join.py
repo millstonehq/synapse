@@ -397,7 +397,7 @@ def _kernel_digests(join: ReplayJoin) -> dict[str, Any]:
     }
     compiled = getattr(outcome, "compiled", None)
     if compiled is not None:
-        digests["souffle_compiled_digest"] = compiled.canonical_digest
+        digests["compiled_digest"] = compiled.canonical_digest
         digests["closure_digest_equal"] = outcome.closure_digest_equal
     return digests
 

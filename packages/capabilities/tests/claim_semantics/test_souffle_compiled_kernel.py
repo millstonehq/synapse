@@ -263,7 +263,8 @@ class TargetGoReceiptThreeKernelsTests(unittest.TestCase):
             self.assertRegex(provenance[field], HEX64, field)
         self.assertEqual(provenance["compile_flags"], ["--no-preprocessor", "-j1", "-o"])
         self.assertEqual(provenance, join.checker.provenance())
-        self.assertEqual(document["kernels"]["souffle_compiled_digest"],
+        # one name for the compiled closure digest in every artifact of a run
+        self.assertEqual(document["kernels"]["compiled_digest"],
                          join.result.compiled.canonical_digest)
         self.assertTrue(document["kernels"]["closure_digest_equal"])
         # the cached provenance.json on disk is the same document
