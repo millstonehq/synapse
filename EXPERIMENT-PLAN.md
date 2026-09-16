@@ -5652,8 +5652,14 @@ rebased over it. On the rewritten tip, in the pinned devShell:
   (pinned identity held, per-head anchors verified); receipt suite 17 OK (1 skipped); replay 73
   OK; PR #3 modules 24 OK; evidence policy 5, validation 23, CLI 19 (1 skipped), manifest checks
   ok. Full regression bound to `3eac405`: `Ran 1195 tests in 98.1s`, `OK (skipped=154)`.
-Note for the record: the repository's local leak-guard pre-commit hook prints a block but does
-not fail `git commit`; a first attempt that named the former short names literally went
-through as `3eac405`'s content only after the wording was neutralized, and the regression was
+Note for the record: a first commit attempt that named the former short names literally was
+blocked by the local leak-guard pre-commit hook (correctly: no commit was created). The
+integrator's script had put the follow-up `git log` on its own line rather than chained to the
+commit, so a done-marker fired anyway and the first regression bound itself to the previous
+head; the hook was briefly and wrongly reported as not failing the commit. The regression was
 rerun bound to the final commit.
+
+Second rewrite (fixleak, same day): user home-directory paths that predated this line's records
+were generalized away across the full history; tip `b47c24f` replaces `0ece816` (kept locally as
+`backup/pre-rewrite2-0ece816`). Content differences are confined to those path strings.
 
