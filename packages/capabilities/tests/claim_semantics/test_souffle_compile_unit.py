@@ -14,12 +14,14 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 import unittest
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from capcov.claims import Atom, Column, Constant, RelationDecl, canonical_json
+from capcov.claims import (Atom, Claim, Column, Constant, DiagnosticRule, Evidence,
+                          RelationDecl, Rule, Variable, canonical_json)
 from capcov.claims import souffle
 from capcov.claims.differential import run_souffle_compiled
 from capcov.claims.replay import pack as replay_pack
@@ -36,6 +38,31 @@ except ImportError:  # unittest discover -s imports this directory as top-level
     from target_go import replay_join
 
 HEX64 = r"^[0-9a-f]{64}$"
+CONTRACT_KEYS = {"schema", "compile_key", "program_digest", "binary_sha256", "souffle_path",
+                 "souffle_sha256", "souffle_version", "compiler_config_sha256", "compile_flags",
+                 "compile_seconds"}
+
+
+def _forbidden_assumption_bundle():
+    """A claim whose support depends on a forbidden assumption row.
+
+    The claim fold answers it from a second closure over the eligible bundle
+    (the evidence that does not descend from the forbidden assumption), so
+    evaluating this bundle starts one process per closure.
+    """
+    rejected = RelationDecl("source__rejected", (Column("x", "symbol"),), modality="assumption")
+    observed = RelationDecl("observed", (Column("x", "symbol"),))
+    claimed = RelationDecl("claimed", (Column("x", "symbol"),), modality="claim")
+    trigger = Atom("source__rejected", (Constant("v"),))
+    observation = Atom("observed", (Constant("v"),))
+    return Bundle(
+        (rejected, observed, claimed), facts=(trigger, observation),
+        evidence=(Evidence("blocked-assumption", trigger, source="test"),
+                  Evidence("a-tainted", observation, source="test", depends_on=("blocked-assumption",)),
+                  Evidence("z-independent", observation, source="test")),
+        rules=(Rule(Atom("claimed", (Variable("x"),)), (Atom("observed", (Variable("x"),)),), "derive"),),
+        claims=(Claim("claimed", (Constant("v"),), id="claim"),),
+        diagnostics=(DiagnosticRule("source__rejected", "forbidden", claim_id="claim"),))
 CONTRACT_KEYS = {"schema", "compile_key", "program_digest", "binary_sha256", "souffle_path",
                  "souffle_sha256", "souffle_version", "compiler_config_sha256", "compile_flags",
                  "compile_seconds"}
@@ -164,8 +191,8 @@ class _RecordingPopen:
     """A compiled checker that echoes its facts back out, recording every spawn.
 
     Patched over ``souffle.subprocess.Popen``, so every process the shared
-    execution path starts is recorded with its argv, cwd and temp-root
-    contents.
+    execution path starts -- the bundle's own run and every eligible-bundle
+    re-run -- is recorded with its argv, cwd and temp-root contents.
     """
     spawns: list[dict[str, object]] = []
 
@@ -451,6 +478,33 @@ class RunCompiledTests(unittest.TestCase):
         self.assertEqual(result.runtime, "souffle-compiled:" + "1" * 16)
         self.assertEqual(result.program_digest, program.program_digest)
         self.assertEqual(result.relations["left"], (("l",),))
+
+    def test_the_eligible_bundle_rerun_stays_inside_the_compiled_binary(self) -> None:
+        """The fold's forbidden-assumption re-run is the binary again, not the interpreter.
+
+        The shared ``_execute`` recomputes the closure on the eligible bundle
+        through the ``rerun`` its caller passes.  A compiled kernel whose
+        ``rerun`` fell back to ``run_bundle`` would answer claim rows from the
+        interpreter while reporting a compiled runtime, and no corpus case
+        reaches this path often enough to notice: every spawn must be the
+        checker binary, and the budget must be charged for each one.
+        """
+        bundle = _forbidden_assumption_bundle()
+        program = souffle.program_for_pack(bundle)
+        checker = replace(self.checker, program_digest=program.program_digest)
+        budget = souffle._ExecutionBudget(time.monotonic() + 60.0, 8)
+        _RecordingPopen.spawns = []
+        with patch.object(souffle.subprocess, "Popen", _RecordingPopen):
+            result = compiled.run_compiled(bundle, checker, _budget=budget)
+        self.assertGreater(len(_RecordingPopen.spawns), 1,
+                           "the forbidden assumption must force an eligible-bundle re-run")
+        for index, spawn in enumerate(_RecordingPopen.spawns):
+            with self.subTest(spawn=index):
+                self.assertEqual(spawn["argv"], [str(self.root / "checker"), "-j1"])
+                self.assertNotIn("program.dl", spawn["argv"], "the interpreter's argv")
+        self.assertEqual(budget.remaining_processes, 8 - len(_RecordingPopen.spawns),
+                         "every re-run is charged to the shared process budget")
+        self.assertEqual(result.runtime, "souffle-compiled:" + "1" * 16)
 
 
 if __name__ == "__main__":
