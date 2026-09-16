@@ -1,0 +1,10 @@
+{
+  "producer": "shen fg-model-host v1",
+  "rows": [
+    {
+      "model": "8410a39b2d935acfed8c7caab5792b7f9ab7773a9f27190afb28b41a5588f859",
+      "op": "delete-issue",
+      "table": "issue"
+    }
+  ]
+}
