@@ -63,9 +63,17 @@ _BLOCKING_ORDER = (
 )
 
 
+COMMITTED_RECEIPT_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "replay_receipt_target_go_5988859"
+"""A real, conforming target-go replay receipt (run 333072ef11f5, synthetic oracle seed, local
+evidence paths scrubbed) committed so the receipt suite is not skip-gated on an
+untracked work directory.  ``CAPCOV_REPLAY_RECEIPT_DIR`` still overrides it."""
+
+
 def receipt_dir() -> Path | None:
     value = os.environ.get(RECEIPT_DIR_ENV)
-    return Path(value) if value else None
+    if value:
+        return Path(value)
+    return COMMITTED_RECEIPT_DIR if (COMMITTED_RECEIPT_DIR / "receipt.json").is_file() else None
 
 
 def _row_id(prefix: str, segment: str, relation: str, row: list[Any]) -> str:
@@ -339,5 +347,5 @@ def write_artifacts(join: ReplayJoin, out_dir: Path) -> dict[str, Any]:
     return document
 
 
-__all__ = ["RECEIPT_DIR_ENV", "OUT_ENV", "SYNTHETIC_INDEX", "ReplayJoin", "receipt_dir", "build", "evaluate_join",
+__all__ = ["COMMITTED_RECEIPT_DIR", "RECEIPT_DIR_ENV", "OUT_ENV", "SYNTHETIC_INDEX", "ReplayJoin", "receipt_dir", "build", "evaluate_join",
            "summary", "write_artifacts", "blocking_premise", "undeclared_tables"]

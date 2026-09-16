@@ -1,0 +1,35 @@
+{
+  "producer": "mut fg-replay v1",
+  "rows": [
+    {
+      "run": "333072ef11f5",
+      "mutant": "M1",
+      "req": "owner"
+    },
+    {
+      "run": "333072ef11f5",
+      "mutant": "M2",
+      "req": "owner"
+    },
+    {
+      "run": "333072ef11f5",
+      "mutant": "M3",
+      "req": "owner"
+    },
+    {
+      "run": "333072ef11f5",
+      "mutant": "M4",
+      "req": "owner"
+    },
+    {
+      "run": "333072ef11f5",
+      "mutant": "M5",
+      "req": "owner"
+    },
+    {
+      "run": "333072ef11f5",
+      "mutant": "M6",
+      "req": "owner"
+    }
+  ]
+}

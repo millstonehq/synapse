@@ -1,0 +1,288 @@
+{
+  "closed": {
+    "go_effects": true,
+    "go_post_states": true,
+    "model_admissible": true,
+    "mutant_kills": true,
+    "php_effects": true,
+    "php_post_states": true,
+    "replay_requests": true
+  },
+  "go_commit": "b18bfe0018badb248fa88493a1d8ea3b3bcedc78",
+  "model": "8410a39b2d935acfed8c7caab5792b7f9ab7773a9f27190afb28b41a5588f859",
+  "model_writes_closed": [
+    {
+      "model": "8410a39b2d935acfed8c7caab5792b7f9ab7773a9f27190afb28b41a5588f859",
+      "op": "delete-issue"
+    }
+  ],
+  "mutants_closed": [
+    {
+      "model": "8410a39b2d935acfed8c7caab5792b7f9ab7773a9f27190afb28b41a5588f859",
+      "op": "delete-issue"
+    }
+  ],
+  "nonce": "0d4c61c7c001974c138372f45207dd88384776f289f3927f3a318e2ea78f5b6e",
+  "php_commit": "9ff51ce59883b59a86499a1bc5d7df0614145abc",
+  "receipts": {
+    "blob_facts": "always empty: the fixture has no S3, [blob B] is never projected",
+    "canonicalizer": "fg-model-host",
+    "canonicalizer_fallback_reason": "",
+    "effect_folding": "one row per (req, table, kind, pk); a row touched twice in one request keeps its final cols_digest",
+    "effect_folding_counts": {
+      "go/forbidden": {
+        "net": 3,
+        "raw": 3,
+        "transient": 0
+      },
+      "go/missing": {
+        "net": 0,
+        "raw": 0,
+        "transient": 0
+      },
+      "go/owner": {
+        "net": 10,
+        "raw": 10,
+        "transient": 0
+      },
+      "php/forbidden": {
+        "net": 9,
+        "raw": 9,
+        "transient": 0
+      },
+      "php/missing": {
+        "net": 0,
+        "raw": 0,
+        "transient": 0
+      },
+      "php/owner": {
+        "net": 30,
+        "raw": 34,
+        "transient": 0
+      }
+    },
+    "target_go_dirty": false,
+    "fixture_note": "Committed fixture: real target-go replay run 333072ef11f5 at target-go integrate/TICKET-0000-replay-model (go_commit b18bfe0..5988859 exporter); synthetic oracle seed data (tenant oracle); local evidence paths replaced by <evidence>/.",
+    "go_binary_sha256": "72d1bb55ed65628d4ddb5aa2920eb7e04606485521ca45f66381778a35fc7171",
+    "go_evidence_dir": "<evidence>/a99a3ced7525",
+    "go_run_id": "a99a3ced7525",
+    "model_effects_captured": true,
+    "model_errors": null,
+    "model_evidence_dir": "<evidence>/fdae4212bbba",
+    "model_host_sha256": "7223d9e9d23326bba9b3b1fc7b7d4a7d86282c2b96e3a7d117c45ec2d24d5525",
+    "model_run_id": "fdae4212bbba",
+    "model_write_tables": [
+      "issue"
+    ],
+    "mutants": {
+      "attribution": "mutant_killed rows carry behavioral kills only; sut_error collateral is listed here, never as a kill",
+      "baseline_go_binary_sha256": "72d1bb55ed65628d4ddb5aa2920eb7e04606485521ca45f66381778a35fc7171",
+      "baseline_go_run_id": "a99a3ced7525",
+      "killed": 6,
+      "killed_by_error_only": 0,
+      "mutants": [
+        {
+          "behavioral_requests": [
+            "owner"
+          ],
+          "collateral_errors": [
+            "forbidden|sut_error|go|go drain failed: effect delivery failed",
+            "missing|sut_error|go|go drain failed: effect delivery failed",
+            "owner|sut_error|go|go drain failed: effect delivery failed"
+          ],
+          "go_binary_sha256": "647cdf7c1ffe5c8fff90da826d1d717c4f8c4b9f258e93d38f578494d6bdda41",
+          "id": "M1",
+          "patch": "M1-state-minus-2.patch",
+          "patch_sha256": "f56ae8aeec40a3068554d1a77678b2b0399188fe1fa2154ac982307f5510f496",
+          "run_id": "19e4a060d419",
+          "verdict": "killed"
+        },
+        {
+          "behavioral_requests": [
+            "owner"
+          ],
+          "collateral_errors": [],
+          "go_binary_sha256": "d877732b8e3c52dd168cabfef40601c7364dbfed5c33873d191d0e51f9519b70",
+          "id": "M2",
+          "patch": "M2-skip-outbox-insert.patch",
+          "patch_sha256": "720b963ade812ca18ed9b2f8c158dfb3003b8577059ae48a0842314c92f4b45e",
+          "run_id": "1c2a3971a149",
+          "verdict": "killed"
+        },
+        {
+          "behavioral_requests": [
+            "owner"
+          ],
+          "collateral_errors": [],
+          "go_binary_sha256": "8e7dfb1d20c8df0d6d0b568471a40152df7c8ecb6999188480d77b18f7458d87",
+          "id": "M3",
+          "patch": "M3-skip-charts-apply.patch",
+          "patch_sha256": "d28d35596611c44a373ac71053b3de489b9d838634aebcc07813196e5f2d237e",
+          "run_id": "c6b019d415a3",
+          "verdict": "killed"
+        },
+        {
+          "behavioral_requests": [
+            "owner"
+          ],
+          "collateral_errors": [],
+          "go_binary_sha256": "734708fedfd3171b1cdf98efad0861c9a3576e213a235d172da44595d680869a",
+          "id": "M4",
+          "patch": "M4-wrong-modified-by.patch",
+          "patch_sha256": "6e1f5650b7191d1626143d47f5d6314c690b8da39895a9f8f77ddb9fb0cb4317",
+          "run_id": "3322d09f0d16",
+          "verdict": "killed"
+        },
+        {
+          "behavioral_requests": [
+            "owner"
+          ],
+          "collateral_errors": [],
+          "go_binary_sha256": "e333e533a82ee7d329fd204d73319f840608577b9e5e2bef5e9e42e0c5eab253",
+          "id": "M5",
+          "patch": "M5-modified-stays-null.patch",
+          "patch_sha256": "daa46df406f11e19bc14ac2ff0e609e7ae36d89816a13b26ca7d79934884500c",
+          "run_id": "40181041893e",
+          "verdict": "killed"
+        },
+        {
+          "behavioral_requests": [
+            "owner"
+          ],
+          "collateral_errors": [],
+          "go_binary_sha256": "2fb68db53bdb13eef331538081f7f5186ed42a5601f9c30d6a51b4f92619c188",
+          "id": "M6",
+          "patch": "M6-skip-statistics.patch",
+          "patch_sha256": "6e766220aa7e9e380581aad085c30c533fa4b1f0494055f3841f49d9c0abf0b2",
+          "run_id": "3cbd5f968828",
+          "verdict": "killed"
+        }
+      ],
+      "php_run_id": "333072ef11f5",
+      "sanity": true,
+      "sanity_go_run_id": "4d7a20afd285",
+      "total": 6
+    },
+    "oracle_dirty": false,
+    "php_evidence_dir": "<evidence>/333072ef11f5",
+    "php_run_id": "333072ef11f5",
+    "php_sha256": "c2a9f2bd44e3a5ec3f0ad2cdcc54682053a683732fe448917861ad0874b83996",
+    "producers": {
+      "go_effect": "go fg-replay v1",
+      "go_post_state": "go fg-replay v1",
+      "model_admissible": "shen fg-model-host v1",
+      "model_effect": "shen fg-model-host v1",
+      "model_writes": "shen fg-model-host v1",
+      "mutant": "mut fg-replay v1",
+      "mutant_killed": "mut fg-replay v1",
+      "php_effect": "php fg-replay v1",
+      "php_post_state": "php fg-replay v1",
+      "replay_request": "replay fg-replay v1"
+    },
+    "projected_issue_scope": "every issue of the request's project (path /api/cloud/project/{project}/)",
+    "projection": {
+      "go/forbidden": {
+        "blob_facts": "empty (no S3 in this fixture)",
+        "canonicalizer": "fg-model-host",
+        "issue_ids": [
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38
+        ]
+      },
+      "go/missing": {
+        "blob_facts": "empty (no S3 in this fixture)",
+        "canonicalizer": "fg-model-host",
+        "issue_ids": [
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38
+        ]
+      },
+      "go/owner": {
+        "blob_facts": "empty (no S3 in this fixture)",
+        "canonicalizer": "fg-model-host",
+        "issue_ids": [
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38
+        ]
+      },
+      "php/forbidden": {
+        "blob_facts": "empty (no S3 in this fixture)",
+        "canonicalizer": "fg-model-host",
+        "issue_ids": [
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38
+        ]
+      },
+      "php/missing": {
+        "blob_facts": "empty (no S3 in this fixture)",
+        "canonicalizer": "fg-model-host",
+        "issue_ids": [
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38
+        ]
+      },
+      "php/owner": {
+        "blob_facts": "empty (no S3 in this fixture)",
+        "canonicalizer": "fg-model-host",
+        "issue_ids": [
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38
+        ]
+      }
+    },
+    "recorded_at": "2026-09-16T12:57:41Z",
+    "relations": {
+      "go_effect": 13,
+      "go_post_state": 3,
+      "model_admissible": 3,
+      "model_effect": 2,
+      "model_writes": 1,
+      "mutant": 6,
+      "mutant_killed": 6,
+      "php_effect": 39,
+      "php_post_state": 3,
+      "replay_request": 3
+    },
+    "schema_sha256": "a8ffc07d620d1666c170c85832692a85f3bff19f001e47cf3307e0840851e85f",
+    "seed_sha256": "54ccce662f40420ac8c79543381a4c0f025098db2c8fb67aa8e588935e1ba29a"
+  },
+  "run": "333072ef11f5",
+  "snapshot": "f386e8e7df8058f867206b2b7f5f506b68fbedb68fdaa122a2c75b0d5486da21",
+  "version": 1
+}
