@@ -1,0 +1,3910 @@
+{
+  "derived": [
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "mutant",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "mutant_killed_in",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index",
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "op_qualified_rt",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "replay_run_current",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "nonce",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "observed",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "replay_run_stale",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "requested",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "requested",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "requested_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "replayed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "php_model_agree",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "state_digest",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "php_model_disagree",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "go_model_agree",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "state_digest",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "go_model_disagree",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "op_exercised",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "php_observed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "go_observed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "php_observed",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "php_observed_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "go_observed",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "go_observed_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "side",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "post_state_gap",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "post_state_any",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "post_state_any",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "post_state_gap_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "undeclared_write",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "mutant",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "surviving_mutant",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "op_has_surviving_mutant",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "op_has_surviving_mutant",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "op_surviving_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "corpus_constrains",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "mutant",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "kill_closure_gap",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "kill_closure_gap_any",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "kill_closure_gap_any",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "kill_gap_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "php_disagree_any",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "go_disagree_any",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "undeclared_any",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "php_disagree_any",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "php_disagreement_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "go_disagree_any",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "go_disagreement_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "undeclared_any",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "undeclared_writes_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index",
+        "run"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "op_qualified",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    }
+  ],
+  "description": "Replay judge rule pack (Phase 4, judge side). `primitives` is a byte-identical copy of claims/replay/schema_replay_v1.json; `supplementary_primitives` is empty (the frozen file declares every primitive the judge reads); `derived` opens with the two rule-less stubs the exporter carries (mutant_killed_in, op_qualified_rt), byte-identical to replay_facts._DERIVED_TARGET_DECLS so combine() accepts both, then the reviewed program; `rules` are in raw IR JSON wire form. op_qualified(index, run, op) is the only claim relation and the only static/runtime join, witnessed by index_describes_replay.",
+  "id": "rules-replay-v1",
+  "primitives": [
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "nonce",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "php_commit",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "go_commit",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "snapshot",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "model",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": true,
+      "modality": "observation",
+      "name": "replay_run",
+      "nonempty": true,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "replay"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "tenant",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "route",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "replay_request",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "replay"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "state_digest",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "php_post_state",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "php"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "state_digest",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "go_post_state",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "go"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "kind",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "pk",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "cols_digest",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "php_effect",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "php"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "kind",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "pk",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "cols_digest",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "go_effect",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "go"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "model",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "kind",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "pk",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "cols_digest",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "model_effect",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "shen"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "model",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "state_digest",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "model_admissible",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "shen"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "model",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "model"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "model_writes",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "shen"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "model",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "mutant",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "model"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "mutant",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "mut"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "mutant",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "mutant_killed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "mut"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": false,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "nonce",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [],
+      "finite": false,
+      "modality": "observation",
+      "name": "run_nonce_observed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": false,
+          "name": "snapshot",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [],
+      "finite": false,
+      "modality": "observation",
+      "name": "snapshot_observed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": false,
+          "name": "model",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [],
+      "finite": false,
+      "modality": "observation",
+      "name": "model_observed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "op_declared",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "php-census"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "replay_request",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "replay_requests_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "replay"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "php_effect",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "php_effects_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "replay"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "go_effect",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "go_effects_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "replay"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "php_post_state",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "php_post_states_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "replay"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "go_post_state",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "go_post_states_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "replay"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "model",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "model_admissible",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "model_admissible_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "shen"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "model",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "model_writes",
+      "context_indices": [
+        "model"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "model_writes_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "shen"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "model",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "mutant",
+      "context_indices": [
+        "model"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "mutants_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "mut"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "mutant_killed_in",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "mutant_kills_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "replay"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "model",
+          "type": "digest"
+        },
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [
+        "model",
+        "run"
+      ],
+      "compatibility_targets": [
+        "go_effect",
+        "go_effects_closed",
+        "go_post_state",
+        "model_admissible",
+        "model_admissible_closed",
+        "model_effect",
+        "model_observed",
+        "model_writes",
+        "model_writes_closed",
+        "mutant",
+        "mutant_killed",
+        "mutant_kills_closed",
+        "mutants_closed",
+        "php_effect",
+        "php_effects_closed",
+        "php_post_state",
+        "replay_request",
+        "replay_run"
+      ],
+      "completes": null,
+      "context_indices": [
+        "model",
+        "run"
+      ],
+      "finite": false,
+      "modality": "compatibility",
+      "name": "model_describes_run",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "shen"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [
+        "index",
+        "run"
+      ],
+      "compatibility_targets": [
+        "op_declared",
+        "op_qualified_rt",
+        "replay_request",
+        "replay_run"
+      ],
+      "completes": null,
+      "context_indices": [
+        "index",
+        "run"
+      ],
+      "finite": false,
+      "modality": "compatibility",
+      "name": "index_describes_replay",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    }
+  ],
+  "primitives_source": "packages/capabilities/src/capcov/claims/replay/schema_replay_v1.json",
+  "rules": [
+    {
+      "body": [
+        {
+          "relation": "mutant_killed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Mu"
+            },
+            {
+              "variable": "Req"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "mutant_killed_in",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Mu"
+          }
+        ]
+      },
+      "name": "mutant_killed_in"
+    },
+    {
+      "body": [
+        {
+          "relation": "replay_run",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Nonce"
+            },
+            {
+              "variable": "PhpCommit"
+            },
+            {
+              "variable": "GoCommit"
+            },
+            {
+              "variable": "Snap"
+            },
+            {
+              "variable": "Model"
+            }
+          ]
+        },
+        {
+          "relation": "run_nonce_observed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Nonce"
+            }
+          ]
+        },
+        {
+          "relation": "snapshot_observed",
+          "terms": [
+            {
+              "variable": "Snap"
+            }
+          ]
+        },
+        {
+          "relation": "model_observed",
+          "terms": [
+            {
+              "variable": "Model"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "replay_run_current",
+        "terms": [
+          {
+            "variable": "Run"
+          }
+        ]
+      },
+      "name": "replay_run_current"
+    },
+    {
+      "body": [
+        {
+          "relation": "replay_run",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Nonce"
+            },
+            {
+              "variable": "PhpCommit"
+            },
+            {
+              "variable": "GoCommit"
+            },
+            {
+              "variable": "Snap"
+            },
+            {
+              "variable": "Model"
+            }
+          ]
+        },
+        {
+          "relation": "run_nonce_observed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Observed"
+            }
+          ]
+        },
+        {
+          "comparison": {
+            "left": {
+              "variable": "Nonce"
+            },
+            "operator": "!=",
+            "right": {
+              "variable": "Observed"
+            }
+          }
+        }
+      ],
+      "head": {
+        "relation": "replay_run_stale",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Nonce"
+          },
+          {
+            "variable": "Observed"
+          }
+        ]
+      },
+      "name": "replay_run_stale"
+    },
+    {
+      "body": [
+        {
+          "relation": "replay_request",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Tenant"
+            },
+            {
+              "variable": "Route"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "requested",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Req"
+          }
+        ]
+      },
+      "name": "requested"
+    },
+    {
+      "body": [
+        {
+          "relation": "replay_requests_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "requested_closed",
+        "terms": [
+          {
+            "variable": "Run"
+          }
+        ]
+      },
+      "name": "requested_closed"
+    },
+    {
+      "body": [
+        {
+          "relation": "replay_request",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Tenant"
+            },
+            {
+              "variable": "Route"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "replayed",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "replayed"
+    },
+    {
+      "body": [
+        {
+          "relation": "php_post_state",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        },
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_admissible",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "php_model_agree",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Req"
+          }
+        ]
+      },
+      "name": "php_model_agree"
+    },
+    {
+      "body": [
+        {
+          "relation": "php_post_state",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        },
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_admissible_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "M"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "model_admissible",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "php_model_disagree",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Req"
+          },
+          {
+            "variable": "S"
+          }
+        ]
+      },
+      "name": "php_model_disagree"
+    },
+    {
+      "body": [
+        {
+          "relation": "go_post_state",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        },
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_admissible",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "go_model_agree",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Req"
+          }
+        ]
+      },
+      "name": "go_model_agree"
+    },
+    {
+      "body": [
+        {
+          "relation": "go_post_state",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        },
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_admissible_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "M"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "model_admissible",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "go_model_disagree",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Req"
+          },
+          {
+            "variable": "S"
+          }
+        ]
+      },
+      "name": "go_model_disagree"
+    },
+    {
+      "body": [
+        {
+          "relation": "replay_request",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Tenant"
+            },
+            {
+              "variable": "Route"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "php_model_agree",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            }
+          ]
+        },
+        {
+          "relation": "go_model_agree",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "op_exercised",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "op_exercised"
+    },
+    {
+      "body": [
+        {
+          "relation": "php_post_state",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "php_observed",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Req"
+          }
+        ]
+      },
+      "name": "php_observed"
+    },
+    {
+      "body": [
+        {
+          "relation": "go_post_state",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "go_observed",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Req"
+          }
+        ]
+      },
+      "name": "go_observed"
+    },
+    {
+      "body": [
+        {
+          "relation": "php_post_states_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "php_observed_closed",
+        "terms": [
+          {
+            "variable": "Run"
+          }
+        ]
+      },
+      "name": "php_observed_closed"
+    },
+    {
+      "body": [
+        {
+          "relation": "go_post_states_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "go_observed_closed",
+        "terms": [
+          {
+            "variable": "Run"
+          }
+        ]
+      },
+      "name": "go_observed_closed"
+    },
+    {
+      "body": [
+        {
+          "relation": "requested",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            }
+          ]
+        },
+        {
+          "relation": "replay_requests_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "php_observed_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "php_observed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "post_state_gap",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Req"
+          },
+          {
+            "type": "symbol",
+            "value": "php"
+          }
+        ]
+      },
+      "name": "post_state_gap_php"
+    },
+    {
+      "body": [
+        {
+          "relation": "requested",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            }
+          ]
+        },
+        {
+          "relation": "replay_requests_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "go_observed_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "go_observed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "post_state_gap",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Req"
+          },
+          {
+            "type": "symbol",
+            "value": "go"
+          }
+        ]
+      },
+      "name": "post_state_gap_go"
+    },
+    {
+      "body": [
+        {
+          "relation": "replay_request",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Tenant"
+            },
+            {
+              "variable": "Route"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "post_state_gap",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Side"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "post_state_any",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "post_state_any"
+    },
+    {
+      "body": [
+        {
+          "relation": "replayed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "replay_requests_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "php_post_states_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "go_post_states_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "post_state_gap_closed",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "post_state_gap_closed"
+    },
+    {
+      "body": [
+        {
+          "relation": "replay_request",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Tenant"
+            },
+            {
+              "variable": "Route"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "php_effect",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Tb"
+            },
+            {
+              "variable": "Kind"
+            },
+            {
+              "variable": "Pk"
+            },
+            {
+              "variable": "Cols"
+            }
+          ]
+        },
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_writes_closed",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "model_writes",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Op"
+            },
+            {
+              "variable": "Tb"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "undeclared_write",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          },
+          {
+            "variable": "Tb"
+          }
+        ]
+      },
+      "name": "undeclared_write_php"
+    },
+    {
+      "body": [
+        {
+          "relation": "replay_request",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Tenant"
+            },
+            {
+              "variable": "Route"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "go_effect",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Tb"
+            },
+            {
+              "variable": "Kind"
+            },
+            {
+              "variable": "Pk"
+            },
+            {
+              "variable": "Cols"
+            }
+          ]
+        },
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_writes_closed",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "model_writes",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Op"
+            },
+            {
+              "variable": "Tb"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "undeclared_write",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          },
+          {
+            "variable": "Tb"
+          }
+        ]
+      },
+      "name": "undeclared_write_go"
+    },
+    {
+      "body": [
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "mutant",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Mu"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "mutants_closed",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "mutant_kills_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "mutant_killed_in",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Mu"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "surviving_mutant",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          },
+          {
+            "variable": "Mu"
+          }
+        ]
+      },
+      "name": "surviving_mutant"
+    },
+    {
+      "body": [
+        {
+          "relation": "surviving_mutant",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            },
+            {
+              "variable": "Mu"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "op_has_surviving_mutant",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "op_has_surviving_mutant"
+    },
+    {
+      "body": [
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "mutants_closed",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "mutant_kills_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "op_surviving_closed",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "op_surviving_closed"
+    },
+    {
+      "body": [
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "mutant",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Mu"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "op_surviving_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "op_has_surviving_mutant",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "corpus_constrains",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "corpus_constrains"
+    },
+    {
+      "body": [
+        {
+          "relation": "mutant_killed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Mu"
+            },
+            {
+              "variable": "Req"
+            }
+          ]
+        },
+        {
+          "relation": "mutant_kills_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "requested_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "requested",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "kill_closure_gap",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Mu"
+          },
+          {
+            "variable": "Req"
+          }
+        ]
+      },
+      "name": "kill_closure_gap"
+    },
+    {
+      "body": [
+        {
+          "relation": "replayed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "kill_closure_gap",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Mu"
+            },
+            {
+              "variable": "Req"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "kill_closure_gap_any",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "kill_closure_gap_any"
+    },
+    {
+      "body": [
+        {
+          "relation": "mutant_kills_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "replay_requests_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "kill_gap_closed",
+        "terms": [
+          {
+            "variable": "Run"
+          }
+        ]
+      },
+      "name": "kill_gap_closed"
+    },
+    {
+      "body": [
+        {
+          "relation": "replay_request",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Tenant"
+            },
+            {
+              "variable": "Route"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "php_model_disagree",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "php_disagree_any",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "php_disagree_any"
+    },
+    {
+      "body": [
+        {
+          "relation": "replay_request",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Tenant"
+            },
+            {
+              "variable": "Route"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "go_model_disagree",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "go_disagree_any",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "go_disagree_any"
+    },
+    {
+      "body": [
+        {
+          "relation": "undeclared_write",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            },
+            {
+              "variable": "Tb"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "undeclared_any",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "undeclared_any"
+    },
+    {
+      "body": [
+        {
+          "relation": "replayed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "replay_run_current",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "replay_requests_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "php_post_states_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_admissible_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "M"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "php_disagreement_closed",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "php_disagreement_closed"
+    },
+    {
+      "body": [
+        {
+          "relation": "replayed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "replay_run_current",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "replay_requests_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "go_post_states_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_admissible_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "M"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "go_disagreement_closed",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "go_disagreement_closed"
+    },
+    {
+      "body": [
+        {
+          "relation": "replayed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "replay_run_current",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "replay_requests_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "php_effects_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "go_effects_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_writes_closed",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "undeclared_writes_closed",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "undeclared_writes_closed"
+    },
+    {
+      "body": [
+        {
+          "relation": "index_describes_replay",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "replayed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "op_exercised",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "corpus_constrains",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "php_disagreement_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "php_disagree_any",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "go_disagreement_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "go_disagree_any",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "undeclared_writes_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "undeclared_any",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "post_state_gap_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "post_state_any",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "kill_gap_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "kill_closure_gap_any",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "op_qualified_rt",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "op_qualified_rt"
+    },
+    {
+      "body": [
+        {
+          "relation": "op_declared",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "index_describes_replay",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "op_qualified_rt",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "op_qualified",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "op_qualified"
+    }
+  ],
+  "schema_version": 1,
+  "supplementary_primitives": []
+}
