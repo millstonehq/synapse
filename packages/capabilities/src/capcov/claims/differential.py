@@ -304,6 +304,8 @@ def compare(bundle: Bundle, *, python_runner: Callable[[Bundle], KernelReport] =
 def compare_three(bundle: Bundle, *, checker: CompiledChecker | None = None,
                   replay_root: str | Path = ".capcov/differential", max_steps: int = 200,
                   cache_dir: str | Path = ".capcov/compiled", executable: str = "souffle",
+                  python_runner: Callable[[Bundle], KernelReport] = run_python,
+                  souffle_runner: Callable[[Bundle], KernelReport] = run_souffle,
                   compiled_runner: Callable[[Bundle], KernelReport] | None = None) -> ThreeWayResult:
     """``compare`` plus the compiled kernel: python, souffle and souffle-compiled must agree.
 
@@ -326,15 +328,20 @@ def compare_three(bundle: Bundle, *, checker: CompiledChecker | None = None,
                 timings[name] = timings.get(name, 0.0) + (time.monotonic() - started)
         return run
 
-    two = compare(bundle, python_runner=timed("python", run_python),
-                  souffle_runner=timed("souffle", run_souffle),
+    two = compare(bundle, python_runner=timed("python", python_runner),
+                  souffle_runner=timed("souffle", souffle_runner),
                   replay_root=replay_root, max_steps=max_steps)
     if compiled_runner is None:
         def compiled_runner(candidate: Bundle) -> KernelReport:
             return run_souffle_compiled(candidate, checker=checker, cache_dir=cache_dir,
                                         executable=executable)
     compiled = _invoke_runner(timed("souffle-compiled", compiled_runner), bundle, "souffle-compiled")
-    matched = reports_match(two.souffle, compiled)
+    # Both pairs, not just the Souffle pair: reports_match is transitive over
+    # semantic_payload, but stating it keeps the three-way contract explicit
+    # if either report ever grows a field canonical_digest does not cover.
+    matched = (reports_match(two.souffle, compiled) and reports_match(two.python, compiled)
+               and len({two.python.canonical_digest, two.souffle.canonical_digest,
+                        compiled.canonical_digest}) == 1)
     closure_equal = (two.souffle.closure_digest is not None
                      and two.souffle.closure_digest == compiled.closure_digest)
     recorded = tuple(sorted(timings.items()))
