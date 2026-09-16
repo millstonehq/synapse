@@ -73,6 +73,9 @@ class CompiledChecker:
     compile_key: str
     compiler_config_sha256: str
     compile_seconds: float = 0.0
+    cache_hit: bool = False
+    """True when this checker came from the cache rather than a fresh compile.
+    Recorded for benchmarks and never part of ``provenance()``."""
 
     @property
     def runtime(self) -> str:
@@ -174,7 +177,7 @@ def _cached_checker(entry: Path, expected: Mapping[str, Any]) -> CompiledChecker
         souffle_sha256=payload["souffle_sha256"], souffle_version=payload["souffle_version"],
         compile_flags=tuple(payload["compile_flags"]), compile_key=payload["compile_key"],
         compiler_config_sha256=payload["compiler_config_sha256"],
-        compile_seconds=float(payload["compile_seconds"]))
+        compile_seconds=float(payload["compile_seconds"]), cache_hit=True)
 
 
 def prune_cache(cache_dir: str | os.PathLike[str], souffle_sha256: str) -> list[str]:
