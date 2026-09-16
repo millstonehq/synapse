@@ -5603,3 +5603,53 @@ with the route trace receipt and no replay env `Ran 10 tests in 256.4s OK`, rece
 named. Full regression bound to `4933f0e`: `Ran 1195 tests in 106.8s`, `OK (skipped=154)` — seven
 fewer skips than on `8829591`, exactly the receipt suite now running un-gated.
 
+### 2026-09-16 publication rewrite absorbed; identity contract finding; pilot made checkout-derived
+
+The `fixleak` session rewrote the public history of all three remotes (blob text, commit
+messages and paths: the company name, host and module path, ticket prefix, `oracle`, and the
+target's former short name, now `target_go`/`target-go` in paths and `TARGET_GO` in env vars);
+tip `b9353b7` replaces `407fdf8` (kept locally as `backup/pre-rewrite-407fdf8`). Nothing was
+rebased over it. On the rewritten tip, in the pinned devShell:
+
+- Row-level content of every bundle is unchanged, but two go_app pins moved because the exporter's
+  stub declarations now admit producer class `target-go-runtime-trace-v2` and every bundle
+  carries those declarations: Stage D `GO_APP_BUNDLE_DIGEST` → `f64eddd2…ccbe` (rules digest
+  `3c7c8082…d36c` unchanged; canonical-JSON diff against the pre-rewrite bundle is exactly the
+  four producer-class strings) and `EXPORTED_BUNDLE_DIGEST` → `2ce5f5c3…a536`. Facts, evidence
+  ids, closure and `GOLDEN_INDEX` are unchanged; Shen 22 OK and static differential 18 OK after
+  the re-pins.
+- The live pilot could not slice the real checkout: its `MODULE` constant had become the
+  placeholder and `cmd/<name>/main.go` had been renamed, so the handler package closure was empty
+  (`scope 'document_set' needs at least one value`). The pilot now reads the module path from the
+  checkout's `go.mod` (`pilot.parse_go_mod`) when `CAPCOV_GO_FIXTURE_ROOT` is set and derives the
+  main-package directory and the archive basename from it; the repository names no real module
+  path. Router/sink file:line anchors are declared per head (`01fe913` and `7e339e07`), which
+  also repairs an older incoherence: the runtime-join merge had moved the anchors to `01fe913`
+  while the identity pin and the committed receipt still named `7e339e07`, so no run had compared
+  the pinned identity since `5c22a89`.
+- Identity finding. `static_relations_index` hashes the sorted list of declared relation names
+  together with the rows (documented: "the declared relation names do" matter). Running the
+  section 30 slice at `7e339e07` under the pin-era exporter (`3630c84`, throwaway worktree) and
+  under this tip gives byte-identical per-relation row hashes for all 20 exported relations; the
+  only difference is five stub declarations the runtime-join merge added (`runtime_function_entered`,
+  `runtime_sql_executed`, `runtime_tx_committed`, `runtime_route_completed`,
+  `runtime_route_reaches_sql_on_index`). So `0759ccef…3a3b` was that head's identity under the
+  20-name contract; under the current contract it is `367b5675…7894` (archive basename restored to
+  the module basename; with the rewrite's `target-go` basename it was `d955db0c…`, which shows the
+  basename is part of identity as recorded in section 29). Pinned: `7e339e07` → `367b5675…7894`,
+  `01fe913` → `ae62aba1…c9c7`. A contract change moving the identity is by design; the record is
+  the correction, not a widening of the pin.
+- Committed pilot artifacts are now redacted copies of the real run at `01fe913` (with the route
+  trace receipt and the default replay fixture): receipt plus four certificates, with the module
+  path, checkout path and host temp paths replaced by markers and a `redaction` block naming the
+  rules and the unredacted receipt's sha256. Every digest, identity, row count and certificate
+  entry in the committed receipt is of the unredacted run, and the identity test compares only
+  those. The retained runtime receipt's symbol strings were neutralized by the rewrite; the
+  runtime join is by run/request/tx/surface/index identity, never by symbol string, so it still
+  derives and its certificates still recheck.
+- Runs: pilot at `01fe913` with runtime receipt `Ran 10 tests in 219.1s OK` (identity compared
+  with the committed receipt); pilot at `7e339e07` `Ran 10 tests in 140.7s OK (skipped=1)`
+  (pinned identity held, per-head anchors verified); receipt suite 17 OK (1 skipped); replay 73
+  OK; PR #3 modules 24 OK; evidence policy 5, validation 23, CLI 19 (1 skipped), manifest checks
+  ok. Full regression bound to the commit is recorded below.
+

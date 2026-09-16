@@ -39,7 +39,11 @@ except ImportError:  # unittest discover -s imports this directory as top-level
 # record's canonical bytes.  The static index identity (GOLDEN_INDEX, derived
 # from the exported relation contract, not from IR serialisation) changes when
 # that contract changes; the sibling tests assert facts, evidence ids and closure.
-EXPORTED_BUNDLE_DIGEST = "b1bd7ecee96f0968ba7d280cfa9b1bc252b4c7119c214836858e20a4ad28319e"
+# It changed a second time at the publication rewrite (b9353b7): the producer
+# class admitted by the exporter's stub declarations for the causal-trace
+# primitives was renamed, and every exported bundle carries those declarations.
+# Facts, evidence ids, closure and the static identity are unchanged.
+EXPORTED_BUNDLE_DIGEST = "2ce5f5c33d3bed224de0187a658e6e431e1ae9d0f80b9d786bfd2bf1a541a536"
 EXPORTED_FACT_COUNT = 210
 # The golden's static-relations-v1 identity (metadata index_digest, every
 # fact's index column, the <index12> of every evidence id).

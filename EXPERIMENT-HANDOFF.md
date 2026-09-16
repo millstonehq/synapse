@@ -44,14 +44,14 @@ Reproduce the live pilot (about 2–3 minutes, network needed once for Go module
 
 ```sh
 cd packages/capabilities
-CAPCOV_GO_FIXTURE_ROOT=/Users/dev/fg/.worktrees/target-go-capcov-claims-runtime \
+CAPCOV_GO_FIXTURE_ROOT=<checkout at the receipt's candidate commit> \
 CAPCOV_TARGET_GO_RUNTIME_RECEIPT="$PWD/tests/claim_semantics/target_go/artifacts/runtime-recipient-route.json" \
 nix develop --no-update-lock-file --command bash -lc \
   'PYTHONPATH="$PWD/src" python -m unittest discover -s tests/claim_semantics -p "test_target_go_static*.py" -t .'
 ```
 
 The committed receipt was produced at target-go `01fe913`. Binding it to a different HEAD fails
-closed (commit mismatch). The target-go worktree above is at `01fe913`; `/Users/dev/fg/target-go` HEAD is not.
+closed (commit mismatch). Use a checkout at `01fe913`; the target's main HEAD is not.
 The replay judge's join (recorded under `replay_join` in the pilot receipt) runs by default
 against the committed receipt `tests/claim_semantics/fixtures/replay_receipt_target_go_5988859/`;
 `CAPCOV_REPLAY_RECEIPT_DIR` overrides it. Set `CAPCOV_GO_CACHE_ROOT` to a persistent directory to avoid
@@ -69,6 +69,14 @@ PYTHONPATH="$PWD/src" python -m unittest \
 
 Dual-kernel agreement on the fixture join skips unless `souffle` is on PATH (nix devShell).
 
+## Publication rules
+
+The public history was rewritten on 2026-09-16 (no company, host, module path, ticket prefix or
+target name). Keep it that way: the pilot reads the module path from the checkout's `go.mod` and
+names no real path; committed pilot artifacts are redacted copies whose digests are of the real
+run (see the `redaction` block in `tests/claim_semantics/target_go/artifacts/receipt.json`); the
+retained runtime receipt's symbol strings are neutral and the join never uses them.
+
 ## Repositories
 
 `origin` = millstonehq/synapse (production `main`, PR #50 targets it). `pyrex41/synapse-capcov` is
@@ -80,6 +88,10 @@ Open PRs to know about (2026-09-16): upstream #50 (this line → `main`); fork `
 agent's deepen branch targeting this line; see the plan's section 26 for its disposition).
 
 ## Two identity traps you will hit if you touch the exporter
+
+0. The identity hashes the *declared relation names* as well as the rows. Adding a stub
+   declaration to the exporter moves every identity while leaving every row unchanged; re-pin
+   with the cause recorded (section 26, 2026-09-16), do not widen the pin.
 
 1. scip-go emits symbols in Go map order: never hash `index.scip` bytes as identity.
 2. Go's generated `_testmain.go` for every `<pkg>.test` package lives in `GOCACHE`, and scip-go

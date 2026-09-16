@@ -62,20 +62,59 @@ FIXTURE_ROOT = os.environ.get("CAPCOV_GO_FIXTURE_ROOT")
 RUNTIME_RECEIPT_PATH = os.environ.get("CAPCOV_TARGET_GO_RUNTIME_RECEIPT")
 _HAVE_TOOLS = bool(FIXTURE_ROOT and shutil.which("scip-go") and shutil.which("scip") and shutil.which("go"))
 
-MODULE = "git.internal.example/org/target-go"
+# The module path is read from the checkout's go.mod when a fixture root is
+# named; the repository itself names no real module path (publication rule).
+# Everything below derives from MODULE, so a checkout with another module path
+# fails at the go.mod assertion, never by silently indexing the wrong tree.
+PLACEHOLDER_MODULE = "git.internal.example/org/target-go"
+
+
+def _module_from_checkout(root: str | None) -> str:
+    if not root:
+        return PLACEHOLDER_MODULE
+    try:
+        return pilot.parse_go_mod((Path(root) / "go.mod").read_text(encoding="utf-8"))[0]
+    except (OSError, ValueError):
+        return PLACEHOLDER_MODULE
+
+
+MODULE = _module_from_checkout(FIXTURE_ROOT)
+MAIN_PACKAGE = MODULE.rsplit("/", 1)[-1]  # cmd/<module basename>/main.go
 LANGUAGE = "go"
 HANDLER_PACKAGE = f"{MODULE}/internal/pilot"
 # The route: internal/httpserver/server.go mounts the app handler at "/"
-# (APP_MOUNT); cmd/target-go/main.go passes Runtime.Handler() (APP_WIRING), which
+# (APP_MOUNT); cmd/<module basename>/main.go passes Runtime.Handler() (APP_WIRING), which
 # registers, for action in {decrypt, unsubscribe, subscribe},
 #   mux.HandleFunc("GET /api/cloud/notification-unsubscribe/"+action+"-email", r.recipientLinks(action))
 # (ROUTE_REGISTRATION).  The three actions share one handler closure returned by
 # Runtime.recipientLinks (HANDLER_DEFINITION), so one concrete surface is declared.
 SURFACE = "http:GET /api/cloud/notification-unsubscribe/subscribe-email"
-ROUTE_REGISTRATION = ("internal/pilot/runtime.go", 209, "r.recipientLinks(action)")
+# The declared file:line of each anchor moves with the checkout; a head not
+# listed here fails the router-line test, which is the signal to re-declare.
+_LINE_SPECS = {
+    # candidate with the runtime trace hooks (the committed receipt's head)
+    "01fe913fffbacf46f668f7e0412e00208fe4b217": {
+        "route_registration": ("internal/pilot/runtime.go", 209, "r.recipientLinks(action)"),
+        "handler_definition": ("internal/pilot/recipient_links.go", 14, "func (r *Runtime) recipientLinks("),
+        "sql_sink_site": ("internal/legacyissues/subscriptions.go", 56, "tx.ExecContext("),
+    },
+    # the section 30 pilot head
+    "7e339e07dbaafe7e606a20afe644623a1f58228f": {
+        "route_registration": ("internal/pilot/runtime.go", 163, "r.recipientLinks(action)"),
+        "handler_definition": ("internal/pilot/recipient_links.go", 13, "func (r *Runtime) recipientLinks("),
+        "sql_sink_site": ("internal/legacyissues/subscriptions.go", 54, "tx.ExecContext("),
+    },
+}
+
+
+def _line_specs(head: str) -> dict:
+    return _LINE_SPECS.get(head, _LINE_SPECS["01fe913fffbacf46f668f7e0412e00208fe4b217"])
+
+
+ROUTE_REGISTRATION = ("internal/pilot/runtime.go", 209, "r.recipientLinks(action)")  # replaced per head in setUpClass
 HANDLER_DEFINITION = ("internal/pilot/recipient_links.go", 14, "func (r *Runtime) recipientLinks(")
 APP_MOUNT = ("internal/httpserver/server.go", 47, 'mux.Handle("/", app)')
-APP_WIRING = ("cmd/target-go/main.go", 181, "httpserver.New(runtime.Handler()")
+APP_WIRING = (f"cmd/{MAIN_PACKAGE}/main.go", 181, "httpserver.New(runtime.Handler()")
 SQL_SINK_SITE = ("internal/legacyissues/subscriptions.go", 56, "tx.ExecContext(")
 
 _P = f"scip-go gomod {MODULE} . "
@@ -97,8 +136,15 @@ COMMITTED_RECEIPT = ARTIFACTS / "receipt.json"
 # static-relations-v1 identity of the archived tree under the pinned toolchain,
 # keyed by target-go HEAD.  Established by two cold-cache runs from fresh nix shells
 # (section 30); a warm-cache run must reproduce it byte for byte.
+# The identity hashes the declared relation names as well as the rows
+# (scip_facts.static_relations_index), so it moved when the runtime-join merge
+# added five stub declarations to the exporter's contract: rows at 7e339e07 are
+# byte-identical under the pin-era exporter and this one (per-relation hashes
+# equal, section 26, 2026-09-16); only the name list differs.  The earlier pin
+# 0759ccef… was that head's identity under the 20-relation contract.
 PINNED_IDENTITY = {
-    "7e339e07dbaafe7e606a20afe644623a1f58228f": "0759ccef8fbb6024b7d215c8adc3019e93bfd277e112090acaa1304813323a3b",
+    "7e339e07dbaafe7e606a20afe644623a1f58228f": "367b56750a2e90b6c0a6d6da8b56402bea2ccf003c1e9260118f7757e5607894",
+    "01fe913fffbacf46f668f7e0412e00208fe4b217": "ae62aba10395c584419693240d1ea131ceecec24e7643c3d23c68d4a20c6c9c7",
 }
 RECORDED_DERIVED = ("static_edge", "static_root", "static_reaches", "static_route_handler", "static_index_current",
                     "scip_index_stale", "static_scope_leak", "static_scope_closed", "scip_references_closed",
@@ -135,8 +181,12 @@ class FgGoStaticPilotTest(unittest.TestCase):
         cls.out_dir = Path(os.environ.get("CAPCOV_TARGET_GO_PILOT_OUT") or tempfile.mkdtemp(prefix="capcov-target-go-pilot-out-"))
         cls.out_dir.mkdir(parents=True, exist_ok=True)
         cls.checkout = pilot.inspect_checkout(FIXTURE_ROOT)
+        global ROUTE_REGISTRATION, HANDLER_DEFINITION, SQL_SINK_SITE
+        specs = _line_specs(cls.checkout.head)
+        ROUTE_REGISTRATION, HANDLER_DEFINITION, SQL_SINK_SITE = (
+            specs["route_registration"], specs["handler_definition"], specs["sql_sink_site"])
         cls.runtime_receipt = cls._load_runtime_receipt()
-        cls.archive = pilot.archive_head(FIXTURE_ROOT, Path(cls.tmp.name) / "target-go")
+        cls.archive = pilot.archive_head(FIXTURE_ROOT, Path(cls.tmp.name) / MAIN_PACKAGE)
         cache_root = Path(os.environ.get("CAPCOV_GO_CACHE_ROOT") or Path(tempfile.gettempdir()) / "capcov-target-go-pilot")
         cls.go_env = pilot.index_environment(cache_root / "gomodcache", cache_root / "gocache")
         for path in (cls.go_env["GOMODCACHE"], cls.go_env["GOCACHE"]):
@@ -417,7 +467,7 @@ class FgGoStaticPilotTest(unittest.TestCase):
         self.assertIn('"GET /api/cloud/notification-unsubscribe/"', self._archived_line(ROUTE_REGISTRATION))
         [record] = self.assumption.evidence
         self.assertEqual(record.kind, "assumption")
-        self.assertTrue(record.source.startswith("human-declared from router source: internal/pilot/runtime.go:209"))
+        self.assertTrue(record.source.startswith(f"human-declared from router source: {ROUTE_REGISTRATION[0]}:{ROUTE_REGISTRATION[1]}"))
         self.assertEqual(record.id.split(":")[:3], ["static", self.index[:12], pilot.ROUTE_HANDLER_ASSUMPTION])
         # the handler symbol is a callable the index defines at the declared line
         definitions = {(p, l): s for _, p, l, s in _rows(self.exported.bundle, "scip_definition_site")}
