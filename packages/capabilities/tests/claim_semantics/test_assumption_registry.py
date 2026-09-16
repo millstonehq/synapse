@@ -348,7 +348,14 @@ class InvalidationTest(_EvaluatedFixture):
         self.assertEqual(qualified["blocking_premise"], {"relation": "undeclared_any", "holds": True})
         self.assertEqual(qualified["undeclared_tables"], {"php": ["authentication"], "go": ["authentication"]})
         self.assertIsNone(qualified["certificate_sha256"], "an unresolved claim certifies no row")
+        # empty, and pinned so it stays visible if it ever stops being: the
+        # `model_writes` output template is built only when the *baseline* join
+        # already had offending effect rows, and on this fixture it had none,
+        # so no template renders the premise the drop actually removed
+        self.assertEqual(qualified["missing_premise"], [])
         self.assertEqual(document["flipped"], [QUALIFIED])
+        self.assertEqual(document["gained"], [UNDECLARED],
+                         "the drop revealed a row: reported, never folded into flipped")
 
         self.assertEqual(document["claims"][CONSTRAINS]["before"], document["claims"][CONSTRAINS]["after"])
         self.assertFalse(document["claims"][CONSTRAINS]["changed"])
@@ -376,7 +383,8 @@ class InvalidationTest(_EvaluatedFixture):
 
     def test_dropping_the_census_assumption_unresolves_op_qualified(self) -> None:
         entry = self.entry("op_declared")
-        document = self.invalidate(entry["assumption_id"]).as_dict()
+        result = self.invalidate(entry["assumption_id"])
+        document = result.as_dict()
         self.assertEqual(document["withdrawn"], [entry["evidence_id"]])
         qualified = document["claims"][QUALIFIED]
         self.assertEqual(qualified["before"]["semantic"], "supported")
@@ -388,7 +396,21 @@ class InvalidationTest(_EvaluatedFixture):
         # this one *is* a positive leaf, so the static prediction gets it right
         self.assertEqual(document["predicted_fallen"], [QUALIFIED])
         self.assertEqual(document["flipped"], [QUALIFIED])
+        self.assertEqual(document["gained"], [])
         self.assertTrue(document["prediction_agrees"])
+        # the drop must remove *only* the census premise: the runtime
+        # qualification `op_qualified_rt` (php/go agreement, no undeclared
+        # write) does not rest on the census and must survive.  If a change to
+        # `closed_revocation` or to the census assumption's `depends_on` also
+        # took `index_describes_replay` -- they share one external heuristic --
+        # every other assertion here would still pass while the withdrawal had
+        # silently over-reached.
+        rows = dict(result.relations)
+        row = (replay_join.SYNTHETIC_INDEX, self.join.run, "delete-issue")
+        self.assertIn(row, list(rows.get("op_qualified_rt", ())),
+                      "op_qualified_rt is not a dependant of the census assumption")
+        self.assertEqual(list(rows.get("op_qualified", ())), [],
+                         "the claim relation itself is empty, which is why the claim is unresolved")
 
     def test_an_evidence_id_names_the_same_assumption(self) -> None:
         entry = self.entry("index_describes_replay")
@@ -527,6 +549,63 @@ class RefusalTest(_EvaluatedFixture):
         reduced = assumptions.withdraw(bundle, [record.id])
         self.assertNotIn(record.id, {r.id for r in reduced.evidence})
 
+    def test_withdraw_refuses_a_template_that_excludes_the_withdrawn_id(self) -> None:
+        """All three evidence fields of a reviewed template are refusals, not just the positive two.
+
+        An ``excludes_evidence`` id would still *render* after the withdrawal --
+        that is the point of the field -- and rendering it would add a missing
+        premise the reviewer wrote under the assumption that the record exists.
+        Deciding on the reviewer's behalf which reading they meant is the edit
+        this operation does not make.
+        """
+        from dataclasses import replace as replace_dataclass
+
+        record = self.record("model_scope_exclusion", "authentication")
+        poisoned = replace_dataclass(self.join.bundle, outputs=tuple(self.join.bundle.outputs) + (
+            OutputTemplate("missing_premise", QUALIFIED, relation="model_writes",
+                           excludes_evidence=(record.id,), when_claim="unresolved"),))
+        with self.assertRaises(InvalidationError) as caught:
+            assumptions.withdraw(poisoned, [record.id])
+        self.assertIn("never repaired", str(caught.exception))
+        self.assertIn(record.id, str(caught.exception))
+
+    def test_a_claim_already_refuted_at_the_baseline_is_not_a_refusal(self) -> None:
+        """The guard is about *transitions*: a verdict the withdrawal did not cause is reported.
+
+        Fail-closed either way, but refusing here would make the whole
+        operation unusable on any bundle that already carries a refuted claim,
+        which is exactly the bundle an invalidation is most worth asking about.
+        """
+        real_compare = assumptions.compare
+
+        def mask(report):
+            claims = [SimpleNamespace(key=c.key, semantic="refuted" if c.key == CONSTRAINS else c.semantic,
+                                      operational=c.operational, missing_premises=c.missing_premises)
+                      for c in report.claims]
+            return SimpleNamespace(claims=claims, relations=report.relations,
+                                   canonical_digest=report.canonical_digest)
+
+        def poisoned(bundle, **kwargs):
+            result = real_compare(bundle, **kwargs)
+            return SimpleNamespace(python=mask(result.python), souffle=result.souffle,
+                                   matched=result.matched)
+
+        baseline = SimpleNamespace(python=mask(self.join.result.python),
+                                   souffle=self.join.result.souffle, matched=True)
+        assumptions.compare = poisoned
+        try:
+            result = assumptions.invalidate(self.join.bundle, PINNED_EXCLUSION_IDS["redis"],
+                                            replay_root=self.replay_root, baseline_result=baseline,
+                                            baseline_row_certificates=self.join.row_certificates)
+        finally:
+            assumptions.compare = real_compare
+        entry = result.claims[CONSTRAINS]
+        self.assertEqual(entry["before"]["semantic"], "refuted")
+        self.assertEqual(entry["after"]["semantic"], "refuted")
+        self.assertFalse(entry["changed"])
+        self.assertNotIn(CONSTRAINS, result.flipped, "it was never supported, so nothing was lost")
+        self.assertNotIn(CONSTRAINS, result.gained)
+
     def test_withdraw_keeps_a_fact_another_producer_still_attests(self) -> None:
         """Two producers, one row: withdrawing one leaves the fact standing."""
         from dataclasses import replace as replace_dataclass
@@ -595,6 +674,125 @@ class RefusalTest(_EvaluatedFixture):
         self.assertIn("one invalidation withdraws one assumption", str(caught.exception))
 
 
+class WholeAssumptionTest(_EvaluatedFixture):
+    """An assumption two records attest is withdrawn only when both go.
+
+    The A3 document is signed with an *assumption* id.  If ``invalidate`` were
+    given an evidence id and withdrew only that record, the fact would still be
+    attested, no claim would move, and the document would read
+    ``assumption_id: asm:9041..., flipped: []`` -- publishable evidence that
+    ``op_qualified`` is independent of a reviewer exclusion that is in fact
+    still carrying it.  The certificates in such a document recheck cleanly, so
+    nothing downstream would catch it.
+    """
+
+    def doubled(self):
+        """The fixture bundle plus a second reviewer signing the identical row."""
+        from dataclasses import replace as replace_dataclass
+
+        record = self.record("model_scope_exclusion", "authentication")
+        twin = Evidence(id="reviewer:twin:model_scope_exclusion:000000000000", atom=record.atom,
+                        context=record.context,
+                        source="reviewer A Nother 2027-01-02 model:08380c9c336d run:zzzzzzzzzzzz",
+                        depends_on=record.depends_on, kind="assumption")
+        self.assertEqual(assumptions.assumption_id(twin), PINNED_EXCLUSION_IDS["authentication"],
+                         "the same producer class and the same row is the same assumption")
+        bundle = replace_dataclass(self.join.bundle, evidence=tuple(self.join.bundle.evidence) + (twin,))
+        self.assertIn(record.atom, bundle.facts,
+                      "the twin attests a row the bundle already carries, so the closure is unchanged "
+                      "and the evaluated baseline is still the baseline of this bundle")
+        return bundle, record, twin
+
+    def test_resolve_names_every_attestation_of_an_assumption(self) -> None:
+        bundle, record, twin = self.doubled()
+        resolved = assumptions.resolve(bundle, PINNED_EXCLUSION_IDS["authentication"])
+        self.assertEqual(sorted(r.id for r in resolved), sorted([record.id, twin.id]))
+        self.assertEqual([r.id for r in assumptions.resolve(bundle, twin.id)], [twin.id],
+                         "an evidence id still names its own record")
+
+    def test_invalidating_by_evidence_id_withdraws_every_attestation(self) -> None:
+        bundle, record, twin = self.doubled()
+        result = assumptions.invalidate(bundle, record.id, replay_root=self.replay_root,
+                                        baseline_result=self.join.result,
+                                        baseline_row_certificates=self.join.row_certificates)
+        document = result.as_dict()
+        self.assertEqual(document["assumption_id"], PINNED_EXCLUSION_IDS["authentication"])
+        self.assertEqual(sorted(document["withdrawn"]), sorted([record.id, twin.id]),
+                         "one evidence id, but the assumption is what is withdrawn")
+        self.assertEqual(document["flipped"], [QUALIFIED])
+        self.assertEqual(document["claims"][QUALIFIED]["after"]["semantic"], "unresolved")
+        self.assertNotIn(record.atom, result.bundle.facts,
+                         "nothing attests the row any more, so the fact goes too")
+
+    def test_an_assumption_id_and_an_evidence_id_give_the_same_document(self) -> None:
+        bundle, record, _ = self.doubled()
+        by_evidence = assumptions.invalidate(bundle, record.id, replay_root=self.replay_root,
+                                             baseline_result=self.join.result,
+                                             baseline_row_certificates=self.join.row_certificates).as_dict()
+        by_assumption = assumptions.invalidate(bundle, PINNED_EXCLUSION_IDS["authentication"],
+                                               replay_root=self.replay_root,
+                                               baseline_result=self.join.result,
+                                               baseline_row_certificates=self.join.row_certificates).as_dict()
+        self.assertEqual(by_evidence, by_assumption,
+                         "which id names the assumption cannot change what the withdrawal says")
+
+
+class CertifyClaimsAgreementTest(_EvaluatedFixture):
+    """``certify_claims`` promises the closures agree; this is that promise, tested."""
+
+    def _result(self, souffle_relations):
+        souffle = SimpleNamespace(relations=souffle_relations,
+                                  canonical_digest=self.join.result.souffle.canonical_digest,
+                                  claims=self.join.result.souffle.claims)
+        return SimpleNamespace(python=self.join.result.python, souffle=souffle, matched=False)
+
+    def test_a_closure_missing_a_claim_row_is_raised_not_reported(self) -> None:
+        dropped = tuple((name, rows[1:] if name == "exclusion_applied" else rows)
+                        for name, rows in self.join.result.souffle.relations)
+        with self.assertRaises(AssertionError) as caught:
+            assumptions.certify_claims(self.join.bundle, self._result(dropped))
+        self.assertIn("disagree on the claim rows", str(caught.exception))
+
+    def test_a_closure_agreeing_on_the_rows_but_not_the_support_is_raised(self) -> None:
+        """Same claim rows, a support row missing: the second closure must object, not be ignored.
+
+        The exception is the certifier's own (no rule derives the premise from
+        that closure) rather than the row/certificate comparison's -- either
+        way it is raised out of ``certify_claims`` and no document is written,
+        which is the property: a judge with two answers has none.
+        """
+        from capcov.claims.static.certificate import CertificateError
+
+        altered = tuple((name, () if name == "model_scope_exclusion" else rows)
+                        for name, rows in self.join.result.souffle.relations)
+        with self.assertRaises((AssertionError, CertificateError)):
+            assumptions.certify_claims(self.join.bundle, self._result(altered))
+
+
+class TruncatedImpactTest(_EvaluatedFixture):
+    """A registry whose ``ground.impact`` query does not fit in its bounds."""
+
+    def test_strict_refuses_and_the_embedded_copy_degrades(self) -> None:
+        report = self.join.report()
+        with self.assertRaises(InvalidationError) as caught:
+            assumptions.registry(self.join.bundle, self.join.row_certificates,
+                                 run=self.join.run, relations=report.relations, max_nodes=1)
+        self.assertIn("truncated", str(caught.exception))
+        degraded = assumptions.registry(self.join.bundle, self.join.row_certificates,
+                                        run=self.join.run, relations=report.relations,
+                                        strict_impact=False, max_nodes=1)
+        self.assertEqual(len(degraded["assumptions"]), 6)
+        for entry in degraded["assumptions"]:
+            self.assertEqual(entry["impact"], {"truncated": True, "fallen": None, "survived": None})
+
+    def test_the_summary_never_raises_on_a_truncated_query(self) -> None:
+        """``summary`` embeds the registry, so it must degrade rather than fail."""
+        summary = replay_join.summary(self.join)
+        self.assertEqual(len(summary["assumptions"]), 6)
+        for entry in summary["assumptions"]:
+            self.assertFalse(entry["impact"]["truncated"], "the fixture fits in the default bounds")
+
+
 class CommandLineTest(unittest.TestCase):
     """``claims assumptions registry|invalidate`` over the committed fixture."""
 
@@ -613,8 +811,13 @@ class CommandLineTest(unittest.TestCase):
             code = cli.main(list(argv))
         return code, buffer.getvalue()
 
+    @staticmethod
+    def _owned_replay_roots() -> set[Path]:
+        return set(Path(tempfile.gettempdir()).glob("capcov-assumptions-*"))
+
     def test_registry_and_invalidate_roundtrip(self) -> None:
         out = Path(tempfile.mkdtemp(prefix="capcov-assumption-cli-"))
+        before_roots = self._owned_replay_roots()
         try:
             code, text = self._run("claims", "assumptions", "registry",
                                    "--receipt", str(FIXTURE), "--out", str(out))
@@ -632,8 +835,38 @@ class CommandLineTest(unittest.TestCase):
             self.assertEqual(document[0]["flipped"], [QUALIFIED])
             self.assertEqual(document[0]["claims"][QUALIFIED]["undeclared_tables"],
                              {"php": ["authentication"], "go": ["authentication"]})
+            self.assertEqual(document[0]["gained"], [UNDECLARED])
+            self.assertEqual(self._owned_replay_roots() - before_roots, set(),
+                             "a replay root the CLI made itself is removed when nothing needs it")
         finally:
             shutil.rmtree(out, ignore_errors=True)
+
+    def test_a_kernel_disagreement_on_the_claims_is_exit_3(self) -> None:
+        """``certify_claims`` raises ``AssertionError``; the contract calls that 3, not a traceback."""
+        from capcov.claims import cli
+
+        module = cli._join_module()
+        real = module.invalidate
+
+        def raising(join, identifier, replay_root):
+            raise AssertionError(f"{identifier}: certificates differ between closures")
+
+        module.invalidate = raising
+        before_roots = self._owned_replay_roots()
+        try:
+            code, text = self._run("claims", "assumptions", "invalidate", "--receipt", str(FIXTURE),
+                                   "--drop", PINNED_EXCLUSION_IDS["redis"])
+        finally:
+            module.invalidate = real
+        self.assertEqual(code, 3, text[:2000])
+        document = json.loads(text)
+        self.assertIn("disagree", document["kernel_mismatch"])
+        self.assertIn("certificates differ", document["error"])
+        kept = self._owned_replay_roots() - before_roots
+        self.assertEqual(len(kept), 1, "a mismatch keeps its replay root: the evidence is in it")
+        self.assertEqual({str(path) for path in kept}, {document["replay"]})
+        for path in kept:
+            shutil.rmtree(path, ignore_errors=True)
 
     def test_unknown_drop_is_a_refusal(self) -> None:
         code, text = self._run("claims", "assumptions", "invalidate",
