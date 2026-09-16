@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable
 
-from .ir import (Bundle, Claim, Constant, Evidence, EvidenceMapping,
+from .ir import (Atom, Bundle, Claim, Constant, Evidence, EvidenceMapping,
                  OutputKind, OutputTemplate, Variable, canonical_dict)
 
 
@@ -185,7 +185,11 @@ def _relevant(bundle: Bundle, claim_id: str, evidence_id: str, proof: set[str],
                 if isinstance(term, Constant))
         if any(name in values and values[name] != value for name, value in claim_values.items()):
             return False
-        return any(rule.head.relation == claim.relation and any(atom.relation == evidence.atom.relation for atom in rule.body) for rule in bundle.rules)
+        # a rule body also holds Comparison items, which name no relation
+        return any(rule.head.relation == claim.relation
+                   and any(isinstance(item, Atom) and item.relation == evidence.atom.relation
+                           for item in rule.body)
+                   for rule in bundle.rules)
     return False
 
 

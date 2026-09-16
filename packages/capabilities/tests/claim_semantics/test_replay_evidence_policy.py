@@ -18,8 +18,8 @@ import tempfile
 import unittest
 
 from capcov.claims import (Atom, Bundle, Claim, Column, Constant, Context, DiagnosticRule, OutputTemplate,
-                           RelationDecl, Rule, TemplateValue, Variable, VerifiedProofEvidence, render_outputs,
-                           validate_bundle)
+                           RelationDecl, Rule, TemplateValue, Variable, VerifiedProofEvidence, bundle_from_json,
+                           render_outputs, validate_bundle)
 from capcov.claims.differential import DifferentialMismatch, compare
 from capcov.claims.evaluator import evaluate
 from capcov.claims.replay import replay_facts
@@ -28,10 +28,12 @@ from capcov.claims.static.combine import CombineError, combine
 
 try:
     from .replay_rules import cases
-    from .replay_rules.adapter import pack_bundle
+    from .replay_rules.adapter import (CASES_DIR, bundle_payload, load_case, load_pack, pack_bundle,
+                                       read_json)
 except ImportError:  # unittest discover -s imports this directory as top-level
     from replay_rules import cases
-    from replay_rules.adapter import pack_bundle
+    from replay_rules.adapter import (CASES_DIR, bundle_payload, load_case, load_pack, pack_bundle,
+                                      read_json)
 
 CLAIM_ID = "claim-close-qualified"
 REASON = "the run's snapshot digest was not observed, so replay_run_current does not hold"
@@ -74,6 +76,44 @@ def _build(*, snapshot: bool, pack: Bundle | None = None, validate: bool = True)
     return bundle
 
 
+class WithheldClosureFlipsBackTest(unittest.TestCase):
+    """Case 21's why-not names ``php_effect_seqs_closed``; putting that one leaf
+    back flips all three op_qualified claims to supported.  The corpus pins the
+    unresolved half; without this the "and adding it flips the claim" half of the
+    policy is only pinned for ``snapshot_observed`` (above)."""
+
+    def _case_with_the_witness(self):
+        case = read_json(CASES_DIR / "21-missing-effect-seq-closure.json")
+        control = read_json(CASES_DIR / "00-positive-control.json")
+        donor = next(f for f in control["facts"] if f["relation"] == "php_effect_seqs_closed")
+        identity = next(f["id"].split(":")[1] for f in case["facts"] if f["relation"] == "go_effect_seqs_closed")
+        run_row = next(f["id"] for f in case["facts"] if f["relation"] == "replay_run")
+        restored = dict(donor, id=f"replay:{identity}:php_effect_seqs_closed:{donor['id'].split(':')[3]}",
+                        provenance={"depends_on": [run_row]})
+        case = dict(case, facts=[*case["facts"], restored])
+        return case, restored["id"]
+
+    def test_the_named_leaf_is_the_one_that_flips_every_claim(self) -> None:
+        pack = load_pack()
+        withheld = evaluate(load_case(CASES_DIR / "21-missing-effect-seq-closure.json", pack))
+        self.assertEqual(withheld.status.value, "complete", withheld.message)
+        for entry in withheld.claims:
+            self.assertEqual(entry.result.semantic.value, "unresolved", entry.claim.id)
+            self.assertEqual([item["relation"] for item in entry.result.missing_premises],
+                             ["php_effect_seqs_closed"], entry.claim.id)
+        self.assertEqual(withheld.relation_rows("op_qualified"), ())
+
+        case, restored_id = self._case_with_the_witness()
+        restored = evaluate(bundle_from_json(bundle_payload(case, pack), validate=True))
+        self.assertEqual(restored.status.value, "complete", restored.message)
+        self.assertEqual(len(restored.relation_rows("op_qualified")), 3)
+        for entry in restored.claims:
+            self.assertEqual(entry.result.semantic.value, "supported", entry.claim.id)
+            self.assertEqual(entry.result.missing_premises, (), entry.claim.id)
+            self.assertIn(restored_id, entry.result.support,
+                          "the restored witness is a leaf of every certificate it unblocked")
+
+
 class ReplayEvidencePolicyTest(unittest.TestCase):
     def test_without_the_snapshot_witness_the_claim_is_unresolved_naming_replay_run_current(self) -> None:
         bundle = _build(snapshot=False)
@@ -88,8 +128,9 @@ class ReplayEvidencePolicyTest(unittest.TestCase):
         self.assertEqual(report.relation_rows("op_qualified"), ())
         self.assertEqual(report.relation_rows("snapshot_observed"), ())
         # every other input to qualification is present: the closures are the only gap
-        self.assertEqual(len(report.relation_rows("php_model_agree")), 3)
-        self.assertEqual(set(report.relation_rows("corpus_constrains")), {(cases.RUN, cases.CREATE), (cases.RUN, cases.CLOSE)})
+        self.assertEqual(len(report.relation_rows("php_model_agree")), 5)
+        self.assertEqual(set(report.relation_rows("corpus_constrains")),
+                         {(cases.RUN, op) for op in (cases.CREATE, cases.CLOSE, cases.DELETE)})
         self.assertEqual(report.relation_rows("php_disagreement_closed"), ())
         active = {record.id for record in bundle.evidence}
         rendered = render_outputs(bundle, CLAIM_ID, active, None, "unresolved", {"replay_run_current"})
@@ -112,7 +153,7 @@ class ReplayEvidencePolicyTest(unittest.TestCase):
         self.assertTrue({"replay", "php", "go", "shen", "mut", "reviewer", "php-census"} <= classes)
         self.assertIn("snapshot_observed", {leaf.split(":")[2] for leaf in leaves})
         self.assertEqual(set(report.relation_rows("op_qualified")),
-                         {(cases.INDEX, cases.RUN, cases.CREATE), (cases.INDEX, cases.RUN, cases.CLOSE)})
+                         {(cases.INDEX, cases.RUN, op) for op in (cases.CREATE, cases.CLOSE, cases.DELETE)})
         proof = VerifiedProofEvidence.from_bundle(bundle, CLAIM_ID, leaves)
         rendered = render_outputs(bundle, CLAIM_ID, set(by_id), proof, "supported")
         observed = {item["evidence_id"] for item in rendered if item["kind"] == "observed"}

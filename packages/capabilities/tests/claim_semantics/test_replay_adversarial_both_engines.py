@@ -98,11 +98,21 @@ class AdversarialReplayCasesInBothEngines(unittest.TestCase):
 
     def test_both_closures_carry_the_same_qualification_rows(self) -> None:
         self.assertTrue(self.results, "no differential results; is souffle on PATH?")
-        qualified = {"00-positive-control": 2, "01-planted-disagreement": 1, "02-planted-undeclared-write": 1,
-                     "03-surviving-mutant": 1, "04-missing-model-witness": 0, "05-missing-snapshot-witness": 0,
-                     "06-stale-replay": 0, "08-lying-closure": 0, "09-missing-post-state": 1,
+        qualified = {"00-positive-control": 3, "01-planted-disagreement": 2, "02-planted-undeclared-write": 2,
+                     "03-surviving-mutant": 2, "04-missing-model-witness": 0, "05-missing-snapshot-witness": 0,
+                     "06-stale-replay": 0, "08-lying-closure": 0, "09-missing-post-state": 2,
                      "10-missing-effects-closure": 0, "11-missing-admissible-closure": 0,
-                     "13-excluded-undeclared-write": 2, "14-exclusions-not-closed": 0, "15-no-exclusions-no-closure": 0}
+                     "13-excluded-undeclared-write": 3, "14-exclusions-not-closed": 0, "15-no-exclusions-no-closure": 0,
+                     # the ordering, repeat-delete and cross-run shapes
+                     "17-effect-order-violation": 2, "18-repeat-delete-with-effects": 3, "19-unstable-oracle": 0,
+                     "20-missing-stability-closure": 0, "21-missing-effect-seq-closure": 0,
+                     "23-repeat-delete-excluded-write": 3, "24-repeat-before-the-commit": 3,
+                     "25-first-delete-not-committed": 2, "26-unstable-on-one-side": 0}
+        # one derived row per shape the new rules are there to catch, in both kernels
+        planted = {"17-effect-order-violation": ("effect_order_violation", 1),
+                   "18-repeat-delete-with-effects": ("repeat_delete_violation", 1),
+                   "19-unstable-oracle": ("oracle_unstable", 1),
+                   "26-unstable-on-one-side": ("oracle_unstable", 1)}
         for stem, (_, result) in sorted(self.results.items()):
             for report in (result.python, result.souffle):
                 relations = dict(report.relations)
@@ -111,6 +121,20 @@ class AdversarialReplayCasesInBothEngines(unittest.TestCase):
                     self.assertEqual(relations["op_qualified"], relations["op_qualified_rt"])
                     self.assertEqual(len(relations["replay_run_stale"]), 1 if stem == "06-stale-replay" else 0)
                     self.assertEqual(len(relations["kill_closure_gap"]), 1 if stem == "08-lying-closure" else 0)
+                    for relation in ("effect_order_violation", "repeat_delete_violation", "oracle_unstable"):
+                        expected = planted.get(stem, (None, 0))
+                        self.assertEqual(len(relations[relation]),
+                                         expected[1] if expected[0] == relation else 0,
+                                         (stem, relation))
+                    # the repeat-delete claim holds wherever the repeat is clean, both effect
+                    # tables are closed and the reviewer's exclusion set is closed and bound to the
+                    # run by a model witness (case 04 drops that witness, case 10 opens php_effects,
+                    # cases 14/15 leave the exclusions open, case 18 plants a write)
+                    self.assertEqual(len(relations["repeat_delete_not_found"]),
+                                     0 if stem in ("04-missing-model-witness", "10-missing-effects-closure",
+                                                   "14-exclusions-not-closed", "15-no-exclusions-no-closure",
+                                                   "18-repeat-delete-with-effects", "24-repeat-before-the-commit",
+                                                   "25-first-delete-not-committed") else 1, stem)
 
     def test_certificates_from_both_closures_agree_on_every_derived_claim_row(self) -> None:
         self.assertTrue(self.results, "no differential results; is souffle on PATH?")

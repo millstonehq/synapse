@@ -61,9 +61,18 @@ _BLOCKING_ORDER = (
     ("go_disagreement_closed", False), ("go_disagree_any", True), ("undeclared_writes_closed", False),
     ("model_scope_exclusions_closed", False), ("undeclared_any", True),
     ("post_state_gap_closed", False), ("post_state_any", True),
+    # ordering, cross-request and cross-run gates (after the write-set and post-state gates:
+    # a receipt without the sequence/response/stability relations is blocked earlier when it
+    # has a write-set gap, and here otherwise)
+    ("effect_order_closed", False), ("effect_order_any", True), ("effect_order_exercised", False),
+    # the repeat delete is its own claim (repeat_delete_not_found) and no premise of
+    # op_qualified_rt; the summary still reports its rows under "repeat_delete"
+    ("oracle_stable", False),
     ("kill_gap_closed", False), ("kill_closure_gap_any", True), ("index_describes_replay", False),
     ("op_declared", False),
 )
+# per-run relations of _BLOCKING_ORDER whose only column is the run
+_RUN_ONLY = ("replay_run_current", "kill_gap_closed", "oracle_stable")
 
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -73,6 +82,13 @@ evidence paths scrubbed) against the model that declares every business table th
 systems write for delete-issue, with the reviewer's scope exclusions: the default
 the receipt suite judges, so it is never skip-gated on an untracked work directory.
 ``CAPCOV_REPLAY_RECEIPT_DIR`` still overrides it."""
+REPEAT_RECEIPT_DIR = _FIXTURES / "replay_receipt_target_go_repeat"
+"""The four-request receipt (run 271d2dde86a0): owner (200), forbidden (403), missing
+(404) and -- for the first time against the incumbent -- repeat (404), a second DELETE
+of the issue ``owner`` soft-deleted.  Neither the selftest nor a mutant re-baseline was
+run on this tape, so ``op_qualified`` is honestly unresolved at ``corpus_constrains``;
+this is the receipt on which ``repeat_delete_not_found`` is judged against real rows
+rather than a synthetic case."""
 UNQUALIFIED_RECEIPT_DIR = _FIXTURES / "replay_receipt_target_go_unqualified"
 """The earlier real receipt (run 333072ef11f5) whose model declared only ``issue``:
 with the reviewer's four exclusions applied, ``entity_statistics`` and ``mongo:issue``
@@ -132,7 +148,7 @@ def blocking_premise(relations, run: str, op: str, index: str = SYNTHETIC_INDEX)
                 return True
             if name == "index_describes_replay" and r == (index, run):
                 return True
-            if name in ("replay_run_current", "kill_gap_closed") and r == (run,):
+            if name in _RUN_ONLY and r == (run,):
                 return True
             if name == "model_describes_run" and r[1] == run:
                 return True
@@ -413,6 +429,22 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
             # and hide the useful missing or blocking premise beneath it.
             explanation = why_not(join.bundle, relations, "op_qualified_rt", target)
         entry["explanation"] = _explanation_summary(explanation)
+        requests = {r[1] for r in relations.get("replay_request", ()) if r[0] == join.run and r[4] == op}
+        # the ordering, cross-request and cross-run rows of this op's requests (digest-free, reportable)
+        entry["effect_order"] = {
+            "violations": sorted([list(r[1:]) for r in relations.get("effect_order_violation", ())
+                                  if r[0] == join.run and r[2] in requests], key=canonical_json),
+            "respected": sorted([list(r[1:]) for r in relations.get("effect_order_respected", ())
+                                 if r[0] == join.run and r[2] in requests], key=canonical_json),
+            "exercised": (join.run, op) in set(relations.get("effect_order_exercised", ())),
+        }
+        entry["repeat_delete"] = {
+            "repeats": sorted([list(r[1:]) for r in relations.get("repeat_delete", ())
+                               if r[0] == join.run and r[1] in requests], key=canonical_json),
+            "violations": sorted([list(r[1:]) for r in relations.get("repeat_delete_violation", ())
+                                  if r[0] == join.run and r[1] in requests], key=canonical_json),
+            "not_found": sorted([r[1] for r in relations.get("repeat_delete_not_found", ()) if r[0] == join.run]),
+        }
         if blocking and blocking["relation"] == "undeclared_any":
             entry["blocked_by"] = "blocked by undeclared writes: " + json.dumps(tables, sort_keys=True)
             entry["undeclared_tables"] = tables
@@ -421,6 +453,11 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
                                                    + ", ".join(applied))
         out[op] = entry
     out["exclusions"] = exclusions(relations, join.run) if relations else []
+    out["stability"] = {
+        "rows": sorted([list(r[1:]) for r in relations.get("replay_stability", ()) if r[0] == join.run], key=canonical_json),
+        "oracle_stable": (join.run,) in set(relations.get("oracle_stable", ())),
+        "oracle_unstable": (join.run,) in set(relations.get("oracle_unstable", ())),
+    } if relations else {}
     return out
 
 

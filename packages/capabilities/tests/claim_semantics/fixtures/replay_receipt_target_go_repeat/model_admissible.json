@@ -1,0 +1,29 @@
+{
+  "producer": "shen fg-model-host v1",
+  "rows": [
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "req": "forbidden",
+      "run": "271d2dde86a0",
+      "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37"
+    },
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "req": "missing",
+      "run": "271d2dde86a0",
+      "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37"
+    },
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "req": "owner",
+      "run": "271d2dde86a0",
+      "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37"
+    },
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "req": "repeat",
+      "run": "271d2dde86a0",
+      "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37"
+    }
+  ]
+}

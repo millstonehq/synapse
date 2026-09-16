@@ -2,34 +2,34 @@
   "producer": "mut fg-replay v1",
   "rows": [
     {
-      "run": "eca6e7930af3",
       "mutant": "M1",
-      "req": "owner"
+      "req": "owner",
+      "run": "eca6e7930af3"
     },
     {
-      "run": "eca6e7930af3",
       "mutant": "M2",
-      "req": "owner"
+      "req": "owner",
+      "run": "eca6e7930af3"
     },
     {
-      "run": "eca6e7930af3",
       "mutant": "M3",
-      "req": "owner"
+      "req": "owner",
+      "run": "eca6e7930af3"
     },
     {
-      "run": "eca6e7930af3",
       "mutant": "M4",
-      "req": "owner"
+      "req": "owner",
+      "run": "eca6e7930af3"
     },
     {
-      "run": "eca6e7930af3",
       "mutant": "M5",
-      "req": "owner"
+      "req": "owner",
+      "run": "eca6e7930af3"
     },
     {
-      "run": "eca6e7930af3",
       "mutant": "M6",
-      "req": "owner"
+      "req": "owner",
+      "run": "eca6e7930af3"
     }
   ]
 }

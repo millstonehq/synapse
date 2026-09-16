@@ -8,9 +8,9 @@ census is qualified by this replay*.  The replay harness is a producer of
 observations, never an oracle; the judge is these rules.
 
 * `rules-replay-v1.json` - the rule pack in raw IR JSON wire form.
-* `cases/NN-*.json` - one positive control (`00`) and seven adversarial
-  shapes; `rejected/07-producer-class-violation.json` is the case the
-  ingestion boundary must refuse.
+* `cases/NN-*.json` - one positive control (`00`) and twenty-two adversarial
+  shapes (the numbering is not contiguous: the gaps are the rejected cases);
+  `rejected/NN-*.json` are the cases the ingestion boundary must refuse.
 * `expected.json` / `rejected.json` - the per-claim review tables duplicated
   from every case, and what the rejected case would have yielded.
 
@@ -110,7 +110,9 @@ op_qualified_rt(IX,Run,Op)      :- index_describes_replay(IX,Run), replayed(Run,
                                    go_disagreement_closed(Run,Op),  !go_disagree_any(Run,Op),
                                    undeclared_writes_closed(Run,Op), !undeclared_any(Run,Op),
                                    post_state_gap_closed(Run,Op), !post_state_any(Run,Op),
-                                   kill_gap_closed(Run), !kill_closure_gap_any(Run,Op).
+                                   kill_gap_closed(Run), !kill_closure_gap_any(Run,Op),
+                                   effect_order_closed(Run,Op), !effect_order_any(Run,Op),
+                                   effect_order_exercised(Run,Op), oracle_stable(Run).
 op_qualified(IX,Run,Op)         :- op_declared(IX,Op), index_describes_replay(IX,Run), op_qualified_rt(IX,Run,Op).
 ```
 
@@ -203,6 +205,124 @@ Design points a reviewer should check:
   (`rejected/12-closure-producer-violation`: `model_admissible_closed`
   sourced `replay`).
 
+* **Statement order** (v1 ordering addendum).  `php_effect_seq` /
+  `go_effect_seq(run, req, seq, table, kind, pk)` and `model_effect_seq(run,
+  model, req, seq, table, kind, pk)` carry the order the effects were
+  *observed* in, which the folded `php_effect` / `go_effect` tables discard.
+  `effect_order_violation(run, side, req, table_a, table_b)` fires when the
+  model declares `table_a` before `table_b` for a request and that side wrote
+  them the other way round; the join is on `(table, kind)` and never on `pk`,
+  because the model's pk for a derived table is a domain id while the
+  system's is a row id.  `op_qualified_rt` is gated on
+  `!effect_order_any(Run, Op)` under `effect_order_closed(Run, Op)` (all three
+  sequences closed) *and* on `effect_order_exercised(Run, Op)`, which requires
+  a request whose order both sides actually demonstrated -- without it an op
+  whose requests each write a single table would pass the order gate
+  vacuously (cases 17, 21).  Only SQL tables captured with a timeline appear:
+  store effects (`redis`, `mongo:*`) come from before/after snapshot diffs and
+  have no order, so the audit leg of a declared order is vacuous by
+  construction and the receipt says so in `receipts.effect_seq_scope`.
+* **The repeat delete** (v1 ordering addendum).  `replay_request_seq(run, req,
+  seq, target)` gives the tape its order and its targets (`target` is the HTTP
+  method and raw path, so two requests aimed at one resource share it), and
+  `php_response` / `go_response(run, req, status)` the status each system
+  returned.  `delete_target(run, req, seq, tenant, target)` carries the tenant
+  the request was served for, and `repeat_delete(run, req, target)` -- a later
+  request for a target an earlier request already addressed -- joins the two
+  positions on `(tenant, target)`, so the same path under two tenants is two
+  resources, not a repeat.  `first_delete_committed(run, req, target)` names
+  the *first* delete of that `(tenant, target)`: the negated
+  `earlier_delete(run, tenant, target, seq)` under `earlier_delete_closed(run)`
+  refuses to read a later committing delete as the commit (case 24), and the
+  request must have answered 200 on both sides *and* written an `issue` update
+  on both (case 25).  When it did,
+  the claim `repeat_delete_not_found(run, target)` says the repeat answered
+  404 on both sides and, under both closed effect tables, wrote nothing
+  *outside the reviewer's scope exclusions* (case 00).
+  `repeat_delete_violation(run, req, side)` is the negative shape -- a status
+  that is not 404 on either side, or any effect at all (`side = "effects"`,
+  case 18).  **The reviewer's scope exclusions apply here exactly as they do
+  to `undeclared_write`**: `repeat_delete_has_effect` joins
+  `model_describes_run(M, Run)`, `model_scope_excluded_closed(M)` and
+  `!model_scope_excluded(M, Tb)`, and its completeness
+  `repeat_delete_effects_closed(Run)` lists `model_scope_exclusions_closed(M)`
+  among its inputs so an unclosed exclusion set withholds the claim instead of
+  vacuously supporting it (cases 04, 14, 15).  The excluded tables are the
+  bookkeeping writes a system makes on *every* authenticated request -- a
+  session-token touch, a cache key, a job-status row -- and a repeat DELETE
+  that 404s still authenticates, so without the guard a correct port would
+  fail the claim on rows the reviewer already accepted (case 23).
+  **`op_qualified_rt` is deliberately *not* gated on the repeat.**  The repeat
+  is a claim of its own (`repeat_delete_not_found`); a second delete that
+  answers 200 or writes a business table is caught for the op through the
+  model -- the model's `Admissible` refuses the post-state, so
+  `php_model_disagree` / `go_model_disagree` blocks `op_qualified` -- not
+  through a second cross-request gate.  Case 18 is the shape: the repeat
+  violation holds, the per-target claim is unresolved, and all three ops still
+  qualify.
+* **Cross-run stability** (v1 ordering addendum).  `replay_stability(run,
+  run_a, run_b, side, stable)` binds the receipt's run to a *selftest* of the
+  same oracle: two further runs of the same tape whose provenance (oracle
+  commit, PHP/schema/seed digests) equals this run's.  The harness emits the
+  row only when that provenance matches, so the row itself is the binding --
+  and the row depends on `external:run:<run_a>` / `external:run:<run_b>`, so a
+  certificate that rests on cross-run stability names the two runs it rests on
+  (what the harness checked about them is still the harness's word, and a
+  reviewer who wants more must read those runs);
+  `stable` is `"true"` iff every request agreed on status and net SQL effects
+  between the two.  `oracle_unstable(run)` fires on any `"false"` row and
+  `oracle_stable(run)` needs the closure, a `"true"` PHP row and the absence
+  of an unstable one; `op_qualified_rt` requires `oracle_stable`.  An oracle
+  that does not reproduce itself qualifies nothing, however well PHP, Go and
+  the model agree within one run (cases 19, 20).  Case 26 is the one that makes
+  the negated atom load-bearing: the PHP row says `"true"` and a second row
+  says the Go side did not reproduce, so `oracle_stable`'s positive premise
+  holds and only `!oracle_unstable` refuses.
+
+## Deviations from the design, and what the rules do not cover
+
+* **`delete_target` still names the op constant `delete-issue`** instead of
+  being generic over `replay_request_seq`.  The tape table carries *every*
+  request, not only the DELETEs, so an op-generic rule would read two POSTs to
+  one collection path as a delete and its repeat.  Genericity needs either a
+  method column on `replay_request_seq` or an op-shaped predicate; until then
+  the constant is the honest restriction, and a second delete op would need a
+  second rule.
+* **`first_delete_committed` names `issue` / `update`** as what a committed
+  delete writes -- a soft delete, which is what the modelled op does.  A hard
+  delete (`issue` / `delete`) would need a second rule; the pack would report
+  the repeat claim as unresolved rather than wrongly supported, which is the
+  safe direction.
+* **The order join is on `(table, kind)`, so a model that declared two
+  statements with the same `(table, kind)` for one request** -- two `issue`
+  updates, say -- would pair them crosswise and could report a violation that
+  is only an artefact of the pairing.  The model declares one statement per
+  `(table, kind)` per request, so this is not reachable today; a model that
+  changes that must refine the join (on `pk`, or on the sequence position
+  itself) before the pack can judge it.
+* **Case 17 plants the order fault on the Go side only.**  The two
+  `effect_order_violation` rules are the same shape over `php_effect_seq` and
+  `go_effect_seq` and the pack lint checks both, but the PHP leg is exercised
+  by symmetry, not by a case of its own.
+* **What the real repeat actually did.**  `repeat_delete_not_found` is judged
+  against real rows on `fixtures/replay_receipt_target_go_repeat` (run
+  `271d2dde86a0`), the four-request tape -- owner 200, forbidden 403, missing
+  404, repeat 404 -- in which the repeat was executed against the incumbent for
+  the first time.  The claim is **supported** there: `owner` is the first
+  delete of the target and committed, the repeat answered 404 on both sides,
+  and both effect tables are empty for it.  Note what that means for the
+  exclusion guard: this repeat wrote *nothing at all*, not even the
+  bookkeeping rows the 403 request writes, so the guard is not what carries
+  the claim on this receipt -- case 23 is the shape that exercises it, and the
+  guard is what keeps a system that does touch its session row on a 404 from
+  failing the claim.  `op_qualified` on that receipt is unresolved at
+  `corpus_constrains`: no mutant was re-baselined on the four-request tape and
+  the selftest did not run, so `closed.mutant_kills` and
+  `closed.replay_stability` are false.  Re-baselining the mutants on this tape
+  and running the selftest is the open item; the three-request
+  `..._qualified` fixture stays the one where `op_qualified` is supported, and
+  its tape has no repeat (marked `TODO(four-request run)` there).
+
 ## One observation per key
 
 The exporter, not the pack, settles duplicate observations: two `php_effect`
@@ -279,7 +399,7 @@ constant in a case.
 
 | case | seeded edit of the fixture receipt | reviewed expectation |
 |---|---|---|
-| 00 positive control | none; reviewer observed nonce, snapshot, model; census declares both ops | `op_qualified` supported/complete for both ops; leaves span `replay, php, go, shen, mut, reviewer, php-census` |
+| 00 positive control | none; reviewer observed nonce, snapshot, model; census declares all three ops | `op_qualified` supported/complete for `issues.create`, `issues.close` and `delete-issue`; leaves span `replay, php, go, shen, mut, reviewer, php-census`; companions `repeat_delete_not_found(run, DELETE /api/issues/1)` and `oracle_stable(run)` supported |
 | 01 planted disagreement | `php_post_state` of req-2 outside the admissible set | close: unresolved, missing `php_model_agree`; create: supported; companion `php_model_disagree` supported, discrepancy `php-state-outside-model` |
 | 02 planted undeclared write | `go_effect` insert into `audit_log` for req-2 | close: unresolved, missing `model_writes`; companion `undeclared_write` supported, discrepancy `undeclared-table` |
 | 03 surviving mutant | `mutant_killed` row for m-2 removed | close: unresolved, missing `mutant_killed`; companion `surviving_mutant` supported, discrepancy `mutant-not-killed` |
@@ -292,7 +412,13 @@ constant in a case.
 | 13 excluded undeclared write | case 02's Go `audit_log` write plus a closed reviewer exclusion file naming `authentication`, `redis`, `audit_log` | both ops supported; companion `exclusion_applied(run, issues.close, audit_log)` supported with the exclusion assumption as a leaf, discrepancy `write-excluded-by-reviewer`; contrast 02 (same table, not excluded: unresolved) |
 | 14 exclusions not closed | case 13's file with `closed.model_scope_exclusions = false` | both unresolved, missing `model_scope_exclusions_closed` |
 | 15 no exclusions, no closure | control without the file and without the closure | both unresolved, missing `model_scope_exclusions_closed`: the reviewer must close an empty set, not say nothing |
+| 17 effect order violation | `go_effect_seq` seq of req-1's `issue` and `entity_statistics` swapped (`go_effect` untouched) | create: unresolved, missing `effect_order_respected`; close and delete-issue: supported; companion `effect_order_violation(run, go, req-1, issue, entity_statistics)` supported, discrepancy `effect-order-violated` |
+| 18 repeat delete with effects | `php_effect` (and `php_effect_seq`) gain an `issue` update for req-5, the repeat of req-4's DELETE | delete-issue: unresolved, missing `repeat_delete_not_found`; create and close supported; companion `repeat_delete_violation(run, req-5, effects)` supported, discrepancy `repeat-delete-with-effects`; companion `repeat_delete_not_found` unresolved on the negated `repeat_delete_has_effect` |
+| 19 unstable oracle | `replay_stability` row says `stable = false` | all three unresolved, missing `oracle_stable`; companion `oracle_unstable` supported, discrepancy `oracle-unstable` |
+| 20 missing stability closure | `closed.replay_stability = false` (the row stays, and says `true`) | all three unresolved, missing `replay_stability_closed` |
+| 21 missing effect-seq closure | `closed.php_effect_seqs = false` (go and model stay closed) | all three unresolved, missing `php_effect_seqs_closed`: an open sequence cannot license `!effect_order_any` |
 | 08 lying closure | `mutant_killed` m-1 names req-9, not a replayed request; closures asserted | both ops **unresolved** (contradiction gate; missing premise `replay_request` for req-9); `kill_closure_gap` supported with support ∩ forbidden = the `mutant_kills_closed` witness (seeded fault), discrepancy `kill-outside-replayed-requests` |
 | rejected 07 | control with `php_post_state` sourced `shen shen-model-host v1` | `load_case` raises; `validate_bundle` lists `evidence-producer` ×3; evaluated unvalidated both ops would be supported |
 | rejected 16 | control with the two `model_scope_exclusion` assumptions sourced `replay …` (the harness excluding on the reviewer's behalf) | `load_case` raises; `evidence-producer` ×2; evaluated unvalidated both ops would be supported |
-| rejected 12 | control with `model_admissible_closed` sourced `replay ...` (the harness closing the model runner's table) | `load_case` raises; `evidence-producer` ×1; evaluated unvalidated both ops would be supported |
+| rejected 12 | control with `model_admissible_closed` sourced `replay ...` (the harness closing the model runner's table) | `load_case` raises; `evidence-producer` ×1; evaluated unvalidated every claim would be supported |
+| rejected 22 | control with the seven `php_effect_seq` rows sourced `shen shen-model-host v1` (the model host reporting PHP's statement order) | `load_case` raises; `evidence-producer` ×7; evaluated unvalidated every claim would be supported |

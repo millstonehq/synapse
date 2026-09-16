@@ -1,0 +1,33 @@
+{
+  "producer": "replay fg-replay v1",
+  "rows": [
+    {
+      "op": "delete-issue",
+      "req": "forbidden",
+      "route": "/api/cloud/project/{project}/issues/{issue}",
+      "run": "271d2dde86a0",
+      "tenant": "oracle"
+    },
+    {
+      "op": "delete-issue",
+      "req": "missing",
+      "route": "/api/cloud/project/{project}/issues/{issue}",
+      "run": "271d2dde86a0",
+      "tenant": "oracle"
+    },
+    {
+      "op": "delete-issue",
+      "req": "owner",
+      "route": "/api/cloud/project/{project}/issues/{issue}",
+      "run": "271d2dde86a0",
+      "tenant": "oracle"
+    },
+    {
+      "op": "delete-issue",
+      "req": "repeat",
+      "route": "/api/cloud/project/{project}/issues/{issue}",
+      "run": "271d2dde86a0",
+      "tenant": "oracle"
+    }
+  ]
+}
