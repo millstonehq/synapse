@@ -20,14 +20,28 @@ bundle:
 Nothing here reads a receipt, changes an exporter contract, or edits a
 reviewer's file.  A withdrawal is a question asked of an existing bundle.
 
+WHOLE ASSUMPTIONS.  A withdrawal is asked of an *assumption*, not of a
+record.  One assumption may be attested by several records -- two reviewers
+signing the identical row land on the identical ``assumption_id`` -- so
+``invalidate`` expands whatever it was given to every record attesting the
+target before it withdraws.  Dropping one attestation and reporting the result
+under an assumption id would say "nothing rests on this assumption" while the
+fact it attests is still in force.
+
 SOUNDINESS.  A dropped assumption is a *missing premise*, never a refutation:
-the post-withdrawal verdict of every claim must stay within ``supported`` /
-``unresolved``, and anything else (``refuted``, ``conflicting``) raises
-``InvalidationError`` as a finding instead of being written to a document.
-Both directions between those two are legitimate and observed: withdrawing a
-scope exclusion moves ``op_qualified`` from supported to unresolved *and*
-moves the open ``undeclared_write`` claim from unresolved to supported,
-because the table the exclusion used to cover is now an undeclared write.
+no claim may *become* ``refuted`` or ``conflicting`` because of a withdrawal,
+and one that does raises ``InvalidationError`` as a finding instead of being
+written to a document.  A claim already outside ``supported`` / ``unresolved``
+at the baseline and left exactly as it was is not a transition and is reported
+unchanged: the operation judges what the withdrawal did, not what it found.
+Both directions between ``supported`` and ``unresolved`` are legitimate and
+observed: withdrawing a scope exclusion moves ``op_qualified`` from supported
+to unresolved *and* moves the open ``undeclared_write`` claim from unresolved
+to supported, because the table the exclusion used to cover is now an
+undeclared write.  The document reports the two directions separately --
+``flipped`` is what the withdrawal cost, ``gained`` is what it revealed --
+because a headline claim appearing in ``gained`` is a finding to read, not a
+success.
 
 PREDICTION.  ``predicted_fallen`` is a ``ground.impact`` query -- which
 certified claim rows rest on the withdrawn leaf -- and it is *reported beside*
@@ -73,7 +87,14 @@ INVALIDATION_VERSION = "capcov-assumption-invalidation-v1"
 ASSUMPTION_PREFIX = "asm:"
 ASSUMPTION_KIND = "assumption"
 
-#: The only semantic verdicts a claim may hold *after* an assumption is dropped.
+#: The only semantic verdicts a claim may *move into* when an assumption is
+#: dropped.  Both directions inside this set are admitted -- including
+#: ``unresolved -> supported``, which the first reviewed case exercises (the
+#: open ``undeclared_write`` claim picks up the table the withdrawn exclusion
+#: covered).  That is wider than "unchanged, or supported -> unresolved", and
+#: deliberately so: a negation-revealed row is the honest consequence of the
+#: drop.  The widening is not free, so a claim that gains support is listed
+#: separately in ``Invalidation.gained`` rather than being absorbed silently.
 ALLOWED_AFTER = frozenset({"supported", "unresolved"})
 
 _REVIEW_MODEL = re.compile(r"\bmodel:([0-9a-f]{6,64})\b")
@@ -154,6 +175,14 @@ def reviewed_against(record: Evidence) -> dict[str, Any] | None:
     """``{model, run, reviewed_at, reviewer}`` parsed from a reviewed source suffix.
 
     ``None`` for a claim-time assumption, whose source names no review.
+
+    EXPORTER-BOUND.  Only ``reviewer`` and ``reviewed_at`` come from what the
+    reviewer wrote.  The ``model:``/``run:`` suffix is stamped into the source
+    by the exporter at export time out of the receipt being judged, and the
+    receipt reader accepts the whole producer string verbatim once it ends in
+    that shape, so ``run`` is *this run's* provenance rather than something the
+    reviewer signed.  Read it as "which run bound this record", never as
+    "which run the reviewer reviewed".
     """
     source = record.source or ""
     model = _REVIEW_MODEL.search(source)
@@ -253,6 +282,7 @@ def _conclusions(row_certificates: Mapping[str, Sequence[Mapping[str, Any]]]
 
 def registry(bundle: Bundle, row_certificates: Mapping[str, Sequence[Mapping[str, Any]]], *,
              run: str | None = None, relations: Any = None,
+             strict_impact: bool = True,
              max_depth: int = DEFAULT_MAX_DEPTH,
              max_nodes: int = DEFAULT_MAX_NODES) -> dict[str, Any]:
     """Contract A2 over an evaluated bundle and the certificates of its claim rows.
@@ -262,6 +292,13 @@ def registry(bundle: Bundle, row_certificates: Mapping[str, Sequence[Mapping[str
     headline claim.  ``relations`` is a kernel closure; with it each entry's
     ``impact`` is a ``ground.impact`` prediction over the certified claim rows,
     without it ``impact`` is ``None``.
+
+    A truncated impact query is a refusal under ``strict_impact`` (the default,
+    for a caller that asked for this document): a partial ``fallen`` list read
+    as a whole one under-reports.  ``strict_impact=False`` degrades that one
+    entry to ``{"truncated": true, "fallen": null, "survived": null}`` instead,
+    for a caller -- the join's ``summary`` -- that embeds the registry in a
+    larger document and must not fail because a bundle grew.
     """
     records = assumption_records(bundle)
     ids = {record.id: assumption_id(record) for record in records}
@@ -285,12 +322,16 @@ def registry(bundle: Bundle, row_certificates: Mapping[str, Sequence[Mapping[str
             predicted = impact(bundle, relations, [record.id], conclusions,
                                max_depth=max_depth, max_nodes=max_nodes)
             if predicted["truncated"]:
-                raise InvalidationError(f"{record.id}: the impact query was truncated; raise max_depth/max_nodes")
-            fallen = _claims_of(predicted["fallen"], owners)
-            # a claim with several rows can have one row fall and another survive;
-            # it counts as fallen, so the two lists stay a partition of the claims
-            prediction = {"fallen": sorted(fallen),
-                          "survived": sorted(_claims_of(predicted["survived"], owners) - fallen)}
+                if strict_impact:
+                    raise InvalidationError(
+                        f"{record.id}: the impact query was truncated; raise max_depth/max_nodes")
+                prediction = {"truncated": True, "fallen": None, "survived": None}
+            else:
+                fallen = _claims_of(predicted["fallen"], owners)
+                # a claim with several rows can have one row fall and another survive;
+                # it counts as fallen, so the two lists stay a partition of the claims
+                prediction = {"truncated": False, "fallen": sorted(fallen),
+                              "survived": sorted(_claims_of(predicted["survived"], owners) - fallen)}
         entries.append({
             "assumption_id": ids[record.id], "evidence_id": record.id,
             "producer_class": producer_class(record.source), "source": record.source,
@@ -394,7 +435,18 @@ class Invalidation:
     predicted_fallen: list[str]
     """``ground.impact``'s static guess at ``flipped`` (see the module docstring)."""
     prediction_agrees: bool
+    gained: list[str] = field(default_factory=list)
+    """Claims that *became* supported -- what the withdrawal revealed.
+
+    Sound for an open claim, whose rows a withdrawal can legitimately expose
+    (dropping a scope exclusion makes the table it covered an undeclared
+    write).  A closed, headline claim here is a finding to read: support that
+    arrives when a premise leaves is support that was being suppressed.
+    """
     bundle: Bundle | None = None
+    relations: Any = None
+    """The post-withdrawal Python closure, so a caller can assert on the rows
+    that survived the drop (the A3 document carries verdicts, not rows)."""
     certificates: dict[str, dict[str, Any]] = field(default_factory=dict)
     row_certificates: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
@@ -410,7 +462,8 @@ class Invalidation:
                 "baseline_bundle_digest": self.baseline_bundle_digest,
                 "withdrawn_bundle_digest": self.withdrawn_bundle_digest,
                 "kernels": dict(self.kernels), "claims": {k: dict(v) for k, v in self.claims.items()},
-                "flipped": list(self.flipped), "predicted_fallen": list(self.predicted_fallen),
+                "flipped": list(self.flipped), "gained": list(self.gained),
+                "predicted_fallen": list(self.predicted_fallen),
                 "prediction_agrees": self.prediction_agrees}
 
 
@@ -441,8 +494,10 @@ def invalidate(bundle: Bundle, ids: str | Iterable[str], *, replay_root: str,
     """Contract A3: withdraw one assumption and report what every claim did.
 
     ``ids`` is one ``asm:`` id or evidence id (or several ids of the *same*
-    assumption).  ``baseline_result`` / ``baseline_row_certificates`` are the
-    evaluated baseline, so the before-verdicts and the ``ground.impact``
+    assumption); whichever is given, *every* record attesting that assumption
+    is withdrawn, because the document is signed with an assumption id and must
+    mean what it says.  ``baseline_result`` / ``baseline_row_certificates`` are
+    the evaluated baseline, so the before-verdicts and the ``ground.impact``
     prediction are read, never recomputed with different bounds.
 
     ``explain(claim_id, relations_after)`` may contribute pack-specific keys
@@ -459,6 +514,12 @@ def invalidate(bundle: Bundle, ids: str | Iterable[str], *, replay_root: str,
     if len(targets) != 1:
         raise InvalidationError(f"one invalidation withdraws one assumption, got {sorted(targets)}")
     target = targets.pop()
+    # expand to every attestation of the target: an evidence id names one
+    # record, but this document is published under an assumption id, and an
+    # assumption a second reviewer also signed is not withdrawn until both
+    # records go -- otherwise the fact stands, no claim moves, and the document
+    # reads "flipped: []" against an assumption that is still in force.
+    records = [record for record in assumption_records(bundle) if assumption_id(record) == target]
     evidence_ids = sorted({record.id for record in records})
     withdrawn = sorted(closed_revocation(bundle, evidence_ids))
 
@@ -471,9 +532,14 @@ def invalidate(bundle: Bundle, ids: str | Iterable[str], *, replay_root: str,
     relations_after = result.python.relations
     claims: dict[str, dict[str, Any]] = {}
     lost: list[str] = []
+    gained: list[str] = []
     for claim_id in sorted(set(before) | set(after)):
         was, now = before.get(claim_id), after.get(claim_id)
-        if now is not None and now["semantic"] not in ALLOWED_AFTER:
+        # only a *transition* is a finding: a claim the baseline already held
+        # outside supported/unresolved, left exactly as it was, was not caused
+        # by this withdrawal and must not make the operation unusable.
+        if (now is not None and now["semantic"] not in ALLOWED_AFTER
+                and (was is None or was["semantic"] != now["semantic"])):
             raise InvalidationError(
                 f"withdrawing {target} left {claim_id} {now['semantic']}: a dropped assumption is a "
                 "missing premise, never a refutation")
@@ -494,6 +560,8 @@ def invalidate(bundle: Bundle, ids: str | Iterable[str], *, replay_root: str,
         # but is not a loss, and is not comparable with a fallen-row prediction.
         if was and was["semantic"] == "supported" and (now is None or now["semantic"] != "supported"):
             lost.append(claim_id)
+        if now and now["semantic"] == "supported" and (was is None or was["semantic"] != "supported"):
+            gained.append(claim_id)
         claims[claim_id] = entry
 
     conclusions, owners = _conclusions(baseline_row_certificates)
@@ -505,9 +573,10 @@ def invalidate(bundle: Bundle, ids: str | Iterable[str], *, replay_root: str,
         baseline_bundle_digest=bundle_digest(bundle), withdrawn_bundle_digest=bundle_digest(reduced),
         kernels={"matched": bool(result.matched), "python_digest": result.python.canonical_digest,
                  "souffle_digest": result.souffle.canonical_digest},
-        claims=claims, flipped=lost, predicted_fallen=predicted_fallen,
+        claims=claims, flipped=lost, gained=gained, predicted_fallen=predicted_fallen,
         prediction_agrees=set(predicted_fallen) == set(lost),
-        bundle=reduced, certificates=certificates, row_certificates=row_certificates)
+        bundle=reduced, relations=relations_after,
+        certificates=certificates, row_certificates=row_certificates)
 
 
 __all__ = ["REGISTRY_VERSION", "INVALIDATION_VERSION", "ASSUMPTION_PREFIX", "ASSUMPTION_KIND",

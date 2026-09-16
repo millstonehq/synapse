@@ -317,8 +317,13 @@ def _explain(join: ReplayJoin):
     return explain
 
 
-def assumption_registry(join: ReplayJoin) -> dict[str, Any]:
-    """The A2 registry of the join's combined bundle (contract: ``assumptions.json``)."""
+def assumption_registry(join: ReplayJoin, *, strict_impact: bool = True) -> dict[str, Any]:
+    """The A2 registry of the join's combined bundle (contract: ``assumptions.json``).
+
+    ``strict_impact=False`` degrades a truncated ``ground.impact`` prediction to
+    a ``truncated`` marker instead of refusing, for the embedded copy ``summary``
+    carries: a bigger bundle must not make the pilot summary unanswerable.
+    """
     if join.bundle is None:
         return {"registry_version": assumptions.REGISTRY_VERSION, "run": join.run,
                 "combined_bundle_digest": None, "assumptions": [], "shared_assumptions": [],
@@ -361,7 +366,7 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
         "assumption_ids": list(join.assumption_ids),
         "ops": list(join.ops),
     }
-    registry = assumption_registry(join)
+    registry = assumption_registry(join, strict_impact=False)
     # the run-independent registry entries; "assumption_ids" above stays the evidence-id list
     out["assumptions"] = registry["assumptions"]
     out["shared_assumptions"] = registry["shared_assumptions"]
