@@ -5667,3 +5667,35 @@ Full regression bound to `7d14b45` (the docs commit on that tip): `Ran 1195 test
 `shen-go` after a store path was collected and first failed on a full disk; only this session's
 own scratch (cold-shell Go caches, a nixpkgs unpack, identity dumps, about 2.3 GB) was removed.
 
+### 2026-09-16 reviewer scope exclusions for the replay judge integrated (shen1, `6f003f6`)
+
+`pyrex41/synapse` `experiment/replay-claims-rewritten` `6f003f6` (three commits on `f9d0cec`:
+`c42088d` schema + exporter, `fb1af9c` pack gating, `6f003f6` join/receipt reporting) merged as
+`b8bdd82`, no conflicts, zero identifier hits in its delta. What it adds: `model_scope_exclusion
+(model, table, reason)` and `model_scope_exclusions_closed(model)` with producer `reviewer`, a
+derived `model_scope_excluded` projection with its own closure, `undeclared_write` negating it,
+and the committed replay fixture gaining a reviewer exclusions file that names reviewer, date,
+model digest and run id (the exporter refuses a stale review). As agreed before it was built:
+exclusion rows enter as assumption-modality evidence, an empty exclusion set without its closure
+qualifies nothing, and the join summary reports the exclusions applied.
+
+Integrator's runs on `b8bdd82` (pinned devShell): replay 79 OK; receipt suite 19 OK (1
+conditional skip); Shen 22 OK; static differential 18 OK; live pilot at `01fe913` with the route
+trace receipt `Ran 10 tests in 384.6s OK`, `replay_join.status = complete`, four exclusions
+applied (authentication, go_issue_outbox, jobs_statuses, redis, each with its reason),
+`delete-issue.op_qualified = unresolved` with the remaining undeclared writes
+`{entity_statistics, mongo:issue}` on both the PHP and Go sides. shen1 reports the candidate
+now declares those two tables; the receipt proving full qualification comes as a separate commit.
+Full regression bound to `b8bdd82`: `Ran 1203 tests in 95.3s`, `OK (skipped=154)`.
+
+Certificate-format decision (owner: this line, Stage D/certificates). shen1 notes that a negated
+atom carries no leaf in `capcov-static-certificate-v1`, so the reviewer exclusion rows cannot
+appear inside the `op_qualified` certificate; they are assumption leaves of the companion
+`exclusion_applied` certificate and the summary counts assumption leaves across both. Decision:
+keep v1 unchanged. The justification of a negated atom in this IR is its completeness witness,
+and that witness (`model_scope_exclusions_closed`, producer `reviewer`) is a positive atom whose
+leaf does appear in the qualifying certificate; the exclusion rows are not premises of the
+negated instance but of the projection's absence, which the companion certificate carries. A
+`capcov-static-certificate-v2` that additionally records negation witnesses (the complement basis
+rows) is backlog, to be taken up only if a consumer needs one certificate to be self-contained.
+
