@@ -214,7 +214,8 @@ WITNESS_DIAGNOSTICS = [observation("model_describes_run", ["run"]), observation(
                        observation("snapshot_observed", []), observation("model_observed", []),
                        observation("php_post_states_closed", ["run"]), observation("go_post_states_closed", ["run"]),
                        observation("php_effects_closed", ["run"]), observation("go_effects_closed", ["run"]),
-                       observation("model_admissible_closed", ["run"])]
+                       observation("model_admissible_closed", ["run"]),
+                       observation("model_scope_exclusions_closed", [])]
 WITNESS_REASONS = {
     "model_describes_run": "no model_describes_run witness binds the receipt's model to the run",
     "run_nonce_observed": "the reviewer did not observe the run's nonce",
@@ -225,6 +226,7 @@ WITNESS_REASONS = {
     "php_effects_closed": "the harness did not close the PHP effect table for the run",
     "go_effects_closed": "the harness did not close the Go effect table for the run",
     "model_admissible_closed": "the model runner did not close the admissible-state set for the run and model",
+    "model_scope_exclusions_closed": "the reviewer did not close the model-scope exclusion set for the model",
 }
 
 
@@ -269,12 +271,31 @@ def discrepancy(claim_id: str, kind: str, requires: list[str], **fields: Any) ->
 
 def _case(stem: str, title: str, seeded_fault: str | None, notes: list[str], facts: list[dict[str, Any]],
           claims: list[dict[str, Any]], outputs: list[dict[str, Any]]) -> dict[str, Any]:
+    # the exporter's assumption-kind rows (the reviewer's scope exclusions) file under assumptions
     return {"schema_version": 1, "id": stem, "title": title, "rule_pack": PACK_ID,
             "provenance": {"kind": "synthetic",
                            "source": "replay_facts.export_bundle over an edit of tests/claim_semantics/fixtures/replay_receipt_min",
                            "seeded_fault": seeded_fault},
             "context": {"run": RUN, "model": MODEL, "index": INDEX},
-            "review_notes": notes, "facts": facts, "assumptions": [], "claims": claims, "outputs": outputs}
+            "review_notes": notes, "facts": [f for f in facts if f["kind"] == "fact"],
+            "assumptions": [f for f in facts if f["kind"] == "assumption"], "claims": claims, "outputs": outputs}
+
+
+def _exclude(*tables: str) -> Edit:
+    """Rewrite the fixture's model_scope_exclusions.json to exactly ``tables``."""
+    def edit(document: Any) -> Any:
+        document["rows"] = [{"model": MODEL, "table": table, "reason": f"reviewer-accepted bookkeeping write: {table}"}
+                            for table in tables]
+        return document
+    return edit
+
+
+def _open(*keys: str) -> Edit:
+    def edit(document: Any) -> Any:
+        for key in keys:
+            document["closed"][key] = False
+        return document
+    return edit
 
 
 def _both_qualified(facts, readings, *, absent=(), extra_diagnostics=None, override=None):
@@ -549,14 +570,6 @@ def build_09() -> dict[str, Any]:
                  "post-state-omitted", notes, facts, claims, outputs)
 
 
-def _open(*keys: str) -> Edit:
-    def edit(document: Any) -> Any:
-        for key in keys:
-            document["closed"][key] = False
-        return document
-    return edit
-
-
 def build_10() -> dict[str, Any]:
     with variant({"receipt": _open("php_effects")}) as root:
         exported, _ = exported_facts(root)
@@ -596,6 +609,104 @@ def build_11() -> dict[str, Any]:
     ]
     return _case("11-missing-admissible-closure", "The model's admissible-state set is not closed", None, notes,
                  facts, claims, outputs)
+
+
+AUDIT = {"req": "req-2", "run": RUN, "table": "audit_log", "kind": "insert",
+         "pk": hashlib.sha256(b"audit_log pk 1").hexdigest(),
+         "cols_digest": hashlib.sha256(b"audit_log cols 1").hexdigest()}
+
+
+def build_13() -> dict[str, Any]:
+    with variant({"go_effect": _append_row(**AUDIT), "model_scope_exclusions": _exclude("authentication", "redis", "audit_log")}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    go_audit = find_id(facts, "go_effect", table="audit_log")
+    exclusion = find_id(facts, "model_scope_exclusion", table="audit_log")
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "issues.create is untouched and qualifies as in the control.",
+        CLOSE: "Go wrote audit_log for req-2 exactly as in case 02, but the reviewer's closed exclusion set names "
+               "audit_log, so !model_scope_excluded fails, undeclared_write does not derive and issues.close "
+               "qualifies under that reviewer assumption."})
+    companion = _claim("claim-audit-log-excluded", "exclusion_applied", ["run", "op", "table"], [RUN, CLOSE, "audit_log"],
+                       {"run": RUN}, "The go_effect audit_log row for req-2 joins the reviewer's exclusion of audit_log "
+                                     "for this model; the assumption row is a leaf of this certificate.",
+                       # the rule reads the exclusion through the model_scope_excluded projection; the
+                       # diagnostic makes the assumption row itself relevant to the discrepancy
+                       [observation("model_scope_exclusion", [], {"column": "table", "operator": "=", "value": "audit_log"})])
+    claims.append(companion)
+    outputs.append(discrepancy(companion["id"], "write-excluded-by-reviewer", [go_audit, exclusion], table="audit_log"))
+    notes = [
+        "The receipt is case 02 (an undeclared Go write to audit_log) plus a reviewer exclusion file naming "
+        "authentication, redis and audit_log, with closed.model_scope_exclusions true.",
+        "Both op_qualified claims are supported: the same write that leaves issues.close unresolved in case 02 is "
+        "covered by an explicit, reviewer-owned assumption here.  Contrast 02 (same table, not excluded).",
+        "The companion exclusion_applied claim is supported and cites the exclusion assumption as a leaf; the "
+        "op_qualified certificate cites the closure witness (a negated atom carries no leaf), which is why the "
+        "assumption is surfaced through the companion.",
+    ]
+    return _case("13-excluded-undeclared-write", "An undeclared Go write covered by a reviewer exclusion", None,
+                 notes, facts, claims, outputs)
+
+
+def build_14() -> dict[str, Any]:
+    with variant({"go_effect": _append_row(**AUDIT), "model_scope_exclusions": _exclude("authentication", "redis", "audit_log"),
+                  "receipt": _open("model_scope_exclusions")}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "The exclusion file is present but closed.model_scope_exclusions is false: no "
+                "model_scope_exclusions_closed witness, so undeclared_writes_closed cannot derive for any op.",
+        CLOSE: "As for issues.create; the audit_log exclusion row exists but an unclosed set licenses nothing."},
+        absent=("model_scope_exclusions_closed",))
+    notes = [
+        "Case 13's receipt with closed.model_scope_exclusions = false: the exclusion rows are exported (as assumptions) "
+        "but the reviewer did not vouch that the set is complete.",
+        "Both op_qualified claims are unresolved with model_scope_exclusions_closed as the only missing premise: an "
+        "open exclusion set neither licenses !model_scope_excluded nor closes undeclared_any.",
+    ]
+    return _case("14-exclusions-not-closed", "Exclusion rows without a closed exclusion set", None, notes, facts,
+                 claims, outputs)
+
+
+def build_15() -> dict[str, Any]:
+    with variant({"model_scope_exclusions": lambda _: None, "receipt": _open("model_scope_exclusions")}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "No exclusion file and no closure: even a receipt whose every write is declared (the control's) "
+                "cannot be judged free of undeclared writes without a closed exclusion set.",
+        CLOSE: "As for issues.create."},
+        absent=("model_scope_exclusions_closed",))
+    notes = [
+        "The control receipt without model_scope_exclusions.json and with closed.model_scope_exclusions = false.",
+        "Both op_qualified claims are unresolved, missing model_scope_exclusions_closed: an empty exclusion set with "
+        "no closure qualifies nothing (the reviewer must say the set is empty, not merely say nothing).",
+    ]
+    return _case("15-no-exclusions-no-closure", "Neither exclusions nor a closed exclusion set", None, notes, facts,
+                 claims, outputs)
+
+
+REJECTED_EXCLUSION_SOURCE = "replay capcov.claims.replay.replay_facts 2026-09-16 model:" + MODEL[:12] + " run:" + RUN
+
+
+def build_rejected_16() -> dict[str, Any]:
+    case = build_00()
+    case["id"] = "16-exclusion-producer-violation"
+    case["title"] = "Positive control whose scope exclusions are emitted by the harness"
+    case["provenance"]["seeded_fault"] = "exclusion-producer-violation"
+    relabelled = 0
+    for entry in case["assumptions"]:
+        if entry["relation"] == "model_scope_exclusion":
+            entry["source"] = REJECTED_EXCLUSION_SOURCE
+            relabelled += 1
+    assert relabelled == 2
+    case["review_notes"] = [
+        "The facts are the control's; only the two model_scope_exclusion assumptions name the replay class, i.e. the "
+        "harness excluding tables from the write-set judgement on the reviewer's behalf.",
+        "load_case refuses the file (evidence-producer: model_scope_exclusion admits reviewer); evaluated unvalidated "
+        "both op_qualified verdicts would be supported (rejected.json).",
+    ]
+    return case
 
 
 def build_rejected_12() -> dict[str, Any]:
@@ -650,10 +761,14 @@ BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "09-missing-post-state": build_09,
     "10-missing-effects-closure": build_10,
     "11-missing-admissible-closure": build_11,
+    "13-excluded-undeclared-write": build_13,
+    "14-exclusions-not-closed": build_14,
+    "15-no-exclusions-no-closure": build_15,
 }
 REJECTED_BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "07-producer-class-violation": build_rejected_07,
     "12-closure-producer-violation": build_rejected_12,
+    "16-exclusion-producer-violation": build_rejected_16,
 }
 
 # The reviewer's table: claim -> (verdict, status, missing-premise relations, discrepancy kinds).
@@ -688,6 +803,13 @@ REVIEW: dict[str, dict[str, tuple[str, str, list[str], list[str]]]] = {
     "11-missing-admissible-closure": {"claim-qualified-create": ("unresolved", "complete", ["model_admissible_closed"], []),
                                       "claim-qualified-close": ("unresolved", "complete", ["model_admissible_closed"], []),
                                       "claim-php-agrees-req-1": ("supported", "complete", [], [])},
+    "13-excluded-undeclared-write": {"claim-qualified-create": ("supported", "complete", [], []),
+                                     "claim-qualified-close": ("supported", "complete", [], []),
+                                     "claim-audit-log-excluded": ("supported", "complete", [], ["write-excluded-by-reviewer"])},
+    "14-exclusions-not-closed": {"claim-qualified-create": ("unresolved", "complete", ["model_scope_exclusions_closed"], []),
+                                 "claim-qualified-close": ("unresolved", "complete", ["model_scope_exclusions_closed"], [])},
+    "15-no-exclusions-no-closure": {"claim-qualified-create": ("unresolved", "complete", ["model_scope_exclusions_closed"], []),
+                                    "claim-qualified-close": ("unresolved", "complete", ["model_scope_exclusions_closed"], [])},
 }
 # Evidence a derivation must not use, per case: the lying witness of 08.
 FORBIDDEN: dict[str, Callable[[list[dict[str, Any]]], list[str]]] = {

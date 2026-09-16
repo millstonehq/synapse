@@ -543,6 +543,90 @@
       "columns": [
         {
           "context": true,
+          "name": "model",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "model"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "model_scope_excluded",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "model",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "model_scope_excluded",
+      "context_indices": [
+        "model"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "model_scope_excluded_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "exclusion_applied",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
           "name": "run",
           "type": "symbol"
         },
@@ -1447,6 +1531,41 @@
       "binding": "runtime",
       "columns": [
         {
+          "context": true,
+          "name": "model",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "reason",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "model"
+      ],
+      "finite": false,
+      "modality": "assumption",
+      "name": "model_scope_exclusion",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
           "context": false,
           "name": "run",
           "type": "symbol"
@@ -1760,6 +1879,31 @@
       "primitive": true,
       "producer_classes": [
         "mut"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "model",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "model_scope_exclusion",
+      "context_indices": [
+        "model"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "model_scope_exclusions_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
       ]
     },
     {
@@ -2776,6 +2920,225 @@
     {
       "body": [
         {
+          "relation": "model_scope_exclusion",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Tb"
+            },
+            {
+              "variable": "Reason"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "model_scope_excluded",
+        "terms": [
+          {
+            "variable": "M"
+          },
+          {
+            "variable": "Tb"
+          }
+        ]
+      },
+      "name": "model_scope_excluded"
+    },
+    {
+      "body": [
+        {
+          "relation": "model_scope_exclusions_closed",
+          "terms": [
+            {
+              "variable": "M"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "model_scope_excluded_closed",
+        "terms": [
+          {
+            "variable": "M"
+          }
+        ]
+      },
+      "name": "model_scope_excluded_closed"
+    },
+    {
+      "body": [
+        {
+          "relation": "replay_request",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Tenant"
+            },
+            {
+              "variable": "Route"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "php_effect",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Tb"
+            },
+            {
+              "variable": "Kind"
+            },
+            {
+              "variable": "Pk"
+            },
+            {
+              "variable": "Cols"
+            }
+          ]
+        },
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_scope_excluded",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Tb"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "exclusion_applied",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          },
+          {
+            "variable": "Tb"
+          }
+        ]
+      },
+      "name": "exclusion_applied_php"
+    },
+    {
+      "body": [
+        {
+          "relation": "replay_request",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Tenant"
+            },
+            {
+              "variable": "Route"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "go_effect",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Tb"
+            },
+            {
+              "variable": "Kind"
+            },
+            {
+              "variable": "Pk"
+            },
+            {
+              "variable": "Cols"
+            }
+          ]
+        },
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_scope_excluded",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Tb"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "exclusion_applied",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          },
+          {
+            "variable": "Tb"
+          }
+        ]
+      },
+      "name": "exclusion_applied_go"
+    },
+    {
+      "body": [
+        {
           "relation": "replay_request",
           "terms": [
             {
@@ -2849,6 +3212,34 @@
             },
             {
               "variable": "Op"
+            },
+            {
+              "variable": "Tb"
+            }
+          ]
+        },
+        {
+          "relation": "model_scope_exclusions_closed",
+          "terms": [
+            {
+              "variable": "M"
+            }
+          ]
+        },
+        {
+          "relation": "model_scope_excluded_closed",
+          "terms": [
+            {
+              "variable": "M"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "model_scope_excluded",
+          "terms": [
+            {
+              "variable": "M"
             },
             {
               "variable": "Tb"
@@ -2948,6 +3339,34 @@
             },
             {
               "variable": "Op"
+            },
+            {
+              "variable": "Tb"
+            }
+          ]
+        },
+        {
+          "relation": "model_scope_exclusions_closed",
+          "terms": [
+            {
+              "variable": "M"
+            }
+          ]
+        },
+        {
+          "relation": "model_scope_excluded_closed",
+          "terms": [
+            {
+              "variable": "M"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "model_scope_excluded",
+          "terms": [
+            {
+              "variable": "M"
             },
             {
               "variable": "Tb"
@@ -3657,6 +4076,14 @@
             },
             {
               "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "model_scope_exclusions_closed",
+          "terms": [
+            {
+              "variable": "M"
             }
           ]
         }

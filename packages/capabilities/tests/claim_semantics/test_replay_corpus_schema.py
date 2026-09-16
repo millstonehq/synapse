@@ -34,12 +34,13 @@ DERIVED = {
     "undeclared_write", "surviving_mutant", "op_has_surviving_mutant", "op_surviving_closed",
     "corpus_constrains", "kill_closure_gap", "php_disagree_any", "go_disagree_any", "undeclared_any",
     "php_disagreement_closed", "go_disagreement_closed", "undeclared_writes_closed", "op_qualified",
+    "model_scope_excluded", "model_scope_excluded_closed", "exclusion_applied",
 }
 COMPLETENESS = {"requested_closed": "requested", "op_surviving_closed": "op_has_surviving_mutant",
                 "php_disagreement_closed": "php_disagree_any", "go_disagreement_closed": "go_disagree_any",
                 "undeclared_writes_closed": "undeclared_any", "php_observed_closed": "php_observed",
                 "go_observed_closed": "go_observed", "post_state_gap_closed": "post_state_any",
-                "kill_gap_closed": "kill_closure_gap_any"}
+                "kill_gap_closed": "kill_closure_gap_any", "model_scope_excluded_closed": "model_scope_excluded"}
 EVIDENCE_ID = re.compile(r"^(replay|php|go|shen|mut|reviewer):([0-9a-f]{12}|claim-time):([a-z_]+):([0-9a-f]{12})$")
 CLAIM_TIME_RELATIONS = {"run_nonce_observed", "snapshot_observed", "model_observed", "op_declared"}
 
@@ -97,6 +98,8 @@ class ReplayRulePackTests(unittest.TestCase):
                 self.assertEqual(item["producer_classes"], [])
                 if name in {"op_qualified", "op_qualified_rt"}:
                     self.assertEqual(item["context_indices"], ["index", "run"])
+                elif name in {"model_scope_excluded", "model_scope_excluded_closed"}:
+                    self.assertEqual(item["context_indices"], ["model"])
                 else:
                     self.assertEqual(item["context_indices"], ["run"])
         self.assertEqual({name for name, item in derived.items() if item["modality"] == "claim"}, {"op_qualified"})
@@ -153,7 +156,7 @@ class ReplayRulePackTests(unittest.TestCase):
             ("corpus_constrains", "op_has_surviving_mutant"), ("kill_closure_gap", "requested"),
             ("op_qualified_rt", "php_disagree_any"), ("op_qualified_rt", "go_disagree_any"),
             ("op_qualified_rt", "undeclared_any"), ("op_qualified_rt", "post_state_any"),
-            ("op_qualified_rt", "kill_closure_gap_any"),
+            ("op_qualified_rt", "kill_closure_gap_any"), ("undeclared_write", "model_scope_excluded"),
             ("post_state_gap", "php_observed"), ("post_state_gap", "go_observed")})
         witnesses = {item["completes"] for item in self.declarations.values() if item["modality"] == "completeness"}
         self.assertTrue({target for _, target in negated} <= witnesses)
@@ -183,7 +186,8 @@ class ReplayRulePackTests(unittest.TestCase):
         owners = {"replay_requests_closed": "replay", "php_effects_closed": "replay", "go_effects_closed": "replay",
                   "php_post_states_closed": "replay", "go_post_states_closed": "replay", "mutant_kills_closed": "replay",
                   "model_admissible_closed": "shen", "model_writes_closed": "shen", "model_describes_run": "shen",
-                  "mutants_closed": "mut", "index_describes_replay": "reviewer"}
+                  "mutants_closed": "mut", "index_describes_replay": "reviewer",
+                  "model_scope_exclusion": "reviewer", "model_scope_exclusions_closed": "reviewer"}
         for name, owner in owners.items():
             self.assertEqual(frozen[name]["producer_classes"], [owner], name)
         self.assertEqual([name for name, item in frozen.items() if not item["producer_classes"]], [])
@@ -196,6 +200,27 @@ class ReplayRulePackTests(unittest.TestCase):
         gate = [atom for atom in _atoms(rules["op_qualified_rt"]) if atom["relation"] == "kill_closure_gap_any"]
         self.assertEqual([atom.get("negated") for atom in gate], [True])
         self.assertIn("kill_gap_closed", [atom["relation"] for atom in _atoms(rules["op_qualified_rt"])])
+
+    def test_scope_exclusions_gate_the_undeclared_write_negation_explicitly(self) -> None:
+        rules = {rule["name"]: rule for rule in self.pack["rules"]}
+        for name in ("undeclared_write_php", "undeclared_write_go"):
+            atoms = _atoms(rules[name])
+            positive = [atom["relation"] for atom in atoms if not atom.get("negated")]
+            negated = [atom["relation"] for atom in atoms if atom.get("negated")]
+            with self.subTest(rule=name):
+                self.assertIn("model_scope_exclusions_closed", positive)
+                self.assertIn("model_scope_excluded_closed", positive)
+                self.assertEqual(negated, ["model_writes", "model_scope_excluded"])
+                excluded = next(atom for atom in atoms if atom["relation"] == "model_scope_excluded")
+                effect = next(atom for atom in atoms if atom["relation"].endswith("_effect"))
+                self.assertEqual(excluded["terms"][1], effect["terms"][2], "the negation names the written table")
+        self.assertEqual([atom["relation"] for atom in _atoms(rules["model_scope_excluded"])], ["model_scope_exclusion"])
+        self.assertEqual([atom["relation"] for atom in _atoms(rules["model_scope_excluded_closed"])],
+                         ["model_scope_exclusions_closed"])
+        self.assertIn("model_scope_exclusions_closed", [atom["relation"] for atom in _atoms(rules["undeclared_writes_closed"])])
+        frozen = {item["name"]: item for item in self.pack["primitives"]}
+        self.assertEqual(frozen["model_scope_exclusion"]["modality"], "assumption")
+        self.assertEqual(frozen["model_scope_exclusions_closed"]["completes"], "model_scope_exclusion")
 
     def test_the_static_join_is_isolated_in_the_claim_rule(self) -> None:
         for rule in self.pack["rules"]:
@@ -219,9 +244,10 @@ class ReplayCaseTests(unittest.TestCase):
     def test_case_numbers_cover_the_control_and_the_adversarial_shapes(self) -> None:
         self.assertEqual([path.stem for path in self.paths], list(case_builder.BUILDERS))
         self.assertEqual(sorted({path.name[:2] for path in self.paths}),
-                         ["00", "01", "02", "03", "04", "05", "06", "08", "09", "10", "11"])
+                         ["00", "01", "02", "03", "04", "05", "06", "08", "09", "10", "11", "13", "14", "15"])
         self.assertEqual([path.stem for path in case_paths(REJECTED_DIR)],
-                         ["07-producer-class-violation", "12-closure-producer-violation"])
+                         ["07-producer-class-violation", "12-closure-producer-violation",
+                          "16-exclusion-producer-violation"])
         self.assertEqual([path.stem for path in case_paths(REJECTED_DIR)], list(case_builder.REJECTED_BUILDERS))
 
     def test_every_case_regenerates_identically_from_the_exporter(self) -> None:
@@ -246,10 +272,14 @@ class ReplayCaseTests(unittest.TestCase):
                 self.assertEqual(set(context), {"run", "model", "index"})
                 self.assertRegex(context["model"], r"^[0-9a-f]{64}$")
                 self.assertRegex(context["index"], r"^[0-9a-f]{64}$")
-                self.assertEqual(case["assumptions"], [])
+                for entry in case["assumptions"]:
+                    self.assertEqual(entry["kind"], "assumption")
+                    self.assertEqual(entry["relation"], "model_scope_exclusion")
+                    self.assertEqual(entry["source"].split(" ", 1)[0], "reviewer")
+                    self.assertIn(f"model:{context['model'][:12]} run:", entry["source"])
                 ids = set()
-                for entry in case["facts"]:
-                    self.assertEqual(entry["kind"], "fact")
+                for entry in [*case["facts"], *case["assumptions"]]:
+                    self.assertEqual(entry["kind"], "assumption" if entry["relation"] == "model_scope_exclusion" else "fact")
                     self.assertNotIn(entry["id"], ids)
                     ids.add(entry["id"])
                     declaration = self.declarations[entry["relation"]]
@@ -282,7 +312,7 @@ class ReplayCaseTests(unittest.TestCase):
             case = read_json(path)
             segments = set()
             with self.subTest(case=path.name):
-                for entry in case["facts"]:
+                for entry in [*case["facts"], *case["assumptions"]]:
                     match = EVIDENCE_ID.match(entry["id"])
                     self.assertIsNotNone(match, entry["id"])
                     prefix, segment, relation, row12 = match.groups()
@@ -300,9 +330,9 @@ class ReplayCaseTests(unittest.TestCase):
     def test_no_orphan_dependencies_and_every_expected_leaf_is_an_evidence_id(self) -> None:
         for path in self.paths:
             case = read_json(path)
-            ids = {entry["id"] for entry in case["facts"]}
+            ids = {entry["id"] for entry in [*case["facts"], *case["assumptions"]]}
             with self.subTest(case=path.name):
-                for entry in case["facts"]:
+                for entry in [*case["facts"], *case["assumptions"]]:
                     for dependency in entry["provenance"]["depends_on"]:
                         self.assertTrue(dependency in ids or dependency.startswith("external:"), dependency)
                 for output in case["outputs"]:
@@ -431,12 +461,13 @@ class ReplayCaseTests(unittest.TestCase):
                 self.assertIn("evidence-producer", str(ctx.exception))
                 lenient = load_case(path, self.pack, validate=False)
                 self.assertEqual([issue.code for issue in validate_bundle(lenient)], entry["validation_issues"])
-                relabelled = [f for f in case["facts"] if f["source"] == entry["relabelled_source"]]
+                relabelled = [f for f in [*case["facts"], *case["assumptions"]] if f["source"] == entry["relabelled_source"]]
                 self.assertEqual({f["relation"] for f in relabelled}, {entry["relabelled_relation"]})
                 self.assertEqual(len(relabelled), len(entry["validation_issues"]))
                 admitted = self.declarations[entry["relabelled_relation"]]["producer_classes"]
                 self.assertNotIn(entry["relabelled_source"].split(" ", 1)[0], admitted)
-                differing = [(a, b) for a, b in zip(control["facts"], case["facts"]) if a != b]
+                differing = [(a, b) for a, b in zip([*control["facts"], *control["assumptions"]],
+                                                    [*case["facts"], *case["assumptions"]]) if a != b]
                 self.assertEqual(len(differing), len(entry["validation_issues"]))
                 for a, b in differing:
                     self.assertEqual({**a, "source": b["source"]}, b)

@@ -127,6 +127,27 @@ class PythonEvaluatorAgreesWithReviewedExpectations(unittest.TestCase):
         self.assertEqual(set(report.relation_rows("undeclared_writes_closed")), {(RUN, CREATE), (RUN, CLOSE)})
         self.assertEqual(report.relation_rows("op_qualified"), ())
 
+    def test_reviewer_exclusions_are_explicit_and_closed_or_nothing(self) -> None:
+        report = self._report("13-excluded-undeclared-write")
+        self.assertEqual({row[1] for row in report.relation_rows("model_scope_excluded")},
+                         {"authentication", "redis", "audit_log"})
+        self.assertEqual(set(report.relation_rows("exclusion_applied")), {(RUN, CLOSE, "audit_log")})
+        self.assertEqual(report.relation_rows("undeclared_write"), ())
+        self.assertEqual(set(report.relation_rows("op_qualified")), {(INDEX, RUN, CREATE), (INDEX, RUN, CLOSE)})
+        # the same write without the exclusion (case 02) blocks the op
+        self.assertEqual(set(self._report("02-planted-undeclared-write").relation_rows("undeclared_write")),
+                         {(RUN, CLOSE, "audit_log")})
+        for stem in ("14-exclusions-not-closed", "15-no-exclusions-no-closure"):
+            report = self._report(stem)
+            self.assertEqual(report.relation_rows("model_scope_exclusions_closed"), (), stem)
+            self.assertEqual(report.relation_rows("model_scope_excluded_closed"), (), stem)
+            self.assertEqual(report.relation_rows("undeclared_write"), (), stem)
+            self.assertEqual(report.relation_rows("undeclared_writes_closed"), (), stem)
+            self.assertEqual(report.relation_rows("op_qualified"), (), stem)
+        self.assertEqual({row[1] for row in self._report("14-exclusions-not-closed").relation_rows("model_scope_excluded")},
+                         {"authentication", "redis", "audit_log"})
+        self.assertEqual(self._report("15-no-exclusions-no-closure").relation_rows("model_scope_excluded"), ())
+
     def test_stale_case_derives_replay_run_stale_and_not_replay_run_current(self) -> None:
         report = self._report("06-stale-replay")
         self.assertEqual(report.relation_rows("replay_run_current"), ())
