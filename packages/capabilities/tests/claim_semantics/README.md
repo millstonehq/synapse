@@ -26,3 +26,21 @@ only validate that the table and fixtures agree; they do not evaluate rules.
 The fixtures are synthetic controls until a real retained execution is added.
 `adapter.py` converts each fixture to strict bundle JSON and invokes the real
 `bundle_from_json(..., validate=True)` parser; it does not evaluate rules.
+
+## Assumption registry and invalidation
+
+`test_assumption_registry.py` covers `capcov.claims.assumptions` over the
+committed `replay_receipt_target_go_qualified` fixture: the run-independent
+`asm:` id (producer class + relation + row, so one reviewed row keeps one id
+across runs), the registry of what each assumption carries, and withdrawal —
+dropping an assumption and re-evaluating both kernels to see which claims lose
+support. Reachable from the command line as
+
+```
+python -m capcov.claims.cli claims assumptions registry   --receipt DIR [--out DIR]
+python -m capcov.claims.cli claims assumptions invalidate --receipt DIR --drop ID
+```
+
+Exit 0 when the documents were produced, 2 for a refusal (an unknown id, or a
+withdrawal that would refute a claim rather than leave a premise missing), 3
+when the kernels disagree. Needs Soufflé, no replay environment.
