@@ -100,6 +100,7 @@ class CompiledCheckerScriptTests(unittest.TestCase):
             self.assertGreater(kernels[field], 0.0, field)
 
         entry = document["ops"]["delete-issue"]
+        self.assertEqual(entry["verdict"], "supported")
         self.assertEqual(entry["op_qualified"],
                          {"semantic": "supported", "operational": "complete",
                           "missing_premises": []})
@@ -155,6 +156,7 @@ class CompiledCheckerScriptTests(unittest.TestCase):
         self.assertEqual(document["unmet_ops"], ["delete-issue"])
         self.assertTrue(document["kernels"]["matched"], "the kernels still agree; the op does not qualify")
         entry = document["ops"]["delete-issue"]
+        self.assertEqual(entry["verdict"], "not-supported")
         self.assertEqual(entry["op_qualified"]["semantic"], "unresolved")
         self.assertEqual(entry["op_qualified"]["missing_premises"], ["model_writes"])
         self.assertEqual(entry["blocking_premise"], {"relation": "undeclared_any", "holds": True})

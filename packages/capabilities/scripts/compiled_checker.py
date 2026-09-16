@@ -106,12 +106,17 @@ def _op_entry(join: replay_join.ReplayJoin, summary: dict[str, Any], op: str) ->
     verdict = join.verdict(join.claim_id("qualified", op)) or {}
     entry = summary.get(op, {})
     certificate = join.certificates.get(join.claim_id("qualified", op))
+    qualified = {
+        "semantic": verdict.get("semantic"),
+        "operational": verdict.get("operational"),
+        "missing_premises": entry.get("missing_premise", []),
+    }
     return {
-        "op_qualified": {
-            "semantic": verdict.get("semantic"),
-            "operational": verdict.get("operational"),
-            "missing_premises": entry.get("missing_premise", []),
-        },
+        # the per-op answer in one word, so a caller need not re-derive it from
+        # the pair; VERDICT_SUPPORTED only when the op is supported *and* complete
+        "verdict": (VERDICT_SUPPORTED if qualified["semantic"] == "supported"
+                    and qualified["operational"] == "complete" else VERDICT_NOT_SUPPORTED),
+        "op_qualified": qualified,
         "corpus_constrains": bool(entry.get("corpus_constrains")),
         "exclusions_applied": list(entry.get("exclusions_applied", [])),
         "blocking_premise": entry.get("blocking_premise"),
@@ -163,8 +168,7 @@ def _judge_document(join: replay_join.ReplayJoin, required: list[str], *,
 
 
 def _op_is_supported(entry: dict[str, Any]) -> bool:
-    qualified = entry["op_qualified"]
-    return qualified["semantic"] == "supported" and qualified["operational"] == "complete"
+    return entry["verdict"] == VERDICT_SUPPORTED
 
 
 def judge(args: argparse.Namespace) -> int:
@@ -219,7 +223,7 @@ def judge(args: argparse.Namespace) -> int:
         document["unmet_ops"] = unmet
     _write_json(out_dir / JUDGE_FILE, document)
     for op, entry in sorted(document["ops"].items()):
-        print(f"{op}: op_qualified={entry['op_qualified']['semantic']}"
+        print(f"{op}: {entry['verdict']} op_qualified={entry['op_qualified']['semantic']}"
               f"/{entry['op_qualified']['operational']}"
               f" missing={entry['op_qualified']['missing_premises']}"
               f" exclusions={entry['exclusions_applied']}")
