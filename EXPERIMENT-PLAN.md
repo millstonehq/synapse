@@ -5015,6 +5015,41 @@ writer as with Pi). The exhausted `kernel-closure-integrate` is retired and repl
 is: same tree, same gates, same reviewer lenses, different agent runtime. Codex results are
 labelled `backend=codex` on every `agent-start` line in `driver.log`.
 
+### 2026-09-15 runtime join follow-up
+
+The fg-go pilot now accepts an optional retained runtime receipt via
+`CAPCOV_FG_GO_RUNTIME_RECEIPT`. The producer is the existing disposable
+`tools/check_subscription_links.py` path in fg-go, extended at candidate
+`bc404ec84d576220993777cade81c6e238fe19e8`. The successful receipt records run
+`claims-runtime-20260915-02`, tenant `tenant-a`, the concrete subscribe surface,
+HTTP 200, a run-bound request id, the final SQL state (no unsubscribe row and one
+cancelled confirmation), and zero owned resources after cleanup.
+
+The pilot validates that receipt before admitting `runtime_route_observed`, asks
+the SCIP exporter to emit `index_describes_run(index, run)`, and derives
+`runtime_route_observed_on_index` in both Python and Souffle. The two kernels
+agreed and all 10 pilot tests passed in 178.828 seconds. The mixed certificate
+contains runtime receipt, `scip_index`, and `index_describes_run` leaves. The
+existing independent static certificate proves the handler reaches
+`database/sql.Tx.ExecContext`. These are complementary certificates, not a
+single claim that runtime tracing observed the call stack or SQL statement.
+
+The first attempted rule tried to introduce a new runtime SQL relation. Bundle
+validation rejected it because the frozen compatibility witness does not
+authorize that producer/target pair. The final rule stays within the declared
+`index_describes_run` target set; this fail-closed result is retained as a design
+constraint for the producer-authority work.
+
+Reproduction from `packages/capabilities`:
+
+```sh
+CAPCOV_GO_FIXTURE_ROOT=/Users/reuben/fg/.worktrees/fg-go-capcov-claims-runtime \
+CAPCOV_GO_CACHE_ROOT=/Users/reuben/projects/.capcov-go-cache \
+CAPCOV_FG_GO_RUNTIME_RECEIPT="$PWD/tests/claim_semantics/fg_go/artifacts/runtime-recipient-route.json" \
+nix develop --no-update-lock-file --command bash -lc \
+  'export PYTHONPATH="$PWD/src"; python -m unittest discover -s tests/claim_semantics -p "test_fg_go_static*.py" -t .'
+```
+
 ## 31. Performance: evaluator access paths and artifact caching
 
 Two independent efforts on 2026-09-15, stacked on branch `codex/capcov-performance-cas` (`0d7d514`):
@@ -5066,6 +5101,22 @@ is a superset (same tools plus hyperfine, souffle, shen-go, the sandboxed checks
 `bash -lc` PATH wrapper) pinned at nixpkgs `34ab9907`, to which every recorded Stage 0 result
 binds. The experiment flake is kept; upstream's `.envrc` (`use flake`) therefore loads it.
 Full regression on the merged tree is recorded below when it completes.
+
+### 2026-09-15 fg-go causal runtime trace follow-up
+
+The recipient-link fixture now emits schema `capcov-fg-go-runtime-route/v2` from fg-go commit
+`01fe913`: one request identity is preserved across route entry, entry into `ChangeSubscription`,
+two successful transaction SQL operations, commit and route completion. CapCov imports those as
+typed runtime facts, rejects evidence whose producer class is not `fg-go-runtime-trace-v2`, joins
+the run to the exact SCIP index, and derives `runtime_route_reaches_sql_on_index` in Python and
+Soufflé. The real fixture gate passed 10 tests in 302.9 seconds (index 19.3 s, differential compare
+185.8 s); the validation/export policy gate passed 68 tests. Missing or mismatched causal
+identities remain unresolved rather than being inferred from terminal database state.
+
+Soufflé can become the sole derivation engine after the deferred ground checker independently
+validates its certificates. Python remains in the trusted path today for receipt parsing, schema
+and producer-authority validation, claim folding and certificate construction; deleting that code
+before the checker exists would reduce, not improve, independent assurance.
 
 ### 2026-09-15 close-out of `datalog-kernel-closure` and integration of the SCIP → Datalog wave
 
