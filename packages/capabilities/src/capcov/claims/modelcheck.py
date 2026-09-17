@@ -94,7 +94,9 @@ class Runtime:
     sources: tuple[tuple[str, str], ...]
 
     def as_dict(self) -> dict[str, Any]:
-        return {"impl": IMPL, "bifrost": self.bifrost, "shen_go": self.shen_go,
+        # Host paths are not evidence and would leak a machine's layout into a
+        # published certificate; the binary's digest and the launcher's name are.
+        return {"impl": IMPL, "bifrost": os.path.basename(self.bifrost), "shen_go": os.path.basename(self.shen_go),
                 "shen_go_sha256": self.shen_go_sha256,
                 "invocation": ["bifrost", "run", "--impl", IMPL, "--raw", "<driver.shen>"]}
 
