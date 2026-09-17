@@ -35,7 +35,7 @@ SCRIPT = PACKAGE_ROOT / "scripts" / "compiled_checker.py"
 HEX64 = r"^[0-9a-f]{64}$"
 CACHE_ENV = "CAPCOV_SOUFFLE_CACHE_DIR"
 JUDGE_KEYS = {"schema", "receipt", "pack", "compiled", "kernels", "ops", "required_ops",
-              "contract_findings", "verdict", "exit_code"}
+              "contract_findings", "verdict", "exit_code", "learn"}
 # what a verdict that is not plain "supported" adds
 PENDING_KEYS = JUDGE_KEYS | {"unmet_ops", "pending_ops", "message"}
 
@@ -98,8 +98,8 @@ class CompiledCheckerScriptTests(unittest.TestCase):
         self.assertEqual(document["required_ops"], ["delete-issue"])
         self.assertEqual(document["contract_findings"], [])
         self.assertEqual(document["pack"]["id"], "rules-replay-v1")
-        self.assertEqual(document["pack"]["relation_count"], 100)
-        self.assertEqual(document["pack"]["rule_count"], 64)
+        self.assertEqual(document["pack"]["relation_count"], 115)
+        self.assertEqual(document["pack"]["rule_count"], 71)
         self.assertRegex(document["pack"]["program_digest"], HEX64)
 
         kernels = document["kernels"]
@@ -124,6 +124,16 @@ class CompiledCheckerScriptTests(unittest.TestCase):
         self.assertEqual(entry["exclusions_applied"],
                          ["authentication", "go_issue_outbox", "jobs_statuses", "redis"])
         self.assertIsNone(entry["certificate_sha256"], "an unresolved claim certifies no row")
+        # the cross-request and learn context the gate now rests on
+        self.assertEqual(entry["repeat_delete"], {"repeats": [], "violations": [], "not_found": []},
+                         "the three-request tape has no repeat")
+        self.assertEqual(entry["learn_consistent"], "supported")
+        self.assertFalse(entry["learn_unmodeled"])
+        learn = document["learn"]
+        self.assertTrue(learn["present"])
+        self.assertEqual(learn["counterexamples"], [])
+        self.assertEqual(learn["consistent_ops"], ["delete-issue"])
+        self.assertNotIn("delete-issue", learn["unmodeled_ops"])
 
         self.assertRegex(document["compiled"]["binary_sha256"], HEX64)
         self.assertEqual(document["compiled"]["schema"], "capcov-souffle-compiled-v1")
@@ -308,7 +318,7 @@ class CompiledCheckerScriptTests(unittest.TestCase):
         self.assertEqual(document["schema"], "capcov-compiled-bench-v1")
         self.assertEqual(document["fixture"], replay_join.COMMITTED_RECEIPT_DIR.name)
         self.assertEqual(document["scale"], 2)
-        self.assertEqual(document["relation_count"], 100)
+        self.assertEqual(document["relation_count"], 115)
         self.assertTrue(document["closures_identical"])
         self.assertRegex(document["binary_sha256"], HEX64)
         self.assertRegex(document["souffle"]["sha256"], HEX64)

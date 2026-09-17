@@ -74,6 +74,28 @@ When Stage D emits a real certificate, drop it into `model_well_formed.json`,
 add its `(checker, checker_version)` to `model_checkers.json`, and flip these
 expectations back; nothing in the pack or the exporter has to change.
 
+## The learn campaign fixture
+
+`fixtures/replay_receipt_target_go_qualified/learn/` is a **real** learn receipt,
+derived from a campaign the candidate repo ran against the same model
+(`08380c9c…`) as the receipt it sits under, with the identifiers scrubbed: 12
+generated tapes, 20 model predictions, 32 oracle observations, 3 ops the model
+does not model (`create-issue`, `edit`, `delete-issues`), and no counterexample.
+Two things were rewritten and nothing else: the `run` column of every row is the
+*replay* run this receipt is for (the campaign's own run id moved to the
+`campaign` column of `learn_run`, which is where the contract puts it), and the
+producer's `class` column is named `predicted` / `observed` by the side that
+wrote it.  The learn digest, the tape and step names, the classes, the state
+digests and the oracle commit are the campaign's own.
+
+Because none of the three unmodelled ops is `delete-issue`, the committed fixture
+is the *consistent* case: `learn_consistent(run, delete-issue)` is supported and
+nothing the receipt would qualify is downgraded.  The other shapes
+(`LearnCampaignTest` in `test_target_go_replay_receipt.py`) are temp copies of it
+with one row edited — a planted counterexample, an unmodelled `delete-issue`, the
+same with the list left open — and `NoLearnReceiptTest` is the receipt with no
+campaign at all, judged exactly as it was before the learn relations existed.
+
 ## Assumption registry and invalidation
 
 `test_assumption_registry.py` covers `capcov.claims.assumptions` over the

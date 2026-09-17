@@ -33,6 +33,13 @@ Exit codes (``judge``)::
 The per-op ``qualification`` field of ``judge.json`` carries the same three
 states in words: ``qualified``, ``pending <relation>``, ``unsupported``.
 
+``judge.json`` also carries the run's cross-request and learn-campaign context:
+each op entry has ``repeat_delete`` (the repeats found, the violations among them
+and the targets judged not-found) and ``learn_consistent`` / ``learn_unmodeled``,
+and the document has a run-level ``learn`` block naming the campaign, its
+counterexamples and the ops it reports as unmodelled.  ``{"present": false}``
+there means no campaign is bound to the run, which is not a finding.
+
 Without ``--require-op`` the verdict is derived from every replayed op rather
 than from an empty requirement: a verdict over zero requirements would be
 vacuously ``supported``, which no party has asserted.
@@ -143,6 +150,10 @@ def _op_entry(join: replay_join.ReplayJoin, summary: dict[str, Any], op: str) ->
         # the cross-request gate op_qualified_rt is now bound by: the repeats of this op's
         # requests, the violations found among them, and the targets judged not-found
         "repeat_delete": entry.get("repeat_delete", {"repeats": [], "violations": [], "not_found": []}),
+        # the learn campaign, when one is bound to the run: whether the model's predictions
+        # matched the oracle for this op, and whether the campaign says the op is unmodelled
+        "learn_consistent": entry.get("learn_consistent"),
+        "learn_unmodeled": bool(entry.get("learn_unmodeled")),
         "exclusions_applied": list(entry.get("exclusions_applied", [])),
         "blocking_premise": entry.get("blocking_premise"),
         "certificate_sha256": _sha256_json(certificate) if certificate is not None else None,
@@ -165,6 +176,7 @@ def _judge_document(join: replay_join.ReplayJoin, required: list[str], *,
         "kernels": None,
         "ops": {},
         "required_ops": list(required),
+        "learn": {"present": False},
         "contract_findings": list(findings),
         "verdict": verdict,
         "exit_code": exit_code,
@@ -189,6 +201,7 @@ def _judge_document(join: replay_join.ReplayJoin, required: list[str], *,
     if join.result is not None:
         summary = replay_join.summary(join)
         document["ops"] = {op: _op_entry(join, summary, op) for op in join.ops}
+        document["learn"] = summary.get("learn", {"present": False})
     return document
 
 

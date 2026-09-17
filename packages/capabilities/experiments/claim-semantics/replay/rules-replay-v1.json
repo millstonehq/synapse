@@ -1624,9 +1624,225 @@
       "polarity": "positive",
       "primitive": false,
       "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "learn_predicted",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "tape",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "predicted",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "observed",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "learn_counterexample",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "learn_counterexample_any",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "learn_counterexample_any",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "learn_counterexample_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "learn_consistent",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "learn_unmodeled_any",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "learn_unmodeled_any",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "learn_unmodeled_gate_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
     }
   ],
-  "description": "Replay judge rule pack (Phase 4, judge side). `primitives` is a byte-identical copy of claims/replay/schema_replay_v1.json; `supplementary_primitives` is empty (the frozen file declares every primitive the judge reads); `derived` opens with the two rule-less stubs the exporter carries (mutant_killed_in, op_qualified_rt), byte-identical to replay_facts._DERIVED_TARGET_DECLS so combine() accepts both, then the reviewed program; `rules` are in raw IR JSON wire form. op_qualified(index, run, op) is the qualification claim and the only static/runtime join, witnessed by index_describes_replay; repeat_delete_not_found(run, target) is the per-target cross-request claim. The Stage D pair (model_well_formed, model_checker_admitted) sits last in op_qualified_rt's body -- semantically a conjunct's position is nothing, but the why-not walk reports the first unsatisfied premise, and while the typed checker does not exist that premise would otherwise mask every real gap. op_qualified_rt is additionally gated on the model's declared effect order (effect_order_*), on the repeat delete being not-found without effects (repeat_delete_closed / !repeat_delete_any: a second DELETE of a committed target that answers anything but 404 on either side, or writes any row outside the reviewer's scope exclusions, blocks the op it belongs to) and on the PHP oracle's cross-run stability (oracle_stable).",
+  "description": "Replay judge rule pack (Phase 4, judge side). `primitives` is a byte-identical copy of claims/replay/schema_replay_v1.json; `supplementary_primitives` is empty (the frozen file declares every primitive the judge reads); `derived` opens with the two rule-less stubs the exporter carries (mutant_killed_in, op_qualified_rt), byte-identical to replay_facts._DERIVED_TARGET_DECLS so combine() accepts both, then the reviewed program; `rules` are in raw IR JSON wire form. op_qualified(index, run, op) is the qualification claim and the only static/runtime join, witnessed by index_describes_replay; repeat_delete_not_found(run, target) is the per-target cross-request claim. The Stage D pair (model_well_formed, model_checker_admitted) sits last in op_qualified_rt's body -- semantically a conjunct's position is nothing, but the why-not walk reports the first unsatisfied premise, and while the typed checker does not exist that premise would otherwise mask every real gap. op_qualified_rt is additionally gated on the model's declared effect order (effect_order_*), on the repeat delete being not-found without effects (repeat_delete_closed / !repeat_delete_any: a second DELETE of a committed target that answers anything but 404 on either side, or writes any row outside the reviewer's scope exclusions, blocks the op it belongs to) and on the PHP oracle's cross-run stability (oracle_stable). A learn receipt, when one is bound to the run, is judged too: learn_consistent(run, op) says the model's predictions matched the oracle's observations for that op under both closures, and op_qualified_rt is downgraded by !learn_unmodeled_any -- an op the learn campaign reported as unmodelled does not qualify.  The downgrade can only take qualification away: a receipt with no learn files carries no learn_run row, derives no learn_unmodeled_any, and qualifies exactly as before.",
   "id": "rules-replay-v1",
   "primitives": [
     {
@@ -2582,6 +2798,201 @@
       ]
     },
     {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "campaign",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "model",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "learn",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "php_commit",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "snapshot",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "learn_run",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "replay"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "model",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "learn",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "tape",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "predicted",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "state_digest",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "learn_prediction",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "shen"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "tape",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "req",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "observed",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "state_digest",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "learn_observation",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "php"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "model",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "learn",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "model"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "learn_unmodeled",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "shen"
+      ]
+    },
+    {
       "binding": "static",
       "columns": [
         {
@@ -3061,6 +3472,91 @@
       "columns": [
         {
           "context": true,
+          "name": "run",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "model",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "learn_prediction",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "learn_predictions_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "shen"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "run",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "learn_observation",
+      "context_indices": [
+        "run"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "learn_observations_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "replay"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "model",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "learn",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "learn_unmodeled",
+      "context_indices": [
+        "model"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "learn_unmodeled_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "shen"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
           "name": "model",
           "type": "digest"
         },
@@ -3082,6 +3578,13 @@
         "go_post_state",
         "go_response",
         "go_responses_closed",
+        "learn_observation",
+        "learn_observations_closed",
+        "learn_prediction",
+        "learn_predictions_closed",
+        "learn_run",
+        "learn_unmodeled",
+        "learn_unmodeled_closed",
         "model_admissible",
         "model_admissible_closed",
         "model_effect",
@@ -3160,6 +3663,48 @@
       "primitive": true,
       "producer_classes": [
         "reviewer"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "learn",
+          "type": "digest"
+        },
+        {
+          "context": true,
+          "name": "model",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [
+        "learn",
+        "model"
+      ],
+      "compatibility_targets": [
+        "learn_observation",
+        "learn_observations_closed",
+        "learn_prediction",
+        "learn_predictions_closed",
+        "learn_run",
+        "learn_unmodeled",
+        "learn_unmodeled_closed"
+      ],
+      "completes": null,
+      "context_indices": [
+        "learn",
+        "model"
+      ],
+      "finite": false,
+      "modality": "compatibility",
+      "name": "learn_describes_model",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "shen"
       ]
     }
   ],
@@ -7226,6 +7771,456 @@
     {
       "body": [
         {
+          "relation": "learn_prediction",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "Tape"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Op"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "SD"
+            }
+          ]
+        },
+        {
+          "comparison": {
+            "left": {
+              "variable": "P"
+            },
+            "operator": "!=",
+            "right": {
+              "type": "symbol",
+              "value": "unknown"
+            }
+          }
+        }
+      ],
+      "head": {
+        "relation": "learn_predicted",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "learn_predicted"
+    },
+    {
+      "body": [
+        {
+          "relation": "learn_prediction",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "Tape"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Op"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "SP"
+            }
+          ]
+        },
+        {
+          "relation": "learn_observation",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Tape"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Op"
+            },
+            {
+              "variable": "O"
+            },
+            {
+              "variable": "SO"
+            }
+          ]
+        },
+        {
+          "comparison": {
+            "left": {
+              "variable": "P"
+            },
+            "operator": "!=",
+            "right": {
+              "variable": "O"
+            }
+          }
+        },
+        {
+          "comparison": {
+            "left": {
+              "variable": "P"
+            },
+            "operator": "!=",
+            "right": {
+              "type": "symbol",
+              "value": "unknown"
+            }
+          }
+        }
+      ],
+      "head": {
+        "relation": "learn_counterexample",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Tape"
+          },
+          {
+            "variable": "Req"
+          },
+          {
+            "variable": "Op"
+          },
+          {
+            "variable": "P"
+          },
+          {
+            "variable": "O"
+          }
+        ]
+      },
+      "name": "learn_counterexample"
+    },
+    {
+      "body": [
+        {
+          "relation": "learn_counterexample",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Tape"
+            },
+            {
+              "variable": "Req"
+            },
+            {
+              "variable": "Op"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "O"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "learn_counterexample_any",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "learn_counterexample_any"
+    },
+    {
+      "body": [
+        {
+          "relation": "learn_predicted",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "learn_run",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Camp"
+            },
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "Php"
+            },
+            {
+              "variable": "Snap"
+            }
+          ]
+        },
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "learn_describes_model",
+          "terms": [
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "M"
+            }
+          ]
+        },
+        {
+          "relation": "learn_predictions_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "M"
+            }
+          ]
+        },
+        {
+          "relation": "learn_observations_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "learn_counterexample_closed",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "learn_counterexample_closed"
+    },
+    {
+      "body": [
+        {
+          "relation": "learn_counterexample_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "learn_counterexample_any",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "learn_consistent",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "learn_consistent"
+    },
+    {
+      "body": [
+        {
+          "relation": "learn_run",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Camp"
+            },
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "Php"
+            },
+            {
+              "variable": "Snap"
+            }
+          ]
+        },
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "learn_describes_model",
+          "terms": [
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "M"
+            }
+          ]
+        },
+        {
+          "relation": "learn_unmodeled_closed",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "L"
+            }
+          ]
+        },
+        {
+          "relation": "learn_unmodeled",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "learn_unmodeled_any",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "learn_unmodeled_any"
+    },
+    {
+      "body": [
+        {
+          "relation": "replayed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "replay_run_current",
+          "terms": [
+            {
+              "variable": "Run"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "learn_unmodeled_gate_closed",
+        "terms": [
+          {
+            "variable": "Run"
+          },
+          {
+            "variable": "Op"
+          }
+        ]
+      },
+      "name": "learn_unmodeled_gate_closed"
+    },
+    {
+      "body": [
+        {
           "relation": "index_describes_replay",
           "terms": [
             {
@@ -7448,6 +8443,29 @@
         {
           "negated": true,
           "relation": "repeat_delete_any",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "relation": "learn_unmodeled_gate_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "learn_unmodeled_any",
           "terms": [
             {
               "variable": "Run"

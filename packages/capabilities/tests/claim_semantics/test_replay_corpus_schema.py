@@ -36,6 +36,10 @@ DERIVED = {
     "php_disagreement_closed", "go_disagreement_closed", "undeclared_writes_closed", "op_qualified",
     "model_scope_excluded", "model_scope_excluded_closed", "exclusion_applied",
     # ordering, repeat-delete and cross-run stability (v1 ordering addendum)
+    # the learn campaign (v1 learn addendum)
+    "learn_predicted", "learn_counterexample", "learn_counterexample_any",
+    "learn_counterexample_closed", "learn_consistent", "learn_unmodeled_any",
+    "learn_unmodeled_gate_closed",
     "effect_order_violation", "effect_order_respected", "effect_order_any", "effect_order_exercised",
     "effect_order_closed", "delete_target", "earlier_delete", "earlier_delete_closed",
     "first_delete_committed", "repeat_delete",
@@ -50,7 +54,10 @@ COMPLETENESS = {"requested_closed": "requested", "op_surviving_closed": "op_has_
                 "kill_gap_closed": "kill_closure_gap_any", "model_scope_excluded_closed": "model_scope_excluded",
                 "effect_order_closed": "effect_order_any", "repeat_delete_effects_closed": "repeat_delete_has_effect",
                 "repeat_delete_closed": "repeat_delete_any", "oracle_unstable_closed": "oracle_unstable",
-                "earlier_delete_closed": "earlier_delete"}
+                "earlier_delete_closed": "earlier_delete",
+                # the learn campaign (v1 learn addendum)
+                "learn_counterexample_closed": "learn_counterexample_any",
+                "learn_unmodeled_gate_closed": "learn_unmodeled_any"}
 EVIDENCE_ID = re.compile(
     r"^(replay|php|go|shen|mut|reviewer|modelcheck):([0-9a-f]{12}|claim-time):([a-z_]+):([0-9a-f]{12})$")
 # rows a judge always adds at claim time (never exported from a receipt)
@@ -118,7 +125,7 @@ class ReplayRulePackTests(unittest.TestCase):
                 else:
                     self.assertEqual(item["context_indices"], ["run"])
         self.assertEqual({name for name, item in derived.items() if item["modality"] == "claim"},
-                         {"op_qualified", "repeat_delete_not_found"})
+                         {"op_qualified", "repeat_delete_not_found", "learn_consistent"})
         self.assertEqual({name: item["completes"] for name, item in derived.items()
                           if item["modality"] == "completeness"}, COMPLETENESS)
         self.assertEqual({item["modality"] for item in derived.values()}, {"derived", "completeness", "claim"})
@@ -175,11 +182,52 @@ class ReplayRulePackTests(unittest.TestCase):
             ("op_qualified_rt", "kill_closure_gap_any"), ("undeclared_write", "model_scope_excluded"),
             ("post_state_gap", "php_observed"), ("post_state_gap", "go_observed"),
             ("op_qualified_rt", "effect_order_any"), ("op_qualified_rt", "repeat_delete_any"),
+            ("op_qualified_rt", "learn_unmodeled_any"), ("learn_consistent", "learn_counterexample_any"),
             ("repeat_delete_not_found", "repeat_delete_has_effect"),
             ("first_delete_committed", "earlier_delete"),
             ("repeat_delete_has_effect", "model_scope_excluded"), ("oracle_stable", "oracle_unstable")})
         witnesses = {item["completes"] for item in self.declarations.values() if item["modality"] == "completeness"}
         self.assertTrue({target for _, target in negated} <= witnesses)
+
+    def test_the_learn_campaign_downgrades_and_never_grants(self) -> None:
+        """The learn gate is a downgrade, and absence of a campaign is not a premise.
+
+        ``learn_unmodeled_any`` is positive in every one of its inputs -- the campaign
+        must be bound to the run (``learn_run``), to the model
+        (``model_describes_run``, ``learn_describes_model``) and must have *closed* its
+        unmodelled list -- so nothing derives without a campaign.  Its completeness
+        ``learn_unmodeled_gate_closed`` therefore reads only the replay run: the claim it
+        licenses is "the downgrades this bundle carries are all of them", never "the
+        model covers every op", which no absence could evidence.  That asymmetry is what
+        makes the gate safe to add to a receipt that has no learn files.
+        """
+        rules = {rule["name"]: rule for rule in self.pack["rules"]}
+        bodies = {name: [atom["relation"] for atom in _atoms(rules[name])] for name in rules}
+        gate = [atom for atom in _atoms(rules["op_qualified_rt"]) if atom["relation"] == "learn_unmodeled_any"]
+        self.assertEqual([atom.get("negated") for atom in gate], [True])
+        self.assertIn("learn_unmodeled_gate_closed", bodies["op_qualified_rt"])
+        for witness in ("learn_run", "model_describes_run", "learn_describes_model", "learn_unmodeled_closed",
+                        "learn_unmodeled"):
+            self.assertIn(witness, bodies["learn_unmodeled_any"], witness)
+        self.assertEqual([atom.get("negated") for atom in _atoms(rules["learn_unmodeled_any"])],
+                         [None] * 5, "every input of the downgrade is positive")
+        self.assertEqual(bodies["learn_unmodeled_gate_closed"], ["replayed", "replay_run_current"])
+        self.assertEqual(self.declarations["learn_unmodeled_gate_closed"]["completes"], "learn_unmodeled_any")
+        # the consistency claim negates only under its own closure, which lists both
+        # producer closures and the two bindings
+        for witness in ("learn_predicted", "learn_run", "model_describes_run", "learn_describes_model",
+                        "learn_predictions_closed", "learn_observations_closed"):
+            self.assertIn(witness, bodies["learn_counterexample_closed"], witness)
+        self.assertEqual(self.declarations["learn_counterexample_closed"]["completes"], "learn_counterexample_any")
+        self.assertEqual(self.declarations["learn_consistent"]["modality"], "claim")
+        frozen = {item["name"]: item for item in self.pack["primitives"]}
+        # producer authority: the oracle answers, the model host predicts, the harness ran it
+        self.assertEqual(frozen["learn_observation"]["producer_classes"], ["php"])
+        self.assertEqual(frozen["learn_prediction"]["producer_classes"], ["shen"])
+        self.assertEqual(frozen["learn_unmodeled"]["producer_classes"], ["shen"])
+        self.assertEqual(frozen["learn_run"]["producer_classes"], ["replay"])
+        self.assertEqual(frozen["learn_observations_closed"]["producer_classes"], ["replay"])
+        self.assertEqual(frozen["learn_describes_model"]["modality"], "compatibility")
 
     def test_the_repeat_delete_gate_is_on_and_its_closure_lists_every_positive_input(self) -> None:
         """The cross-request claim is load-bearing, and its negation is licensed.

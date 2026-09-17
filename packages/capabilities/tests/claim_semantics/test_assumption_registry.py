@@ -218,10 +218,11 @@ class CrossRunIdStabilityTest(unittest.TestCase):
         cls.directory = cls.tmp / "rerun"
         shutil.copytree(FIXTURE, cls.directory)
         cls.baseline = replay_join.build(FIXTURE)
-        for path in cls.directory.iterdir():
-            if path.suffix == ".json":
-                path.write_text(path.read_text(encoding="utf-8").replace(cls.baseline.run, cls.OTHER_RUN),
-                                encoding="utf-8")
+        # rglob, not iterdir: the learn campaign's rows are scoped to the replay run too,
+        # and a learn row naming another run is stale exactly like any other row
+        for path in sorted(cls.directory.rglob("*.json")):
+            path.write_text(path.read_text(encoding="utf-8").replace(cls.baseline.run, cls.OTHER_RUN),
+                            encoding="utf-8")
         cls.join = replay_join.build(cls.directory)
 
     @classmethod

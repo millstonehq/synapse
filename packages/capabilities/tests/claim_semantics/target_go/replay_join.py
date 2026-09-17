@@ -19,8 +19,8 @@ from capcov.claims.replay.join import *  # noqa: E402,F401,F403
 from capcov.claims.replay.join import (  # noqa: E402,F401
     _BLOCKING_ORDER, CENSUS_ASSUMPTION_SOURCE, INDEX_ASSUMPTION_SOURCE, MODEL_WITNESSES, REASONS,
     REVIEWER_SOURCE, SYNTHETIC_INDEX, UNDECLARED_REASON, ReplayJoin, assumption_registry,
-    blocking_premise, build, evaluate_join, exclusions, exclusions_applied, invalidate, summary,
-    undeclared_tables, well_formed_certificate, write_artifacts)
+    blocking_premise, build, evaluate_join, exclusions, exclusions_applied, invalidate,
+    learn_summary, summary, undeclared_tables, well_formed_certificate, write_artifacts)
 
 RECEIPT_DIR_ENV = "CAPCOV_REPLAY_RECEIPT_DIR"
 OUT_ENV = "CAPCOV_TARGET_GO_REPLAY_OUT"
@@ -66,4 +66,5 @@ __all__ = ["COMMITTED_RECEIPT_DIR", "REPEAT_RECEIPT_DIR", "UNQUALIFIED_RECEIPT_D
            "SYNTHETIC_RECEIPT_DIR", "RECEIPT_DIR_ENV",
            "OUT_ENV", "SYNTHETIC_INDEX", "ReplayJoin", "receipt_dir", "build", "evaluate_join",
            "summary", "write_artifacts", "blocking_premise", "undeclared_tables", "exclusions",
-           "exclusions_applied", "well_formed_certificate", "assumption_registry", "invalidate"]
+           "exclusions_applied", "well_formed_certificate", "learn_summary", "assumption_registry",
+           "invalidate"]

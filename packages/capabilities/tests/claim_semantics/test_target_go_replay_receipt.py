@@ -820,6 +820,186 @@ class RepeatTapeReceiptTest(_JoinCase):
         self.assertNotIn("claim:", json.dumps(entry))
 
 
+class LearnCampaignTest(_JoinCase):
+    """The learn receipt committed under the qualified fixture, and three edits of it.
+
+    A *learn campaign* is a separate producer chain (tape generator, PHP oracle,
+    model host) that replays generated tapes against both and reports where the
+    model predicted something the oracle did not do, and which ops it does not
+    model at all.  The judge reads two things from it: the claim
+    ``learn_consistent(run, op)``, and a **downgrade** of ``op_qualified_rt`` for
+    an op the campaign's closed unmodelled list names.  The downgrade can only
+    take qualification away; ``NoLearnReceiptTest`` below is the receipt with no
+    campaign, judged exactly as before.
+    """
+
+    TAPE = "learn-03-delete-delete"
+    STEP = "learn-03-delete-delete/03-1-delete"
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._setup(replay_join.COMMITTED_RECEIPT_DIR, Path(tempfile.mkdtemp(prefix="capcov-learn-out-")))
+
+    @classmethod
+    def _variant(cls, name: str, edit) -> Path:
+        """A temp copy of the committed fixture whose ``learn/<name>.json`` was edited."""
+        root = Path(tempfile.mkdtemp(prefix="capcov-learn-variant-")) / "receipt"
+        shutil.copytree(replay_join.COMMITTED_RECEIPT_DIR, root)
+        path = root / replay_facts.LEARN_DIR / f"{name}.json"
+        document = json.loads(path.read_text())
+        path.write_text(json.dumps(edit(document), indent=1, sort_keys=True) + "\n")
+        return root
+
+    def _relations(self, directory: Path):
+        """Build *and evaluate* a variant: the summary reads the evaluated closure."""
+        join = replay_join.build(directory)
+        self.assertEqual(join.contract_findings, [])
+        root = tempfile.mkdtemp(prefix="capcov-learn-variant-diff-")
+        self.addCleanup(shutil.rmtree, root, True)
+        replay_join.evaluate_join(join, root)
+        self.assertIsNone(join.mismatch, "kernels disagree on the variant")
+        self.assertIsNotNone(join.result)
+        return join, join.result.python, dict(join.result.python.relations)
+
+    def test_the_committed_campaign_is_consistent_and_downgrades_nothing_replayed(self) -> None:
+        self._evaluated()
+        summary = replay_join.summary(self.join)
+        learn = summary["learn"]
+        self.assertTrue(learn["present"])
+        self.assertTrue(learn["closed"])
+        self.assertEqual(learn["counterexamples"], [], "the campaign found no disagreement")
+        self.assertEqual(learn["consistent_ops"], ["delete-issue"])
+        # the ops the campaign says the model does not model are ops this tape never replayed,
+        # so nothing the receipt qualifies is downgraded
+        self.assertEqual(learn["unmodeled_ops"], ["create-issue", "delete-issues", "edit"])
+        self.assertNotIn("delete-issue", learn["unmodeled_ops"])
+        entry = summary["delete-issue"]
+        self.assertEqual(entry["learn_consistent"], "supported")
+        self.assertFalse(entry["learn_unmodeled"])
+        # and the op is still blocked only by the Stage D premise
+        self.assertEqual(entry["blocking_premise"], {"relation": "model_well_formed", "holds": False})
+        relations = dict(self.join.result.python.relations)
+        self.assertIn((self.join.run, "delete-issue"), set(relations["learn_unmodeled_gate_closed"]))
+        self.assertNotIn((self.join.run, "delete-issue"), set(relations["learn_unmodeled_any"]))
+        # the compatibility row the campaign is bound through
+        [binding] = relations["learn_describes_model"]
+        self.assertEqual(binding[1], self.join.receipt["model"])
+        self.assertEqual(len(relations["learn_run"]), 1)
+        self.assertEqual(relations["learn_run"][0][0], self.join.run,
+                         "learn rows are scoped to the replay run; the campaign's own id is the "
+                         "'campaign' column")
+
+    def test_a_planted_counterexample_leaves_learn_consistent_unresolved_naming_the_step(self) -> None:
+        def flip(document):
+            for row in document["rows"]:
+                if row["req"] == self.STEP and row["predicted"] == "ok":
+                    row["predicted"] = "forbidden"
+            return document
+
+        join, report, relations = self._relations(self._variant("learn_prediction", flip))
+        counterexamples = [r for r in relations["learn_counterexample"] if r[0] == join.run]
+        self.assertTrue(counterexamples, "the planted prediction disagrees with the oracle")
+        for row in counterexamples:
+            # (run, tape, req, op, predicted, observed): the step is named, and so is the pair
+            self.assertEqual((row[1], row[2], row[4], row[5]), (self.TAPE, self.STEP, "forbidden", "ok"))
+        self.assertIn((join.run, "delete-issue"), set(relations["learn_counterexample_any"]))
+        self.assertEqual(relations["learn_consistent"], (),
+                         "one counterexample for the op withdraws the claim for the op")
+        consistent = next(c for c in report.claims if c.key == join.claim_id("learn-consistent", "delete-issue"))
+        self.assertEqual(consistent.semantic, "unresolved")
+        summary = replay_join.summary(join)
+        [named] = summary["learn"]["counterexamples"]
+        self.assertEqual(named, [self.TAPE, self.STEP, "delete-issue", "forbidden", "ok"])
+        # the counterexample is about the model's predictions, not about the port: the op's
+        # own qualification is untouched and still blocked only by the Stage D premise
+        self.assertEqual(summary["delete-issue"]["blocking_premise"],
+                         {"relation": "model_well_formed", "holds": False})
+
+    def test_an_unmodeled_op_downgrades_its_qualification_and_says_so(self) -> None:
+        model = json.loads((replay_join.COMMITTED_RECEIPT_DIR / "receipt.json").read_text())["model"]
+
+        def add(document):
+            document["rows"].append({"model": model, "op": "delete-issue",
+                                     "learn": document["rows"][0]["learn"]})
+            return document
+
+        join, report, relations = self._relations(self._variant("learn_unmodeled", add))
+        self.assertIn((join.run, "delete-issue"), set(relations["learn_unmodeled_any"]))
+        self.assertEqual(relations["op_qualified_rt"], ())
+        summary = replay_join.summary(join)
+        entry = summary["delete-issue"]
+        self.assertTrue(entry["learn_unmodeled"])
+        self.assertEqual(entry["blocking_premise"], {"relation": "learn_unmodeled_any", "holds": True},
+                         "the downgrade outranks the Stage D premise, which is checked last")
+        self.assertIn("learn_unmodeled", entry["missing_premise"])
+        self.assertEqual(entry["qualification"], "unsupported",
+                         "an op the campaign says is unmodelled is a finding, not a pending premise")
+        self.assertIn("delete-issue", summary["learn"]["unmodeled_ops"])
+
+    def test_an_unclosed_unmodeled_list_downgrades_nothing(self) -> None:
+        """The positive half is read under its own closure: an open list licenses no downgrade."""
+        model = json.loads((replay_join.COMMITTED_RECEIPT_DIR / "receipt.json").read_text())["model"]
+
+        def add(document):
+            document["rows"].append({"model": model, "op": "delete-issue",
+                                     "learn": document["rows"][0]["learn"]})
+            return document
+
+        root = self._variant("learn_unmodeled", add)
+        header = root / replay_facts.LEARN_DIR / replay_facts.LEARN_RECEIPT_FILE
+        document = json.loads(header.read_text())
+        document["closed"]["learn_unmodeled"] = False
+        header.write_text(json.dumps(document, indent=1, sort_keys=True) + "\n")
+        join, _, relations = self._relations(root)
+        self.assertEqual(relations["learn_unmodeled_closed"], ())
+        self.assertEqual(relations["learn_unmodeled_any"], (),
+                         "an unmodelled list the producer did not close downgrades nothing")
+        self.assertEqual(replay_join.summary(join)["delete-issue"]["blocking_premise"],
+                         {"relation": "model_well_formed", "holds": False})
+
+    def test_a_campaign_against_another_model_is_stale_not_a_finding(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="capcov-learn-foreign-")) / "receipt"
+        shutil.copytree(replay_join.COMMITTED_RECEIPT_DIR, root)
+        header = root / replay_facts.LEARN_DIR / replay_facts.LEARN_RECEIPT_FILE
+        document = json.loads(header.read_text())
+        document["model"] = hashlib.sha256(b"another model entirely").hexdigest()
+        header.write_text(json.dumps(document, indent=1, sort_keys=True) + "\n")
+        result = replay_facts.export_bundle(root, run=self.join.run)
+        self.assertEqual(result.status, replay_facts.STATUS_STALE)
+        self.assertIn("the learn campaign was run against model", result.messages[0])
+
+
+class NoLearnReceiptTest(unittest.TestCase):
+    """A receipt with no learn campaign is judged exactly as it was before one existed."""
+
+    def test_absence_is_not_a_finding_and_licenses_the_downgrade_gate(self) -> None:
+        self.assertIsNotNone(shutil.which("souffle"), "souffle must be on PATH: run inside the nix devShell")
+        join = replay_join.build(replay_join.REPEAT_RECEIPT_DIR)
+        self.assertEqual(join.contract_findings, [])
+        self.assertTrue(any("no learn campaign is bound" in m for m in join.exported.messages))
+        root = tempfile.mkdtemp(prefix="capcov-no-learn-diff-")
+        self.addCleanup(shutil.rmtree, root, True)
+        replay_join.evaluate_join(join, root)
+        self.assertIsNone(join.mismatch)
+        relations = dict(join.result.python.relations)
+        for name in ("learn_run", "learn_prediction", "learn_observation", "learn_unmodeled",
+                     "learn_consistent", "learn_unmodeled_any"):
+            self.assertEqual(relations[name], (), name)
+        # the gate's completeness still derives, so !learn_unmodeled_any is licensed and
+        # the op reaches the premises it would have reached anyway
+        self.assertIn((join.run, "delete-issue"), set(relations["learn_unmodeled_gate_closed"]))
+        summary = replay_join.summary(join)
+        self.assertEqual(summary["learn"], {"present": False})
+        self.assertEqual(summary["delete-issue"]["blocking_premise"],
+                         {"relation": "corpus_constrains", "holds": False},
+                         "unchanged: the corpus gate, exactly as before the learn relations existed")
+        self.assertIsNone(summary["delete-issue"]["learn_consistent"])
+        self.assertFalse(summary["delete-issue"]["learn_unmodeled"])
+        self.assertNotIn("claim-learn-consistent-delete-issue",
+                         {claim.id for claim in join.bundle.claims},
+                         "no campaign, no claim about one")
+
+
 class UnqualifiedFixtureTest(_JoinCase):
     """The earlier real receipt: the model declares only issue, so two business tables stay undeclared."""
 

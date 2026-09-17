@@ -1,0 +1,13 @@
+{
+ "producer": "replay fg-replay v1",
+ "rows": [
+  {
+   "campaign": "learn-b40826cba2f4f8b3",
+   "learn": "4c70ec8595ea26fedb046dd08dc025cedcf27d6034195f845b70848f4c278879",
+   "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+   "php_commit": "9ff51ce59883b59a86499a1bc5d7df0614145abc",
+   "run": "eca6e7930af3",
+   "snapshot": "f386e8e7df8058f867206b2b7f5f506b68fbedb68fdaa122a2c75b0d5486da21"
+  }
+ ]
+}

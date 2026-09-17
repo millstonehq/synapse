@@ -119,6 +119,65 @@ and carries no ``model``).  A certificate from a checker version the list does
 not name admits nothing.  No closure witness here either: the judge reads the
 list positively.
 
+THE LEARN RECEIPT.  A *learn campaign* is a separate producer chain -- a tape
+generator, the PHP oracle and the model host -- that replays generated tapes
+against the oracle and against the model and reports where the model predicted
+something the oracle did not do, and which ops it does not model at all.  It is
+optional: a replay receipt with no ``learn/`` subdirectory carries no learn row,
+and qualification is exactly what it was.  When one is present it lives in
+``learn/`` beside ``receipt.json`` and its header is ``learn/learn_receipt.json``
+(``LEARN_DIR`` / ``LEARN_RECEIPT_FILE``)::
+
+    {"version": 1,
+     "learn": "<sha256>",                 # the campaign's digest (plan + tape set)
+     "model": "<sha256>",                 # optional; defaults to the receipt's model
+     "closed": {"learn_predictions": true, "learn_observations": true,
+                "learn_unmodeled": true},
+     "receipts": {...}}                   # optional; wall clock, counts, paths
+
+plus one ``{"rows": [...], "producer": "..."}`` file per relation, read exactly
+like the top-level observation files (``LEARN_FILES``)::
+
+    learn/learn_run.json          learn_run(run, campaign, model, learn, php_commit, snapshot)
+    learn/learn_prediction.json   learn_prediction(run, model, learn, tape, req, op, predicted, state_digest)
+    learn/learn_observation.json  learn_observation(run, tape, req, op, observed, state_digest)
+    learn/learn_unmodeled.json    learn_unmodeled(model, learn, op)
+
+``run`` is **this receipt's run** and may be omitted (a row naming another run
+is ``stale``, as everywhere else); the campaign's *own* run id is the separate
+``campaign`` column of ``learn_run``, which is not a context and is only
+recorded.  ``model`` and ``learn`` may likewise be omitted and default to the
+receipt's model and the learn header's digest; a row naming a different one is
+``invalid-input``, and a header naming a different *model* is ``stale`` (the
+campaign was run against another artifact and says nothing about this run).
+``req`` is the tape-qualified request key (``<tape>/<request id>``, since a
+request id repeats across tapes) and is the "step" the judge names in a
+counterexample.  ``predicted`` / ``observed`` are the outcome class the model
+and the oracle assign to that request (``ok``, ``forbidden``, ``missing``, ...);
+``state_digest`` is recorded beside each, not compared -- the class is what the
+campaign compares, and a digest comparison belongs to the post-state relations.
+The reserved class ``"unknown"`` means *the model made no prediction here* and is
+never a counterexample.  A prediction is a **set**: the model may admit several
+post-states for one position, so ``learn_prediction`` is keyed by
+``(run, model, learn, tape, req, state_digest)`` and what may not differ between
+two rows of one position is the class.  One observation per ``(run, tape, req)``.
+Producer classes: ``replay`` owns ``learn_run`` and ``learn_observations_closed``
+(the harness ran the tapes), ``php`` owns ``learn_observation`` (the oracle
+answered), ``shen`` owns ``learn_prediction``, ``learn_unmodeled``,
+``learn_predictions_closed``, ``learn_unmodeled_closed`` and the compatibility
+row ``learn_describes_model(learn, model)``, which the exporter emits from the
+header and which binds the campaign to the model the judge is using.  Each learn
+row depends on ``external:learn:<digest>`` as well as on the run row.
+
+The judge reads three things from this.  ``learn_counterexample(run, tape, req,
+op, predicted, observed)`` is a tape position where the two disagree;
+``learn_consistent(run, op)`` is the claim that, under both closures, there is
+none for that op.  ``learn_unmodeled_any(run, op)`` **downgrades**
+``op_qualified_rt``: an op the campaign reported as unmodelled, under its closed
+unmodelled list, does not qualify.  The downgrade can only take qualification
+away -- absence of a learn receipt is not evidence that the model covers
+everything, and a receipt without one qualifies as before.
+
 REVIEWER SCOPE EXCLUSIONS.  Infrastructure tables the systems write around an
 op (a session touch, job bookkeeping, a cache, an outbox) leave the
 ``undeclared_write`` judgement only through explicit, reviewer-owned facts,
@@ -311,6 +370,11 @@ UNIQUE_KEYS = {
     "php_response": ("run", "req"),
     "go_response": ("run", "req"),
     "replay_stability": ("run", "run_a", "run_b", "side"),
+    # the model's prediction for a tape position is a *set* of admissible post-states
+    # (like ``model_admissible``), so the state digest is part of the key; what may not
+    # differ is the class the model assigns to one of them.  The oracle answered once.
+    "learn_prediction": ("run", "model", "learn", "tape", "req", "state_digest"),
+    "learn_observation": ("run", "tape", "req"),
 }
 
 # The witnesses' predicate versions. Each Evidence.source names one of these so
@@ -337,6 +401,22 @@ WITNESS_STABILITY = "replay-stability-closed-v1"
 # ``model_checker_admitted`` rows under a file name that is not the relation's.
 CHECKERS_FILE = "model_checkers.json"
 CHECKERS_RELATION = "model_checker_admitted"
+
+# The learn campaign (module docstring, LEARN RECEIPT).  A subdirectory, because the
+# learn files are a *different producer chain* -- a tape generator, the oracle and the
+# model host -- bound to this run through the model, and because a receipt that has
+# none is the normal case.
+LEARN_DIR = "learn"
+LEARN_RECEIPT_FILE = "learn_receipt.json"
+LEARN_VERSION = 1
+LEARN_FILES = ("learn_run", "learn_prediction", "learn_observation", "learn_unmodeled")
+_LEARN_RECEIPT_KEYS = frozenset({"version", "model", "learn", "closed", "receipts"})
+# learn_receipt.json ``closed`` key -> (witness relation, predicate version)
+_LEARN_WITNESSES = {
+    "learn_predictions": ("learn_predictions_closed", "learn-predictions-closed-v1"),
+    "learn_observations": ("learn_observations_closed", "learn-observations-closed-v1"),
+    "learn_unmodeled": ("learn_unmodeled_closed", "learn-unmodeled-closed-v1"),
+}
 
 # The reviewer's scope exclusions (module docstring, REVIEWER SCOPE EXCLUSIONS).
 EXCLUSIONS_FILE = "model_scope_exclusions.json"
@@ -731,9 +811,63 @@ def _read_exclusions(receipt_dir: Path, header: Mapping[str, str],
     return source, rows
 
 
+def _read_learn_receipt(receipt_dir: Path, header: Mapping[str, str],
+                        limits: ExportLimits) -> dict[str, Any] | None:
+    """The ``learn/learn_receipt.json`` header, or ``None`` when no learn campaign is bound.
+
+    A run with no ``learn/`` directory is the normal case and is not an error:
+    the learn relations stay empty, no closure is emitted and the qualification
+    path is exactly the one a receipt without them always had.
+    """
+    path = receipt_dir / LEARN_DIR / LEARN_RECEIPT_FILE
+    if not path.is_file():
+        return None
+    document = _read_json(path, limits.file_bytes)
+    if not isinstance(document, Mapping):
+        raise ExportInputError(f"{LEARN_DIR}/{LEARN_RECEIPT_FILE}: must be an object")
+    unknown = set(document) - _LEARN_RECEIPT_KEYS
+    if unknown:
+        raise ExportInputError(f"{LEARN_DIR}/{LEARN_RECEIPT_FILE}: unknown keys {sorted(unknown)}")
+    version = document.get("version")
+    if isinstance(version, bool) or version != LEARN_VERSION:
+        raise ExportInputError(f"{LEARN_DIR}/{LEARN_RECEIPT_FILE}: version must be "
+                               f"{LEARN_VERSION}, got {version!r}")
+    learn = document.get("learn")
+    if not isinstance(learn, str) or not learn:
+        raise ExportInputError(f"{LEARN_DIR}/{LEARN_RECEIPT_FILE}: 'learn' must be a non-empty string")
+    model = document.get("model", header["model"])
+    if model != header["model"]:
+        # the campaign was run against another model: it says nothing about this run
+        raise StaleReceiptError(f"{LEARN_DIR}/{LEARN_RECEIPT_FILE}: the learn campaign was run "
+                                f"against model {str(model)[:12]!r}, the receipt's model is "
+                                f"{header['model'][:12]!r}")
+    closed_raw = document.get("closed", {})
+    if not isinstance(closed_raw, Mapping):
+        raise ExportInputError(f"{LEARN_DIR}/{LEARN_RECEIPT_FILE}: 'closed' must be an object")
+    unknown = set(closed_raw) - set(_LEARN_WITNESSES)
+    if unknown:
+        raise ExportInputError(f"{LEARN_DIR}/{LEARN_RECEIPT_FILE}: unknown 'closed' keys {sorted(unknown)}")
+    closed = {}
+    for key in _LEARN_WITNESSES:
+        value = closed_raw.get(key, False)
+        if not isinstance(value, bool):
+            raise ExportInputError(f"{LEARN_DIR}/{LEARN_RECEIPT_FILE}: closed.{key} must be a boolean")
+        closed[key] = value
+    receipts = document.get("receipts", {})
+    if not isinstance(receipts, Mapping):
+        raise ExportInputError(f"{LEARN_DIR}/{LEARN_RECEIPT_FILE}: 'receipts' must be an object")
+    return {"learn": learn, "model": model, "closed": closed, "receipts": dict(receipts)}
+
+
 def _read_rows(receipt_dir: Path, relation: RelationDecl, header: Mapping[str, str],
-               limits: ExportLimits, filename: str | None = None) -> tuple[str | None, list[dict[str, Any]]]:
-    """``(producer, rows)`` of ``<relation>.json`` (or ``filename``); ``(None, [])`` when absent."""
+               limits: ExportLimits, filename: str | None = None,
+               defaults: Mapping[str, str] | None = None) -> tuple[str | None, list[dict[str, Any]]]:
+    """``(producer, rows)`` of ``<relation>.json`` (or ``filename``); ``(None, [])`` when absent.
+
+    ``defaults`` names further columns a row may omit because the enclosing
+    receipt already fixes them (the learn digest of ``learn/learn_receipt.json``);
+    a row that names a *different* value is refused, as for ``run`` and ``model``.
+    """
     path = receipt_dir / (filename or f"{relation.name}.json")
     if not path.is_file():
         return None, []
@@ -771,6 +905,14 @@ def _read_rows(receipt_dir: Path, relation: RelationDecl, header: Mapping[str, s
                 raise ExportInputError(f"{path.name}: rows[{index}] names model "
                                        f"{str(row['model'])[:12]!r}, the receipt's model is "
                                        f"{header['model'][:12]!r}")
+        for name, value in (defaults or {}).items():
+            if name not in names:
+                continue
+            row.setdefault(name, value)
+            if row[name] != value:
+                raise ExportInputError(f"{path.name}: rows[{index}] names {name} "
+                                       f"{str(row[name])[:12]!r}, the receipt's {name} is "
+                                       f"{str(value)[:12]!r}")
         missing = [name for name in names if name not in row]
         if missing:
             raise ExportInputError(f"{path.name}: rows[{index}] lacks columns {missing}")
@@ -863,6 +1005,49 @@ def export_bundle(
                 eid = facts.add(name, row, source=source, depends_on=deps)
                 if name == "replay_request":
                     request_eids[row["req"]] = eid
+            if len(facts) > limits.rows:
+                return ExportResult(STATUS_RESOURCE_EXHAUSTED, None, facts.counts(),
+                                    (f"rows {len(facts)} exceed limit {limits.rows}",))
+
+        # --- the learn campaign, when one is bound to this run ----------------------
+        learn_header = _read_learn_receipt(receipt_dir, header, limits)
+        if learn_header is None:
+            messages.append(f"{LEARN_DIR}/{LEARN_RECEIPT_FILE} absent: no learn campaign is bound to this run")
+        else:
+            learn = learn_header["learn"]
+            learn_ext = f"external:learn:{learn}"
+            learn_defaults = {"learn": learn}
+            for name in LEARN_FILES:
+                decl = relations[name]
+                producer, rows = _read_rows(receipt_dir / LEARN_DIR, decl, header, limits,
+                                            defaults=learn_defaults)
+                source = producer if producer is not None else default_source(decl)
+                producers[name] = source
+                if producer is None and not rows:
+                    messages.append(f"{LEARN_DIR}/{name}.json absent: zero rows")
+                names = [column.name for column in decl.columns]
+                for row in rows:
+                    deps = [learn_ext]
+                    if "run" in names:
+                        deps.append(run_eid)
+                    if "model" in names:
+                        deps.append(model_ext)
+                    facts.add(name, row, source=source, depends_on=deps)
+            facts.add("learn_describes_model", {"learn": learn, "model": model},
+                      source=default_source(relations["learn_describes_model"]),
+                      depends_on=[learn_ext, model_ext])
+            for key, (relation, predicate) in _LEARN_WITNESSES.items():
+                if not learn_header["closed"][key]:
+                    messages.append(f"{LEARN_DIR} closed.{key} is false: no {relation} witness")
+                    continue
+                if relation == "learn_unmodeled_closed":
+                    values, deps = {"model": model, "learn": learn}, [model_ext, learn_ext]
+                elif relation == "learn_predictions_closed":
+                    values, deps = {"run": header["run"], "model": model}, [run_eid, model_ext]
+                else:
+                    values, deps = {"run": header["run"]}, [run_eid]
+                facts.add(relation, values, source=witness_source(relations[relation], predicate),
+                          depends_on=deps)
             if len(facts) > limits.rows:
                 return ExportResult(STATUS_RESOURCE_EXHAUSTED, None, facts.counts(),
                                     (f"rows {len(facts)} exceed limit {limits.rows}",))
@@ -994,7 +1179,7 @@ __all__ = [
     "RECEIPT_FILE", "RECEIPT_METADATA_KEYS", "EVIDENCE_PREFIXES", "OBSERVATION_FILES",
     "STATUS_COMPLETE", "STATUS_RESOURCE_EXHAUSTED", "STATUS_INVALID_INPUT", "STATUS_STALE", "UNIQUE_KEYS",
     "EXCLUSIONS_FILE", "WITNESS_SCOPE_EXCLUSIONS", "CHECKERS_FILE", "CHECKERS_RELATION",
-    "STALE_ON_FOREIGN_MODEL",
+    "STALE_ON_FOREIGN_MODEL", "LEARN_DIR", "LEARN_RECEIPT_FILE", "LEARN_FILES", "LEARN_VERSION",
     "ExportLimits", "ExportResult", "ExportInputError", "StaleReceiptError",
     "evidence_id", "evidence_prefix", "row_digest", "replay_relations_identity",
     "replay_relations", "primitive_relations", "STUB_RELATIONS", "default_source", "witness_source",

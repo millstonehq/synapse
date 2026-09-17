@@ -106,6 +106,20 @@ go_disagreement_closed(Run,Op)  :- the same body with go_post_states_closed(Run)
 undeclared_writes_closed(Run,Op):- replayed(Run,Op), replay_run_current(Run), model_describes_run(M,Run),
                                    replay_requests_closed(Run), php_effects_closed(Run), go_effects_closed(Run),
                                    model_writes_closed(M,Op), model_scope_exclusions_closed(M).
+learn_predicted(Run,Op)         :- learn_prediction(Run,_,_,_,_,Op,P,_), P != "unknown".
+learn_counterexample(Run,Tape,Req,Op,P,O)
+                                :- learn_prediction(Run,_,_,Tape,Req,Op,P,_), learn_observation(Run,Tape,Req,Op,O,_),
+                                   P != O, P != "unknown".
+learn_counterexample_any(Run,Op):- learn_counterexample(Run,_,_,Op,_,_).
+learn_counterexample_closed(Run,Op)
+                                :- learn_predicted(Run,Op), learn_run(Run,_,M,L,_,_), model_describes_run(M,Run),
+                                   learn_describes_model(L,M), learn_predictions_closed(Run,M),
+                                   learn_observations_closed(Run).
+learn_consistent(Run,Op)        :- learn_counterexample_closed(Run,Op), !learn_counterexample_any(Run,Op).
+learn_unmodeled_any(Run,Op)     :- learn_run(Run,_,M,L,_,_), model_describes_run(M,Run), learn_describes_model(L,M),
+                                   learn_unmodeled_closed(M,L), learn_unmodeled(M,L,Op).
+learn_unmodeled_gate_closed(Run,Op)
+                                :- replayed(Run,Op), replay_run_current(Run).
 op_qualified_rt(IX,Run,Op)      :- index_describes_replay(IX,Run), replayed(Run,Op), op_exercised(Run,Op),
                                    model_describes_run(M,Run),
                                    corpus_constrains(Run,Op),
@@ -117,6 +131,7 @@ op_qualified_rt(IX,Run,Op)      :- index_describes_replay(IX,Run), replayed(Run,
                                    effect_order_closed(Run,Op), !effect_order_any(Run,Op),
                                    effect_order_exercised(Run,Op), oracle_stable(Run),
                                    repeat_delete_closed(Run,Op), !repeat_delete_any(Run,Op),
+                                   learn_unmodeled_gate_closed(Run,Op), !learn_unmodeled_any(Run,Op),
                                    model_well_formed(M,Checker,Version,Cert),
                                    model_checker_admitted(Checker,Version).
 op_qualified(IX,Run,Op)         :- op_declared(IX,Op), index_describes_replay(IX,Run), op_qualified_rt(IX,Run,Op).
@@ -322,6 +337,43 @@ Design points a reviewer should check:
   `scripts/compiled_checker.py`) rather than as a finding against the port; see
   `tests/claim_semantics/README.md`.  The shape of the premise, not the strength
   of any certificate, is what the corpus fixes.
+* **The learn campaign** (v1 learn addendum).  A *learn campaign* is a separate
+  producer chain -- a tape generator, the PHP oracle and the model host -- that
+  replays generated tapes against the oracle and against the model and reports,
+  per tape position, what each said.  It is **optional**, and its receipt lives
+  in `learn/` beside `receipt.json` (`replay_facts` module docstring, THE LEARN
+  RECEIPT).  The judge reads two things from it.
+
+  `learn_consistent(run, op)` is the claim that, under `learn_predictions_closed`
+  and `learn_observations_closed`, no tape position of that op has the model
+  predicting a class the oracle did not produce.  `learn_counterexample(run,
+  tape, req, op, predicted, observed)` is such a position, and it names the step:
+  the `req` key is `<tape>/<request id>`, because a request id repeats across
+  tapes.  The reserved predicted class `"unknown"` means the model made no
+  prediction there and is never a counterexample.
+
+  `learn_unmodeled_any(run, op)` **downgrades** `op_qualified_rt`: an op the
+  campaign's *closed* unmodelled list names does not qualify, because the model
+  the judge is qualifying against does not model it.  Every input of that
+  relation is positive -- the campaign must be bound to the run (`learn_run`), to
+  the model (`model_describes_run`, `learn_describes_model`) and must have closed
+  its list (`learn_unmodeled_closed`) -- so a receipt with no `learn/` derives
+  nothing and is judged exactly as it was.  Its completeness
+  `learn_unmodeled_gate_closed(run, op)` therefore reads only `replayed` and
+  `replay_run_current`: what it licenses is "the downgrades **this bundle**
+  carries are all of them", never "the model covers every op", which no absence
+  could evidence.  **Absence of a learn campaign is not evidence of coverage.**
+  The gate can only take qualification away; that asymmetry is what makes it safe
+  to add to every receipt at once, and it is the one thing a reviewer must hold
+  on to here.
+
+  Producer authority is the usual split: `replay` owns `learn_run` and
+  `learn_observations_closed` (the harness ran the tapes), `php` owns
+  `learn_observation` (the oracle answered), and `shen` owns `learn_prediction`,
+  `learn_unmodeled`, their closures and the compatibility row
+  `learn_describes_model(learn, model)`.  A campaign whose header names another
+  model is `stale`, not `invalid-input`: it was run against another artifact.
+
 * **Cross-run stability** (v1 ordering addendum).  `replay_stability(run,
   run_a, run_b, side, stable)` binds the receipt's run to a *selftest* of the
   same oracle: two further runs of the same tape whose provenance (oracle
@@ -355,6 +407,16 @@ Design points a reviewer should check:
   delete (`issue` / `delete`) would need a second rule; the pack would report
   the repeat claim as unresolved rather than wrongly supported, which is the
   safe direction.
+* **A prediction is a set, but the counterexample rule compares one at a time.**
+  The model may admit several post-states for one tape position, so
+  `learn_prediction` is keyed by `(run, model, learn, tape, req, state_digest)`
+  and a position can carry more than one row.  `learn_counterexample` fires when
+  *some* predicted class differs from the observed one, which for a position
+  whose rows all agree on the class -- the only shape the model produces today --
+  is exact, and otherwise over-reports.  Over-reporting withdraws
+  `learn_consistent`, which is the safe direction; a model that assigns two
+  different classes to one position must refine the rule (compare against the
+  *set* under a per-position closure) before the pack can judge it.
 * **The order join is on `(table, kind)`, so a model that declared two
   statements with the same `(table, kind)` for one request** -- two `issue`
   updates, say -- would pair them crosswise and could report a violation that
