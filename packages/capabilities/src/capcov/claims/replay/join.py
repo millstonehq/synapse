@@ -46,19 +46,26 @@ SYNTHETIC_INDEX = hashlib.sha256(b"target-go replay pilot: synthetic PHP census 
 REVIEWER_SOURCE = "reviewer claim-time observation"
 CENSUS_ASSUMPTION_SOURCE = "php-census assumed by the reviewer pending the PHP SCIP census"
 INDEX_ASSUMPTION_SOURCE = "reviewer assumed: synthetic census index pending the PHP SCIP census"
-MODEL_WITNESSES = ("model_describes_run", "model_observed", "model_admissible_closed", "model_scope_exclusions_closed")
+MODEL_WITNESSES = ("model_describes_run", "model_observed", "model_admissible_closed",
+                   "model_scope_exclusions_closed", "model_well_formed", "model_checker_admitted")
 REASONS = {
     "model_describes_run": "no model runner vouched that a model describes the run",
     "model_observed": "the receipt names no model, so the reviewer has no model digest to observe",
     "model_admissible_closed": "the receipt names no model, so no admissible-state set is closed",
     "model_scope_exclusions_closed": "the reviewer did not close the model-scope exclusion set for this model",
+    "model_well_formed": "no typed checker certified that the model describing this run is well formed",
+    "model_checker_admitted": "the reviewer admits no checker at the version that certified the model",
 }
 UNDECLARED_REASON = "blocked by undeclared writes: PHP or Go wrote a table the model's closed write set does not declare for this op"
 # The premises op_qualified_rt needs, in the order a reviewer checks them; the
 # first one that fails (or the first "any" that holds) is the blocking premise.
 _BLOCKING_ORDER = (
     ("replay_run_current", False), ("model_describes_run", False), ("replayed", False), ("op_exercised", False),
-    ("corpus_constrains", False), ("php_disagreement_closed", False), ("php_disagree_any", True),
+    ("corpus_constrains", False),
+    # the Stage D premise, checked after the corpus gate: a receipt whose mutants were never
+    # re-baselined is blocked by its corpus first, whether or not a checker ran
+    ("model_well_formed", False), ("model_checker_admitted", False),
+    ("php_disagreement_closed", False), ("php_disagree_any", True),
     ("go_disagreement_closed", False), ("go_disagree_any", True), ("undeclared_writes_closed", False),
     ("model_scope_exclusions_closed", False), ("undeclared_any", True),
     ("post_state_gap_closed", False), ("post_state_any", True),
@@ -90,6 +97,24 @@ def exclusions(relations, run: str) -> list[dict[str, str]]:
     models = {r[0] for r in rows.get("model_describes_run", ()) if r[1] == run}
     return sorted(({"table": r[1], "reason": r[2]} for r in rows.get("model_scope_exclusion", ()) if r[0] in models),
                   key=lambda item: item["table"])
+
+
+def well_formed_certificate(relations, run: str) -> dict[str, str] | list[dict[str, str]] | str:
+    """The typed checker's certificate for the model(s) describing ``run``.
+
+    ``{"checker", "version", "certificate"}`` for the one certificate, ``"missing"``
+    when no checker certified the model op_qualified_rt joins (the premise is
+    positive and has no closure, so "missing" is exactly what the judge knows), and
+    the list when a model carries more than one.
+    """
+    rows = dict(relations) if not isinstance(relations, dict) else relations
+    models = {r[0] for r in rows.get("model_describes_run", ()) if r[1] == run}
+    certificates = sorted(({"checker": r[1], "version": r[2], "certificate": r[3]}
+                           for r in rows.get("model_well_formed", ()) if r[0] in models),
+                          key=canonical_json)
+    if not certificates:
+        return "missing"
+    return certificates[0] if len(certificates) == 1 else certificates
 
 
 def exclusions_applied(relations, run: str, op: str) -> list[str]:
@@ -127,6 +152,11 @@ def blocking_premise(relations, run: str, op: str, index: str = SYNTHETIC_INDEX)
             if name == "model_describes_run" and r[1] == run:
                 return True
             if name == "model_scope_exclusions_closed" and r[0] in models:
+                return True
+            if name == "model_well_formed" and r[0] in models:
+                return True
+            if name == "model_checker_admitted" and any(
+                    w[0] in models and w[1:3] == r for w in rows.get("model_well_formed", ())):
                 return True
             if r[:2] == (run, op):
                 return True
@@ -467,6 +497,8 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
                                                    + ", ".join(applied))
         out[op] = entry
     out["exclusions"] = exclusions(relations, join.run) if relations else []
+    # the Stage D premise: what typechecked the model this run is judged against
+    out["model_well_formed"] = well_formed_certificate(relations, join.run) if relations else "missing"
     out["stability"] = {
         "rows": sorted([list(r[1:]) for r in relations.get("replay_stability", ()) if r[0] == join.run], key=canonical_json),
         "oracle_stable": (join.run,) in set(relations.get("oracle_stable", ())),
@@ -549,4 +581,4 @@ def write_artifacts(join: ReplayJoin, out_dir: Path) -> dict[str, Any]:
 __all__ = ["SYNTHETIC_INDEX", "REVIEWER_SOURCE", "CENSUS_ASSUMPTION_SOURCE", "INDEX_ASSUMPTION_SOURCE",
            "MODEL_WITNESSES", "REASONS", "UNDECLARED_REASON", "ReplayJoin", "build", "evaluate_join",
            "summary", "write_artifacts", "blocking_premise", "undeclared_tables", "exclusions",
-           "exclusions_applied", "assumption_registry", "invalidate"]
+           "exclusions_applied", "well_formed_certificate", "assumption_registry", "invalidate"]

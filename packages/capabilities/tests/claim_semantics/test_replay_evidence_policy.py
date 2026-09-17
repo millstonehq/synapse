@@ -146,11 +146,12 @@ class ReplayEvidencePolicyTest(unittest.TestCase):
         self.assertEqual(entry.result.operational.value, "complete")
         self.assertEqual(entry.result.missing_premises, ())
         leaves = set(entry.result.support)
-        self.assertEqual({leaf.split(":")[0] for leaf in leaves}, {"replay", "php", "go", "shen", "mut", "reviewer"})
+        self.assertEqual({leaf.split(":")[0] for leaf in leaves},
+                         {"replay", "php", "go", "shen", "mut", "reviewer", "modelcheck"})
         by_id = {record.id: record for record in bundle.evidence}
         self.assertTrue(leaves <= set(by_id))
         classes = {by_id[leaf].source.split(" ", 1)[0] for leaf in leaves}
-        self.assertTrue({"replay", "php", "go", "shen", "mut", "reviewer", "php-census"} <= classes)
+        self.assertTrue({"replay", "php", "go", "shen", "mut", "reviewer", "php-census", "modelcheck"} <= classes)
         self.assertIn("snapshot_observed", {leaf.split(":")[2] for leaf in leaves})
         self.assertEqual(set(report.relation_rows("op_qualified")),
                          {(cases.INDEX, cases.RUN, op) for op in (cases.CREATE, cases.CLOSE, cases.DELETE)})

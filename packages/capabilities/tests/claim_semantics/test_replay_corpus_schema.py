@@ -51,8 +51,13 @@ COMPLETENESS = {"requested_closed": "requested", "op_surviving_closed": "op_has_
                 "effect_order_closed": "effect_order_any", "repeat_delete_effects_closed": "repeat_delete_has_effect",
                 "repeat_delete_closed": "repeat_delete_any", "oracle_unstable_closed": "oracle_unstable",
                 "earlier_delete_closed": "earlier_delete"}
-EVIDENCE_ID = re.compile(r"^(replay|php|go|shen|mut|reviewer):([0-9a-f]{12}|claim-time):([a-z_]+):([0-9a-f]{12})$")
+EVIDENCE_ID = re.compile(
+    r"^(replay|php|go|shen|mut|reviewer|modelcheck):([0-9a-f]{12}|claim-time):([a-z_]+):([0-9a-f]{12})$")
+# rows a judge always adds at claim time (never exported from a receipt)
 CLAIM_TIME_RELATIONS = {"run_nonce_observed", "snapshot_observed", "model_observed", "op_declared"}
+# a checker certificate normally rides in the receipt, but one naming another model can
+# only reach the judge at claim time (the exporter calls it stale): case 28
+CLAIM_TIME_ADMITTED = CLAIM_TIME_RELATIONS | {"model_well_formed"}
 
 
 def canonical(value) -> str:
@@ -202,7 +207,11 @@ class ReplayRulePackTests(unittest.TestCase):
                   "php_post_states_closed": "replay", "go_post_states_closed": "replay", "mutant_kills_closed": "replay",
                   "model_admissible_closed": "shen", "model_writes_closed": "shen", "model_describes_run": "shen",
                   "mutants_closed": "mut", "index_describes_replay": "reviewer",
-                  "model_scope_exclusion": "reviewer", "model_scope_exclusions_closed": "reviewer"}
+                  "model_scope_exclusion": "reviewer", "model_scope_exclusions_closed": "reviewer",
+                  # the model host may not certify its own model, and the reviewer may not
+                  # wave the check through: the checker owns the certificate, the reviewer
+                  # owns only which checker versions are admitted
+                  "model_well_formed": "modelcheck", "model_checker_admitted": "reviewer"}
         for name, owner in owners.items():
             self.assertEqual(frozen[name]["producer_classes"], [owner], name)
         self.assertEqual([name for name, item in frozen.items() if not item["producer_classes"]], [])
@@ -237,6 +246,33 @@ class ReplayRulePackTests(unittest.TestCase):
         self.assertEqual(frozen["model_scope_exclusion"]["modality"], "assumption")
         self.assertEqual(frozen["model_scope_exclusions_closed"]["completes"], "model_scope_exclusion")
 
+    def test_model_well_formedness_is_a_positive_premise_of_qualification(self) -> None:
+        rules = {rule["name"]: rule for rule in self.pack["rules"]}
+        atoms = _atoms(rules["op_qualified_rt"])
+        well_formed = next(atom for atom in atoms if atom["relation"] == "model_well_formed")
+        admitted = next(atom for atom in atoms if atom["relation"] == "model_checker_admitted")
+        binding = next(atom for atom in atoms if atom["relation"] == "model_describes_run")
+        for atom in (well_formed, admitted, binding):
+            self.assertIsNone(atom.get("negated"), atom["relation"])
+        # the certificate is joined on the model the compatibility witness binds to this run
+        self.assertEqual(well_formed["terms"][0], binding["terms"][0])
+        self.assertEqual(binding["terms"][1], rules["op_qualified_rt"]["head"]["terms"][1])
+        # and on the (checker, version) pair the reviewer admits
+        self.assertEqual(admitted["terms"], well_formed["terms"][1:3])
+        frozen = {item["name"]: item for item in self.pack["primitives"]}
+        self.assertEqual(frozen["model_well_formed"]["producer_classes"], ["modelcheck"])
+        self.assertNotIn("shen", frozen["model_well_formed"]["producer_classes"])
+        self.assertEqual(frozen["model_well_formed"]["context_indices"], ["model"])
+        self.assertEqual([column["name"] for column in frozen["model_well_formed"]["columns"]],
+                         ["model", "checker", "checker_version", "certificate"])
+        self.assertEqual(frozen["model_checker_admitted"]["producer_classes"], ["reviewer"])
+        self.assertEqual(frozen["model_checker_admitted"]["context_indices"], [])
+        # nothing negates well-formedness, so neither relation has (or needs) a closure
+        self.assertEqual([name for name, item in self.declarations.items()
+                          if item["completes"] in ("model_well_formed", "model_checker_admitted")], [])
+        self.assertNotIn("model_well_formed", {atom["relation"] for rule in self.pack["rules"]
+                                               for atom in _atoms(rule) if atom.get("negated")})
+
     def test_the_static_join_is_isolated_in_the_claim_rule(self) -> None:
         for rule in self.pack["rules"]:
             static = [atom["relation"] for atom in _atoms(rule)
@@ -260,10 +296,11 @@ class ReplayCaseTests(unittest.TestCase):
         self.assertEqual([path.stem for path in self.paths], list(case_builder.BUILDERS))
         self.assertEqual(sorted({path.name[:2] for path in self.paths}),
                          ["00", "01", "02", "03", "04", "05", "06", "08", "09", "10", "11", "13", "14", "15",
-                          "17", "18", "19", "20", "21", "23", "24", "25", "26"])
+                          "17", "18", "19", "20", "21", "23", "24", "25", "26", "27", "28", "29"])
         self.assertEqual([path.stem for path in case_paths(REJECTED_DIR)],
                          ["07-producer-class-violation", "12-closure-producer-violation",
-                          "16-exclusion-producer-violation", "22-effect-seq-producer-violation"])
+                          "16-exclusion-producer-violation", "22-effect-seq-producer-violation",
+                          "30-well-formed-producer-violation"])
         self.assertEqual([path.stem for path in case_paths(REJECTED_DIR)], list(case_builder.REJECTED_BUILDERS))
 
     def test_every_case_regenerates_identically_from_the_exporter(self) -> None:
@@ -306,6 +343,11 @@ class ReplayCaseTests(unittest.TestCase):
                     self.assertEqual(entry["context"], {name: values[name] for name in declaration["context_indices"]})
                     for key in ("run", "model", "index"):
                         if key in values:
+                            if (case["id"] == "28-well-formed-other-model"
+                                    and entry["relation"] == "model_well_formed" and key == "model"):
+                                # the planted fault: a certificate for another model, which must not join
+                                self.assertNotEqual(values[key], context[key])
+                                continue
                             self.assertEqual(values[key], context[key])
                     self.assertTrue(entry["source"])
                     if declaration["producer_classes"]:
@@ -337,6 +379,8 @@ class ReplayCaseTests(unittest.TestCase):
                     self.assertEqual(prefix, replay_facts.evidence_prefix(decls[relation]))
                     if relation in CLAIM_TIME_RELATIONS:
                         self.assertEqual(segment, "claim-time")
+                    elif segment == "claim-time":
+                        self.assertIn(relation, CLAIM_TIME_ADMITTED, entry["id"])
                     else:
                         segments.add(segment)
                         self.assertEqual(entry["id"], replay_facts.evidence_id(segment + "0" * 52, decls[relation],
@@ -457,10 +501,11 @@ class ReplayCaseTests(unittest.TestCase):
         control = table["00-positive-control"]["claims"]
         for claim_id in ("claim-qualified-create", "claim-qualified-close"):
             leaves = control[claim_id]["support_leaves"]
-            self.assertEqual({leaf.split(":")[0] for leaf in leaves}, {"replay", "php", "go", "shen", "mut", "reviewer"})
+            self.assertEqual({leaf.split(":")[0] for leaf in leaves},
+                             {"replay", "php", "go", "shen", "mut", "reviewer", "modelcheck"})
         facts = {entry["id"]: entry for entry in read_json(CASES_DIR / "00-positive-control.json")["facts"]}
         classes = {facts[leaf]["source"].split(" ", 1)[0] for leaf in control["claim-qualified-create"]["support_leaves"]}
-        self.assertTrue({"replay", "php", "go", "shen", "mut", "reviewer", "php-census"} <= classes)
+        self.assertTrue({"replay", "php", "go", "shen", "mut", "reviewer", "php-census", "modelcheck"} <= classes)
         self.assertEqual(table["06-stale-replay"]["claims"]["claim-qualified-close"]["operational_status"], "stale")
 
     def test_each_rejected_case_is_refused_at_ingestion_by_the_producer_class_alone(self) -> None:

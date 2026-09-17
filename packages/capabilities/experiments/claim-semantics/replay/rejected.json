@@ -69,6 +69,20 @@
         "claim-oracle-stable": "supported",
         "claim-repeat-delete-not-found": "supported"
       }
+    },
+    "30-well-formed-producer-violation": {
+      "validation_issues": [
+        "evidence-producer"
+      ],
+      "relabelled_relation": "model_well_formed",
+      "relabelled_source": "shen shen-model-host v1",
+      "unvalidated_verdicts": {
+        "claim-qualified-close": "supported",
+        "claim-qualified-create": "supported",
+        "claim-qualified-delete": "supported",
+        "claim-oracle-stable": "supported",
+        "claim-repeat-delete-not-found": "supported"
+      }
     }
   }
 }

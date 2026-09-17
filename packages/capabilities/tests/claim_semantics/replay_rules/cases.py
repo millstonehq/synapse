@@ -53,6 +53,12 @@ SUFFIX = {CREATE: "create", CLOSE: "close", DELETE: "delete"}
 DELETE_TARGET = "DELETE /api/issues/1"
 FIRST_DELETE, REPEAT_DELETE = "req-4", "req-5"
 OTHER_NONCE = hashlib.sha256(b"rules-replay-v1 another nonce").hexdigest()
+# the model of a *different* Shen domain model: what a checker certificate for the
+# previous model names (case 28), which must not join this run's model
+OTHER_MODEL = hashlib.sha256(b"rules-replay-v1 another model").hexdigest()
+# the Stage D placeholder the fixture's model_well_formed.json / model_checkers.json carry
+CHECKER, CHECKER_VERSION = "stage-d-typecheck", "0.1-pending"
+CHECKER_CERTIFICATE = hashlib.sha256(b"pending: checker not yet built").hexdigest()
 DISAGREEING_STATE = hashlib.sha256(b"rules-replay-v1 php post-state outside the model").hexdigest()
 
 REVIEWER_SOURCE = "reviewer claim-time observation"
@@ -228,7 +234,8 @@ WITNESS_DIAGNOSTICS = [observation("model_describes_run", ["run"]), observation(
                        observation("php_effect_seqs_closed", ["run"]), observation("go_effect_seqs_closed", ["run"]),
                        observation("model_effect_seqs_closed", ["run"]), observation("replay_request_seqs_closed", ["run"]),
                        observation("php_responses_closed", ["run"]), observation("go_responses_closed", ["run"]),
-                       observation("replay_stability_closed", ["run"])]
+                       observation("replay_stability_closed", ["run"]),
+                       observation("model_well_formed", []), observation("model_checker_admitted", [])]
 WITNESS_REASONS = {
     "model_describes_run": "no model_describes_run witness binds the receipt's model to the run",
     "run_nonce_observed": "the reviewer did not observe the run's nonce",
@@ -247,6 +254,8 @@ WITNESS_REASONS = {
     "php_responses_closed": "the harness did not close the PHP response table for the run",
     "go_responses_closed": "the harness did not close the Go response table for the run",
     "replay_stability_closed": "the harness did not close the cross-run stability table for the run (no bound selftest)",
+    "model_well_formed": "no typed checker certified that the model the judge binds to this run is well formed",
+    "model_checker_admitted": "the reviewer admits no checker at the version that certified the model",
 }
 
 
@@ -356,14 +365,18 @@ def build_00() -> dict[str, Any]:
     notes = [
         "The receipt is the fixture unchanged: one run, three ops, five requests (req-4 deletes issue 1, req-5 repeats "
         "the delete), PHP/Go/model agreeing row for row and statement for statement, three mutants all killed, "
-        "the PHP selftest stable, every closure witness present.",
+        "the PHP selftest stable, every closure witness present, and the model typechecked by an admitted checker.",
         "The reviewer observed the run's nonce, snapshot and model, and the PHP census declares all three ops for the "
         "synthetic index; index_describes_replay binds that index to the run, which is the only static/runtime join "
         "in the pack.",
         "op_qualified support for issues.create uses req-1 (the canonical proof is the shortest, then lexically least, "
         "so req-1 is chosen over req-3 for replayed/op_exercised and for effect_order_exercised); leaves span the "
-        "replay, php, go, shen, mut, reviewer and php-census producer classes and include the php/go/model effect "
-        "sequences and the stability row.",
+        "replay, php, go, shen, mut, reviewer, php-census and modelcheck producer classes and include the php/go/model "
+        "effect sequences and the stability row.",
+        "This is also the positive control of the Stage D premise: the typed checker's model_well_formed certificate "
+        "(stage-d-typecheck 0.1-pending) is a support leaf of every op_qualified proof, joined on the same model as "
+        "model_describes_run, under the reviewer's model_checker_admitted row.  Cases 27-29 withhold each half in "
+        "turn and 30 (rejected) lets the model host sign its own certificate.",
         "The per-target claim repeat_delete_not_found(run, " + DELETE_TARGET + ") is supported from the tape order, "
         "both 200/404 response pairs, req-4's issue update on both sides and both effect closures; oracle_stable "
         "is supported from the stability row and its closure.",
@@ -1087,6 +1100,111 @@ def build_21() -> dict[str, Any]:
                  facts, claims, outputs)
 
 
+def build_27() -> dict[str, Any]:
+    with variant({"model_well_formed": lambda _: None}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "model_well_formed.json is absent, so no typed checker certified the model the judge binds to this "
+                "run: op_qualified_rt's positive well-formedness premise has nothing to match and no op qualifies, "
+                "however well PHP, Go and the model agree.",
+        CLOSE: "As for issues.create.", DELETE: "As for issues.create."},
+        absent=("model_well_formed",))
+    notes = [
+        "The control receipt without model_well_formed.json; the reviewer's model_checkers.json still admits "
+        "stage-d-typecheck 0.1-pending and every other observation, witness and closure is the control's.",
+        "All three op_qualified claims are unresolved with model_well_formed as the only missing premise.  The "
+        "premise is positive, not a negation under a closure: an un-typechecked model is not qualified by silence, "
+        "and there is no completeness witness that could make its absence mean 'no certificate exists'.",
+    ]
+    return _case("27-model-not-well-formed", "No typed well-formedness certificate for the model", None, notes,
+                 facts, claims, outputs)
+
+
+def _foreign_certificate() -> dict[str, Any]:
+    """A checker certificate that reached the judge at claim time and names another model.
+
+    The exporter refuses such a row inside a receipt (``stale``: the certificate is
+    for a different artifact), so the only way it reaches a judge is directly from
+    the checker -- which is exactly the shape a stale Stage D run produces."""
+    return _claim_time_fact("model_well_formed", ["model", "checker", "checker_version", "certificate"],
+                            [OTHER_MODEL, CHECKER, CHECKER_VERSION, CHECKER_CERTIFICATE],
+                            {"model": OTHER_MODEL}, "modelcheck",
+                            f"modelcheck {CHECKER} {CHECKER_VERSION} model:{OTHER_MODEL[:12]}",
+                            [f"external:model:{OTHER_MODEL}"])
+
+
+def build_28() -> dict[str, Any]:
+    with variant({"model_well_formed": lambda _: None}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts() + [_foreign_certificate()]
+    foreign = find_id(facts, "model_well_formed")
+    reason = ("the only checker certificate names model " + OTHER_MODEL[:12] + ", not the model "
+              "model_describes_run binds to this run, so it does not join")
+    override = {op: {"model_well_formed": missing(claim_id_for(op), "model_well_formed", reason,
+                                                  requires=[foreign])} for op in OPS}
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "A certificate exists, but for another model: op_qualified_rt joins model_well_formed(M, ...) on the "
+                "same M as model_describes_run(M, Run), and the certified model is not the run's, so the premise "
+                "does not bind and no op qualifies.",
+        CLOSE: "As for issues.create.", DELETE: "As for issues.create."},
+        override=override)
+    notes = [
+        "The control receipt without model_well_formed.json, plus a claim-time checker certificate for a different "
+        "model digest.  The exporter refuses such a row inside a receipt (stale: the certificate is for another "
+        "artifact), so a certificate naming a foreign model can only arrive at claim time, which is what this case "
+        "plants -- the shape a Stage D run against the previous model produces.",
+        "All three op_qualified claims are unresolved with model_well_formed as the missing premise, triggered by the "
+        "foreign certificate: the join is on the model, so a certificate for another model is not weaker evidence, "
+        "it is no evidence at all.  Contrast case 27, where no certificate exists.",
+        "This is the only case whose rows do not all name the case's model; the foreign row is the fault.",
+    ]
+    return _case("28-well-formed-other-model", "The checker certified a different model", "well-formed-other-model",
+                 notes, facts, claims, outputs)
+
+
+def build_29() -> dict[str, Any]:
+    with variant({"model_checkers": lambda _: None}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "The checker certified the model, but the reviewer's admitted-checker list is absent: "
+                "model_checker_admitted(stage-d-typecheck, 0.1-pending) does not hold, so the certificate is from a "
+                "checker version nobody vouched for and op_qualified_rt cannot derive.",
+        CLOSE: "As for issues.create.", DELETE: "As for issues.create."},
+        absent=("model_checker_admitted",))
+    notes = [
+        "The control receipt without model_checkers.json; model_well_formed.json is the control's, so the "
+        "certificate itself is present and valid.",
+        "All three op_qualified claims are unresolved with model_checker_admitted as the only missing premise: which "
+        "checker versions may be believed is the reviewer's word, not the checker's, so an unknown checker version "
+        "certifies nothing.  The rule joins the certificate's (checker, checker_version) to the admitted pair.",
+    ]
+    return _case("29-checker-not-admitted", "The certifying checker version is not admitted by the reviewer", None,
+                 notes, facts, claims, outputs)
+
+
+def build_rejected_30() -> dict[str, Any]:
+    case = build_00()
+    case["id"] = "30-well-formed-producer-violation"
+    case["title"] = "Positive control whose model_well_formed row is emitted by the model host"
+    case["provenance"]["seeded_fault"] = "well-formed-producer-violation"
+    relabelled = 0
+    for entry in case["facts"]:
+        if entry["relation"] == "model_well_formed":
+            entry["source"] = REJECTED_SOURCE
+            relabelled += 1
+    assert relabelled == 1
+    case["review_notes"] = [
+        "The facts are the control's; only the model_well_formed certificate names the shen class, i.e. the model "
+        "host certifying the well-formedness of its own model.",
+        "load_case refuses the file (evidence-producer: model_well_formed admits modelcheck); evaluated unvalidated "
+        "all three op_qualified verdicts would be supported (rejected.json).  This is the producer boundary the "
+        "premise exists for: a host that could vouch for itself would add nothing to the judgement.",
+    ]
+    return case
+
+
 def build_rejected_22() -> dict[str, Any]:
     case = build_00()
     case["id"] = "22-effect-seq-producer-violation"
@@ -1194,12 +1312,16 @@ BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "24-repeat-before-the-commit": build_24,
     "25-first-delete-not-committed": build_25,
     "26-unstable-on-one-side": build_26,
+    "27-model-not-well-formed": build_27,
+    "28-well-formed-other-model": build_28,
+    "29-checker-not-admitted": build_29,
 }
 REJECTED_BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "07-producer-class-violation": build_rejected_07,
     "12-closure-producer-violation": build_rejected_12,
     "16-exclusion-producer-violation": build_rejected_16,
     "22-effect-seq-producer-violation": build_rejected_22,
+    "30-well-formed-producer-violation": build_rejected_30,
 }
 
 # The reviewer's table: claim -> (verdict, status, missing-premise relations, discrepancy kinds).
@@ -1265,6 +1387,9 @@ REVIEW: dict[str, dict[str, tuple[str, str, list[str], list[str]]]] = {
                                                                         ["first_delete_committed"], [])},
     "26-unstable-on-one-side": {**_all_ops("oracle_stable"),
                                 "claim-oracle-unstable": ("supported", "complete", [], ["oracle-unstable"])},
+    "27-model-not-well-formed": _all_ops("model_well_formed"),
+    "28-well-formed-other-model": _all_ops("model_well_formed"),
+    "29-checker-not-admitted": _all_ops("model_checker_admitted"),
     "23-repeat-delete-excluded-write": {"claim-qualified-create": SUPPORTED, "claim-qualified-close": SUPPORTED,
                                         "claim-qualified-delete": SUPPORTED,
                                         "claim-repeat-delete-not-found": SUPPORTED,

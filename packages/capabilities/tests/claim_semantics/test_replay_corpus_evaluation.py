@@ -391,6 +391,35 @@ class PackMutationsFailTheCorpus(unittest.TestCase):
         self.assertEqual(self._repeat_claim_verdict(self._mutated(drop_effect_premises),
                                                     "25-first-delete-not-committed"), "supported")
 
+    def _qualified_verdict(self, pack, stem: str) -> str:
+        report = evaluate(load_case(CASES_DIR / f"{stem}.json", pack))
+        self.assertEqual(report.status.value, "complete", report.message)
+        return next(entry.result.semantic.value for entry in report.claims
+                    if entry.claim.id == "claim-qualified-create")
+
+    def test_dropping_a_half_of_the_well_formedness_premise_flips_its_case(self) -> None:
+        """Each half of the Stage D premise is load-bearing on its own case."""
+        for stem, relation in (("27-model-not-well-formed", "model_well_formed"),
+                               ("28-well-formed-other-model", "model_well_formed"),
+                               ("29-checker-not-admitted", "model_checker_admitted")):
+            with self.subTest(case=stem):
+                self.assertEqual(self._qualified_verdict(load_pack(), stem), "unresolved")
+
+                def drop(pack, relation=relation):
+                    rule = next(r for r in pack["rules"] if r["name"] == "op_qualified_rt")
+                    rule["body"] = [a for a in rule["body"] if a.get("relation") != relation]
+
+                self.assertEqual(self._qualified_verdict(self._mutated(drop), stem), "supported")
+        # and dropping the model binding lets case 28's foreign certificate through
+        def drop_binding(pack):
+            rule = next(r for r in pack["rules"] if r["name"] == "op_qualified_rt")
+            rule["body"] = [a for a in rule["body"] if a.get("relation") != "model_describes_run"]
+
+        self.assertEqual(self._qualified_verdict(self._mutated(drop_binding), "28-well-formed-other-model"),
+                         "supported", "without the binding the certificate need not be this model's")
+        self.assertEqual(self._qualified_verdict(self._mutated(drop_binding), "27-model-not-well-formed"),
+                         "unresolved", "an absent certificate is absent however the join is written")
+
     def test_dropping_the_gate_from_op_qualified_rt_flips_the_case(self) -> None:
         def drop_gate(pack):
             rule = next(r for r in pack["rules"] if r["name"] == "op_qualified_rt")

@@ -8,7 +8,7 @@ census is qualified by this replay*.  The replay harness is a producer of
 observations, never an oracle; the judge is these rules.
 
 * `rules-replay-v1.json` - the rule pack in raw IR JSON wire form.
-* `cases/NN-*.json` - one positive control (`00`) and twenty-two adversarial
+* `cases/NN-*.json` - one positive control (`00`) and twenty-five adversarial
   shapes (the numbering is not contiguous: the gaps are the rejected cases);
   `rejected/NN-*.json` are the cases the ingestion boundary must refuse.
 * `expected.json` / `rejected.json` - the per-claim review tables duplicated
@@ -40,7 +40,9 @@ flips the claim).
 `src/capcov/claims/replay/schema_replay_v1.json` (`relations`).
 `supplementary_primitives` is empty: the frozen file declares everything the
 judge reads, including the reviewer's claim-time witnesses
-(`run_nonce_observed`, `snapshot_observed`, `model_observed`), the PHP census
+(`run_nonce_observed`, `snapshot_observed`, `model_observed`), the reviewer's
+admitted model checkers (`model_checker_admitted`), the typed checker's
+certificate (`model_well_formed`, producer class `modelcheck`), the PHP census
 (`op_declared`, static binding) and the two compatibility relations
 (`model_describes_run`, `index_describes_replay`).  `derived` opens with the
 two rule-less stubs the exporter carries (`mutant_killed_in`,
@@ -105,6 +107,8 @@ undeclared_writes_closed(Run,Op):- replayed(Run,Op), replay_run_current(Run), mo
                                    replay_requests_closed(Run), php_effects_closed(Run), go_effects_closed(Run),
                                    model_writes_closed(M,Op), model_scope_exclusions_closed(M).
 op_qualified_rt(IX,Run,Op)      :- index_describes_replay(IX,Run), replayed(Run,Op), op_exercised(Run,Op),
+                                   model_describes_run(M,Run), model_well_formed(M,Checker,Version,Cert),
+                                   model_checker_admitted(Checker,Version),
                                    corpus_constrains(Run,Op),
                                    php_disagreement_closed(Run,Op), !php_disagree_any(Run,Op),
                                    go_disagreement_closed(Run,Op),  !go_disagree_any(Run,Op),
@@ -260,6 +264,29 @@ Design points a reviewer should check:
   through a second cross-request gate.  Case 18 is the shape: the repeat
   violation holds, the per-target claim is unresolved, and all three ops still
   qualify.
+* **The model typechecked** (Stage D premise).  `op_qualified_rt` carries the
+  *positive* atom `model_well_formed(M, Checker, Version, Cert)`, joined on the
+  same `M` as `model_describes_run(M, Run)`: the judge qualifies an op against a
+  model only when a typed checker certified that model, and the certificate must
+  be for *this* model, not merely for some model (case 28).  Two things make the
+  premise worth its weight.  First, **producer authority**: `model_well_formed`
+  admits only the class `modelcheck`; the model host (`shen`) may not certify the
+  well-formedness of its own model and the `reviewer` may not wave it through, so
+  a certificate signed by either is refused at ingestion (rejected case 30) -- the
+  premise would be empty if the host could sign it.  Second, **which checker may
+  be believed is the reviewer's word**: the certificate's `(checker,
+  checker_version)` must appear in the reviewer-owned primitive
+  `model_checker_admitted`, so a certificate from an unknown or unadmitted
+  version admits nothing (case 29).  There is **no closure relation** on either:
+  nothing negates well-formedness, the premise is read positively, and a receipt
+  with no certificate is simply unresolved (case 27) rather than qualified by
+  silence.  The exporter reads `model_well_formed.json` (a row for another model
+  is `stale`, not `invalid-input`: the certificate is for another artifact) and
+  the reviewer's `model_checkers.json`.  The checked-in fixtures carry a
+  **placeholder** certificate -- checker `stage-d-typecheck`, version
+  `0.1-pending`, certificate `sha256("pending: checker not yet built")` -- until
+  the real Stage D checker emits one; the shape of the premise, not the strength
+  of that certificate, is what the corpus fixes.
 * **Cross-run stability** (v1 ordering addendum).  `replay_stability(run,
   run_a, run_b, side, stable)` binds the receipt's run to a *selftest* of the
   same oracle: two further runs of the same tape whose provenance (oracle
@@ -383,7 +410,7 @@ derivation must not use (the lying `mutant_kills_closed` witness of case 08);
 
 Exported rows: `<prefix>:<replay12>:<relation>:<row12>` exactly as
 `replay_facts` emits them (`prefix` from the relation's producer class:
-`replay`, `php`, `go`, `shen`, `mut`, `reviewer`; `php-census` shares `php`;
+`replay`, `php`, `go`, `shen`, `mut`, `reviewer`, `modelcheck`; `php-census` shares `php`;
 witnesses and compatibility rows use their owning class's prefix; `replay12` is the
 `replay-relations-v1` identity of the case's receipt variant; `row12 =
 sha256(canonical_json([relation, row]))[:12]`).  Claim-time rows the judge
@@ -399,7 +426,7 @@ constant in a case.
 
 | case | seeded edit of the fixture receipt | reviewed expectation |
 |---|---|---|
-| 00 positive control | none; reviewer observed nonce, snapshot, model; census declares all three ops | `op_qualified` supported/complete for `issues.create`, `issues.close` and `delete-issue`; leaves span `replay, php, go, shen, mut, reviewer, php-census`; companions `repeat_delete_not_found(run, DELETE /api/issues/1)` and `oracle_stable(run)` supported |
+| 00 positive control | none; reviewer observed nonce, snapshot, model; census declares all three ops; the model typechecked under an admitted checker | `op_qualified` supported/complete for `issues.create`, `issues.close` and `delete-issue`; leaves span `replay, php, go, shen, mut, reviewer, php-census, modelcheck`; companions `repeat_delete_not_found(run, DELETE /api/issues/1)` and `oracle_stable(run)` supported |
 | 01 planted disagreement | `php_post_state` of req-2 outside the admissible set | close: unresolved, missing `php_model_agree`; create: supported; companion `php_model_disagree` supported, discrepancy `php-state-outside-model` |
 | 02 planted undeclared write | `go_effect` insert into `audit_log` for req-2 | close: unresolved, missing `model_writes`; companion `undeclared_write` supported, discrepancy `undeclared-table` |
 | 03 surviving mutant | `mutant_killed` row for m-2 removed | close: unresolved, missing `mutant_killed`; companion `surviving_mutant` supported, discrepancy `mutant-not-killed` |
@@ -418,6 +445,10 @@ constant in a case.
 | 20 missing stability closure | `closed.replay_stability = false` (the row stays, and says `true`) | all three unresolved, missing `replay_stability_closed` |
 | 21 missing effect-seq closure | `closed.php_effect_seqs = false` (go and model stay closed) | all three unresolved, missing `php_effect_seqs_closed`: an open sequence cannot license `!effect_order_any` |
 | 08 lying closure | `mutant_killed` m-1 names req-9, not a replayed request; closures asserted | both ops **unresolved** (contradiction gate; missing premise `replay_request` for req-9); `kill_closure_gap` supported with support ∩ forbidden = the `mutant_kills_closed` witness (seeded fault), discrepancy `kill-outside-replayed-requests` |
+| 27 model not well formed | `model_well_formed.json` removed | all three unresolved, missing `model_well_formed`: an un-typechecked model is not qualified by silence (the premise is positive and has no closure) |
+| 28 well-formed, other model | no `model_well_formed.json`; a *claim-time* certificate naming another model digest (the exporter calls such a row inside a receipt `stale`) | all three unresolved, missing `model_well_formed`: the join is on the model `model_describes_run` binds, so a certificate for another model is no evidence at all |
+| 29 checker not admitted | `model_checkers.json` removed (the certificate stays) | all three unresolved, missing `model_checker_admitted`: which checker versions may be believed is the reviewer's word, not the checker's |
+| rejected 30 | control with the `model_well_formed` row sourced `shen shen-model-host v1` (the model host certifying its own model) | `load_case` raises; `evidence-producer` ×1; evaluated unvalidated every claim would be supported |
 | rejected 07 | control with `php_post_state` sourced `shen shen-model-host v1` | `load_case` raises; `validate_bundle` lists `evidence-producer` ×3; evaluated unvalidated both ops would be supported |
 | rejected 16 | control with the two `model_scope_exclusion` assumptions sourced `replay …` (the harness excluding on the reviewer's behalf) | `load_case` raises; `evidence-producer` ×2; evaluated unvalidated both ops would be supported |
 | rejected 12 | control with `model_admissible_closed` sourced `replay ...` (the harness closing the model runner's table) | `load_case` raises; `evidence-producer` ×1; evaluated unvalidated every claim would be supported |

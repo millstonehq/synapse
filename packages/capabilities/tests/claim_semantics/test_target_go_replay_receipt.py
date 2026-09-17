@@ -19,6 +19,7 @@ verdicts, certificates) go to ``CAPCOV_TARGET_GO_REPLAY_OUT``.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import shutil
@@ -41,7 +42,9 @@ RECEIPT_DIR = replay_join.receipt_dir()
 REPO_ROOT = Path(__file__).resolve().parents[3]
 NONCONFORMING_DIR = Path(os.environ.get("CAPCOV_REPLAY_NONCONFORMING_RECEIPT_DIR")
                          or REPO_ROOT / ".work" / "receipts" / "target-go-8177366-nomodel")
-PRODUCER_CLASSES = {"replay", "php", "go", "shen", "mut", "reviewer"}
+# every class an op_qualified certificate's leaves span; ``modelcheck`` is the typed
+# well-formedness checker, whose certificate is a positive premise of qualification
+PRODUCER_CLASSES = {"replay", "php", "go", "shen", "mut", "reviewer", "modelcheck"}
 
 
 def _nonconforming(document_dir: Path) -> None:
@@ -542,6 +545,31 @@ class FixtureJoinTest(_JoinCase):
                 self.assertEqual(entry.result.semantic.value, "unresolved")
 
 
+    def test_the_well_formedness_certificate_is_reported_and_load_bearing(self) -> None:
+        self._evaluated()
+        summary = replay_join.summary(self.join)
+        self.assertEqual(summary["model_well_formed"],
+                         {"checker": "stage-d-typecheck", "version": "0.1-pending",
+                          "certificate": hashlib.sha256(b"pending: checker not yet built").hexdigest()})
+        # withdraw the certificate: every op falls back to unresolved and the why-not names it
+        bundle = self.join.bundle
+        dropped = next(record for record in bundle.evidence if record.atom.relation == "model_well_formed")
+        from dataclasses import replace
+        variant = replace(bundle, facts=tuple(f for f in bundle.facts if f != dropped.atom),
+                          evidence=tuple(r for r in bundle.evidence if r.id != dropped.id),
+                          outputs=tuple(replace(o, excludes_evidence=tuple(e for e in o.excludes_evidence if e != dropped.id))
+                                        for o in bundle.outputs))
+        report = evaluate(variant)
+        self.assertEqual(report.status.value, "complete", report.message)
+        for entry in report.claims:
+            if entry.claim.relation == "op_qualified":
+                self.assertEqual(entry.result.semantic.value, "unresolved")
+                self.assertEqual([item["relation"] for item in entry.result.missing_premises],
+                                 ["model_well_formed"])
+        relations = dict(report.relations)
+        self.assertEqual(relations["op_qualified_rt"], ())
+
+
 @unittest.skipUnless(RECEIPT_DIR is not None, f"needs {replay_join.RECEIPT_DIR_ENV}")
 class RealReceiptTest(_JoinCase):
     """The corrected, model-backed target-go receipt."""
@@ -669,6 +697,8 @@ class RepeatTapeReceiptTest(_JoinCase):
         self.assertFalse(entry["corpus_constrains"])
         self.assertEqual(summary["stability"], {"rows": [], "oracle_stable": False, "oracle_unstable": False},
                          "the selftest did not run on this tape")
+        self.assertEqual(summary["model_well_formed"], "missing",
+                         "this tape's receipt carries no Stage D certificate; the corpus gate blocks it first")
         # the gates that did run on it
         self.assertEqual(entry["effect_order"], {"violations": [], "respected": [["go", "owner"], ["php", "owner"]],
                                                  "exercised": True})

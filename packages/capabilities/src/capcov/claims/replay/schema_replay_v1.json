@@ -786,6 +786,46 @@
         },
         {
           "context": false,
+          "name": "checker",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "checker_version",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "certificate",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "model"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "model_well_formed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "modelcheck"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": true,
+          "name": "model",
+          "type": "digest"
+        },
+        {
+          "context": false,
           "name": "table",
           "type": "symbol"
         },
@@ -878,6 +918,34 @@
       "finite": false,
       "modality": "observation",
       "name": "model_observed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "runtime",
+      "columns": [
+        {
+          "context": false,
+          "name": "checker",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "checker_version",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [],
+      "finite": false,
+      "modality": "observation",
+      "name": "model_checker_admitted",
       "nonempty": false,
       "polarity": "positive",
       "primitive": true,

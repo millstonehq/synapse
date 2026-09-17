@@ -44,8 +44,9 @@ for each of ``replay_request``, ``php_post_state``, ``go_post_state``,
 ``model_writes``, ``mutant``, ``mutant_killed`` and -- the ordering,
 cross-request and cross-run relations -- ``php_effect_seq``,
 ``go_effect_seq``, ``model_effect_seq``, ``replay_request_seq``,
-``php_response``, ``go_response`` and ``replay_stability``
-(``OBSERVATION_FILES``).  Row objects carry the relation's columns by name; a
+``php_response``, ``go_response``, ``replay_stability`` and
+``model_well_formed`` (``OBSERVATION_FILES``).  Row objects carry the
+relation's columns by name; a
 ``run`` column may be omitted (it is the receipt's ``run``) and a ``model``
 column may be omitted (it is the receipt's ``model``).  Values are typed by
 the schema: ``symbol`` and ``digest`` columns are JSON strings, ``unsigned``
@@ -82,6 +83,41 @@ closures are ``closed.php_effect_seqs`` / ``go_effect_seqs`` /
 ``model_effect_seqs_closed(run, model)`` carries the model like
 ``model_admissible_closed``; ``replay_stability_closed(run)`` completes
 ``replay_stability``).
+
+MODEL WELL-FORMEDNESS.  ``model_describes_run`` binds a run to a model; that
+the model *typechecks* is a separate, positive premise of qualification, and
+the model host cannot vouch for it.  The optional ``model_well_formed.json``
+(``OBSERVATION_FILES``)::
+
+    {"producer": "modelcheck <checker> <version> model:<digest12>",
+     "rows": [{"model": "<sha256>",           # optional; defaults to the receipt's
+               "checker": "<name>", "checker_version": "<version>",
+               "certificate": "<sha256>"}, ...]}
+
+exports one ``model_well_formed(model, checker, checker_version, certificate)``
+row per entry under the producer class ``modelcheck`` (evidence-id prefix
+``modelcheck``).  The class is the point: ``shen`` -- the model host -- is not
+admitted for this relation, because a host cannot certify its own model's
+well-formedness, and neither is ``reviewer``; a file that claims either is
+refused at ingestion (``evidence-producer``) like any other producer lie.  A
+row naming a model other than the receipt's certifies *another artifact* and
+makes the export ``stale`` with its own message (``STALE_ON_FOREIGN_MODEL``)
+rather than ``invalid-input``: the receipt is well formed, the certificate is
+simply not this model's.  There is no closure relation -- nothing negates
+well-formedness -- so a missing file is simply no certificate, and the judge
+withholds qualification rather than inferring one.
+
+Which checker versions may be believed is the *reviewer's* word, not the
+checker's: ``model_checkers.json`` (``CHECKERS_FILE``)::
+
+    {"producer": "reviewer <name>",          # optional; first token must be reviewer
+     "rows": [{"checker": "<name>", "checker_version": "<version>"}, ...]}
+
+exports one ``model_checker_admitted(checker, checker_version)`` row per entry
+(``CHECKERS_RELATION``; the file is named for the list, not for the relation,
+and carries no ``model``).  A certificate from a checker version the list does
+not name admits nothing.  No closure witness here either: the judge reads the
+list positively.
 
 REVIEWER SCOPE EXCLUSIONS.  Infrastructure tables the systems write around an
 op (a session touch, job bookkeeping, a cache, an outbox) leave the
@@ -159,15 +195,17 @@ EVIDENCE
 --------
 Ids are ``<prefix>:<replay12>:<relation>:<row12>`` where ``prefix`` is the
 evidence-id prefix of the relation's producer class (``EVIDENCE_PREFIXES``:
-``replay``, ``php``, ``go``, ``shen``, ``mut``, ``reviewer``; the ``php-census``
-class shares the ``php`` prefix).  Every relation of the frozen schema is
-owned: the harness (``replay``) owns the request, effect, post-state and kill
+``replay``, ``php``, ``go``, ``shen``, ``mut``, ``reviewer``, ``modelcheck``;
+the ``php-census`` class shares the ``php`` prefix).  Every relation of the
+frozen schema is owned: the harness (``replay``) owns the request, effect, post-state and kill
 closures and the sequence, response and stability closures, the model runner
 (``shen``) owns ``model_admissible_closed``, ``model_effect_seqs_closed``,
 ``model_writes_closed`` and ``model_describes_run``, the mutation tool
-(``mut``) owns ``mutants_closed`` and the reviewer owns
-``index_describes_replay`` -- so a runner cannot emit another producer's
-closure and the validator refuses one that tries (``evidence-producer``).
+(``mut``) owns ``mutants_closed``, the reviewer owns
+``index_describes_replay`` and ``model_checker_admitted``, and the typed
+well-formedness checker (``modelcheck``) owns ``model_well_formed`` -- so a
+runner cannot emit another producer's closure and the validator refuses one
+that tries (``evidence-producer``).
 A relation that declared no class would use the ``replay`` prefix.  ``row12 =
 sha256(canonical_json([relation, row]))[:12]``.
 
@@ -235,7 +273,7 @@ RECEIPT_METADATA_KEYS = ("receipts", "receipt_dir")
 # of each (module docstring, EVIDENCE).
 EVIDENCE_PREFIXES = {
     "replay": "replay", "php": "php", "go": "go", "shen": "shen", "mut": "mut",
-    "reviewer": "reviewer", "php-census": "php",
+    "reviewer": "reviewer", "php-census": "php", "modelcheck": "modelcheck",
 }
 _UNOWNED_PREFIX = "replay"
 
@@ -247,7 +285,15 @@ OBSERVATION_FILES = (
     # ordering, cross-request and cross-run observations (module docstring)
     "php_effect_seq", "go_effect_seq", "model_effect_seq", "replay_request_seq",
     "php_response", "go_response", "replay_stability",
+    # the typed well-formedness certificate of the model the judge binds to
+    "model_well_formed",
 )
+
+# Relations whose rows are *about* one model rather than merely scoped to it: a
+# row naming another model is a certificate for a different artifact, i.e. a
+# leftover of another check, and is ``stale`` rather than ``invalid-input``
+# (module docstring, MODEL WELL-FORMEDNESS).
+STALE_ON_FOREIGN_MODEL = frozenset({"model_well_formed"})
 
 # Relations that admit one observation per key (module docstring, RECEIPT
 # DIRECTORY CONTRACT): relation -> the columns that identify the event; the
@@ -286,6 +332,11 @@ WITNESS_REQUEST_SEQS = "replay-request-seqs-closed-v1"
 WITNESS_PHP_RESPONSES = "php-responses-closed-v1"
 WITNESS_GO_RESPONSES = "go-responses-closed-v1"
 WITNESS_STABILITY = "replay-stability-closed-v1"
+
+# The reviewer's admitted model checkers (module docstring, MODEL WELL-FORMEDNESS):
+# ``model_checker_admitted`` rows under a file name that is not the relation's.
+CHECKERS_FILE = "model_checkers.json"
+CHECKERS_RELATION = "model_checker_admitted"
 
 # The reviewer's scope exclusions (module docstring, REVIEWER SCOPE EXCLUSIONS).
 EXCLUSIONS_FILE = "model_scope_exclusions.json"
@@ -681,9 +732,9 @@ def _read_exclusions(receipt_dir: Path, header: Mapping[str, str],
 
 
 def _read_rows(receipt_dir: Path, relation: RelationDecl, header: Mapping[str, str],
-               limits: ExportLimits) -> tuple[str | None, list[dict[str, Any]]]:
-    """``(producer, rows)`` of ``<relation>.json``; ``(None, [])`` when absent."""
-    path = receipt_dir / f"{relation.name}.json"
+               limits: ExportLimits, filename: str | None = None) -> tuple[str | None, list[dict[str, Any]]]:
+    """``(producer, rows)`` of ``<relation>.json`` (or ``filename``); ``(None, [])`` when absent."""
+    path = receipt_dir / (filename or f"{relation.name}.json")
     if not path.is_file():
         return None, []
     document = _read_json(path, limits.file_bytes)
@@ -712,6 +763,11 @@ def _read_rows(receipt_dir: Path, relation: RelationDecl, header: Mapping[str, s
         if "model" in names:
             row.setdefault("model", header["model"])
             if row["model"] != header["model"]:
+                if relation.name in STALE_ON_FOREIGN_MODEL:
+                    raise StaleReceiptError(
+                        f"{path.name}: rows[{index}] certifies model {str(row['model'])[:12]!r}, "
+                        f"the receipt's model is {header['model'][:12]!r}: the certificate is for "
+                        f"another model and does not describe this run")
                 raise ExportInputError(f"{path.name}: rows[{index}] names model "
                                        f"{str(row['model'])[:12]!r}, the receipt's model is "
                                        f"{header['model'][:12]!r}")
@@ -810,6 +866,16 @@ def export_bundle(
             if len(facts) > limits.rows:
                 return ExportResult(STATUS_RESOURCE_EXHAUSTED, None, facts.counts(),
                                     (f"rows {len(facts)} exceed limit {limits.rows}",))
+
+        # --- the reviewer's admitted model checkers ---------------------------------
+        checkers = relations[CHECKERS_RELATION]
+        producer, rows = _read_rows(receipt_dir, checkers, header, limits, CHECKERS_FILE)
+        source = producer if producer is not None else default_source(checkers)
+        producers[CHECKERS_RELATION] = source
+        if producer is None and not rows:
+            messages.append(f"{CHECKERS_FILE} absent: zero admitted checkers")
+        for row in rows:
+            facts.add(CHECKERS_RELATION, row, source=source)
 
         # --- reviewer scope exclusions (assumption-kind evidence) --------------------
         source, rows = _read_exclusions(receipt_dir, header, limits)
@@ -927,7 +993,8 @@ __all__ = [
     "EXPORT_VERSION", "EXPORTER", "PRODUCER", "REPLAY_IDENTITY", "RECEIPT_VERSION",
     "RECEIPT_FILE", "RECEIPT_METADATA_KEYS", "EVIDENCE_PREFIXES", "OBSERVATION_FILES",
     "STATUS_COMPLETE", "STATUS_RESOURCE_EXHAUSTED", "STATUS_INVALID_INPUT", "STATUS_STALE", "UNIQUE_KEYS",
-    "EXCLUSIONS_FILE", "WITNESS_SCOPE_EXCLUSIONS",
+    "EXCLUSIONS_FILE", "WITNESS_SCOPE_EXCLUSIONS", "CHECKERS_FILE", "CHECKERS_RELATION",
+    "STALE_ON_FOREIGN_MODEL",
     "ExportLimits", "ExportResult", "ExportInputError", "StaleReceiptError",
     "evidence_id", "evidence_prefix", "row_digest", "replay_relations_identity",
     "replay_relations", "primitive_relations", "STUB_RELATIONS", "default_source", "witness_source",

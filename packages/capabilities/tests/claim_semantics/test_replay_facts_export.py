@@ -854,6 +854,91 @@ class ScopeExclusionTest(_Exported):
         self.assertEqual(_rows(result.bundle, "model_scope_exclusions_closed"), [])
 
 
+class ModelWellFormedTest(_Exported):
+    """The typed checker's certificate and the reviewer's admitted checker list."""
+
+    CERTIFICATE = hashlib.sha256(b"pending: checker not yet built").hexdigest()
+
+    def test_the_certificate_exports_under_the_modelcheck_class(self) -> None:
+        [record] = _evidence(self.bundle, "model_well_formed")
+        self.assertEqual([t.value for t in record.atom.terms],
+                         [self.model, "stage-d-typecheck", "0.1-pending", self.CERTIFICATE])
+        self.assertEqual(record.kind, "fact")
+        self.assertEqual(record.source, f"modelcheck stage-d-typecheck 0.1-pending model:{self.model[:12]}")
+        self.assertTrue(record.id.startswith("modelcheck:"))
+        self.assertEqual(record.context.as_dict(), {"model": self.model})
+        self.assertEqual(record.depends_on, (f"external:model:{self.model}",))
+        decls = {r.name: r for r in self.bundle.relations}
+        self.assertEqual(decls["model_well_formed"].producer_classes, ("modelcheck",))
+        self.assertEqual(replay_facts.EVIDENCE_PREFIXES["modelcheck"], "modelcheck")
+        # and the reviewer's admission list, which is not named for its relation
+        [admitted] = _evidence(self.bundle, "model_checker_admitted")
+        self.assertEqual([t.value for t in admitted.atom.terms], ["stage-d-typecheck", "0.1-pending"])
+        self.assertEqual(admitted.source, "reviewer fixture-reviewer admitted model checkers 2026-09-16")
+        self.assertTrue(admitted.id.startswith("reviewer:"))
+        self.assertEqual(admitted.context.as_dict(), {})
+        self.assertEqual(dict(dict(self.bundle.metadata)["producers"])["model_checker_admitted"], admitted.source)
+
+    def test_the_model_host_may_not_certify_its_own_model(self) -> None:
+        for producer in ("shen shen-model-host v1", "reviewer fixture-reviewer", "replay fg-replay v1"):
+            with self.subTest(producer=producer), \
+                    _variant(model_well_formed=lambda d, p=producer: {**d, "producer": p}) as root:
+                result = self.export(root)
+                self.assertEqual(result.status, replay_facts.STATUS_INVALID_INPUT)
+                [message] = result.messages
+                self.assertTrue(message.startswith("evidence-producer:"), message)
+                self.assertIn("'model_well_formed' admits ('modelcheck',)", message)
+
+    def test_a_certificate_for_another_model_is_stale_with_its_own_message(self) -> None:
+        def other(document):
+            document = copy.deepcopy(document)
+            document["rows"][0]["model"] = "a" * 64
+            return document
+
+        with _variant(model_well_formed=other) as root:
+            result = self.export(root)
+        self.assertEqual(result.status, replay_facts.STATUS_STALE)
+        [message] = result.messages
+        self.assertIn("certifies model 'aaaaaaaaaaaa'", message)
+        self.assertIn("the certificate is for another model", message)
+        self.assertEqual(replay_facts.STALE_ON_FOREIGN_MODEL, frozenset({"model_well_formed"}))
+        # a model-scoped relation that is merely *about* this model stays invalid-input
+        with _variant(model_writes=other) as root:
+            result = self.export(root)
+        self.assertEqual(result.status, replay_facts.STATUS_INVALID_INPUT)
+        self.assertIn("names model 'aaaaaaaaaaaa'", result.messages[0])
+
+    def test_neither_file_has_a_closure_and_absence_is_simply_no_rows(self) -> None:
+        with _variant(model_well_formed=lambda _: None, model_checkers=lambda _: None) as root:
+            result = self.export(root)
+        self.assertEqual(result.status, replay_facts.STATUS_COMPLETE, result.messages)
+        self.assertEqual(_rows(result.bundle, "model_well_formed"), [])
+        self.assertEqual(_rows(result.bundle, "model_checker_admitted"), [])
+        self.assertTrue(any("model_well_formed.json absent" in m for m in result.messages))
+        self.assertTrue(any("model_checkers.json absent" in m for m in result.messages))
+        # nothing in the schema completes either relation: they are read positively
+        completes = {r.completes for r in result.bundle.relations if r.completes}
+        self.assertNotIn("model_well_formed", completes)
+        self.assertNotIn("model_checker_admitted", completes)
+        self.assertNotIn("model_well_formed", replay_facts._RUN_WITNESSES.values())
+
+    def test_a_malformed_certificate_or_admission_row_is_invalid_input(self) -> None:
+        for edits, needle in (
+                ({"model_well_formed": lambda d: {**d, "rows": [{"model": d["rows"][0]["model"],
+                                                                 "checker": "c", "checker_version": "v"}]}},
+                 "lacks columns ['certificate']"),
+                ({"model_well_formed": lambda d: {**d, "rows": [{**d["rows"][0], "checker": 3}]}},
+                 "model_well_formed.checker: expected str"),
+                ({"model_checkers": lambda d: {**d, "rows": [{"checker": "c"}]}},
+                 "lacks columns ['checker_version']"),
+                ({"model_checkers": lambda d: {**d, "producer": "shen shen-model-host v1"}},
+                 "'model_checker_admitted' admits ('reviewer',)")):
+            with self.subTest(needle=needle), _variant(**edits) as root:
+                result = self.export(root)
+                self.assertEqual(result.status, replay_facts.STATUS_INVALID_INPUT)
+                self.assertIn(needle, result.messages[0])
+
+
 class ProducerAuthorityTest(_Exported):
     """Step 1's ``evidence-producer`` is the boundary the exporter relies on."""
 

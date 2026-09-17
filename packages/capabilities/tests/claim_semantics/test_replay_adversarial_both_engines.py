@@ -107,7 +107,10 @@ class AdversarialReplayCasesInBothEngines(unittest.TestCase):
                      "17-effect-order-violation": 2, "18-repeat-delete-with-effects": 3, "19-unstable-oracle": 0,
                      "20-missing-stability-closure": 0, "21-missing-effect-seq-closure": 0,
                      "23-repeat-delete-excluded-write": 3, "24-repeat-before-the-commit": 3,
-                     "25-first-delete-not-committed": 2, "26-unstable-on-one-side": 0}
+                     "25-first-delete-not-committed": 2, "26-unstable-on-one-side": 0,
+                     # the Stage D well-formedness premise: each half withheld in turn
+                     "27-model-not-well-formed": 0, "28-well-formed-other-model": 0,
+                     "29-checker-not-admitted": 0}
         # one derived row per shape the new rules are there to catch, in both kernels
         planted = {"17-effect-order-violation": ("effect_order_violation", 1),
                    "18-repeat-delete-with-effects": ("repeat_delete_violation", 1),

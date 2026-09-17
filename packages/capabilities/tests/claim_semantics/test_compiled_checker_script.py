@@ -84,7 +84,7 @@ class CompiledCheckerScriptTests(unittest.TestCase):
         self.assertEqual(document["required_ops"], ["delete-issue"])
         self.assertEqual(document["contract_findings"], [])
         self.assertEqual(document["pack"]["id"], "rules-replay-v1")
-        self.assertEqual(document["pack"]["relation_count"], 98)
+        self.assertEqual(document["pack"]["relation_count"], 100)
         self.assertEqual(document["pack"]["rule_count"], 64)
         self.assertRegex(document["pack"]["program_digest"], HEX64)
 
@@ -254,7 +254,7 @@ class CompiledCheckerScriptTests(unittest.TestCase):
         self.assertEqual(document["schema"], "capcov-compiled-bench-v1")
         self.assertEqual(document["fixture"], replay_join.COMMITTED_RECEIPT_DIR.name)
         self.assertEqual(document["scale"], 2)
-        self.assertEqual(document["relation_count"], 98)
+        self.assertEqual(document["relation_count"], 100)
         self.assertTrue(document["closures_identical"])
         self.assertRegex(document["binary_sha256"], HEX64)
         self.assertRegex(document["souffle"]["sha256"], HEX64)
