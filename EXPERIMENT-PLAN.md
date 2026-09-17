@@ -5911,3 +5911,27 @@ the qualified receipt's missing premise from `model_well_formed` to `model_check
 (measured: six of shen1's assertions move), so fact, signed row and assertion flip land as one
 reviewable change owned by shen1, waiting on the repository owner's signature.
 
+### 2026-09-17 direction: core plus optional profiles (relayed by shen1 from the repository owner; code pending)
+
+Everything this line added becomes opt-in, so that `capcov` on this branch with no flags and no
+optional tools installed behaves exactly like upstream `main` (discover / observe / reconcile /
+gate / report, the four-cell reconcile, the AST resolver; no Soufflé, Shen, Nix or SCIP required).
+The convention is upstream's own `--resolver scip`: an opt-in flag, a named error when the tool
+is absent, never a silent downgrade. Three switches, being built by shen1 on
+`experiment/optional-profiles`: `--judge claims` on reconcile/gate (or `[judge] engine = "claims"`
+in `capcov.toml`) enables the claims judge, with `--evaluator python|souffle|souffle-compiled`
+beneath it (default python; differential only when two are present); `--model shen:<dir>` as a
+producer profile under which Stage D's preflight runs; `--static scip` as a producer profile that
+reuses upstream's resolver and additionally emits its residue as facts plus a `call_graph_closed`
+witness only when the residue is empty in scope, so negative static claims can resolve. Proof of
+optionality: a CI job that installs the wheel with no extras and no optional tools, runs
+upstream's own suite, and golden-compares discover/reconcile/gate/report outputs on go_app
+against upstream `main`. Nothing is deleted.
+
+Ownership: shen1 builds the flags and the no-extras job; this line owns the plan and handoff
+rewrite to "core + three optional profiles (model, static census, advisory) + one evaluator with
+optional cross-check", to land when the code does. Stage D's import footprint was measured for
+this: `import capcov.claims.modelcheck` loads only the pure IR/validation/verdict/output modules,
+shells out only inside `check()`, and names its missing runtime; `preflight(model_dir)` (to add)
+returns a status dict and never raises, for the `--model` profile to call.
+
