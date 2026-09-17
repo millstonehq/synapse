@@ -130,8 +130,17 @@ class ProgramIdentityTests(unittest.TestCase):
             next(iter(self.replay_cases.values()))).program_digest)
 
     def test_src_pack_loader_equals_the_test_adapter(self) -> None:
+        """Two loaders, two files, one pack: the shipped mirror and the reviewed original.
+
+        ``replay_pack`` reads package data (so the judge works from a wheel) and
+        the corpus adapter reads ``experiments/`` beside its cases.  The paths
+        differ on purpose; the bundles and the bytes must not.
+        ``test_replay_pack_package_data`` owns the byte-identity contract.
+        """
         self.assertEqual(replay_pack.pack_bundle(), replay_adapter.pack_bundle())
-        self.assertEqual(replay_pack.PACK_PATH, replay_adapter.PACK_PATH)
+        self.assertEqual(replay_pack.load_pack(), replay_adapter.load_pack())
+        self.assertEqual(replay_pack.PACK_PATH.read_bytes(), replay_adapter.PACK_PATH.read_bytes())
+        self.assertNotEqual(replay_pack.PACK_PATH, replay_adapter.PACK_PATH)
 
 
 class CompileKeyTests(unittest.TestCase):

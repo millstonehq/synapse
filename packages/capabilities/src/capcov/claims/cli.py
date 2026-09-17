@@ -47,13 +47,22 @@ Two shapes a consumer has to know, stated here because they are the contract:
   (``CAPCOV_REPLAY_RECEIPT_DIR`` overrides it).  A bare invocation therefore
   judges the fixture rather than refusing; pass ``--receipt`` to judge a run.
 
-Both assumption commands import the target-go join from ``tests/claim_semantics``
-beside this package, so they run from a source checkout and not from an
-installed wheel (``_join_module`` refuses with exit 2 when it is absent).
+Both assumption commands need the target-go join (``tests/claim_semantics``),
+which carries the experiment's fixtures and is not part of the installed
+package.  ``_join_module`` finds it on ``sys.path`` when the checkout's
+``tests`` package is importable and otherwise beside this package, and refuses
+with exit 2 -- never a traceback -- when neither is there.  The refusals that
+say nothing about the join are answered *before* it is reached, so a bad
+``--receipt`` is named as a bad ``--receipt`` wherever the command runs.
+
+``--out`` is a **directory** for these two commands (the join's artifacts),
+unlike the ``shen`` commands where it is a file, so a refusal or a kernel
+mismatch is printed on stdout only and never written into it.
 """
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import sys
 from typing import Any
@@ -106,12 +115,35 @@ def _common(parser: argparse.ArgumentParser, *, need_row: bool) -> None:
         parser.add_argument("--max-nodes", type=int, default=DEFAULT_MAX_NODES)
 
 
+#: How the target-go join is named once the checkout is on ``sys.path``: as part
+#: of the ``tests`` package (``unittest discover -t .``), as ``claim_semantics``
+#: (``discover -s tests``), or top-level (``discover -s tests/claim_semantics``).
+_JOIN_MODULES = ("tests.claim_semantics.target_go.replay_join",
+                 "claim_semantics.target_go.replay_join",
+                 "target_go.replay_join")
+
+
+def _is_receipt_dir(path: Path) -> bool:
+    """A receipt is a directory carrying ``receipt.json`` -- not a file, not an empty directory."""
+    return path.is_dir() and (path / "receipt.json").is_file()
+
+
 def _join_module():
     """The target-go replay join lives beside its fixtures, under ``tests/claim_semantics``.
 
     Source-checkout only, deliberately: the join carries the experiment's
-    fixtures and is not part of the installed package.
+    fixtures and is not part of the installed package.  Import wins over the
+    path probe, because ``capcov`` being an installed wheel says nothing about
+    whether the checkout's tests are on ``sys.path`` -- they are, for instance,
+    when the release job runs ``unittest discover`` against the installed
+    interpreter -- while the path beside an installed ``capcov`` names a
+    directory that does not exist.
     """
+    for name in _JOIN_MODULES:
+        try:
+            return importlib.import_module(name)
+        except ImportError:
+            continue
     tests = Path(__file__).resolve().parents[3] / "tests" / "claim_semantics"
     if not (tests / "target_go" / "replay_join.py").is_file():
         raise FileNotFoundError(f"the replay join was not found under {tests}")
@@ -129,15 +161,29 @@ def _assumptions(args: argparse.Namespace) -> int:
     from .assumptions import InvalidationError
     from .differential import DifferentialMismatch
 
+    # --out names a DIRECTORY here (the join's artifacts), so every document
+    # below is printed and never written to it -- writing a refusal to --out
+    # raised IsADirectoryError on top of the refusal it was trying to report.
+    def emit(document: dict[str, Any]) -> None:
+        _emit(document, None)
+
+    # an explicit --receipt is judged before the join is reached: a path that is
+    # not a receipt directory is a bad argument, and saying so does not depend
+    # on the experiment's fixtures being importable
+    receipt = Path(args.receipt) if args.receipt else None
+    if receipt is not None and not _is_receipt_dir(receipt):
+        emit({"refusal": "no receipt directory (pass --receipt DIR)"})
+        return 2
     try:
         replay_join = _join_module()
     except (FileNotFoundError, ImportError) as exc:
-        _emit({"refusal": f"the replay join is unavailable: {exc}"}, args.out)
+        emit({"refusal": f"the replay join is unavailable: {exc}"})
         return 2
-    receipt = Path(args.receipt) if args.receipt else replay_join.receipt_dir()
-    if receipt is None or not (receipt / "receipt.json").is_file():
-        _emit({"refusal": "no receipt directory (pass --receipt DIR)"}, args.out)
-        return 2
+    if receipt is None:
+        receipt = replay_join.receipt_dir()
+        if receipt is None or not _is_receipt_dir(receipt):
+            emit({"refusal": "no receipt directory (pass --receipt DIR)"})
+            return 2
     owned = args.replay_root is None
     replay_root = args.replay_root or tempfile.mkdtemp(prefix="capcov-assumptions-")
     # a kernel disagreement is the one outcome whose evidence lives in the
@@ -147,14 +193,14 @@ def _assumptions(args: argparse.Namespace) -> int:
         try:
             join = replay_join.build(receipt)
             if join.bundle is None:
-                _emit({"refusal": "the exporter refused the receipt",
-                       "contract_findings": list(join.contract_findings)}, args.out)
+                emit({"refusal": "the exporter refused the receipt",
+                      "contract_findings": list(join.contract_findings)})
                 return 2
             replay_join.evaluate_join(join, replay_root)
             if join.mismatch is not None:
                 keep = True
-                _emit({"kernel_mismatch": "the kernels disagree on the join",
-                       "replay": str(join.mismatch.replay_path)}, args.out)
+                emit({"kernel_mismatch": "the kernels disagree on the join",
+                      "replay": str(join.mismatch.replay_path)})
                 return 3
             document: dict[str, Any] = {"registry": replay_join.assumption_registry(join)}
             if args.command == "invalidate":
@@ -162,23 +208,23 @@ def _assumptions(args: argparse.Namespace) -> int:
                                              for drop in args.drop]
         except DifferentialMismatch as exc:
             keep = True
-            _emit({"kernel_mismatch": "the kernels disagree on the withdrawn bundle",
-                   "replay": str(exc.result.replay_path)}, args.out)
+            emit({"kernel_mismatch": "the kernels disagree on the withdrawn bundle",
+                  "replay": str(exc.result.replay_path)})
             return 3
         except AssertionError as exc:
             # certify_claims: the kernels agree on the rows but not on the claim
             # rows or the certificates of the withdrawn bundle -- a judge with
             # two answers has none, so this is exit 3 like any other mismatch
             keep = True
-            _emit({"kernel_mismatch": "the kernels disagree on the claims of the withdrawn bundle",
-                   "error": str(exc), "replay": replay_root}, args.out)
+            emit({"kernel_mismatch": "the kernels disagree on the claims of the withdrawn bundle",
+                  "error": str(exc), "replay": replay_root})
             return 3
         except (InvalidationError, ValidationError) as exc:
-            _emit({"refusal": str(exc)}, args.out)
+            emit({"refusal": str(exc)})
             return 2
         if args.out:
             replay_join.write_artifacts(join, Path(args.out))
-        _emit(document, None)
+        emit(document)
         return 0
     finally:
         if owned and not keep:
