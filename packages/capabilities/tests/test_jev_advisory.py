@@ -15,6 +15,11 @@ from capcov.claims.jev import (
     ARTIFACT_KIND, AssessmentRequest, JevError, assess, build_artifact,
     claims_bundle,
 )
+from capcov.claims.jev_patterns import (
+    ARTIFACT_KIND as PATTERN_ARTIFACT_KIND, PatternRequest, VARIANTS,
+    assess as assess_pattern, build_artifact as build_pattern_artifact,
+    claims_bundle as pattern_claims_bundle,
+)
 from capcov.claims.validation import validate_bundle
 
 
@@ -66,7 +71,83 @@ def api_response() -> dict:
     }
 
 
+def pattern_request_document() -> dict:
+    return {
+        "schema_version": 1,
+        "subject_id": "patch:42",
+        "pattern": {
+            "id": "lost-update",
+            "definition": "A read-modify-write can overwrite a concurrent update.",
+            "positive_signatures": ["read and write are separated without serialization"],
+            "required_evidence": ["write ordering or synchronization evidence"],
+            "exclusions": ["the operation is serialized by a lock or transaction"],
+        },
+        "evidence": [
+            {"id": "scip:read", "kind": "static", "fact": {"call": "load", "line": 20}},
+            {"id": "patch:write", "kind": "patch", "fact": {"call": "store", "line": 24}},
+        ],
+        "missing_evidence": ["runtime interleaving trace"],
+    }
+
+
+def pattern_response(match: float = .8, sufficient: float = .3,
+                     exclusion: float = .1) -> dict:
+    return {"model": "jev-1.13.0", "answers": {
+        "pattern_match": {"type": "noul", "noul": match},
+        "evidence_sufficient": {"type": "noul", "noul": sufficient},
+        "exclusion_applies": {"type": "noul", "noul": exclusion},
+    }, "usage": {"input_tokens": 100, "output_tokens": 10}}
+
+
 class JevAdvisoryTests(unittest.TestCase):
+    def test_pattern_packet_has_no_freeform_hypothesis_slot(self) -> None:
+        request = PatternRequest.parse(pattern_request_document())
+        payload = request.payload()
+        self.assertEqual(set(payload["questions"]), {
+            "pattern_match", "evidence_sufficient", "exclusion_applies"})
+        framed = pattern_request_document()
+        framed["diagnosis"] = "This is definitely a lost update."
+        with self.assertRaises(JevError):
+            PatternRequest.parse(framed)
+
+    def test_pattern_variants_change_form_not_evidence_content(self) -> None:
+        request = PatternRequest.parse(pattern_request_document())
+        baseline = request.payload("baseline")
+        reversed_packet = request.payload("reversed_evidence")
+        opaque = request.payload("opaque_ids")
+        self.assertEqual(list(reversed(baseline["state"]["evidence"])),
+                         reversed_packet["state"]["evidence"])
+        self.assertEqual(opaque["state"]["subject_id"], "subject")
+        self.assertEqual([item["fact"] for item in opaque["state"]["evidence"]],
+                         [item["fact"] for item in baseline["state"]["evidence"]])
+
+    def test_pattern_sensitivity_labels_unstable_results(self) -> None:
+        request = PatternRequest.parse(pattern_request_document())
+        responses = {variant: pattern_response() for variant in VARIANTS}
+        responses["neutral_paraphrase"] = pattern_response(match=.45)
+        artifact = build_pattern_artifact(request, responses, max_spread=.2)
+        self.assertEqual(artifact["kind"], PATTERN_ARTIFACT_KIND)
+        self.assertFalse(artifact["sensitivity"]["stable"])
+        self.assertAlmostEqual(artifact["sensitivity"]["spreads"]["pattern_match"], .35)
+        self.assertEqual(artifact["evidence_semantics"]["kind"], "assumption")
+        self.assertFalse(artifact["evidence_semantics"]["may_qualify_claim"])
+        bundle = pattern_claims_bundle(artifact)
+        self.assertEqual(validate_bundle(bundle), ())
+        self.assertEqual({relation.modality for relation in bundle.relations},
+                         {Modality.ASSUMPTION})
+        self.assertFalse(bundle.claims)
+        self.assertFalse(bundle.rules)
+
+    def test_pattern_assessment_fans_variants_out(self) -> None:
+        seen = []
+        def transport(endpoint, body, headers, timeout):
+            seen.append(json.loads(body))
+            return json.dumps(pattern_response()).encode()
+        artifact = assess_pattern(PatternRequest.parse(pattern_request_document()),
+                                  max_spread=.2, api_key="secret", transport=transport)
+        self.assertEqual(len(seen), 4)
+        self.assertTrue(artifact["sensitivity"]["stable"])
+
     def test_payload_fans_out_bounded_choice_and_presence(self) -> None:
         request = AssessmentRequest.parse(request_document())
         payload = request.payload()

@@ -3,6 +3,7 @@
 Reached only through the ``experiment`` namespace of ``capcov``::
 
     capcov experiment claims jev assess --request REQUEST.json
+    capcov experiment claims jev pattern --request REQUEST.json --max-spread .2
     capcov experiment claims shen authority (--bundle B.json | --rules PACK.json)
     capcov experiment claims shen evaluate --bundle B.json --relation R --row '[...]'
     capcov experiment claims shen why-not  --bundle B.json --relation R --row '[...]'
@@ -23,7 +24,7 @@ from typing import Any
 
 from .ir import BundleIngestionError, bundle_from_json
 from .validation import ValidationError
-from . import jev, shen
+from . import jev, jev_patterns, shen
 from .static.certificate import DEFAULT_MAX_DEPTH, DEFAULT_MAX_NODES
 
 
@@ -88,6 +89,19 @@ def main(argv: list[str]) -> int:
                             help="also write the advisory artifact to this file")
     jev_assess.add_argument("--claims-out", default=None,
                             help="also write Datalog assumption facts as a claim bundle")
+    jev_pattern = jev_sub.add_parser(
+        "pattern", help="test a neutral pattern packet under framing perturbations")
+    jev_pattern.add_argument("--request", required=True,
+                             help="capcov-jev pattern request JSON")
+    jev_pattern.add_argument("--responses", default=None,
+                             help="offline map of sensitivity variant to TypeSafe response")
+    jev_pattern.add_argument("--max-spread", required=True, type=float,
+                             help="policy threshold; larger Noul spread labels the result unstable")
+    jev_pattern.add_argument("--endpoint", default=None)
+    jev_pattern.add_argument("--timeout", type=float, default=30.0)
+    jev_pattern.add_argument("--out", default=None)
+    jev_pattern.add_argument("--claims-out", default=None,
+                             help="write assumption-only pattern and sensitivity facts")
     shen_parser = claims_sub.add_parser("shen", help="executable Shen semantic workbench (section 18)")
     shen_sub = shen_parser.add_subparsers(dest="command", required=True)
     _common(shen_sub.add_parser("authority", help="structural authority checks over a rule pack"), need_row=False)
@@ -97,6 +111,23 @@ def main(argv: list[str]) -> int:
 
     try:
         if args.tool == "jev":
+            if args.command == "pattern":
+                request = jev_patterns.PatternRequest.parse(_load_json(args.request))
+                if args.responses:
+                    artifact = jev_patterns.build_artifact(
+                        request, _load_json(args.responses), max_spread=args.max_spread)
+                else:
+                    artifact = jev_patterns.assess(
+                        request, max_spread=args.max_spread,
+                        endpoint=args.endpoint, timeout=args.timeout)
+                if args.claims_out:
+                    from pathlib import Path
+                    from .ir import canonical_json
+                    Path(args.claims_out).write_text(
+                        canonical_json(jev_patterns.claims_bundle(artifact)) + "\n",
+                        encoding="utf-8")
+                _emit(artifact, args.out)
+                return 0
             request = jev.AssessmentRequest.parse(_load_json(args.request))
             if args.response:
                 artifact = jev.build_artifact(request, _load_json(args.response))

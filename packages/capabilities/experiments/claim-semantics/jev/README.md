@@ -59,3 +59,39 @@ probe_requested(Route, Operation) :-
 
 `covered`, `op_qualified`, compatibility, and closure relations must continue
 to depend on their existing authoritative producers.
+
+## Neutral pattern packets and sensitivity
+
+Patch triage has a second, stricter protocol for the case where the candidates
+are causal patterns rather than program symbols. It deliberately accepts no
+free-form preamble, diagnosis, or hypothesis field. SCIP and Soufflé should
+first reduce the repository to neutral, provenance-bearing facts; Shen can
+check that the packet shape and producer authority are valid. Jev then receives
+one explicit pattern definition, its signatures and exclusions, the facts, and
+a list of evidence known to be missing.
+
+The command asks three independent Nouls: pattern match, evidence sufficiency,
+and exclusion applicability. It concurrently repeats them under four
+meaning-preserving forms: baseline, reversed evidence order, opaque identifiers,
+and a neutral paraphrase. The caller supplies `--max-spread` as an explicit
+campaign policy. A result exceeding it is retained but marked unstable; it is
+not silently averaged into a stronger verdict.
+
+```sh
+capcov experiment claims jev pattern \
+  --request packages/capabilities/experiments/claim-semantics/jev/example-pattern-request.json \
+  --max-spread 0.20 \
+  --out jev-pattern.json \
+  --claims-out jev-pattern-assumptions.json
+```
+
+For offline replay, `--responses` accepts an object whose exact keys are
+`baseline`, `reversed_evidence`, `opaque_ids`, and `neutral_paraphrase`.
+The emitted `jev_pattern_assumption` and `jev_pattern_sensitivity` relations
+remain runtime assumptions. They can rank a survivor or request the missing
+probe named by the packet; they cannot qualify or close a claim.
+
+At campaign scope, track the low-match rate and the score distribution. A
+collapse toward one answer across every survivor is evidence that the request
+or pattern definition is framing the result, even when per-item perturbations
+are stable.
