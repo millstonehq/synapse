@@ -808,15 +808,23 @@ def build_18() -> dict[str, Any]:
     facts = exported + reviewer_facts() + census_facts()
     php_row = find_id(facts, "php_effect", req=REPEAT_DELETE)
     req5 = observation("php_effect", ["run"], {"column": "req", "operator": "=", "value": REPEAT_DELETE})
+    blocked = missing(claim_id_for(DELETE), "repeat_delete",
+                      "the second DELETE of " + DELETE_TARGET + " (req-5) wrote a row outside the reviewer's scope "
+                      "exclusions: repeat_delete_violation(req-5, effects) holds, so repeat_delete_any(run, "
+                      "delete-issue) holds and the negated premise !repeat_delete_any fails",
+                      requires=[php_row])
     claims, outputs = _both_qualified(facts, {
-        CREATE: "issues.create is untouched by the repeat's effect and qualifies as in the control.",
+        CREATE: "issues.create is untouched by the repeat's effect and qualifies as in the control: repeat_delete_any "
+                "is joined on the request, so a violation by a delete-issue request does not reach another op.",
         CLOSE: "issues.close is untouched by the repeat's effect and qualifies as in the control.",
         DELETE: "req-5 repeats the committed delete of " + DELETE_TARGET + " and still answers 404 on both sides, but PHP "
                 "recorded an issue update for it: repeat_delete_has_effect derives (issue is not a reviewer-excluded "
-                "table) and repeat_delete_violation(req-5, effects) holds, so the per-target claim "
-                "repeat_delete_not_found does not derive.  op_qualified is not gated on that claim: the repeat's write "
-                "is a declared table and both post-states stay inside the model, so delete-issue still qualifies."},
+                "table) and repeat_delete_violation(req-5, effects) holds, so repeat_delete_any(run, delete-issue) "
+                "holds and op_qualified_rt's !repeat_delete_any fails.  The write is a *declared* table and both "
+                "post-states stay inside the model, so nothing else in the op gate objects: the cross-request "
+                "premise is the only thing standing between this receipt and a qualification."},
         extra_diagnostics={DELETE: [req5]})
+    outputs.append(blocked)
     violation = _claim("claim-repeat-delete-has-effects", "repeat_delete_violation", ["run", "req", "side"],
                        [RUN, REPEAT_DELETE, "effects"], {"run": RUN},
                        "req-5 is a later request for req-4's target, req-4 committed (200 on both sides with an issue "
@@ -833,13 +841,16 @@ def build_18() -> dict[str, Any]:
     notes = [
         "php_effect.json (and php_effect_seq.json, to stay coherent) gain an issue update for req-5, the repeat of "
         "req-4's DELETE; responses stay 200/404 and the write is a declared table, so undeclared_write does not fire.",
-        "All three op_qualified claims are supported: op_qualified_rt is not gated on the repeat (the repeat is its "
-        "own claim, and a repeat that answers 404 while writing a declared table leaves every premise of the op gate "
-        "intact).  Case 23 is the shape where the repeat's write is a reviewer-excluded table and the claim survives.",
+        "op_qualified(delete-issue) is unresolved: this is the case that makes the cross-request claim load-bearing.  "
+        "Every per-request premise holds -- PHP, Go and the model agree, the write is declared, the order is "
+        "respected, the mutants are killed, the oracle is stable -- and the op is refused only because the second "
+        "delete of a committed target wrote rows.  issues.create and issues.close are supported: repeat_delete_any "
+        "joins the violating request's own op, so one op's repeat does not poison the run.",
         "The companion repeat_delete_violation(run, req-5, effects) is supported (discrepancy "
         "repeat-delete-with-effects); the companion repeat_delete_not_found is unresolved, its missing premise naming "
         "the negated repeat_delete_has_effect that the PHP row defeats.  issue is not one of the reviewer's excluded "
-        "tables (authentication, redis), so the exclusion guard on repeat_delete_has_effect does not exempt it.",
+        "tables (authentication, redis), so the exclusion guard on repeat_delete_has_effect does not exempt it -- "
+        "case 23 is the shape where the write *is* excluded and both the claim and the op survive.",
     ]
     return _case("18-repeat-delete-with-effects", "The repeat delete answers 404 but PHP writes the issue again",
                  "repeat-delete-with-effects", notes, facts, claims, outputs)
@@ -1100,6 +1111,37 @@ def build_21() -> dict[str, Any]:
                  facts, claims, outputs)
 
 
+def build_31() -> dict[str, Any]:
+    with variant({"receipt": _open("php_responses")}) as root:
+        exported, _ = exported_facts(root)
+    facts = exported + reviewer_facts() + census_facts()
+    claims, outputs = _both_qualified(facts, {
+        CREATE: "closed.php_responses is false: no php_responses_closed witness, so repeat_delete_closed lists an "
+                "absent input and does not derive; !repeat_delete_any is unlicensed and op_qualified_rt cannot "
+                "derive, although every response row is present and the repeat did answer 404 on both sides.",
+        CLOSE: "As for issues.create.", DELETE: "As for issues.create."},
+        absent=("php_responses_closed",))
+    not_found = _claim("claim-repeat-delete-not-found", "repeat_delete_not_found", ["run", "target"],
+                       [RUN, DELETE_TARGET], {"run": RUN},
+                       "the per-target claim reads the two 404 rows positively and needs no response closure, so it "
+                       "is supported here: what the open table costs is the op gate's negation, not the claim.",
+                       [observation("php_response", ["run"], {"column": "req", "operator": "=", "value": REPEAT_DELETE}),
+                        observation("go_response", ["run"], {"column": "req", "operator": "=", "value": REPEAT_DELETE})])
+    claims.append(not_found)
+    notes = [
+        "receipt.json says closed.php_responses = false; php_response.json is the control's (five rows) and every "
+        "other closure is present, so exactly one leaf is absent.",
+        "All three op_qualified claims are unresolved with php_responses_closed as the only missing premise.  This is "
+        "the completeness half of the cross-request gate: without a closed response table a repeat whose 200 was "
+        "simply not reported would look like a repeat that answered 404, and !repeat_delete_any would be a statement "
+        "about what the harness happened to write down rather than about what the systems did.",
+        "repeat_delete_not_found is still supported: it reads php_response / go_response positively.  The asymmetry "
+        "is the point -- a positive claim may rest on the rows it was given, a negation may not.",
+    ]
+    return _case("31-missing-response-closure", "The PHP response table is not closed", None, notes,
+                 facts, claims, outputs)
+
+
 def build_27() -> dict[str, Any]:
     with variant({"model_well_formed": lambda _: None}) as root:
         exported, _ = exported_facts(root)
@@ -1315,6 +1357,7 @@ BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "27-model-not-well-formed": build_27,
     "28-well-formed-other-model": build_28,
     "29-checker-not-admitted": build_29,
+    "31-missing-response-closure": build_31,
 }
 REJECTED_BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     "07-producer-class-violation": build_rejected_07,
@@ -1369,7 +1412,7 @@ REVIEW: dict[str, dict[str, tuple[str, str, list[str], list[str]]]] = {
                                   "claim-qualified-close": SUPPORTED, "claim-qualified-delete": SUPPORTED,
                                   "claim-go-order-violated-req-1": ("supported", "complete", [], ["effect-order-violated"])},
     "18-repeat-delete-with-effects": {"claim-qualified-create": SUPPORTED, "claim-qualified-close": SUPPORTED,
-                                      "claim-qualified-delete": SUPPORTED,
+                                      "claim-qualified-delete": ("unresolved", "complete", ["repeat_delete"], []),
                                       "claim-repeat-delete-has-effects": ("supported", "complete", [], ["repeat-delete-with-effects"]),
                                       "claim-repeat-delete-not-found": ("unresolved", "complete", ["repeat_delete_has_effect"], [])},
     "19-unstable-oracle": {**_all_ops("oracle_stable"),
@@ -1390,6 +1433,8 @@ REVIEW: dict[str, dict[str, tuple[str, str, list[str], list[str]]]] = {
     "27-model-not-well-formed": _all_ops("model_well_formed"),
     "28-well-formed-other-model": _all_ops("model_well_formed"),
     "29-checker-not-admitted": _all_ops("model_checker_admitted"),
+    "31-missing-response-closure": {**_all_ops("php_responses_closed"),
+                                    "claim-repeat-delete-not-found": SUPPORTED},
     "23-repeat-delete-excluded-write": {"claim-qualified-create": SUPPORTED, "claim-qualified-close": SUPPORTED,
                                         "claim-qualified-delete": SUPPORTED,
                                         "claim-repeat-delete-not-found": SUPPORTED,

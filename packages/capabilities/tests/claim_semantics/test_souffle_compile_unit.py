@@ -119,7 +119,7 @@ class ProgramIdentityTests(unittest.TestCase):
         join = replay_join.build(replay_join.COMMITTED_RECEIPT_DIR)
         self.assertIsNotNone(join.bundle, join.contract_findings)
         program = souffle.program_for_pack(join.bundle)
-        self.assertEqual(program.program_digest, "c0a28dec14481d484928fc8a0586f0beecf81a862dc59e8870108624ccca80bd")
+        self.assertEqual(program.program_digest, "a47bbd118a4aef91abcbbb7cb81d6eae89654a11acca7b671a49498c2f2267fd")
         self.assertEqual(len(program.outputs), 100)
         self.assertEqual(len(program.program.splitlines()), 309)
         unqualified = replay_join.build(replay_join.UNQUALIFIED_RECEIPT_DIR)

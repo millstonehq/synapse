@@ -82,9 +82,11 @@ _BLOCKING_ORDER = (
     # a receipt without the sequence/response/stability relations is blocked earlier when it
     # has a write-set gap, and here otherwise)
     ("effect_order_closed", False), ("effect_order_any", True), ("effect_order_exercised", False),
-    # the repeat delete is its own claim (repeat_delete_not_found) and no premise of
-    # op_qualified_rt; the summary still reports its rows under "repeat_delete"
     ("oracle_stable", False),
+    # the cross-request gate: a second DELETE of a committed target that answered anything
+    # but 404 on either side, or wrote a row outside the reviewer's scope exclusions, blocks
+    # the op it belongs to.  The summary reports the rows themselves under "repeat_delete".
+    ("repeat_delete_closed", False), ("repeat_delete_any", True),
     ("kill_gap_closed", False), ("kill_closure_gap_any", True), ("index_describes_replay", False),
     ("op_declared", False),
     # the Stage D premise, checked last (PENDING_PREMISES): the checker is not built, so an

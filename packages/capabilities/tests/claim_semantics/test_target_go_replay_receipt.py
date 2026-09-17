@@ -440,10 +440,11 @@ class _JoinCase(unittest.TestCase):
                 self.assertEqual([r for r in relations["undeclared_write"] if r[1] == op], [])
                 self.assertEqual(self._undeclared()[op], {"php": [], "go": []})
                 for closed in ("php_disagreement_closed", "go_disagreement_closed", "undeclared_writes_closed",
-                               "post_state_gap_closed", "effect_order_closed", "effect_order_exercised"):
+                               "post_state_gap_closed", "effect_order_closed", "effect_order_exercised",
+                               "repeat_delete_closed"):
                     self.assertIn((run, op), set(relations[closed]), closed)
                 for blocker in ("php_disagree_any", "go_disagree_any", "undeclared_any", "post_state_any",
-                                "effect_order_any", "kill_closure_gap_any"):
+                                "effect_order_any", "kill_closure_gap_any", "repeat_delete_any"):
                     self.assertNotIn((run, op), set(relations[blocker]), blocker)
 
     def check_qualified(self) -> None:
@@ -799,6 +800,13 @@ class RepeatTapeReceiptTest(_JoinCase):
                                                  "exercised": True})
         self.assertEqual(entry["repeat_delete"], {"repeats": [["repeat", self.TARGET]], "violations": [],
                                                   "not_found": [self.TARGET]})
+        # the cross-request gate op_qualified_rt now carries, on the only real tape that
+        # has a repeat: the closure derives and no violation does, so the gate passes and
+        # this receipt is blocked by its unbaselined corpus alone
+        relations = dict(self.join.result.python.relations)
+        self.assertIn((self.join.run, "delete-issue"), set(relations["repeat_delete_closed"]))
+        self.assertEqual(relations["repeat_delete_any"], ())
+        self.assertEqual(relations["repeat_delete_violation"], ())
         self.assertEqual(set(entry["exclusions_applied"]),
                          {"authentication", "go_issue_outbox", "jobs_statuses", "redis"})
 

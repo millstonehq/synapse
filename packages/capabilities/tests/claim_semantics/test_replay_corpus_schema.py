@@ -174,12 +174,41 @@ class ReplayRulePackTests(unittest.TestCase):
             ("op_qualified_rt", "undeclared_any"), ("op_qualified_rt", "post_state_any"),
             ("op_qualified_rt", "kill_closure_gap_any"), ("undeclared_write", "model_scope_excluded"),
             ("post_state_gap", "php_observed"), ("post_state_gap", "go_observed"),
-            ("op_qualified_rt", "effect_order_any"),
+            ("op_qualified_rt", "effect_order_any"), ("op_qualified_rt", "repeat_delete_any"),
             ("repeat_delete_not_found", "repeat_delete_has_effect"),
             ("first_delete_committed", "earlier_delete"),
             ("repeat_delete_has_effect", "model_scope_excluded"), ("oracle_stable", "oracle_unstable")})
         witnesses = {item["completes"] for item in self.declarations.values() if item["modality"] == "completeness"}
         self.assertTrue({target for _, target in negated} <= witnesses)
+
+    def test_the_repeat_delete_gate_is_on_and_its_closure_lists_every_positive_input(self) -> None:
+        """The cross-request claim is load-bearing, and its negation is licensed.
+
+        ``!repeat_delete_any`` may only be read under ``repeat_delete_closed``, whose
+        body must list the closure of *every* positive input of the chain it negates:
+        the requests and their tape order (``repeat_delete`` reads
+        ``replay_request_seq``), both response tables (the status half of
+        ``repeat_delete_violation`` and of ``first_delete_committed``), both effect
+        tables (its effect half and ``repeat_delete_has_effect``) and -- because
+        ``repeat_delete_has_effect`` itself negates ``model_scope_excluded`` -- the
+        reviewer's closed exclusion set for the model that describes the run.
+        """
+        rules = {rule["name"]: rule for rule in self.pack["rules"]}
+        bodies = {name: [atom["relation"] for atom in _atoms(rules[name])] for name in rules}
+        gate = [atom for atom in _atoms(rules["op_qualified_rt"]) if atom["relation"] == "repeat_delete_any"]
+        self.assertEqual([atom.get("negated") for atom in gate], [True])
+        self.assertIn("repeat_delete_closed", bodies["op_qualified_rt"])
+        # the gate is per op: repeat_delete_any joins the violating request's own op
+        any_rule = rules["repeat_delete_any"]
+        request = next(atom for atom in _atoms(any_rule) if atom["relation"] == "replay_request")
+        violation = next(atom for atom in _atoms(any_rule) if atom["relation"] == "repeat_delete_violation")
+        self.assertEqual(request["terms"][1], violation["terms"][1], "joined on the request")
+        self.assertEqual(request["terms"][4], any_rule["head"]["terms"][1], "and the op is that request's")
+        for witness in ("replay_run_current", "replay_requests_closed", "replay_request_seqs_closed",
+                        "php_responses_closed", "go_responses_closed", "php_effects_closed", "go_effects_closed",
+                        "model_describes_run", "model_scope_exclusions_closed"):
+            self.assertIn(witness, bodies["repeat_delete_closed"], witness)
+        self.assertEqual(self.declarations["repeat_delete_closed"]["completes"], "repeat_delete_any")
 
     def test_every_closure_lists_the_post_state_witnesses_and_the_gate_is_on(self) -> None:
         rules = {rule["name"]: rule for rule in self.pack["rules"]}
@@ -296,7 +325,7 @@ class ReplayCaseTests(unittest.TestCase):
         self.assertEqual([path.stem for path in self.paths], list(case_builder.BUILDERS))
         self.assertEqual(sorted({path.name[:2] for path in self.paths}),
                          ["00", "01", "02", "03", "04", "05", "06", "08", "09", "10", "11", "13", "14", "15",
-                          "17", "18", "19", "20", "21", "23", "24", "25", "26", "27", "28", "29"])
+                          "17", "18", "19", "20", "21", "23", "24", "25", "26", "27", "28", "29", "31"])
         self.assertEqual([path.stem for path in case_paths(REJECTED_DIR)],
                          ["07-producer-class-violation", "12-closure-producer-violation",
                           "16-exclusion-producer-violation", "22-effect-seq-producer-violation",

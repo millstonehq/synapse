@@ -15,8 +15,8 @@
   },
   "review_notes": [
     "php_effect.json (and php_effect_seq.json, to stay coherent) gain an issue update for req-5, the repeat of req-4's DELETE; responses stay 200/404 and the write is a declared table, so undeclared_write does not fire.",
-    "All three op_qualified claims are supported: op_qualified_rt is not gated on the repeat (the repeat is its own claim, and a repeat that answers 404 while writing a declared table leaves every premise of the op gate intact).  Case 23 is the shape where the repeat's write is a reviewer-excluded table and the claim survives.",
-    "The companion repeat_delete_violation(run, req-5, effects) is supported (discrepancy repeat-delete-with-effects); the companion repeat_delete_not_found is unresolved, its missing premise naming the negated repeat_delete_has_effect that the PHP row defeats.  issue is not one of the reviewer's excluded tables (authentication, redis), so the exclusion guard on repeat_delete_has_effect does not exempt it."
+    "op_qualified(delete-issue) is unresolved: this is the case that makes the cross-request claim load-bearing.  Every per-request premise holds -- PHP, Go and the model agree, the write is declared, the order is respected, the mutants are killed, the oracle is stable -- and the op is refused only because the second delete of a committed target wrote rows.  issues.create and issues.close are supported: repeat_delete_any joins the violating request's own op, so one op's repeat does not poison the run.",
+    "The companion repeat_delete_violation(run, req-5, effects) is supported (discrepancy repeat-delete-with-effects); the companion repeat_delete_not_found is unresolved, its missing premise naming the negated repeat_delete_has_effect that the PHP row defeats.  issue is not one of the reviewer's excluded tables (authentication, redis), so the exclusion guard on repeat_delete_has_effect does not exempt it -- case 23 is the shape where the write *is* excluded and both the claim and the op survive."
   ],
   "facts": [
     {
@@ -3554,7 +3554,7 @@
           "context_indices": []
         }
       ],
-      "reading": "issues.create is untouched by the repeat's effect and qualifies as in the control."
+      "reading": "issues.create is untouched by the repeat's effect and qualifies as in the control: repeat_delete_any is joined on the request, so a violation by a delete-issue request does not reach another op."
     },
     {
       "id": "claim-qualified-close",
@@ -3895,7 +3895,7 @@
           }
         }
       ],
-      "reading": "req-5 repeats the committed delete of DELETE /api/issues/1 and still answers 404 on both sides, but PHP recorded an issue update for it: repeat_delete_has_effect derives (issue is not a reviewer-excluded table) and repeat_delete_violation(req-5, effects) holds, so the per-target claim repeat_delete_not_found does not derive.  op_qualified is not gated on that claim: the repeat's write is a declared table and both post-states stay inside the model, so delete-issue still qualifies."
+      "reading": "req-5 repeats the committed delete of DELETE /api/issues/1 and still answers 404 on both sides, but PHP recorded an issue update for it: repeat_delete_has_effect derives (issue is not a reviewer-excluded table) and repeat_delete_violation(req-5, effects) holds, so repeat_delete_any(run, delete-issue) holds and op_qualified_rt's !repeat_delete_any fails.  The write is a *declared* table and both post-states stay inside the model, so nothing else in the op gate objects: the cross-request premise is the only thing standing between this receipt and a qualification."
     },
     {
       "id": "claim-repeat-delete-has-effects",
@@ -4768,6 +4768,20 @@
       ]
     },
     {
+      "kind": "missing_premise",
+      "claim_id": "claim-qualified-delete",
+      "relation": "repeat_delete",
+      "fields": {
+        "reason": {
+          "value": "the second DELETE of DELETE /api/issues/1 (req-5) wrote a row outside the reviewer's scope exclusions: repeat_delete_violation(req-5, effects) holds, so repeat_delete_any(run, delete-issue) holds and the negated premise !repeat_delete_any fails"
+        }
+      },
+      "when_claim": "unresolved",
+      "requires_all_evidence": [
+        "php:de9c57b1779a:php_effect:e26eda7c38ff"
+      ]
+    },
+    {
       "kind": "discrepancy",
       "claim_id": "claim-repeat-delete-has-effects",
       "when_claim": "supported",
@@ -4820,11 +4834,14 @@
           "replay:de9c57b1779a:go_effect_seqs_closed:abdb419a2db3",
           "replay:de9c57b1779a:go_effects_closed:741c700022f7",
           "replay:de9c57b1779a:go_post_states_closed:d399545a4a0d",
+          "replay:de9c57b1779a:go_responses_closed:f59875098423",
           "replay:de9c57b1779a:mutant_kills_closed:5ec55c452bcf",
           "replay:de9c57b1779a:php_effect_seqs_closed:d8e1764ed4bf",
           "replay:de9c57b1779a:php_effects_closed:c69d8dda2898",
           "replay:de9c57b1779a:php_post_states_closed:563c8b6a1be0",
+          "replay:de9c57b1779a:php_responses_closed:a139721eba4a",
           "replay:de9c57b1779a:replay_request:e1b3e116da62",
+          "replay:de9c57b1779a:replay_request_seqs_closed:2bfa66364c8c",
           "replay:de9c57b1779a:replay_requests_closed:acc922ba3952",
           "replay:de9c57b1779a:replay_run:ad8057bded65",
           "replay:de9c57b1779a:replay_stability:555c8d99e7b2",
@@ -4905,11 +4922,14 @@
           "replay:de9c57b1779a:go_effect_seqs_closed:abdb419a2db3",
           "replay:de9c57b1779a:go_effects_closed:741c700022f7",
           "replay:de9c57b1779a:go_post_states_closed:d399545a4a0d",
+          "replay:de9c57b1779a:go_responses_closed:f59875098423",
           "replay:de9c57b1779a:mutant_kills_closed:5ec55c452bcf",
           "replay:de9c57b1779a:php_effect_seqs_closed:d8e1764ed4bf",
           "replay:de9c57b1779a:php_effects_closed:c69d8dda2898",
           "replay:de9c57b1779a:php_post_states_closed:563c8b6a1be0",
+          "replay:de9c57b1779a:php_responses_closed:a139721eba4a",
           "replay:de9c57b1779a:replay_request:b67ffd90fbf2",
+          "replay:de9c57b1779a:replay_request_seqs_closed:2bfa66364c8c",
           "replay:de9c57b1779a:replay_requests_closed:acc922ba3952",
           "replay:de9c57b1779a:replay_run:ad8057bded65",
           "replay:de9c57b1779a:replay_stability:555c8d99e7b2",
@@ -4974,90 +4994,40 @@
         "missing_premises": []
       },
       "claim-qualified-delete": {
-        "semantic_verdict": "supported",
+        "semantic_verdict": "unresolved",
         "operational_status": "complete",
-        "support_leaves": [
-          "go:de9c57b1779a:go_effect_seq:4d9d7170f1dc",
-          "go:de9c57b1779a:go_effect_seq:e7b8dd7ed7db",
-          "go:de9c57b1779a:go_post_state:4d82078e2c4a",
-          "modelcheck:de9c57b1779a:model_well_formed:45152bff266a",
-          "mut:de9c57b1779a:mutant:922bc90b7793",
-          "mut:de9c57b1779a:mutants_closed:adb434f574a9",
-          "php:claim-time:op_declared:435ff47d3ea2",
-          "php:de9c57b1779a:php_effect_seq:56d289a677b4",
-          "php:de9c57b1779a:php_effect_seq:941ca360b4fc",
-          "php:de9c57b1779a:php_post_state:62d53ef57d7c",
-          "replay:de9c57b1779a:go_effect_seqs_closed:abdb419a2db3",
-          "replay:de9c57b1779a:go_effects_closed:741c700022f7",
-          "replay:de9c57b1779a:go_post_states_closed:d399545a4a0d",
-          "replay:de9c57b1779a:mutant_kills_closed:5ec55c452bcf",
-          "replay:de9c57b1779a:php_effect_seqs_closed:d8e1764ed4bf",
-          "replay:de9c57b1779a:php_effects_closed:c69d8dda2898",
-          "replay:de9c57b1779a:php_post_states_closed:563c8b6a1be0",
-          "replay:de9c57b1779a:replay_request:843caaa74c2d",
-          "replay:de9c57b1779a:replay_requests_closed:acc922ba3952",
-          "replay:de9c57b1779a:replay_run:ad8057bded65",
-          "replay:de9c57b1779a:replay_stability:555c8d99e7b2",
-          "replay:de9c57b1779a:replay_stability_closed:cafd259173e9",
-          "reviewer:claim-time:model_observed:5071ad5dc2c5",
-          "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
-          "reviewer:claim-time:snapshot_observed:320fa56f8495",
-          "reviewer:de9c57b1779a:index_describes_replay:6da538f7902a",
-          "reviewer:de9c57b1779a:model_checker_admitted:cd6761b8d728",
-          "reviewer:de9c57b1779a:model_scope_exclusions_closed:62143215abdd",
-          "shen:de9c57b1779a:model_admissible:c88ec3adb7d6",
-          "shen:de9c57b1779a:model_admissible_closed:e42e24b4af61",
-          "shen:de9c57b1779a:model_describes_run:30e5416af7e4",
-          "shen:de9c57b1779a:model_effect_seq:8cc36ec3d9a2",
-          "shen:de9c57b1779a:model_effect_seq:9d0f6b87c294",
-          "shen:de9c57b1779a:model_effect_seqs_closed:53d4ce94a7bc",
-          "shen:de9c57b1779a:model_writes_closed:c0617349e17e"
-        ],
+        "support_leaves": [],
         "refutation_leaves": [],
         "observed_leaves": [
-          "go:de9c57b1779a:go_effect_seq:4d9d7170f1dc",
-          "go:de9c57b1779a:go_effect_seq:e7b8dd7ed7db",
-          "go:de9c57b1779a:go_post_state:4d82078e2c4a",
           "modelcheck:de9c57b1779a:model_well_formed:45152bff266a",
-          "mut:de9c57b1779a:mutant:922bc90b7793",
-          "mut:de9c57b1779a:mutants_closed:adb434f574a9",
-          "php:claim-time:op_declared:435ff47d3ea2",
           "php:de9c57b1779a:php_effect:e26eda7c38ff",
-          "php:de9c57b1779a:php_effect_seq:56d289a677b4",
-          "php:de9c57b1779a:php_effect_seq:941ca360b4fc",
-          "php:de9c57b1779a:php_post_state:62d53ef57d7c",
           "replay:de9c57b1779a:go_effect_seqs_closed:abdb419a2db3",
           "replay:de9c57b1779a:go_effects_closed:741c700022f7",
           "replay:de9c57b1779a:go_post_states_closed:d399545a4a0d",
           "replay:de9c57b1779a:go_responses_closed:f59875098423",
-          "replay:de9c57b1779a:mutant_kills_closed:5ec55c452bcf",
           "replay:de9c57b1779a:php_effect_seqs_closed:d8e1764ed4bf",
           "replay:de9c57b1779a:php_effects_closed:c69d8dda2898",
           "replay:de9c57b1779a:php_post_states_closed:563c8b6a1be0",
           "replay:de9c57b1779a:php_responses_closed:a139721eba4a",
-          "replay:de9c57b1779a:replay_request:843caaa74c2d",
           "replay:de9c57b1779a:replay_request_seqs_closed:2bfa66364c8c",
-          "replay:de9c57b1779a:replay_requests_closed:acc922ba3952",
-          "replay:de9c57b1779a:replay_run:ad8057bded65",
-          "replay:de9c57b1779a:replay_stability:555c8d99e7b2",
           "replay:de9c57b1779a:replay_stability_closed:cafd259173e9",
           "reviewer:claim-time:model_observed:5071ad5dc2c5",
           "reviewer:claim-time:run_nonce_observed:47b34bd1b4f8",
           "reviewer:claim-time:snapshot_observed:320fa56f8495",
-          "reviewer:de9c57b1779a:index_describes_replay:6da538f7902a",
           "reviewer:de9c57b1779a:model_checker_admitted:cd6761b8d728",
           "reviewer:de9c57b1779a:model_scope_exclusions_closed:62143215abdd",
-          "shen:de9c57b1779a:model_admissible:c88ec3adb7d6",
           "shen:de9c57b1779a:model_admissible_closed:e42e24b4af61",
           "shen:de9c57b1779a:model_describes_run:30e5416af7e4",
-          "shen:de9c57b1779a:model_effect_seq:8cc36ec3d9a2",
-          "shen:de9c57b1779a:model_effect_seq:9d0f6b87c294",
-          "shen:de9c57b1779a:model_effect_seqs_closed:53d4ce94a7bc",
-          "shen:de9c57b1779a:model_writes_closed:c0617349e17e"
+          "shen:de9c57b1779a:model_effect_seqs_closed:53d4ce94a7bc"
         ],
         "forbidden_leaves": [],
         "discrepancies": [],
-        "missing_premises": []
+        "missing_premises": [
+          {
+            "relation": "repeat_delete",
+            "reason": "the second DELETE of DELETE /api/issues/1 (req-5) wrote a row outside the reviewer's scope exclusions: repeat_delete_violation(req-5, effects) holds, so repeat_delete_any(run, delete-issue) holds and the negated premise !repeat_delete_any fails"
+          }
+        ]
       },
       "claim-repeat-delete-has-effects": {
         "semantic_verdict": "supported",

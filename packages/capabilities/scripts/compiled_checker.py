@@ -140,6 +140,9 @@ def _op_entry(join: replay_join.ReplayJoin, summary: dict[str, Any], op: str) ->
         "qualification": entry.get("qualification", replay_join.QUALIFICATION_UNSUPPORTED),
         "op_qualified": qualified,
         "corpus_constrains": bool(entry.get("corpus_constrains")),
+        # the cross-request gate op_qualified_rt is now bound by: the repeats of this op's
+        # requests, the violations found among them, and the targets judged not-found
+        "repeat_delete": entry.get("repeat_delete", {"repeats": [], "violations": [], "not_found": []}),
         "exclusions_applied": list(entry.get("exclusions_applied", [])),
         "blocking_premise": entry.get("blocking_premise"),
         "certificate_sha256": _sha256_json(certificate) if certificate is not None else None,

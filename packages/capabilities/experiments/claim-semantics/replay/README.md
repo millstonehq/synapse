@@ -8,7 +8,7 @@ census is qualified by this replay*.  The replay harness is a producer of
 observations, never an oracle; the judge is these rules.
 
 * `rules-replay-v1.json` - the rule pack in raw IR JSON wire form.
-* `cases/NN-*.json` - one positive control (`00`) and twenty-five adversarial
+* `cases/NN-*.json` - one positive control (`00`) and twenty-six adversarial
   shapes (the numbering is not contiguous: the gaps are the rejected cases);
   `rejected/NN-*.json` are the cases the ingestion boundary must refuse.
 * `expected.json` / `rejected.json` - the per-claim review tables duplicated
@@ -116,6 +116,7 @@ op_qualified_rt(IX,Run,Op)      :- index_describes_replay(IX,Run), replayed(Run,
                                    kill_gap_closed(Run), !kill_closure_gap_any(Run,Op),
                                    effect_order_closed(Run,Op), !effect_order_any(Run,Op),
                                    effect_order_exercised(Run,Op), oracle_stable(Run),
+                                   repeat_delete_closed(Run,Op), !repeat_delete_any(Run,Op),
                                    model_well_formed(M,Checker,Version,Cert),
                                    model_checker_admitted(Checker,Version).
 op_qualified(IX,Run,Op)         :- op_declared(IX,Op), index_describes_replay(IX,Run), op_qualified_rt(IX,Run,Op).
@@ -257,14 +258,32 @@ Design points a reviewer should check:
   session-token touch, a cache key, a job-status row -- and a repeat DELETE
   that 404s still authenticates, so without the guard a correct port would
   fail the claim on rows the reviewer already accepted (case 23).
-  **`op_qualified_rt` is deliberately *not* gated on the repeat.**  The repeat
-  is a claim of its own (`repeat_delete_not_found`); a second delete that
-  answers 200 or writes a business table is caught for the op through the
-  model -- the model's `Admissible` refuses the post-state, so
-  `php_model_disagree` / `go_model_disagree` blocks `op_qualified` -- not
-  through a second cross-request gate.  Case 18 is the shape: the repeat
-  violation holds, the per-target claim is unresolved, and all three ops still
-  qualify.
+  **`op_qualified_rt` is gated on the repeat**: `repeat_delete_closed(Run, Op),
+  !repeat_delete_any(Run, Op)`, where `repeat_delete_any(run, op)` joins a
+  `repeat_delete_violation` to the *op of the violating request*, so one op's
+  repeat does not poison the run.  The earlier design left the repeat as a claim
+  of its own on the theory that a second delete which answers 200 or writes a
+  business table is caught through the model's `Admissible`.  That is not a
+  theorem: case 18 plants an `issue` update -- a **declared** table -- on the
+  second delete, and every per-request premise still holds, so without this gate
+  the op qualified and the receipt's only defect lived in a claim nothing read.
+  With it, case 18 leaves `delete-issue` unresolved (missing premise
+  `repeat_delete`) while `issues.create` / `issues.close` stay supported, and
+  `test_replay_corpus_evaluation` shows that dropping either half of the gate
+  flips it back.
+  `repeat_delete_closed(Run, Op)` lists the closure of **every** positive input
+  of the chain it negates: `replay_run_current`, `replay_requests_closed`,
+  `replay_request_seqs_closed` (the tape order `repeat_delete` reads),
+  `php_responses_closed` / `go_responses_closed` (the status half of
+  `repeat_delete_violation` and of `first_delete_committed`),
+  `php_effects_closed` / `go_effects_closed` (its effect half and
+  `repeat_delete_has_effect`) and -- because `repeat_delete_has_effect` itself
+  negates `model_scope_excluded` -- `model_describes_run(M, Run)` with
+  `model_scope_exclusions_closed(M)`.  Case 31 opens the PHP response table and
+  every op goes unresolved on `php_responses_closed`, while the per-target claim
+  `repeat_delete_not_found`, which reads the response rows *positively*, stays
+  supported: a positive claim may rest on the rows it was given, a negation may
+  not.
 * **The model typechecked** (Stage D premise).  `op_qualified_rt` carries the
   *positive* atom `model_well_formed(M, Checker, Version, Cert)`, joined on the
   same `M` as `model_describes_run(M, Run)`: the judge qualifies an op against a

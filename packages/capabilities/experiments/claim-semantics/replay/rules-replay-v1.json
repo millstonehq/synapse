@@ -1626,7 +1626,7 @@
       "producer_classes": []
     }
   ],
-  "description": "Replay judge rule pack (Phase 4, judge side). `primitives` is a byte-identical copy of claims/replay/schema_replay_v1.json; `supplementary_primitives` is empty (the frozen file declares every primitive the judge reads); `derived` opens with the two rule-less stubs the exporter carries (mutant_killed_in, op_qualified_rt), byte-identical to replay_facts._DERIVED_TARGET_DECLS so combine() accepts both, then the reviewed program; `rules` are in raw IR JSON wire form. op_qualified(index, run, op) is the qualification claim and the only static/runtime join, witnessed by index_describes_replay; repeat_delete_not_found(run, target) is the per-target cross-request claim. The Stage D pair (model_well_formed, model_checker_admitted) sits last in op_qualified_rt's body -- semantically a conjunct's position is nothing, but the why-not walk reports the first unsatisfied premise, and while the typed checker does not exist that premise would otherwise mask every real gap. op_qualified_rt is additionally gated on the model's declared effect order (effect_order_*), on repeat deletes being not-found without effects (repeat_delete_*) and on the PHP oracle's cross-run stability (oracle_stable).",
+  "description": "Replay judge rule pack (Phase 4, judge side). `primitives` is a byte-identical copy of claims/replay/schema_replay_v1.json; `supplementary_primitives` is empty (the frozen file declares every primitive the judge reads); `derived` opens with the two rule-less stubs the exporter carries (mutant_killed_in, op_qualified_rt), byte-identical to replay_facts._DERIVED_TARGET_DECLS so combine() accepts both, then the reviewed program; `rules` are in raw IR JSON wire form. op_qualified(index, run, op) is the qualification claim and the only static/runtime join, witnessed by index_describes_replay; repeat_delete_not_found(run, target) is the per-target cross-request claim. The Stage D pair (model_well_formed, model_checker_admitted) sits last in op_qualified_rt's body -- semantically a conjunct's position is nothing, but the why-not walk reports the first unsatisfied premise, and while the typed checker does not exist that premise would otherwise mask every real gap. op_qualified_rt is additionally gated on the model's declared effect order (effect_order_*), on the repeat delete being not-found without effects (repeat_delete_closed / !repeat_delete_any: a second DELETE of a committed target that answers anything but 404 on either side, or writes any row outside the reviewer's scope exclusions, blocks the op it belongs to) and on the PHP oracle's cross-run stability (oracle_stable).",
   "id": "rules-replay-v1",
   "primitives": [
     {
@@ -7074,6 +7074,25 @@
               "variable": "Run"
             }
           ]
+        },
+        {
+          "relation": "model_describes_run",
+          "terms": [
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "model_scope_exclusions_closed",
+          "terms": [
+            {
+              "variable": "M"
+            }
+          ]
         }
       ],
       "head": {
@@ -7412,6 +7431,29 @@
           "terms": [
             {
               "variable": "Run"
+            }
+          ]
+        },
+        {
+          "relation": "repeat_delete_closed",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "repeat_delete_any",
+          "terms": [
+            {
+              "variable": "Run"
+            },
+            {
+              "variable": "Op"
             }
           ]
         },
