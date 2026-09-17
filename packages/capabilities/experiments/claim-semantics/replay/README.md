@@ -7,7 +7,13 @@ requests under one nonce and one snapshot, plus the mutation tool's verdicts
 census is qualified by this replay*.  The replay harness is a producer of
 observations, never an oracle; the judge is these rules.
 
-* `rules-replay-v1.json` - the rule pack in raw IR JSON wire form.
+* `rules-replay-v1.json` - the rule pack in raw IR JSON wire form. **This
+  copy is the reviewed one**: edit it here. It is mirrored byte-for-byte to
+  `src/capcov/claims/replay/rules-replay-v1.json`, which ships in the wheel as
+  package data so the judge (`capcov.claims.replay.pack`, `join`, the compiled
+  checker, `capcov experiment claims assumptions`) runs with no source tree.
+  After changing this file, copy it over the mirror --
+  `tests/claim_semantics/test_replay_pack_package_data.py` fails while they differ.
 * `cases/NN-*.json` - one positive control (`00`) and twenty-six adversarial
   shapes (the numbering is not contiguous: the gaps are the rejected cases);
   `rejected/NN-*.json` are the cases the ingestion boundary must refuse.

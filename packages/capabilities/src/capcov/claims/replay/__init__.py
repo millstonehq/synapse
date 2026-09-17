@@ -9,6 +9,12 @@ loaded here, never edited here: a change to it is a schema version, not a
 patch.  The per-relation field set is exactly that of
 ``capcov.claims.static.schema_static_v1.json``.
 
+``rules-replay-v1.json`` is the judge's rule pack, shipped here as package data
+and loaded by ``pack.py`` through ``importlib.resources``.  It is a
+byte-identical mirror of the reviewed
+``experiments/claim-semantics/replay/rules-replay-v1.json``; that copy is the
+one a reviewer edits, and a test fails while the two differ.
+
 ``replay_facts`` turns one receipt directory written by the replay harness
 into a validated claims ``Bundle`` of facts and evidence keyed by the receipt's
 ``run``, whose identity is a digest of the exported relations and never of the
