@@ -207,6 +207,111 @@ class RobustnessUnitTest(unittest.TestCase):
         )
 
 
+class TypeReferencesTest(unittest.TestCase):
+    """Constructor calls and other type mentions are TYPE references, not call
+    edges (module docstring); ``type_references`` recovers them with the same
+    innermost-caller attribution ``call_edges`` uses."""
+
+    def setUp(self) -> None:
+        self.normalized = json.loads(FIXTURE.read_text())
+
+    def test_the_constructor_call_is_a_type_reference_inside_create_job(self) -> None:
+        refs = scip_map.type_references(self.normalized)
+        job_refs = [r for r in refs if r["type_symbol"] == _JOB and r["referrer"] == _CREATE_JOB]
+        self.assertTrue(job_refs, "Job() inside create_job must be a type reference")
+        for ref in refs:
+            self.assertEqual(set(ref), {"referrer", "type_symbol", "file", "line"})
+            self.assertTrue(ref["type_symbol"].endswith("#"))
+
+    def test_type_references_never_overlap_call_edges(self) -> None:
+        callees = {e["callee"] for e in scip_map.call_edges(self.normalized)}
+        types = {r["type_symbol"] for r in scip_map.type_references(self.normalized)}
+        self.assertFalse(callees & types)
+
+    def test_module_scope_type_reference_has_no_referrer(self) -> None:
+        occ = [
+            {"symbol": "m Cls#", "is_definition": False, "start_line": 0, "start_col": 0,
+             "enclosing_start_line": None, "enclosing_end_line": None},
+        ]
+        refs = scip_map.type_references(
+            {"documents": [{"path": "x", "symbols": [], "occurrences": occ}]}
+        )
+        self.assertEqual(len(refs), 1)
+        self.assertIsNone(refs[0]["referrer"])
+
+    def test_result_is_deterministically_ordered_and_deduplicated(self) -> None:
+        once = scip_map.type_references(self.normalized)
+        again = scip_map.type_references(json.loads(FIXTURE.read_text()))
+        self.assertEqual(once, again)
+        keys = [(r["referrer"], r["type_symbol"], r["file"], r["line"]) for r in once]
+        self.assertEqual(len(keys), len(set(keys)))
+
+
+class SiteOwnersTest(unittest.TestCase):
+    """``site_owners`` attributes tree-sitter sites (1-based lines) to the
+    innermost enclosing SCIP definition, reusing ``_innermost_caller``."""
+
+    def _normalized(self):
+        occ = [
+            {"symbol": "m Cls#", "is_definition": True, "start_line": 0, "start_col": 0,
+             "enclosing_start_line": 0, "enclosing_end_line": 20},
+            {"symbol": "m outer().", "is_definition": True, "start_line": 2, "start_col": 0,
+             "enclosing_start_line": 2, "enclosing_end_line": 8, "enclosing_synthesized": True},
+        ]
+        return {"documents": [{"path": "x.go", "symbols": [], "occurrences": occ}]}
+
+    def test_sites_are_attributed_in_the_one_based_frame_by_default(self) -> None:
+        # 1-based line 6 is SCIP line 5, inside outer() (2..8) and Cls (0..20).
+        out = scip_map.site_owners(self._normalized(), [{"file": "x.go", "line": 6}])
+        self.assertEqual(
+            out,
+            [{"file": "x.go", "line": 6, "owner": "m outer().", "owner_synthesized": True}],
+        )
+
+    def test_zero_based_sites_can_be_passed_through(self) -> None:
+        out = scip_map.site_owners(
+            self._normalized(), [{"file": "x.go", "line": 5}], line_base=0
+        )
+        self.assertEqual(out[0]["owner"], "m outer().")
+
+    def test_a_site_outside_every_span_or_document_has_no_owner(self) -> None:
+        out = scip_map.site_owners(
+            self._normalized(),
+            [{"file": "x.go", "line": 15}, {"file": "other.go", "line": 3},
+             {"file": "x.go", "line": 40}],
+        )
+        self.assertEqual([o["owner"] for o in out], ["m Cls#", None, None])
+        self.assertEqual([o["owner_synthesized"] for o in out], [False, False, False])
+
+    def test_the_same_line_gets_the_same_owner_as_a_call_edge(self) -> None:
+        normalized = json.loads(FIXTURE.read_text())
+        edge = scip_map.call_edges(normalized)[0]
+        owned = scip_map.site_owners(
+            normalized, [{"file": edge["file"], "line": edge["line"] + 1}]
+        )
+        self.assertEqual(owned[0]["owner"], edge["caller"])
+
+    def test_input_order_is_preserved(self) -> None:
+        sites = [{"file": "x.go", "line": 6}, {"file": "x.go", "line": 1}]
+        out = scip_map.site_owners(self._normalized(), sites)
+        self.assertEqual([o["line"] for o in out], [6, 1])
+
+
+class ReferenceEdgesTest(unittest.TestCase):
+    def test_call_edges_are_the_callable_projection_of_reference_edges(self) -> None:
+        normalized = json.loads(FIXTURE.read_text())
+        raw = scip_map.reference_edges(normalized, "callable")
+        self.assertTrue(raw)
+        for entry in raw:
+            self.assertEqual(
+                set(entry), {"owner", "symbol", "file", "line", "occurrence", "owner_synthesized"}
+            )
+            self.assertIs(entry["occurrence"].get("is_definition"), False)
+        projected = {(e["owner"], e["symbol"], e["file"], e["line"]) for e in raw}
+        edges = {(e["caller"], e["callee"], e["file"], e["line"]) for e in scip_map.call_edges(normalized)}
+        self.assertEqual(projected, edges)
+
+
 # ---------------------------------------------------------------------------
 # Live: index a real tree, read it, map it. Skips when the tools are absent.
 

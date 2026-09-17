@@ -1,0 +1,97 @@
+{
+ "absent": [],
+ "bounds": {
+  "max_depth": 64,
+  "max_nodes": 10000
+ },
+ "bundle_digest": "a686edeee4b4f1d236bc73c3b48bc2c0d510308f413b8b31820a51eb41dd38f9",
+ "certificate_version": "capcov-static-certificate-v1",
+ "conclusion": {
+  "relation": "runtime_route_observed_on_index",
+  "row": [
+   "ae62aba10395c584419693240d1ea131ceecec24e7643c3d23c68d4a20c6c9c7",
+   "tenant-a",
+   "http:GET /api/cloud/notification-unsubscribe/subscribe-email",
+   "claims-runtime-trace-20260915-02"
+  ]
+ },
+ "derivation": {
+  "absent": [],
+  "comparisons": [],
+  "kind": "rule",
+  "premises": [
+   {
+    "evidence": [
+     "runtime:claims-runtime-trace-20260915-02:runtime_route_observed:81fb583deef4"
+    ],
+    "kind": "fact",
+    "relation": "runtime_route_observed",
+    "row": [
+     "tenant-a",
+     "http:GET /api/cloud/notification-unsubscribe/subscribe-email",
+     "claims-runtime-trace-20260915-02-subscribe",
+     "claims-runtime-trace-20260915-02"
+    ]
+   },
+   {
+    "evidence": [
+     "static:ae62aba10395:index_describes_run:9059a9a8a1ed"
+    ],
+    "kind": "fact",
+    "relation": "index_describes_run",
+    "row": [
+     "ae62aba10395c584419693240d1ea131ceecec24e7643c3d23c68d4a20c6c9c7",
+     "claims-runtime-trace-20260915-02"
+    ]
+   },
+   {
+    "evidence": [
+     "scip:ae62aba10395:scip_index:f6d81a92c5a5"
+    ],
+    "kind": "fact",
+    "relation": "scip_index",
+    "row": [
+     "ae62aba10395c584419693240d1ea131ceecec24e7643c3d23c68d4a20c6c9c7",
+     "scip-go",
+     "0.2.7",
+     "go",
+     "file:///target-go",
+     "static-relations-v1"
+    ]
+   }
+  ],
+  "relation": "runtime_route_observed_on_index",
+  "row": [
+   "ae62aba10395c584419693240d1ea131ceecec24e7643c3d23c68d4a20c6c9c7",
+   "tenant-a",
+   "http:GET /api/cloud/notification-unsubscribe/subscribe-email",
+   "claims-runtime-trace-20260915-02"
+  ],
+  "rule": "runtime_route_matches_scip_index",
+  "rule_digest": "8fa8818598ce8f41cacad480bb07ebb039105ac0249671a6298e54a9707ad141"
+ },
+ "leaves": [
+  "runtime:claims-runtime-trace-20260915-02:runtime_route_observed:81fb583deef4",
+  "scip:ae62aba10395:scip_index:f6d81a92c5a5",
+  "static:ae62aba10395:index_describes_run:9059a9a8a1ed"
+ ],
+ "nesting": 1,
+ "nodes": 7,
+ "rules_digest": "3caf2bf2a6e3cb6458834c73449d92d530803413b57a8e9e52cb9e2cdd541a37",
+ "steps": 0,
+ "truncated": false,
+ "truncation": null,
+ "witnesses": [
+  {
+   "evidence": [
+    "static:ae62aba10395:index_describes_run:9059a9a8a1ed"
+   ],
+   "modality": "compatibility",
+   "relation": "index_describes_run",
+   "row": [
+    "ae62aba10395c584419693240d1ea131ceecec24e7643c3d23c68d4a20c6c9c7",
+    "claims-runtime-trace-20260915-02"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,483 @@
+{
+ "certificates": {
+  "claim-route-reaches-change-subscription": {
+   "derivation_sha256": "28f4a40bc2f0b69cda445175072db2594013fab4e0ece88416268c1985ffd89b",
+   "leaves": 3,
+   "nodes": 13,
+   "sha256": "56046864e5780bc973fef29ff5ed1788833cdc6d354d7f80cd0dae8b60db94f1",
+   "steps": 0,
+   "truncated": false
+  },
+  "claim-route-reaches-sql-tx-exec": {
+   "derivation_sha256": "2e4823c8a056a8e12a876ffad173a4a6ec9a7c9e1ef0d0c598e934c8823b9174",
+   "leaves": 4,
+   "nodes": 187,
+   "sha256": "117dcd90c0ef557b65916ada03a22e5b725754852ec08a3cbe7c27d13f68e18b",
+   "steps": 1,
+   "truncated": false
+  },
+  "claim-runtime-route-belongs-to-index-with-terminal-sql-receipt": {
+   "derivation_sha256": "eca9b6cd681491e734f0aa3eef6aed7aa43331509d9f0ed50e7827b68737650e",
+   "leaves": 3,
+   "nodes": 7,
+   "sha256": "0f5f4793278d4def7e5af77c840d73d6c8e41733fd3e0f2083e8275d2e570161",
+   "steps": 0,
+   "truncated": false
+  },
+  "claim-runtime-route-executed-sql-on-index": {
+   "derivation_sha256": "283bc91eb3dabcce4436078c493568159f2e22c45c39a3583d9e00e6fafd7c55",
+   "leaves": 7,
+   "nodes": 15,
+   "sha256": "56939f8ee1bef7d3f0b3a8fb231c8b1a404dc2f052cb5a0caade25a1e2c9156b",
+   "steps": 0,
+   "truncated": false
+  }
+ },
+ "claims": {
+  "claim-route-reaches-change-subscription": {
+   "basis": "derivational",
+   "missing_premises": [],
+   "operational": "complete",
+   "semantic": "supported"
+  },
+  "claim-route-reaches-sql-tx-exec": {
+   "basis": "derivational",
+   "missing_premises": [],
+   "operational": "complete",
+   "semantic": "supported"
+  },
+  "claim-runtime-route-belongs-to-index-with-terminal-sql-receipt": {
+   "basis": "derivational",
+   "missing_premises": [],
+   "operational": "complete",
+   "semantic": "supported"
+  },
+  "claim-runtime-route-executed-sql-on-index": {
+   "basis": "derivational",
+   "missing_premises": [],
+   "operational": "complete",
+   "semantic": "supported"
+  },
+  "control-route-reaches-send-due-digests": {
+   "basis": "derivational",
+   "missing_premises": [
+    "\"claim:static_reaches:{\\\"index\\\":\\\"ae62aba10395c584419693240d1ea131ceecec24e7643c3d23c68d4a20c6c9c7\\\"}\""
+   ],
+   "operational": "complete",
+   "semantic": "unresolved"
+  }
+ },
+ "combined": {
+  "bundle_digest": "5f554cee059c6d5500fbf253daf20be0b88efaf78e4936395a1b6d7f01e10c04",
+  "facts": 29247,
+  "ir_digest": "a686edeee4b4f1d236bc73c3b48bc2c0d510308f413b8b31820a51eb41dd38f9",
+  "relations": 75,
+  "rules": 30,
+  "rules_digest": "3caf2bf2a6e3cb6458834c73449d92d530803413b57a8e9e52cb9e2cdd541a37"
+ },
+ "coverage": {
+  "deep_unresolved": 0,
+  "ratio": 1.0,
+  "rooted_edges": 2407,
+  "rooted_symbols": 1382,
+  "route_closure_symbols": 53,
+  "total_edges": 2407,
+  "unrooted_on_route_closure": {},
+  "unrooted_reasons": {
+   "local": 125,
+   "non-node-descriptor": 16
+  },
+  "unrooted_symbols": 141
+ },
+ "export": {
+  "exported_bundle_digest": "efea70340d291400bf8a69bd77a56c181e9fa00187b13b97958547c2af63ac7b",
+  "facts": 29239,
+  "index_identity": "ae62aba10395c584419693240d1ea131ceecec24e7643c3d23c68d4a20c6c9c7",
+  "index_identity_kind": "static-relations-v1",
+  "limits": {
+   "documents": 500,
+   "occurrences": 200000,
+   "rows": 100000
+  },
+  "messages": [
+   "11 document(s) outside the indexed tree are not exported (paths escaping the project root; recorded as metadata out_of_tree_documents)",
+   "scip_index.project_root recorded as 'file:///target-go'; the indexer reported 'file://<host path>shell.mRmrcP/capcov-target-go-pilot-9j6g2bzu/target-go' (host path, not a fact)",
+   "189 type reference(s) at module scope have no referrer symbol and no section-29 relation; not exported",
+   "index identity ae62aba10395c584419693240d1ea131ceecec24e7643c3d23c68d4a20c6c9c7 (static-relations-v1); the index file digest 9a95577c48539507a4cb5ce6010bc5aaba9b41a9476806b0c7f5c3c4e1fbd59f (binary) is a run receipt, not identity"
+  ],
+  "out_of_tree_documents": [
+   {
+    "basename": "02cb8160b96e4892b589713ba185816f2909b04c4426f9903b94ee46cebf7ecf-d",
+    "occurrence_count": 85
+   },
+   {
+    "basename": "2ae80d23a5344dfc379a8d6041db92f82a99c77841216c45effefcb0cce7e98b-d",
+    "occurrence_count": 47
+   },
+   {
+    "basename": "523a3925c1f5ee838a9b6b84e32d25e0dae69b86e0faa02f933c7dd797334a00-d",
+    "occurrence_count": 40
+   },
+   {
+    "basename": "55d9caebb5daa17d8a7d52931c651c23c918dc9968a7542b69b2b77c48adda47-d",
+    "occurrence_count": 41
+   },
+   {
+    "basename": "579fbfec314e8bdc0143127d55d29d72b4b6b4b48ea553b3f8f38bbbb0479dd5-d",
+    "occurrence_count": 79
+   },
+   {
+    "basename": "671c8d2547a522caee8811e24c6284e7db58ae9511b83c9cfe78324a50863333-d",
+    "occurrence_count": 63
+   },
+   {
+    "basename": "7eb6ae09466db000aca4382805dbafd0b9d571ff94f2f70abddf4e377484217a-d",
+    "occurrence_count": 43
+   },
+   {
+    "basename": "d9416117a5a1869cec7e76b4f051d27cc19835e4752ab04efbc7431dfd88d0d1-d",
+    "occurrence_count": 46
+   },
+   {
+    "basename": "ddbd36e47e0d8bfbf3e1f84a5ea9663fee2b0f7648cbafc01629f70f7a7c4cf6-d",
+    "occurrence_count": 109
+   },
+   {
+    "basename": "ecd11509b01f09bd48b9720f0ed22c100131a416ad54a1773d4decd2c40b1336-d",
+    "occurrence_count": 47
+   },
+   {
+    "basename": "febed0acb72541a9b85260650d4084f17a1d074d5e4a259b8b4f18181614ed18-d",
+    "occurrence_count": 45
+   }
+  ],
+  "profile": "slice",
+  "row_counts": {
+   "index_describes_run": 1,
+   "scip_definition_site": 3642,
+   "scip_definitions_closed": 74,
+   "scip_document": 133,
+   "scip_documents_closed": 1,
+   "scip_enclosing": 238,
+   "scip_index": 1,
+   "scip_index_commit": 1,
+   "scip_index_tree": 1,
+   "scip_may_reference": 2407,
+   "scip_module_scope_reference": 27,
+   "scip_read_site": 16458,
+   "scip_relationship": 19,
+   "scip_symbol": 3433,
+   "scip_symbol_node": 1382,
+   "scip_symbol_unrooted": 141,
+   "scip_type_reference": 1034,
+   "static_language_covered": 1,
+   "static_scope": 74,
+   "static_scope_closed": 1,
+   "static_source_file": 170
+  },
+  "status": "complete",
+  "tree": {
+   "digest": "edc336a1161c2fa4e47e5e93719e05c88a2bca68ee895dc6aec5849d214c5556",
+   "file_count": 170,
+   "pattern": "**/*.go"
+  },
+  "unindexed_files": [
+   "internal/legacyassets/read_integration_test.go",
+   "internal/legacydocuments/read_integration_test.go",
+   "internal/legacyequipment/feeding_integration_test.go",
+   "internal/legacyissues/digest_delivery_integration_test.go",
+   "internal/legacyissues/metadata_preview_integration_test.go",
+   "internal/legacyissues/notification_changed_integration_test.go",
+   "internal/legacyissues/notification_mail_handoff_integration_test.go",
+   "internal/legacyissues/read_properties_integration_test.go",
+   "internal/legacyissues/subscriptions_integration_test.go",
+   "internal/legacyissues/system_statistics_integration_test.go",
+   "internal/legacyissues/type_task_statistics_integration_test.go",
+   "internal/legacyissues/write_integration_test.go",
+   "internal/legacypermissions/project_integration_test.go",
+   "internal/legacyprojects/access_integration_test.go",
+   "internal/legacyprojects/buildings_integration_test.go",
+   "internal/legacyprojects/list_integration_test.go",
+   "internal/legacyprojects/tasks_integration_test.go",
+   "internal/legacyreports/issuedetail_integration_test.go",
+   "internal/legacyreports/issuedetail_s3_integration_test.go",
+   "internal/legacysessions/browser_integration_test.go",
+   "internal/legacysessions/cache_integration_test.go",
+   "internal/legacysessions/cached_browser_integration_test.go",
+   "internal/legacysessions/guard_integration_test.go",
+   "internal/pilot/cloud_save_properties_integration_test.go",
+   "internal/pilot/dispatch_integration_test.go",
+   "internal/pilot/documents_integration_test.go",
+   "internal/pilot/equipment_integration_test.go",
+   "internal/pilot/issue_delete_recovery_integration_test.go",
+   "internal/pilot/migrate_integration_test.go",
+   "internal/pilot/recipient_links_integration_test.go",
+   "internal/pilot/report_callbacks_integration_test.go",
+   "test-harness/notification/cloud_mail_fixture_integration_test.go",
+   "test-harness/notification/cloud_save_mail_flow_integration_test.go",
+   "test-harness/notification/mixed_trigger_grouping_test.go",
+   "test-harness/notification/smtp_capture_integration_test.go",
+   "test-harness/notification/soft_event_ordering_integration_test.go",
+   "test-harness/notification/sql_properties_test.go"
+  ]
+ },
+ "go_environment": {
+  "GOCACHE": "<host path>shell.mRmrcP/capcov-target-go-pilot/gocache",
+  "GOFLAGS": "-mod=mod",
+  "GOMODCACHE": "<host path>shell.mRmrcP/capcov-target-go-pilot/gomodcache",
+  "GOTOOLCHAIN": "local"
+ },
+ "index_file": {
+  "bytes": 3235735,
+  "documents": 144,
+  "kind": "binary receipt, not identity",
+  "occurrences": 38008,
+  "sha256": "9a95577c48539507a4cb5ce6010bc5aaba9b41a9476806b0c7f5c3c4e1fbd59f",
+  "tool_name": "scip-go",
+  "tool_version": "0.2.7"
+ },
+ "kernels": {
+  "derived_rows": {
+   "scip_duplicate_definition": 0,
+   "scip_index_stale": 0,
+   "scip_references_closed": 0,
+   "static_edge": 1543,
+   "static_file_unindexed": 37,
+   "static_index_current": 1,
+   "static_reachability_closed": 0,
+   "static_reaches": 52,
+   "static_root": 1,
+   "static_route_handler": 1,
+   "static_scope_closed": 1,
+   "static_scope_leak": 0
+  },
+  "matched": true,
+  "python_digest": "04516123cd263790c0779cc7efddfba728d7306d09f6ae1c9e060126e1bf8a5a",
+  "python_failure": null,
+  "replay_path": null,
+  "souffle_digest": "04516123cd263790c0779cc7efddfba728d7306d09f6ae1c9e060126e1bf8a5a",
+  "souffle_failure": null
+ },
+ "outcome": "supported",
+ "outcome_reasons": [],
+ "path": {
+  "claim-route-reaches-change-subscription": [
+   [
+    "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks().",
+    "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/legacyissues`/ChangeSubscription()."
+   ]
+  ],
+  "claim-route-reaches-sql-tx-exec": [
+   [
+    "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks().",
+    "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/legacyissues`/ChangeSubscription()."
+   ],
+   [
+    "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/legacyissues`/ChangeSubscription().",
+    "scip-go gomod github.com/golang/go/src go1.25.0 `database/sql`/Tx#ExecContext()."
+   ]
+  ],
+  "claim-runtime-route-belongs-to-index-with-terminal-sql-receipt": [],
+  "claim-runtime-route-executed-sql-on-index": []
+ },
+ "pilot": "EXPERIMENT-PLAN section 30 target-go static path pilot",
+ "redaction": {
+  "note": "committed copy of a real pilot run; identifying strings are replaced for publication (module path -> placeholder, checkout and host temp paths -> markers). Every digest, identity, row count and certificate entry is of the unredacted run; the certificate files' own sha256 values therefore describe the originals, not these copies.",
+  "rules": [
+   "<real module path> -> git.internal.example/org/target-go",
+   "<checkout path> -> <checkout>",
+   "<host temp paths> -> <host path>",
+   "<module basename> -> target-go"
+  ],
+  "unredacted_receipt_sha256": "ea002db57f87b8bf7093f8000660e3451abdd0d8898cb5c5d5788ef007b04393"
+ },
+ "replay_join": {
+  "assumptions": [
+   "reviewer:assumed:index_describes_replay:c04c48cab2b5",
+   "php:assumed:op_declared:1c0f01043d66"
+  ],
+  "combined_bundle_digest": "4b940c4f46d9b4e937b470d1934f9556a9e96425e48ba32941ca0598f72cf9eb",
+  "delete-issue": {
+   "blocked_by": "blocked by undeclared writes: {\"go\": [\"authentication\", \"entity_statistics\", \"go_issue_outbox\", \"mongo:issue\", \"redis\"], \"php\": [\"authentication\", \"entity_statistics\", \"jobs_statuses\", \"mongo:issue\", \"redis\"]}",
+   "blocking_premise": {
+    "holds": true,
+    "relation": "undeclared_any"
+   },
+   "corpus_constrains": true,
+   "missing_premise": [
+    "model_writes"
+   ],
+   "op_qualified": "unresolved",
+   "operational": "complete",
+   "undeclared_tables": {
+    "go": [
+     "authentication",
+     "entity_statistics",
+     "go_issue_outbox",
+     "mongo:issue",
+     "redis"
+    ],
+    "php": [
+     "authentication",
+     "entity_statistics",
+     "jobs_statuses",
+     "mongo:issue",
+     "redis"
+    ]
+   },
+   "undeclared_write": "supported"
+  },
+  "model_absent": false,
+  "ops": [
+   "delete-issue"
+  ],
+  "replay_bundle_digest": "f0b635bed5458b926aa82d5fbdc5d324fcef9697a5c927743c8942fbf1bc3bea",
+  "replay_identity": "319052670e8b62d5b9d004f121665efe0002c8f09a0a89c06c8cadc9a5a1b173",
+  "run": "333072ef11f5",
+  "status": "complete",
+  "synthetic_index": "314aeb9212266c218285016aae13b68c0e00fd40239180f6396594e3c6dc2a7d"
+ },
+ "route": {
+  "assumption_evidence_id": "static:ae62aba10395:route_handler_symbol__accepted:00a6e769ba93",
+  "binding": "labelled assumption; no route_site / route_handler_location observation",
+  "declared_from": "human-declared from router source: internal/pilot/runtime.go:209 registers GET /api/cloud/notification-unsubscribe/<action>-email -> r.recipientLinks(action); handler defined at internal/pilot/recipient_links.go:14; app mounted at internal/httpserver/server.go:47 and wired at cmd/target-go/main.go:181",
+  "handler_symbol": "scip-go gomod git.internal.example/org/target-go . `git.internal.example/org/target-go/internal/pilot`/Runtime#recipientLinks().",
+  "surface": "http:GET /api/cloud/notification-unsubscribe/subscribe-email"
+ },
+ "runtime_join": {
+  "claim": "claim-runtime-route-belongs-to-index-with-terminal-sql-receipt",
+  "receipt_sha256": "efd7bd17dd270daa10c32e348491aa7561f48eb865d4fc969cd97a9c2b43e32c",
+  "run": "claims-runtime-trace-20260915-02"
+ },
+ "slice": {
+  "document_count": 74,
+  "documents": [
+   "internal/issues/delete_policy.go",
+   "internal/legacyassets/read.go",
+   "internal/legacydocuments/read.go",
+   "internal/legacyequipment/feeding.go",
+   "internal/legacyfiles/logo.go",
+   "internal/legacyfiles/metadata.go",
+   "internal/legacyflags/responsibility.go",
+   "internal/legacyissues/audit.go",
+   "internal/legacyissues/charts.go",
+   "internal/legacyissues/cloud_assignment.go",
+   "internal/legacyissues/cloud_dates.go",
+   "internal/legacyissues/cloud_notify.go",
+   "internal/legacyissues/cloud_write.go",
+   "internal/legacyissues/deletion.go",
+   "internal/legacyissues/digest_render.go",
+   "internal/legacyissues/digest_send.go",
+   "internal/legacyissues/digest_ses.go",
+   "internal/legacyissues/digests.go",
+   "internal/legacyissues/metadata.go",
+   "internal/legacyissues/notification_schedule.go",
+   "internal/legacyissues/notifications.go",
+   "internal/legacyissues/read.go",
+   "internal/legacyissues/read_labels.go",
+   "internal/legacyissues/read_responsibility.go",
+   "internal/legacyissues/recipient_token.go",
+   "internal/legacyissues/statistics.go",
+   "internal/legacyissues/subscriptions.go",
+   "internal/legacyissues/system_statistics.go",
+   "internal/legacyissues/task_properties.go",
+   "internal/legacyissues/task_statistics.go",
+   "internal/legacyissues/type_task_statistics.go",
+   "internal/legacyissues/write.go",
+   "internal/legacypermissions/documents.go",
+   "internal/legacypermissions/project.go",
+   "internal/legacyprojects/access.go",
+   "internal/legacyprojects/buildings.go",
+   "internal/legacyprojects/list.go",
+   "internal/legacyprojects/tasks.go",
+   "internal/legacyreports/callback.go",
+   "internal/legacyreports/executor_ecs.go",
+   "internal/legacyreports/issuedetail.go",
+   "internal/legacyreports/issuedetail_s3.go",
+   "internal/legacysessions/browser.go",
+   "internal/legacysessions/cache.go",
+   "internal/legacysessions/cached_browser.go",
+   "internal/legacysessions/cloud.go",
+   "internal/legacysessions/cloud_file.go",
+   "internal/legacysessions/cloud_history.go",
+   "internal/legacysessions/cloud_redis.go",
+   "internal/legacysessions/credentials.go",
+   "internal/legacysessions/guard.go",
+   "internal/legacysessions/populate.go",
+   "internal/legacysessions/users.go",
+   "internal/phpcache/decode.go",
+   "internal/phpcache/encode.go",
+   "internal/pilot/assets.go",
+   "internal/pilot/browser_failure.go",
+   "internal/pilot/cloud_save.go",
+   "internal/pilot/commissioning.go",
+   "internal/pilot/completion.go",
+   "internal/pilot/config.go",
+   "internal/pilot/connections.go",
+   "internal/pilot/dispatch.go",
+   "internal/pilot/documents.go",
+   "internal/pilot/equipment.go",
+   "internal/pilot/migrate.go",
+   "internal/pilot/notifications.go",
+   "internal/pilot/project_discovery.go",
+   "internal/pilot/project_routes.go",
+   "internal/pilot/recipient_links.go",
+   "internal/pilot/report_requests.go",
+   "internal/pilot/runtime.go",
+   "internal/pilot/worker.go",
+   "internal/runtimeevidence/runtimeevidence.go"
+  ],
+  "edge_count": 27,
+  "excluded_test_documents": 62,
+  "occurrences": 21914,
+  "packages": [
+   "git.internal.example/org/target-go/internal/issues",
+   "git.internal.example/org/target-go/internal/legacyassets",
+   "git.internal.example/org/target-go/internal/legacydocuments",
+   "git.internal.example/org/target-go/internal/legacyequipment",
+   "git.internal.example/org/target-go/internal/legacyfiles",
+   "git.internal.example/org/target-go/internal/legacyflags",
+   "git.internal.example/org/target-go/internal/legacyissues",
+   "git.internal.example/org/target-go/internal/legacypermissions",
+   "git.internal.example/org/target-go/internal/legacyprojects",
+   "git.internal.example/org/target-go/internal/legacyreports",
+   "git.internal.example/org/target-go/internal/legacysessions",
+   "git.internal.example/org/target-go/internal/phpcache",
+   "git.internal.example/org/target-go/internal/pilot",
+   "git.internal.example/org/target-go/internal/runtimeevidence"
+  ],
+  "start": "git.internal.example/org/target-go/internal/pilot"
+ },
+ "target": {
+  "dirty": false,
+  "go_directive": "1.25.0",
+  "head": "01fe913fffbacf46f668f7e0412e00208fe4b217",
+  "module_path": "git.internal.example/org/target-go",
+  "porcelain": [],
+  "root": "<checkout>"
+ },
+ "timings_seconds": {
+  "compare": 105.5,
+  "export": 8.1,
+  "index": 95.5,
+  "total": 220.9
+ },
+ "tools": {
+  "go": {
+   "path": "/nix/store/lz3qw52rpazqga73xgsqlj4qz1lgs4hg-go-1.27.0/bin/go",
+   "version": "go version go1.27.0 darwin/arm64"
+  },
+  "scip": {
+   "path": "/nix/store/hckm2075va6x941b4lwncv8ls3p6ssr1-scip-0.9.0/bin/scip",
+   "version": "scip version v0.9.0"
+  },
+  "scip-go": {
+   "path": "/nix/store/3inxss33qhklfr6416j0kwp4cbjkdlys-scip-go-0.2.7/bin/scip-go",
+   "version": "0.2.7"
+  },
+  "souffle": {
+   "path": "/nix/store/hjf84h92h4ynbbn9sg9q1biyr25r617i-souffle-2.5/bin/souffle",
+   "version": "Version:"
+  }
+ }
+}

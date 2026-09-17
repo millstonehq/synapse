@@ -1,0 +1,20 @@
+{
+  "producer": "go fg-replay v1",
+  "rows": [
+    {
+      "run": "333072ef11f5",
+      "req": "forbidden",
+      "state_digest": "5e32ce6eccf708dda676d8c374db2b994a71b547df12e33849300b511c03451f"
+    },
+    {
+      "run": "333072ef11f5",
+      "req": "missing",
+      "state_digest": "5e32ce6eccf708dda676d8c374db2b994a71b547df12e33849300b511c03451f"
+    },
+    {
+      "run": "333072ef11f5",
+      "req": "owner",
+      "state_digest": "5e32ce6eccf708dda676d8c374db2b994a71b547df12e33849300b511c03451f"
+    }
+  ]
+}

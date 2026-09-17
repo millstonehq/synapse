@@ -1,0 +1,35 @@
+{
+  "producer": "mut fg-replay v1",
+  "rows": [
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "mutant": "M1",
+      "op": "delete-issue"
+    },
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "mutant": "M2",
+      "op": "delete-issue"
+    },
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "mutant": "M3",
+      "op": "delete-issue"
+    },
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "mutant": "M4",
+      "op": "delete-issue"
+    },
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "mutant": "M5",
+      "op": "delete-issue"
+    },
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "mutant": "M6",
+      "op": "delete-issue"
+    }
+  ]
+}

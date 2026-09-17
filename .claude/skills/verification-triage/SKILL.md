@@ -223,7 +223,7 @@ queue is not proof that processing is drained: due recipients and ready emails i
 SQL can repopulate it when scanning resumes. Check both durable eligibility and
 ready/delayed/reserved queue work before transferring ownership. Inspect the
 deployed send job too: explicit-ID or serialized-payload jobs may bypass current
-SQL status and resend already-settled messages. In FacilityGrid this was verified
+SQL status and resend already-settled messages. In the target system this was verified
 against the deployed PHP sender; the ordinary ready-status query alone missed it.
 Preserve restored legacy backlog and isolate qualification work rather than
 starting an unscoped sender or resetting statuses to make a rehearsal pass.
@@ -235,7 +235,7 @@ failure. Rebuild from the declared derivation and keep an output link as a GC ro
 for the qualification. Compare extension bytes as well as loaded PHP/extension
 versions and a BSON round-trip. A rebuilt output can retain its path and version
 while changing bytes: record a fresh fingerprint and rerun the required contract;
-do not silently reuse earlier receipts or disable hash verification. FacilityGrid
+do not silently reuse earlier receipts or disable hash verification. the target system
 cloud-save qualification encountered this with its MongoDB PHP extension.
 
 ## Keep fixture premises independent of the candidate

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "subject_id": "capability:notification.unsubscribe",
+  "subject": {
+    "definition": "The recipient can disable a selected notification category.",
+    "route": "GET /api/cloud/notification-unsubscribe/{action}-email",
+    "static_chain": [
+      "Runtime.recipientLinks",
+      "legacyissues.ChangeSubscription",
+      "sql.Tx.ExecContext"
+    ]
+  },
+  "candidates": [
+    {
+      "id": "legacyissues.ChangeSubscription",
+      "description": "Changes the recipient subscription and removes pending confirmation state.",
+      "evidence_ids": [
+        "static:route-reaches-change-subscription"
+      ]
+    },
+    {
+      "id": "audit.RecordRequest",
+      "description": "Records that the unsubscribe request occurred without changing subscription state.",
+      "evidence_ids": [
+        "static:route-reaches-audit"
+      ]
+    }
+  ],
+  "instructions": "Which candidate directly implements the modeled business outcome in `subject.definition`? Select `no_match` when every candidate is only incidental, observational, or unrelated.",
+  "presence_criteria": {
+    "true": "At least one candidate directly creates the modeled subscription outcome.",
+    "false": "All candidates are incidental, observational, supporting infrastructure, or unrelated."
+  },
+  "model": "jev-latest"
+}

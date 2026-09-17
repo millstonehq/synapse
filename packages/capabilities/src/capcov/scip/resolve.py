@@ -199,17 +199,46 @@ class _Normalizer:
         self.namespace_sep = namespace_sep
 
     def symbol_to_node(self, symbol: str | None) -> str | None:
+        return self.explain(symbol)[0]
+
+    def explain(self, symbol: str | None) -> tuple[str | None, str | None]:
+        """``(node, None)`` for a rootable symbol, else ``(None, reason)``.
+
+        The same parse as ``symbol_to_node`` but it says *why* a symbol is not a
+        node instead of a silent ``None`` -- the static fact exporter records the
+        reason as ``scip_symbol_unrooted(index, symbol, reason)`` (section 29).
+        Reasons: ``local`` (a ``local N`` symbol), ``unknown-scheme`` (fewer than
+        the four prefix fields of the SCIP grammar, or an empty symbol),
+        ``non-node-descriptor`` (a parameter, type parameter, meta, macro or
+        malformed descriptor tail), ``no-package`` (a member with no leading
+        namespace, so nothing to root a node in).
+        """
+        if not symbol:
+            return None, UNROOTED_UNKNOWN_SCHEME
+        if symbol.startswith("local "):
+            return None, UNROOTED_LOCAL
         descriptor = _strip_scip_prefix(symbol)
         if descriptor is None:
-            return None
+            return None, UNROOTED_UNKNOWN_SCHEME
         parsed = _parse_descriptor(descriptor)
         if parsed is None:
-            return None
+            return None, UNROOTED_NON_NODE
         namespaces, tail = parsed
         if not namespaces:
-            return None  # no package -> not a rootable in-project node
+            return None, UNROOTED_NO_PACKAGE  # not a rootable in-project node
         package = self.namespace_sep.join(namespaces)
-        return f"{package}:{'.'.join(tail)}"
+        return f"{package}:{'.'.join(tail)}", None
+
+
+# The reasons ``_Normalizer.explain`` gives for a symbol it cannot root. Frozen
+# vocabulary of ``scip_symbol_unrooted.reason`` in schema_static_v1 / section 29.
+UNROOTED_LOCAL = "local"
+UNROOTED_UNKNOWN_SCHEME = "unknown-scheme"
+UNROOTED_NON_NODE = "non-node-descriptor"
+UNROOTED_NO_PACKAGE = "no-package"
+UNROOTED_REASONS = frozenset(
+    {UNROOTED_LOCAL, UNROOTED_UNKNOWN_SCHEME, UNROOTED_NON_NODE, UNROOTED_NO_PACKAGE}
+)
 
 
 # The node-id spelling per language (see the co-design contract): python joins a
@@ -583,7 +612,13 @@ def resolve(
     source_root = Path(source_root)
     index_path = runner.run_scip_index(source_root, language, timeout=timeout)
     try:
-        normalized = runner.read_scip_index(index_path)
+        # retain=True hashes index.scip while it still exists: the digest is the
+        # index identity every static fact is keyed by (section 29), and it must
+        # be read before the transient index is removed below.
+        normalized = runner.read_scip_index(index_path, retain=True)
     finally:
         index_path.unlink(missing_ok=True)
-    return hybrid_raw(ast_raw, normalized, source_root, language=language, deep=deep)
+    hybrid = hybrid_raw(ast_raw, normalized, source_root, language=language, deep=deep)
+    hybrid["scip_index_digest"] = normalized.get("index_digest")
+    hybrid["scip_index_digest_kind"] = normalized.get("index_digest_kind")
+    return hybrid

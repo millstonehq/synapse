@@ -1,0 +1,30 @@
+{
+  "reviewed_against": {
+    "model": "8410a39b2d935acfed8c7caab5792b7f9ab7773a9f27190afb28b41a5588f859",
+    "run": "333072ef11f5"
+  },
+  "reviewed_at": "2026-09-16",
+  "reviewer": "target-go-reviewer",
+  "rows": [
+    {
+      "model": "8410a39b2d935acfed8c7caab5792b7f9ab7773a9f27190afb28b41a5588f859",
+      "reason": "session touch on every authenticated request",
+      "table": "authentication"
+    },
+    {
+      "model": "8410a39b2d935acfed8c7caab5792b7f9ab7773a9f27190afb28b41a5588f859",
+      "reason": "job status bookkeeping around the op",
+      "table": "jobs_statuses"
+    },
+    {
+      "model": "8410a39b2d935acfed8c7caab5792b7f9ab7773a9f27190afb28b41a5588f859",
+      "reason": "cache invalidation bookkeeping",
+      "table": "redis"
+    },
+    {
+      "model": "8410a39b2d935acfed8c7caab5792b7f9ab7773a9f27190afb28b41a5588f859",
+      "reason": "candidate outbox row, not a business write",
+      "table": "go_issue_outbox"
+    }
+  ]
+}
