@@ -31,7 +31,8 @@ Set the experiment credential and assess the example:
 export JEV_API_KEY=...
 capcov experiment claims jev assess \
   --request packages/capabilities/experiments/claim-semantics/jev/example-request.json \
-  --out jev-assessment.json
+  --out jev-assessment.json \
+  --claims-out jev-assumptions.json
 ```
 
 For replay and tests, `--response response.json` validates a retained API
@@ -40,6 +41,11 @@ response and builds the same artifact without a network call.
 The API key is read only for the request and is never written to the artifact.
 `TYPESAFE_API_KEY` is accepted as a fallback for SDK-compatible environments;
 `TYPESAFE_ENDPOINT` or `--endpoint` can override the endpoint.
+
+`--claims-out` emits two producer-authorized Datalog input relations:
+`jev_candidate_probability` and `jev_selected_candidate`. Both have modality
+`assumption`, admit only the `jev` producer class, and deliberately provide no
+rules, claims, completeness relation, or compatibility relation.
 
 ## Intended next join
 

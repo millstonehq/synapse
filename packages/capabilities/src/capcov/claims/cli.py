@@ -86,6 +86,8 @@ def main(argv: list[str]) -> int:
     jev_assess.add_argument("--timeout", type=float, default=30.0)
     jev_assess.add_argument("--out", default=None,
                             help="also write the advisory artifact to this file")
+    jev_assess.add_argument("--claims-out", default=None,
+                            help="also write Datalog assumption facts as a claim bundle")
     shen_parser = claims_sub.add_parser("shen", help="executable Shen semantic workbench (section 18)")
     shen_sub = shen_parser.add_subparsers(dest="command", required=True)
     _common(shen_sub.add_parser("authority", help="structural authority checks over a rule pack"), need_row=False)
@@ -101,6 +103,13 @@ def main(argv: list[str]) -> int:
             else:
                 artifact = jev.assess(
                     request, endpoint=args.endpoint, timeout=args.timeout)
+            if args.claims_out:
+                from pathlib import Path
+                from .ir import canonical_json
+
+                Path(args.claims_out).write_text(
+                    canonical_json(jev.claims_bundle(artifact)) + "\n",
+                    encoding="utf-8")
             _emit(artifact, args.out)
             return 0
         bundle = _load_bundle(args.bundle) if args.bundle else None

@@ -10,9 +10,12 @@ from io import StringIO
 from unittest.mock import patch
 
 from capcov.claims.cli import main as experiment_main
+from capcov.claims import Modality
 from capcov.claims.jev import (
     ARTIFACT_KIND, AssessmentRequest, JevError, assess, build_artifact,
+    claims_bundle,
 )
+from capcov.claims.validation import validate_bundle
 
 
 def request_document() -> dict:
@@ -92,6 +95,19 @@ class JevAdvisoryTests(unittest.TestCase):
         ):
             self.assertFalse(semantics[authority])
 
+    def test_claim_fragment_contains_only_producer_authorized_assumptions(self) -> None:
+        artifact = build_artifact(AssessmentRequest.parse(request_document()), api_response())
+        bundle = claims_bundle(artifact)
+        self.assertEqual(validate_bundle(bundle), ())
+        self.assertEqual({relation.modality for relation in bundle.relations},
+                         {Modality.ASSUMPTION})
+        self.assertEqual({relation.producer_classes for relation in bundle.relations},
+                         {("jev",)})
+        self.assertFalse(bundle.claims)
+        self.assertFalse(bundle.rules)
+        self.assertTrue(bundle.facts)
+        self.assertTrue(all(record.kind == "assumption" for record in bundle.evidence))
+
     def test_assess_uses_jev_key_without_leaking_it(self) -> None:
         seen = {}
 
@@ -145,8 +161,9 @@ class JevAdvisoryTests(unittest.TestCase):
     def test_cli_replays_response_and_writes_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            request_path, response_path, output_path = (
-                root / "request.json", root / "response.json", root / "artifact.json")
+            request_path, response_path, output_path, claims_path = (
+                root / "request.json", root / "response.json", root / "artifact.json",
+                root / "claims.json")
             request_path.write_text(json.dumps(request_document()))
             response_path.write_text(json.dumps(api_response()))
             stdout = StringIO()
@@ -154,12 +171,17 @@ class JevAdvisoryTests(unittest.TestCase):
                 status = experiment_main([
                     "claims", "jev", "assess", "--request", str(request_path),
                     "--response", str(response_path), "--out", str(output_path),
+                    "--claims-out", str(claims_path),
                 ])
             self.assertEqual(status, 0)
             emitted = json.loads(stdout.getvalue())
             stored = json.loads(output_path.read_text())
             self.assertEqual(emitted, stored)
             self.assertEqual(stored["evidence_semantics"]["kind"], "assumption")
+            claim_document = json.loads(claims_path.read_text())
+            self.assertEqual(
+                {relation["modality"] for relation in claim_document["relations"]},
+                {"assumption"})
 
 
 if __name__ == "__main__":

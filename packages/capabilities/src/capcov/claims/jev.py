@@ -273,6 +273,108 @@ def build_artifact(request: AssessmentRequest, response: Any) -> dict[str, Any]:
     return core
 
 
+def claims_bundle(artifact: Mapping[str, Any]):
+    """Translate a validated advisory artifact into Datalog input assumptions.
+
+    The relations intentionally have no completeness or compatibility modality,
+    and contain no claim relation.  Combining this fragment with a rule pack can
+    therefore prioritize work, but cannot close an evidence domain by itself.
+    """
+    from .ir import (
+        Atom, BindingTime, Bundle, Column, Constant, Evidence, Modality,
+        RelationDecl, TypeName,
+    )
+    from .validation import ValidationError, validate_bundle
+
+    if not isinstance(artifact, Mapping) or artifact.get("kind") != ARTIFACT_KIND:
+        raise JevError("invalid-input", f"artifact.kind must be {ARTIFACT_KIND!r}")
+    assessment_id = artifact.get("assessment_id")
+    subject_id = artifact.get("subject_id")
+    producer = artifact.get("producer")
+    judgments = artifact.get("judgments")
+    semantics = artifact.get("evidence_semantics")
+    if (not isinstance(assessment_id, str) or not assessment_id
+            or not isinstance(subject_id, str) or not subject_id
+            or not isinstance(producer, Mapping) or producer.get("class") != "jev"
+            or not isinstance(producer.get("source"), str)
+            or not producer["source"].startswith("jev ")
+            or not isinstance(judgments, Mapping)
+            or not isinstance(semantics, Mapping)
+            or semantics.get("kind") != "assumption"
+            or any(semantics.get(name) is not False for name in (
+                "may_establish_fact", "may_establish_compatibility",
+                "may_establish_completeness", "may_qualify_claim",
+            ))):
+        raise JevError("invalid-input", "artifact does not satisfy the Jev advisory contract")
+    selection = judgments.get(SELECTION_QUESTION)
+    presence = judgments.get(PRESENCE_QUESTION)
+    if (not isinstance(selection, Mapping) or not isinstance(presence, Mapping)
+            or selection.get("type") != "choice" or presence.get("type") != "noul"):
+        raise JevError("invalid-input", "artifact judgments are malformed")
+    probabilities = selection.get("probabilities")
+    if not isinstance(probabilities, Mapping):
+        raise JevError("invalid-input", "artifact probabilities are malformed")
+
+    probability_relation = RelationDecl(
+        "jev_candidate_probability",
+        (Column("assessment", TypeName.SYMBOL), Column("subject", TypeName.SYMBOL),
+         Column("candidate", TypeName.SYMBOL), Column("probability_ppm", TypeName.UNSIGNED)),
+        modality=Modality.ASSUMPTION, binding=BindingTime.RUNTIME,
+        producer_classes=("jev",),
+    )
+    selection_relation = RelationDecl(
+        "jev_selected_candidate",
+        (Column("assessment", TypeName.SYMBOL), Column("subject", TypeName.SYMBOL),
+         Column("candidate", TypeName.SYMBOL), Column("confidence_ppm", TypeName.UNSIGNED),
+         Column("direct_match_ppm", TypeName.UNSIGNED)),
+        modality=Modality.ASSUMPTION, binding=BindingTime.RUNTIME,
+        producer_classes=("jev",),
+    )
+    facts = []
+    evidence = []
+    for candidate, value in sorted(probabilities.items()):
+        probability = _probability(value, f"artifact.probabilities.{candidate}")
+        if not isinstance(candidate, str) or not candidate:
+            raise JevError("invalid-input", "artifact candidate ids must be nonempty")
+        atom = Atom("jev_candidate_probability", (
+            Constant(assessment_id), Constant(subject_id), Constant(candidate),
+            Constant(round(probability * 1_000_000)),
+        ))
+        facts.append(atom)
+        evidence.append(Evidence(
+            f"{assessment_id}:probability:{_digest([candidate, probability])[:16]}",
+            atom, source=producer["source"], kind="assumption"))
+    choice = selection.get("choice")
+    if choice not in probabilities:
+        raise JevError("invalid-input", "artifact selection is outside its distribution")
+    selected = Atom("jev_selected_candidate", (
+        Constant(assessment_id), Constant(subject_id), Constant(choice),
+        Constant(round(_probability(selection.get("confidence"),
+                                    "artifact.confidence") * 1_000_000)),
+        Constant(round(_probability(presence.get("noul"),
+                                    "artifact.direct_match") * 1_000_000)),
+    ))
+    facts.append(selected)
+    evidence.append(Evidence(
+        f"{assessment_id}:selection", selected,
+        source=producer["source"], kind="assumption"))
+    bundle = Bundle(
+        (probability_relation, selection_relation), facts=tuple(facts),
+        evidence=tuple(evidence), metadata=tuple(sorted({
+            "artifact_kind": ARTIFACT_KIND,
+            "assessment_id": assessment_id,
+            "candidate_set_sha256": artifact.get("candidate_set_sha256"),
+            "model": artifact.get("model"),
+            "request_sha256": artifact.get("request_sha256"),
+            "state_sha256": artifact.get("state_sha256"),
+        }.items())),
+    )
+    issues = validate_bundle(bundle)
+    if issues:
+        raise ValidationError(issues)
+    return bundle
+
+
 Transport = Callable[[str, bytes, Mapping[str, str], float], bytes]
 
 
