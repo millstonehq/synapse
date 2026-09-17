@@ -1,0 +1,32 @@
+{
+  "producer": "shen fg-model-host v1",
+  "rows": [
+    {
+      "kind": "update",
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "pk": "eb1e33e8a81b697b75855af6bfcdbcbf7cbbde9f94962ceaec1ed8af21f5a50f",
+      "req": "owner",
+      "run": "271d2dde86a0",
+      "seq": 1,
+      "table": "issue"
+    },
+    {
+      "kind": "update",
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "pk": "d029fa3a95e174a19934857f535eb9427d967218a36ea014b70ad704bc6c8d1c",
+      "req": "owner",
+      "run": "271d2dde86a0",
+      "seq": 2,
+      "table": "entity_statistics"
+    },
+    {
+      "kind": "insert",
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "pk": "eb1e33e8a81b697b75855af6bfcdbcbf7cbbde9f94962ceaec1ed8af21f5a50f",
+      "req": "owner",
+      "run": "271d2dde86a0",
+      "seq": 3,
+      "table": "mongo:issue"
+    }
+  ]
+}

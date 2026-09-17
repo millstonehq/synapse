@@ -1,0 +1,20 @@
+{
+  "producer": "go fg-replay v1",
+  "rows": [
+    {
+      "req": "forbidden",
+      "run": "eca6e7930af3",
+      "status": 403
+    },
+    {
+      "req": "missing",
+      "run": "eca6e7930af3",
+      "status": 404
+    },
+    {
+      "req": "owner",
+      "run": "eca6e7930af3",
+      "status": 200
+    }
+  ]
+}

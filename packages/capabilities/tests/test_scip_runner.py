@@ -332,7 +332,188 @@ class PhpEnclosingSynthesisTest(unittest.TestCase):
         self.assertEqual(job["enclosing_end_line"], 40)
 
 
+# The keys retain=True adds and NOTHING else may differ from the default output.
+_RETAINED_TOP = {"metadata", "external_symbols"}
+_RETAINED_DOC = {"language", "enclosing_synthesized"}
+_RETAINED_OCC = {"symbol_roles", "roles", "end_line", "end_col", "enclosing_synthesized"}
+_RETAINED_SYM = {"relationships", "kind_number"}
+
+
+def _strip_retained(retained: dict) -> dict:
+    """The retained dict minus the retain-only keys, for the round-trip test."""
+    out = {k: v for k, v in retained.items() if k not in _RETAINED_TOP}
+    docs = []
+    for doc in out["documents"]:
+        d = {k: v for k, v in doc.items() if k not in _RETAINED_DOC}
+        d["occurrences"] = [
+            {k: v for k, v in o.items() if k not in _RETAINED_OCC} for o in d["occurrences"]
+        ]
+        d["symbols"] = [
+            {k: v for k, v in s.items() if k not in _RETAINED_SYM} for s in d["symbols"]
+        ]
+        docs.append(d)
+    out["documents"] = docs
+    return out
+
+
+class RetainModeTest(unittest.TestCase):
+    """``retain=True`` is opt-in and additive: on every checked-in fixture the
+    default output is byte-identical to before, and equals the retained output
+    with the new keys removed. The retained keys carry the identity the static
+    fact exporter (section 29) needs."""
+
+    FIXTURES = (
+        "scip_print_sample.json",
+        "scip_go_nested_symbols.json",
+        "scip_php_symbols.json",
+    )
+
+    def _raw(self, name: str) -> dict:
+        return json.loads((FIXTURE.parent / name).read_text())
+
+    def test_default_output_equals_retained_minus_new_keys_on_every_fixture(self) -> None:
+        for name in self.FIXTURES:
+            with self.subTest(fixture=name):
+                raw = self._raw(name)
+                default = runner.normalize_scip_json(raw)
+                retained = runner.normalize_scip_json(raw, retain=True)
+                self.assertEqual(default, _strip_retained(retained))
+                # and the default is exactly the JSON-serialized shape it always was
+                self.assertEqual(
+                    json.dumps(default, sort_keys=True),
+                    json.dumps(runner.normalize_scip_json(self._raw(name)), sort_keys=True),
+                )
+
+    def test_default_output_has_no_retained_keys(self) -> None:
+        out = runner.normalize_scip_json(self._raw("scip_go_nested_symbols.json"))
+        self.assertEqual(set(out), {"documents"})
+        for doc in out["documents"]:
+            self.assertEqual(set(doc), {"path", "symbols", "occurrences"})
+            for occ in doc["occurrences"]:
+                self.assertEqual(
+                    set(occ),
+                    {"symbol", "is_definition", "start_line", "start_col",
+                     "enclosing_start_line", "enclosing_end_line"},
+                )
+            for sym in doc["symbols"]:
+                self.assertEqual(set(sym), {"symbol", "kind", "display_name"})
+
+    def test_metadata_and_document_language_are_retained_for_scip_go(self) -> None:
+        out = runner.normalize_scip_json(self._raw("scip_go_nested_symbols.json"), retain=True)
+        self.assertEqual(
+            out["metadata"],
+            {
+                "tool_name": "scip-go",
+                "tool_version": "0.2.7",
+                "arguments": ["--output", "index.scip"],
+                "project_root": "file:///tmp/gonest",
+                "text_document_encoding": 1,
+            },
+        )
+        self.assertEqual(out["external_symbols"], [])
+        for doc in out["documents"]:
+            self.assertEqual(doc["language"], "go")
+            self.assertFalse(doc["enclosing_synthesized"])
+
+    def test_roles_are_decoded_and_the_range_end_is_kept(self) -> None:
+        doc = {
+            "documents": [
+                {
+                    "relative_path": "x.go",
+                    "symbols": [{"symbol": "s", "kind": 26, "relationships": [
+                        {"symbol": "iface", "is_implementation": True, "is_reference": True},
+                    ]}],
+                    "occurrences": [
+                        {"symbol": "s", "range": [3, 4, 9], "symbol_roles": 1 | 32},
+                        {"symbol": "s", "range": [5, 1, 7, 2], "symbol_roles": 8 | 16},
+                        {"symbol": "s", "range": [8, 0, 1]},
+                    ],
+                }
+            ]
+        }
+        out = runner.normalize_scip_json(doc, retain=True)
+        occs = out["documents"][0]["occurrences"]
+        self.assertEqual(occs[0]["symbol_roles"], 33)
+        self.assertEqual(occs[0]["roles"], ["definition", "test"])
+        self.assertEqual((occs[0]["end_line"], occs[0]["end_col"]), (3, 9))
+        self.assertEqual(occs[1]["roles"], ["read", "generated"])
+        self.assertEqual((occs[1]["end_line"], occs[1]["end_col"]), (7, 2))
+        self.assertEqual(occs[2]["symbol_roles"], 0)
+        self.assertEqual(occs[2]["roles"], [])
+        sym = out["documents"][0]["symbols"][0]
+        self.assertEqual(sym["kind"], "Method")
+        self.assertEqual(sym["kind_number"], 26)
+        self.assertEqual(
+            sym["relationships"],
+            [{"symbol": "iface", "is_reference": True, "is_implementation": True,
+              "is_type_definition": False, "is_definition": False}],
+        )
+        self.assertEqual(
+            runner.decode_roles(1 | 2 | 4 | 8 | 16 | 32 | 64),
+            ["definition", "import", "write", "read", "generated", "test",
+             "forward_definition"],
+        )
+
+    def test_synthesized_spans_are_flagged_only_when_retained(self) -> None:
+        raw = self._raw("scip_php_symbols.json")
+        retained = runner.normalize_scip_json(raw, retain=True)
+        flagged = [
+            o for d in retained["documents"] for o in d["occurrences"]
+            if o["enclosing_synthesized"]
+        ]
+        self.assertTrue(flagged, "scip-php spans are synthesized, so some must be flagged")
+        self.assertTrue(all(o["is_definition"] for o in flagged))
+        self.assertTrue(any(d["enclosing_synthesized"] for d in retained["documents"]))
+        # the go dump supplies its own enclosing ranges: nothing is synthesized
+        go = runner.normalize_scip_json(self._raw("scip_go_nested_symbols.json"), retain=True)
+        self.assertFalse(any(
+            o["enclosing_synthesized"] for d in go["documents"] for o in d["occurrences"]
+        ))
+
+    def test_json_fixture_digest_is_prefixed_canonical_sha256(self) -> None:
+        raw = self._raw("scip_go_nested_symbols.json")
+        canonical = json.dumps(raw, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        import hashlib
+
+        expected = hashlib.sha256(("scip-json:" + canonical).encode()).hexdigest()
+        self.assertEqual(runner.json_index_digest(raw), expected)
+        # key order in the raw JSON does not change the identity
+        shuffled = json.loads(json.dumps(raw, sort_keys=True))
+        self.assertEqual(runner.json_index_digest(shuffled), expected)
+
+
 class ReadIndexTest(unittest.TestCase):
+    def test_read_with_retain_returns_the_binary_index_digest(self) -> None:
+        raw_text = FIXTURE.read_text()
+        with tempfile.TemporaryDirectory() as d:
+            cli = Path(d) / "scip"
+            cli.write_text("#!/bin/sh\n")
+            cli.chmod(0o755)
+            index = Path(d) / "index.scip"
+            index.write_bytes(b"\x00scip-bytes")
+
+            def fake_run(command, **kwargs):
+                return SimpleNamespace(returncode=0, stdout=raw_text, stderr="")
+
+            with (
+                patch.dict(os.environ, {"SCIP_CLI": str(cli)}),
+                patch("capcov.scip.runner.subprocess.run", fake_run),
+            ):
+                default = runner.read_scip_index(index)
+                retained = runner.read_scip_index(index, retain=True)
+
+        import hashlib
+
+        self.assertNotIn("index_digest", default)
+        self.assertEqual(retained["index_digest"], hashlib.sha256(b"\x00scip-bytes").hexdigest())
+        self.assertEqual(retained["index_digest_kind"], "binary")
+        self.assertIn("metadata", retained)
+        self.assertEqual(
+            default,
+            _strip_retained({k: v for k, v in retained.items()
+                             if k not in {"index_digest", "index_digest_kind"}}),
+        )
+
     def test_scip_cli_not_located_raises_named_error(self) -> None:
         with (
             patch.dict(os.environ, {}, clear=True),

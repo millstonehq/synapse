@@ -1,0 +1,1042 @@
+"""Judge a real target-go replay receipt with rules-replay-v1 (Phase 4, judge side, runtime half).
+
+Three parts.  ``NonconformingReceiptExample`` is the documented negative
+example: the first receipt the target-go runner produced
+(``.work/receipts/target-go-8177366-nomodel``) used array rows under a ``columns``
+key, carried the extra top-level keys ``relations`` / ``producers`` and named
+an empty ``model``; the strict exporter refuses each of those, and the test
+pins the exact ingestion error for each by peeling them off a synthesized
+copy one at a time (and checks the on-disk directory when it is present).
+``FixtureJoinTest`` proves the join logic on the checked-in fixture receipt
+without any environment.  ``RealReceiptTest`` runs the positive path against
+the corrected, model-backed receipt named by ``CAPCOV_REPLAY_RECEIPT_DIR``
+(the gate wrapper treats a skip as not-evidence): the exporter must accept it,
+``corpus_constrains`` must be supported for every replayed op in both kernels
+with identical certificates, and ``op_qualified`` must be supported/complete
+with leaves spanning every producer class.  Artifacts (digests, counts,
+verdicts, certificates) go to ``CAPCOV_TARGET_GO_REPLAY_OUT``.
+"""
+from __future__ import annotations
+
+import copy
+import hashlib
+import json
+import os
+import shutil
+import tempfile
+import unittest
+from pathlib import Path
+
+from capcov.claims import canonical_json, validate_bundle
+from capcov.claims.evaluator import evaluate
+from capcov.claims.replay import replay_facts
+
+try:
+    from .target_go import replay_join
+    from .replay_rules import cases as fixture_cases
+except ImportError:  # unittest discover -s imports this directory as top-level
+    from target_go import replay_join
+    from replay_rules import cases as fixture_cases
+
+RECEIPT_DIR = replay_join.receipt_dir()
+REPO_ROOT = Path(__file__).resolve().parents[3]
+NONCONFORMING_DIR = Path(os.environ.get("CAPCOV_REPLAY_NONCONFORMING_RECEIPT_DIR")
+                         or REPO_ROOT / ".work" / "receipts" / "target-go-8177366-nomodel")
+# every class an op_qualified certificate's leaves span; ``modelcheck`` is the typed
+# well-formedness checker, whose certificate is a positive premise of qualification
+PRODUCER_CLASSES = {"replay", "php", "go", "shen", "mut", "reviewer", "modelcheck"}
+
+
+def _nonconforming(document_dir: Path) -> None:
+    """Rewrite a conforming receipt copy into the runner's first dialect."""
+    receipt = json.loads((document_dir / "receipt.json").read_text())
+    receipt["model"] = ""
+    receipt["closed"]["model_admissible"] = False
+    receipt["model_writes_closed"] = []
+    receipt["mutants_closed"] = [{"model": "", "op": entry["op"]} for entry in receipt["mutants_closed"]]
+    receipt["relations"] = {}
+    receipt["producers"] = {}
+    for name in replay_facts.OBSERVATION_FILES:
+        path = document_dir / f"{name}.json"
+        if not path.exists():
+            continue
+        document = json.loads(path.read_text())
+        receipt["relations"][name] = len(document["rows"])
+        if "producer" in document:
+            receipt["producers"][name] = document["producer"]
+        columns = list(document["rows"][0]) if document["rows"] else []
+        document = {**document, "columns": columns,
+                    "rows": [[("" if c == "model" else row[c]) for c in columns] for row in document["rows"]]}
+        path.write_text(json.dumps(document, indent=1))
+    (document_dir / "receipt.json").write_text(json.dumps(receipt, indent=2, sort_keys=True))
+
+
+class NonconformingReceiptExample(unittest.TestCase):
+    """The strict exporter names each nonconformance of the runner's first receipt."""
+
+    def _export(self, directory: Path):
+        run = json.loads((directory / "receipt.json").read_text())["run"]
+        return replay_facts.export_bundle(directory, run=run)
+
+    def test_each_nonconformance_is_refused_with_its_own_error(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="capcov-nonconforming-") as tmp:
+            root = Path(tmp) / "receipt"
+            shutil.copytree(fixture_cases.FIXTURE, root)
+            _nonconforming(root)
+            # 1. extra top-level keys
+            result = self._export(root)
+            self.assertEqual(result.status, replay_facts.STATUS_INVALID_INPUT)
+            self.assertEqual(result.messages, ("receipt.json: unknown keys ['producers', 'relations']",))
+            receipt = json.loads((root / "receipt.json").read_text())
+            for key in ("producers", "relations"):
+                receipt.pop(key)
+            (root / "receipt.json").write_text(json.dumps(receipt, indent=2, sort_keys=True))
+            # 2. an empty model digest (the header is checked before any row file is read)
+            result = self._export(root)
+            self.assertEqual(result.status, replay_facts.STATUS_INVALID_INPUT)
+            self.assertEqual(result.messages, ("receipt.json: 'model' must be a non-empty string",))
+            model = json.loads((fixture_cases.FIXTURE / "receipt.json").read_text())["model"]
+            receipt["model"] = model
+            receipt["mutants_closed"] = [{"model": model, "op": entry["op"]} for entry in receipt["mutants_closed"]]
+            (root / "receipt.json").write_text(json.dumps(receipt, indent=2, sort_keys=True))
+            for name in replay_facts.OBSERVATION_FILES:
+                path = root / f"{name}.json"
+                if path.exists():
+                    document = json.loads(path.read_text())
+                    if "model" in document["columns"]:
+                        position = document["columns"].index("model")
+                        for row in document["rows"]:
+                            row[position] = model
+                        path.write_text(json.dumps(document, indent=1))
+            # 3. array rows under a columns key
+            result = self._export(root)
+            self.assertEqual(result.status, replay_facts.STATUS_INVALID_INPUT)
+            self.assertEqual(result.messages, ("replay_request.json: must be {rows, producer?}",))
+            for name in replay_facts.OBSERVATION_FILES:
+                path = root / f"{name}.json"
+                if not path.exists():
+                    continue
+                document = json.loads(path.read_text())
+                columns = document.pop("columns")
+                document["rows"] = [dict(zip(columns, row)) for row in document["rows"]]
+                path.write_text(json.dumps(document, indent=1))
+            # with the three nonconformances removed the copy is the fixture again
+            # (minus the model-scoped rows this dialect could not carry)
+            result = self._export(root)
+            self.assertEqual(result.status, replay_facts.STATUS_COMPLETE, result.messages)
+
+    def test_the_on_disk_first_receipt_is_refused_on_its_extra_keys(self) -> None:
+        if not (NONCONFORMING_DIR / "receipt.json").is_file():
+            return  # the negative example above stands on its own; the directory is optional
+        result = self._export(NONCONFORMING_DIR)
+        self.assertEqual(result.status, replay_facts.STATUS_INVALID_INPUT)
+        self.assertEqual(result.messages, ("receipt.json: unknown keys ['producers', 'relations']",))
+        receipt = json.loads((NONCONFORMING_DIR / "receipt.json").read_text())
+        self.assertEqual(receipt["model"], "")
+        self.assertIn("columns", json.loads((NONCONFORMING_DIR / "replay_request.json").read_text()))
+        join = replay_join.build(NONCONFORMING_DIR)
+        self.assertIsNone(join.bundle)
+        self.assertEqual(replay_join.summary(join)["status"], "blocked")
+        self.assertTrue(replay_join.summary(join)["contract_findings"])
+
+
+class _JoinCase(unittest.TestCase):
+    directory: Path
+    out_dir: Path
+    join: replay_join.ReplayJoin
+
+    def _undeclared(self) -> dict[str, dict[str, list[str]]]:
+        relations = dict(self.join.result.python.relations)
+        return {op: replay_join.undeclared_tables(relations, None, self.join.run, op) for op in self.join.ops}
+
+    def _expect_qualified(self, op: str) -> bool:
+        """No write-set gap: the op clears every premise that says something about the port.
+
+        It is *not* on its own enough for ``op_qualified``: the Stage D
+        certificate is a separate, positive premise no real receipt carries.
+        """
+        return not any(self._undeclared()[op].values())
+
+    def _has_certificate(self) -> bool:
+        """A typed checker certified the model this run is judged against."""
+        return bool(dict(self.join.result.python.relations).get("model_well_formed"))
+
+    @classmethod
+    def _setup(cls, directory: Path, out_dir: Path) -> None:
+        cls.directory = directory
+        cls.out_dir = out_dir
+        cls.replay_root = tempfile.mkdtemp(prefix="capcov-target-go-replay-diff-")
+        cls.join = replay_join.build(directory)
+        if cls.join.bundle is not None and shutil.which("souffle") is not None:
+            replay_join.evaluate_join(cls.join, cls.replay_root)
+        cls.artifacts = replay_join.write_artifacts(cls.join, cls.out_dir)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        if getattr(cls, "join", None) is not None and cls.join.mismatch is None:
+            shutil.rmtree(cls.replay_root, ignore_errors=True)
+
+    def _exported(self) -> None:
+        if self.join.bundle is None:
+            self.fail("CONTRACT FINDING: " + "; ".join(self.join.contract_findings))
+
+    def _evaluated(self) -> None:
+        self._exported()
+        self.assertIsNotNone(shutil.which("souffle"), "souffle must be on PATH: run inside the nix devShell")
+        if self.join.mismatch is not None:
+            self.fail(f"kernels disagree; replay bundle: {self.join.mismatch.replay_path}; "
+                      f"souffle={self.join.mismatch.souffle.message[:400]}")
+        self.assertIsNotNone(self.join.result)
+
+    # -- shared assertions ------------------------------------------------------
+
+    def check_export(self) -> None:
+        self._exported()
+        self.assertEqual(self.join.exported.status, replay_facts.STATUS_COMPLETE)
+        self.assertEqual(validate_bundle(self.join.exported.bundle), ())
+        self.assertEqual(validate_bundle(self.join.bundle), ())
+        self.assertEqual(self.join.exported.counts["replay_run"], 1)
+        self.assertTrue(self.join.ops)
+        self.assertRegex(self.join.receipt["model"], r"^[0-9a-f]{64}$")
+        for record in self.join.bundle.evidence:
+            if record.kind == "assumption" and record.atom.relation == "model_scope_exclusion":
+                # the reviewer's exported scope exclusions are assumptions too
+                self.assertTrue(record.id.startswith("reviewer:"))
+                self.assertEqual(record.source.split(" ", 1)[0], "reviewer")
+            elif record.kind == "assumption":
+                self.assertIn(record.id, self.join.assumption_ids)
+                self.assertIn(":assumed:", record.id)
+                self.assertIn(record.atom.relation, {"op_declared", "index_describes_replay"})
+        self.assertEqual(len(self.join.assumption_ids), 1 + len(self.join.ops))
+        # the registry is additive: the evidence-id list the summary always carried stays
+        self.assertEqual(replay_join.summary(self.join)["assumption_ids"], list(self.join.assumption_ids))
+        self.assertEqual(len(replay_join.summary(self.join)["assumption_ids"]), 1 + len(self.join.ops))
+
+    def check_kernels(self) -> None:
+        self._evaluated()
+        self.assertTrue(self.join.result.matched)
+        self.assertEqual(self.join.result.python.canonical_digest, self.join.result.souffle.canonical_digest)
+        self.assertIsNone(self.join.result.python.operational_failure)
+
+    def check_corpus_constrains(self) -> None:
+        self._evaluated()
+        relations = dict(self.join.result.python.relations)
+        for op in self.join.ops:
+            claim_id = self.join.claim_id("corpus-constrains", op)
+            declared = [row for row in relations["mutant"] if row[2] == op]
+            killed = {row[1] for row in relations["mutant_killed_in"]}
+            with self.subTest(op=op):
+                self.assertTrue(declared, f"no mutant declared for {op}")
+                self.assertTrue({row[1] for row in declared} <= killed, "a declared mutant was not killed")
+                self.assertEqual([row for row in relations["surviving_mutant"] if row[1] == op], [])
+                self.assertEqual(relations["kill_closure_gap"], ())
+                for report in (self.join.result.python, self.join.result.souffle):
+                    claim = next(c for c in report.claims if c.key == claim_id)
+                    self.assertEqual((claim.semantic, claim.operational), ("supported", "complete"), report.backend)
+                cert = self.join.certificates[claim_id]
+                self.assertFalse(cert["truncated"])
+                self.assertTrue({"mutant", "mutants_closed", "mutant_kills_closed", "model_describes_run"}
+                                <= {leaf.split(":")[2] for leaf in cert["leaves"]})
+                self.assertEqual(json.loads((self.out_dir / f"certificate-{claim_id}.json").read_text()), cert)
+        report = evaluate(self.join.bundle)
+        for entry in report.claims:
+            if entry.claim.relation == "corpus_constrains":
+                self.assertEqual(sorted(entry.result.support), self.join.certificates[entry.claim.id]["leaves"])
+
+    def check_agreement_and_corpus_hygiene(self) -> None:
+        self._evaluated()
+        relations = dict(self.join.result.python.relations)
+        self.assertEqual(relations["php_model_disagree"], ())
+        self.assertEqual(relations["go_model_disagree"], ())
+        self.assertEqual(relations["surviving_mutant"], ())
+        self.assertEqual(relations["post_state_gap"], ())
+        self.assertEqual(relations["kill_closure_gap"], ())
+        self.assertEqual(relations["replay_run_current"], ((self.join.run,),))
+        for op in self.join.ops:
+            self.assertIn((self.join.run, op), set(relations["op_exercised"]))
+            self.assertIn((self.join.run, op), set(relations["php_disagreement_closed"]))
+            self.assertIn((self.join.run, op), set(relations["undeclared_writes_closed"]))
+
+    def check_undeclared_writes(self) -> None:
+        """The companion undeclared_write claim states the actual write-set gap, side by side."""
+        self._evaluated()
+        relations = dict(self.join.result.python.relations)
+        for op in self.join.ops:
+            claim_id = self.join.claim_id("undeclared-write", op)
+            tables = self._undeclared()[op]
+            derived = {row[2] for row in relations["undeclared_write"] if row[1] == op}
+            print(f"\n{self.join.receipt_dir.name} {op}: undeclared tables php={tables['php']} go={tables['go']}")
+            with self.subTest(op=op):
+                verdicts = {report.backend: next(c.semantic for c in report.claims if c.key == claim_id)
+                            for report in (self.join.result.python, self.join.result.souffle)}
+                if derived:
+                    self.assertEqual(set(verdicts.values()), {"supported"}, verdicts)
+                    self.assertTrue(tables["php"] or tables["go"])
+                    self.assertEqual(set(tables["php"]) | set(tables["go"]), derived)
+                    self.assertNotIn("issue", derived, "the model declares the issue write")
+                    for side in ("php", "go"):
+                        self.assertTrue(set(tables[side]) <= derived)
+                    self.assertIn(claim_id, self.join.certificates)
+                    blocking = replay_join.blocking_premise(relations, self.join.run, op)
+                    self.assertEqual(blocking, {"relation": "undeclared_any", "holds": True})
+                else:
+                    self.assertEqual(set(verdicts.values()), {"unresolved"}, verdicts)
+                    self.assertEqual(tables, {"php": [], "go": []})
+
+    def check_not_qualified_naming_the_blocker(self) -> None:
+        """Where the write-set gap exists, op_qualified is unresolved and the why-not names it."""
+        self._evaluated()
+        for op in self.join.ops:
+            if self._expect_qualified(op):
+                continue
+            claim_id = self.join.claim_id("qualified", op)
+            with self.subTest(op=op):
+                for report in (self.join.result.python, self.join.result.souffle):
+                    claim = next(c for c in report.claims if c.key == claim_id)
+                    self.assertEqual((claim.semantic, claim.operational), ("unresolved", "complete"), report.backend)
+                    named = [json.loads(item)["relation"] for item in claim.missing_premises if item.startswith("{")]
+                    self.assertEqual(sorted(named), sorted(self._expected_missing()), claim.missing_premises)
+                    self.assertFalse(any(item.startswith("claim:") for item in claim.missing_premises),
+                                     "the evaluator's claim-id fallback must not be the why-not")
+                entry = replay_join.summary(self.join)[op]
+                self.assertEqual(entry["op_qualified"], "unresolved")
+                self.assertEqual(sorted(entry["missing_premise"]), sorted(self._expected_missing()))
+                self.assertEqual(entry["blocking_premise"], {"relation": "undeclared_any", "holds": True})
+                # a real blocker outranks the pending Stage D premise: this is a finding
+                # against the port, not a checker that has not been built
+                self.assertEqual(entry["qualification"], "unsupported")
+                self.assertTrue(entry["blocked_by"].startswith("blocked by undeclared writes: "))
+                self.assertEqual(entry["undeclared_tables"], self._undeclared()[op])
+                explanation = entry["explanation"]
+                self.assertFalse(explanation["holds"])
+                self.assertFalse(explanation["refuted"])
+                attempts = explanation["attempts"]
+                # the why-not walk stops at the first unsatisfied premise, and the Stage D
+                # pair sits last in the rule body precisely so a real gap is what it reports
+                self.assertTrue(any(attempt["status"] == "blocked-by-presence"
+                                    and attempt["relation"] == "undeclared_any"
+                                    for attempt in attempts), attempts)
+        self.assertEqual({row[2] for row in dict(self.join.result.python.relations)["op_qualified"]},
+                         {op for op in self.join.ops if self._expect_qualified(op)} if self._has_certificate() else set())
+
+    def _raw_undeclared(self) -> dict[str, dict[str, set[str]]]:
+        """From the receipt files alone: tables each side wrote for the op minus declared minus reviewer-excluded."""
+        directory = self.join.receipt_dir
+        requests = {row["req"]: row["op"] for row in json.loads((directory / "replay_request.json").read_text())["rows"]}
+        writes: dict[str, set[str]] = {}
+        for row in json.loads((directory / "model_writes.json").read_text())["rows"]:
+            writes.setdefault(row["op"], set()).add(row["table"])
+        excluded = set()
+        exclusions_path = directory / replay_facts.EXCLUSIONS_FILE
+        if exclusions_path.is_file() and self.join.receipt["closed"].get("model_scope_exclusions"):
+            excluded = {row["table"] for row in json.loads(exclusions_path.read_text())["rows"]}
+        out = {op: {"php": set(), "go": set()} for op in self.join.ops}
+        for side in ("php", "go"):
+            for row in json.loads((directory / f"{side}_effect.json").read_text())["rows"]:
+                op = requests.get(row["req"])
+                if op is not None and row["table"] not in writes.get(op, set()) and row["table"] not in excluded:
+                    out[op][side].add(row["table"])
+        return out
+
+    def check_exclusions(self) -> None:
+        """Exclusions are explicit reviewer assumptions; the closure-derived gap equals the raw one."""
+        self._evaluated()
+        summary = replay_join.summary(self.join)
+        relations = dict(self.join.result.python.relations)
+        exclusion_rows = [record for record in self.join.bundle.evidence if record.atom.relation == "model_scope_exclusion"]
+        for record in exclusion_rows:
+            self.assertEqual(record.kind, "assumption")
+            self.assertEqual(record.source.split(" ", 1)[0], "reviewer")
+            self.assertIn(f"model:{self.join.receipt['model'][:12]} run:", record.source)
+        self.assertEqual({item["table"] for item in summary["exclusions"]},
+                         {record.atom.terms[1].value for record in exclusion_rows})
+        raw = self._raw_undeclared()
+        for op in self.join.ops:
+            tables = self._undeclared()[op]
+            print(f"\n{self.join.receipt_dir.name} {op}: remaining undeclared php={tables['php']} go={tables['go']}; "
+                  f"exclusions applied={summary[op]['exclusions_applied']}")
+            with self.subTest(op=op):
+                self.assertEqual({side: set(v) for side, v in tables.items()}, raw[op])
+                applied = set(summary[op]["exclusions_applied"])
+                self.assertTrue(applied <= {record.atom.terms[1].value for record in exclusion_rows})
+                self.assertEqual(set(relations["exclusion_applied"]) & {(self.join.run, op, t) for t in applied},
+                                 {(self.join.run, op, t) for t in applied})
+                claim_id = self.join.claim_id("exclusions-applied", op)
+                if applied:
+                    self.assertIn(claim_id, self.join.certificates)
+                    # one certificate per excluded table; each cites its exclusion assumption as a leaf
+                    self.assertEqual(len(self.join.row_certificates[claim_id]), len(applied))
+                    cert_leaves = set()
+                    for cert in self.join.row_certificates[claim_id]:
+                        self.assertFalse(cert["truncated"])
+                        self.assertTrue({r.id for r in exclusion_rows} & set(cert["leaves"]), "the assumption is a leaf")
+                        cert_leaves.update(cert["leaves"])
+                    self.assertEqual(summary[op]["assumption_leaves"], len({r.id for r in exclusion_rows} & cert_leaves))
+                    self.assertEqual(summary[op]["assumption_leaves"], len(applied))
+                if summary[op]["op_qualified"] == "supported" and applied:
+                    self.assertTrue(summary[op]["qualified_under_exclusions"].startswith(
+                        f"qualified under {len(applied)} reviewer exclusions: "))
+                elif summary[op]["op_qualified"] == "supported":
+                    self.assertNotIn("qualified_under_exclusions", summary[op])
+
+    def check_write_set_gap(self) -> None:
+        """The closure-derived gap equals the gap computed from the raw files (possibly empty); issue is never in it."""
+        self._evaluated()
+        raw = self._raw_undeclared()
+        relations = dict(self.join.result.python.relations)
+        for op in self.join.ops:
+            tables = self._undeclared()[op]
+            with self.subTest(op=op):
+                self.assertEqual({side: set(v) for side, v in tables.items()}, raw[op])
+                for side in ("php", "go"):
+                    self.assertNotIn("issue", tables[side])
+                self.assertNotIn("issue", {row[2] for row in relations["undeclared_write"] if row[1] == op})
+
+    def _expected_missing(self) -> list[str]:
+        """The why-not templates that fire for an op with a write-set gap.
+
+        ``model_writes`` always; ``model_well_formed`` as well whenever no typed
+        checker certified the model, which is every real receipt until Stage D
+        exists.  ``model_checker_admitted`` never fires without a certificate:
+        the missing premise is the certificate, and naming both would report one
+        gap twice (``replay.join.build``).
+        """
+        return ["model_writes"] if self._has_certificate() else ["model_writes", "model_well_formed"]
+
+    def check_pending_well_formed(self) -> None:
+        """Every premise of ``op_qualified`` holds but the one nothing can satisfy yet.
+
+        No real receipt carries a ``model_well_formed`` certificate because the
+        Stage D typed checker has not been built.  What the receipt can show is
+        that the claim *reaches* that premise: ``model_well_formed`` is last in
+        ``replay.join._BLOCKING_ORDER``, so it is reported as the blocker only
+        when every premise before it held, and this spells the rest out row by
+        row rather than resting on that ordering alone.
+        """
+        self._evaluated()
+        relations = dict(self.join.result.python.relations)
+        self.assertEqual(relations["model_well_formed"], (), "a real receipt carries no certificate yet")
+        self.assertEqual(relations["model_checker_admitted"], (), "the reviewer admits no checker yet")
+        self.assertIn("model_well_formed", replay_join.PENDING_PREMISES)
+        summary = replay_join.summary(self.join)
+        self.assertEqual(summary["model_well_formed"], "missing")
+        run = self.join.run
+        for name in ("replay_run_current", "kill_gap_closed", "oracle_stable"):
+            self.assertIn((run,), set(relations[name]), name)
+        self.assertEqual(relations["op_qualified_rt"], (), "the gate body derives nothing without a certificate")
+        self.assertEqual(relations["op_qualified"], ())
+        for op in self.join.ops:
+            with self.subTest(op=op):
+                entry = summary[op]
+                self.assertEqual((entry["op_qualified"], entry["operational"]), ("unresolved", "complete"))
+                self.assertEqual(entry["qualification"], "pending model_well_formed")
+                self.assertEqual(entry["blocking_premise"], {"relation": "model_well_formed", "holds": False})
+                self.assertEqual(entry["missing_premise"], ["model_well_formed"],
+                                 "the Stage D certificate is the ONLY missing premise")
+                # and every other premise of op_qualified_rt, spelled out
+                self.assertTrue(entry["corpus_constrains"])
+                self.assertIn((run, op), set(relations["op_exercised"]))
+                self.assertEqual([r for r in relations["surviving_mutant"] if r[1] == op], [])
+                self.assertEqual([r for r in relations["undeclared_write"] if r[1] == op], [])
+                self.assertEqual(self._undeclared()[op], {"php": [], "go": []})
+                for closed in ("php_disagreement_closed", "go_disagreement_closed", "undeclared_writes_closed",
+                               "post_state_gap_closed", "effect_order_closed", "effect_order_exercised",
+                               "repeat_delete_closed"):
+                    self.assertIn((run, op), set(relations[closed]), closed)
+                for blocker in ("php_disagree_any", "go_disagree_any", "undeclared_any", "post_state_any",
+                                "effect_order_any", "kill_closure_gap_any", "repeat_delete_any"):
+                    self.assertNotIn((run, op), set(relations[blocker]), blocker)
+
+    def check_qualified(self) -> None:
+        self._evaluated()
+        by_id = {record.id: record for record in self.join.bundle.evidence}
+        summary = replay_join.summary(self.join)
+        for op in self.join.ops:
+            if not self._expect_qualified(op):
+                self.skipTest(f"{op}: awaiting model write-set for the remaining business tables "
+                              f"(undeclared: {self._undeclared()[op]})")
+            claim_id = self.join.claim_id("qualified", op)
+            with self.subTest(op=op):
+                entry = summary[op]
+                self.assertEqual((entry["op_qualified"], entry["operational"]), ("supported", "complete"))
+                self.assertIsNone(entry["blocking_premise"])
+                applied = entry["exclusions_applied"]
+                if applied:
+                    self.assertEqual(entry["qualified_under_exclusions"],
+                                     f"qualified under {len(applied)} reviewer exclusions: " + ", ".join(applied))
+                    self.assertEqual(entry["assumption_leaves"], len(applied))
+                self.assertTrue(entry["corpus_constrains"])
+                for report in (self.join.result.python, self.join.result.souffle):
+                    claim = next(c for c in report.claims if c.key == claim_id)
+                    self.assertEqual((claim.semantic, claim.operational), ("supported", "complete"), report.backend)
+                    self.assertEqual(claim.missing_premises, ())
+                cert = self.join.certificates[claim_id]
+                leaves = set(cert["leaves"])
+                self.assertEqual({leaf.split(":")[0] for leaf in leaves}, PRODUCER_CLASSES)
+                classes = {by_id[leaf].source.split(" ", 1)[0] for leaf in leaves}
+                self.assertTrue(PRODUCER_CLASSES | {"php-census"} <= classes)
+                self.assertTrue(set(self.join.assumption_ids) & leaves, "the census assumptions carry the claim")
+                explanation = entry["explanation"]
+                self.assertTrue(explanation["holds"])
+                self.assertFalse(explanation["truncated"])
+                self.assertEqual(set(explanation["leaves"]), set(cert["leaves"]))
+                self.assertTrue(set(explanation["shared_assumptions"]) & set(self.join.assumption_ids))
+        self.assertEqual({row[2] for row in dict(self.join.result.python.relations)["op_qualified"]}, set(self.join.ops))
+
+    def check_artifact_hygiene(self) -> dict:
+        """The artifact contract every receipt owes: a join receipt, no paths, no source."""
+        self._exported()
+        written = sorted(p.name for p in self.out_dir.iterdir())
+        self.assertIn("receipt.json", written)
+        document = json.loads((self.out_dir / "receipt.json").read_text())
+        self.assertEqual(document["join"]["run"], self.join.run)
+        self.assertEqual(document["export"]["status"], "complete")
+        text = "\n".join((self.out_dir / name).read_text(encoding="utf-8") for name in written)
+        for needle in ("/Users/", "/home/", str(self.directory), "package ", "func ("):
+            self.assertNotIn(needle, text)
+        for value in self.join.receipt.get("receipts", {}).values():
+            if isinstance(value, str) and value.startswith("/"):
+                self.assertNotIn(value, text)
+        self.assertIn("assumptions.json", written)
+        registry = self._assumption_registry()
+        self.assertEqual(document["assumptions"]["registry"], "assumptions.json")
+        registered = {entry["assumption_id"]: entry for entry in registry["assumptions"]}
+        self.assertEqual(len(registered), len(registry["assumptions"]), "one entry per assumption id")
+        return document
+
+    def _assumption_registry(self) -> dict:
+        """The assumption registry the exporter writes beside every receipt."""
+        return json.loads((self.out_dir / "assumptions.json").read_text())
+
+    def check_artifacts(self) -> None:
+        document = self.check_artifact_hygiene()
+        if self.join.result is not None:
+            registry = self._assumption_registry()
+            kinds = {record.id: record.kind for record in self.join.bundle.evidence}
+            by_evidence = {entry["evidence_id"]: entry for entry in registry["assumptions"]}
+            for op in self.join.ops:
+                # every assumption op_qualified positively rests on is registered as carrying it
+                # (an unresolved op certifies no row, so there is nothing to carry)
+                certificate = self.join.certificates.get(self.join.claim_id("qualified", op))
+                if certificate is None:
+                    self.assertFalse(self._expect_qualified(op) and self._has_certificate())
+                    continue
+                for leaf in certificate["leaves"]:
+                    if kinds.get(leaf) != "assumption":
+                        continue
+                    self.assertIn(leaf, by_evidence)
+                    self.assertIn(self.join.claim_id("qualified", op),
+                                  {carrier["claim_id"] for carrier in by_evidence[leaf]["carried_by"]})
+            for op in self.join.ops:
+                entry = document["join"][op]
+                self.assertTrue(entry["corpus_constrains"])
+                if self._expect_qualified(op) and self._has_certificate():
+                    self.assertEqual(entry["op_qualified"], "supported")
+                    self.assertEqual(entry["qualification"], "qualified")
+                    self.assertIsNone(entry["blocking_premise"])
+                elif self._expect_qualified(op):
+                    # nothing to fault the port for; the Stage D certificate does not exist yet
+                    self.assertEqual(entry["op_qualified"], "unresolved")
+                    self.assertEqual(entry["qualification"], "pending model_well_formed")
+                    self.assertEqual(entry["blocking_premise"], {"relation": "model_well_formed", "holds": False})
+                    self.assertEqual(entry["missing_premise"], ["model_well_formed"])
+                    self.assertNotIn("claim:", json.dumps(entry))
+                else:
+                    self.assertEqual(entry["op_qualified"], "unresolved")
+                    self.assertEqual(entry["blocking_premise"]["relation"], "undeclared_any")
+                    self.assertEqual(sorted(entry["missing_premise"]), sorted(self._expected_missing()))
+                    self.assertIn("blocked by undeclared writes: ", entry["blocked_by"])
+                    self.assertNotIn("claim:", json.dumps(entry))
+
+
+class FixtureJoinTest(_JoinCase):
+    """The join logic on the checked-in fixture receipt (no environment needed)."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._setup(fixture_cases.FIXTURE, Path(tempfile.mkdtemp(prefix="capcov-fixture-replay-out-")))
+
+    def test_export(self) -> None:
+        self.check_export()
+        self.assertEqual(self.join.ops, (fixture_cases.DELETE, fixture_cases.CLOSE, fixture_cases.CREATE))
+
+    def test_kernels(self) -> None:
+        self.check_kernels()
+
+    def test_corpus_constrains(self) -> None:
+        self.check_corpus_constrains()
+
+    def test_qualified(self) -> None:
+        self.check_qualified()
+        self.assertEqual(self._undeclared(), {op: {"php": [], "go": []} for op in self.join.ops})
+
+    def test_hygiene_and_no_undeclared_writes(self) -> None:
+        self.check_agreement_and_corpus_hygiene()
+        self.check_undeclared_writes()
+        self.check_not_qualified_naming_the_blocker()
+
+    def test_exclusions_are_explicit_and_unused_on_the_clean_fixture(self) -> None:
+        self.check_exclusions()
+        summary = replay_join.summary(self.join)
+        self.assertEqual({item["table"] for item in summary["exclusions"]}, {"authentication", "redis"})
+        for op in self.join.ops:
+            self.assertEqual(summary[op]["exclusions_applied"], [])
+            self.assertEqual(summary[op]["assumption_leaves"], 0)
+
+    def test_the_order_repeat_and_stability_verdicts_are_reported(self) -> None:
+        summary = replay_join.summary(self.join)
+        self.assertEqual(summary["stability"],
+                         {"rows": [["run-fixture-1a", "run-fixture-1b", "php", "true"]],
+                          "oracle_stable": True, "oracle_unstable": False})
+        for op in self.join.ops:
+            self.assertEqual(summary[op]["effect_order"]["violations"], [], op)
+            self.assertTrue(summary[op]["effect_order"]["exercised"], op)
+        delete = summary[fixture_cases.DELETE]
+        self.assertEqual(delete["repeat_delete"]["repeats"],
+                         [[fixture_cases.REPEAT_DELETE, fixture_cases.DELETE_TARGET]])
+        self.assertEqual(delete["repeat_delete"]["violations"], [])
+        self.assertEqual(delete["repeat_delete"]["not_found"], [fixture_cases.DELETE_TARGET])
+
+    def test_artifacts(self) -> None:
+        self.check_artifacts()
+
+    def test_a_missing_model_witness_leaves_qualification_unresolved_naming_it(self) -> None:
+        # the same join without the reviewer's model_observed row: the why-not names it
+        self._evaluated()
+        bundle = self.join.bundle
+        dropped = next(record for record in bundle.evidence if record.atom.relation == "model_observed")
+        from dataclasses import replace
+        variant = replace(bundle, facts=tuple(f for f in bundle.facts if f != dropped.atom),
+                          evidence=tuple(r for r in bundle.evidence if r.id != dropped.id),
+                          outputs=tuple(replace(o, excludes_evidence=tuple(e for e in o.excludes_evidence if e != dropped.id))
+                                        for o in bundle.outputs))
+        report = evaluate(variant)
+        self.assertEqual(report.status.value, "complete", report.message)
+        for entry in report.claims:
+            if entry.claim.relation == "op_qualified":
+                self.assertEqual(entry.result.semantic.value, "unresolved")
+                self.assertEqual([item["relation"] for item in entry.result.missing_premises], ["model_observed"])
+            elif entry.claim.relation == "corpus_constrains":
+                self.assertEqual(entry.result.semantic.value, "supported")
+            else:  # undeclared_write / exclusion_applied companions: nothing to report on the clean fixture
+                self.assertEqual(entry.result.semantic.value, "unresolved")
+
+
+    def test_the_well_formedness_certificate_is_reported_and_load_bearing(self) -> None:
+        self._evaluated()
+        summary = replay_join.summary(self.join)
+        self.assertEqual(summary["model_well_formed"],
+                         {"checker": "stage-d-typecheck", "version": "0.1-pending",
+                          "certificate": hashlib.sha256(b"pending: checker not yet built").hexdigest()})
+        # withdraw the certificate: every op falls back to unresolved and the why-not names it
+        bundle = self.join.bundle
+        dropped = next(record for record in bundle.evidence if record.atom.relation == "model_well_formed")
+        from dataclasses import replace
+        variant = replace(bundle, facts=tuple(f for f in bundle.facts if f != dropped.atom),
+                          evidence=tuple(r for r in bundle.evidence if r.id != dropped.id),
+                          outputs=tuple(replace(o, excludes_evidence=tuple(e for e in o.excludes_evidence if e != dropped.id))
+                                        for o in bundle.outputs))
+        report = evaluate(variant)
+        self.assertEqual(report.status.value, "complete", report.message)
+        for entry in report.claims:
+            if entry.claim.relation == "op_qualified":
+                self.assertEqual(entry.result.semantic.value, "unresolved")
+                self.assertEqual([item["relation"] for item in entry.result.missing_premises],
+                                 ["model_well_formed"])
+        relations = dict(report.relations)
+        self.assertEqual(relations["op_qualified_rt"], ())
+
+
+@unittest.skipUnless(RECEIPT_DIR is not None, f"needs {replay_join.RECEIPT_DIR_ENV}")
+class RealReceiptTest(_JoinCase):
+    """The corrected, model-backed target-go receipt."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        out_dir = Path(os.environ.get(replay_join.OUT_ENV) or tempfile.mkdtemp(prefix="capcov-target-go-replay-out-"))
+        cls._setup(RECEIPT_DIR, out_dir)
+        print(f"\ntarget-go replay artifacts: {out_dir}")
+
+    def test_exporter_accepts_the_receipt(self) -> None:
+        self.check_export()
+        counts = self.join.exported.counts
+        self.assertIn("delete-issue", self.join.ops)
+        self.assertGreaterEqual(counts.get("mutant", 0), 1)
+
+    def test_kernels_agree_on_the_real_receipt(self) -> None:
+        self.check_kernels()
+
+    def test_the_corpus_constrains_every_replayed_op_in_both_kernels(self) -> None:
+        self.check_corpus_constrains()
+
+    def test_php_and_go_agree_with_the_model_and_no_mutant_survives(self) -> None:
+        self.check_agreement_and_corpus_hygiene()
+
+    def test_undeclared_writes_equal_the_raw_write_set_gap_per_side(self) -> None:
+        self.check_undeclared_writes()
+        self.check_write_set_gap()
+
+    def test_an_unqualified_op_names_the_undeclared_writes_as_its_blocker(self) -> None:
+        self.check_not_qualified_naming_the_blocker()
+
+    def test_reviewer_exclusions_are_explicit_and_applied(self) -> None:
+        self.check_exclusions()
+        summary = replay_join.summary(self.join)
+        self.assertTrue(summary["exclusions"], "the receipt carries a reviewer exclusion file")
+
+    def test_delete_issue_is_pending_only_the_well_formedness_certificate(self) -> None:
+        """The real receipt would be qualified but for the premise Stage D has not built.
+
+        This is the assertion the previous "supported" one becomes: every other
+        premise of ``op_qualified`` holds (``check_pending_well_formed`` spells
+        them out), the Stage D certificate is the only missing premise, and the
+        judge reports ``pending model_well_formed`` rather than a finding.  The
+        *positive* path -- a supported ``op_qualified`` whose leaves span every
+        producer class -- is covered by the synthetic corpus alone
+        (``FixtureJoinTest``, corpus case 00), whose made-up checker fact is
+        honest because that corpus is labelled synthetic throughout.
+        """
+        if self._has_certificate():
+            self.check_qualified()
+        else:
+            self.check_pending_well_formed()
+        if self.join.receipt_dir.resolve() == replay_join.COMMITTED_RECEIPT_DIR.resolve():
+            entry = replay_join.summary(self.join)["delete-issue"]
+            self.assertEqual(set(entry["exclusions_applied"]), {"authentication", "jobs_statuses", "redis", "go_issue_outbox"})
+            if self._has_certificate():
+                self.assertEqual(entry["qualified_under_exclusions"],
+                                 "qualified under 4 reviewer exclusions: authentication, go_issue_outbox, jobs_statuses, redis")
+            else:
+                # nothing is "qualified under" anything while the claim is pending
+                self.assertNotIn("qualified_under_exclusions", entry)
+            self.assertEqual(self._undeclared()["delete-issue"], {"php": [], "go": []})
+            # the ordering and cross-run gates the op passes on its way to the pending premise
+            self.assertEqual(entry["effect_order"]["violations"], [])
+            self.assertEqual(entry["effect_order"]["respected"], [["go", "owner"], ["php", "owner"]])
+            self.assertTrue(entry["effect_order"]["exercised"])
+            summary = replay_join.summary(self.join)
+            self.assertEqual(summary["stability"]["oracle_stable"], True)
+            self.assertEqual(summary["stability"]["oracle_unstable"], False)
+            [row] = summary["stability"]["rows"]
+            self.assertEqual(row[2:], ["php", "true"])
+            self.assertEqual(len(row), 4, "(run_a, run_b, side, stable) after the run column")
+            # TODO(four-request run): this receipt is a three-request run that predates
+            # the repeat request, so there is nothing for the repeat rules to judge here.
+            # The positive shape lives on the four-request receipt (RepeatTapeReceiptTest,
+            # fixtures/replay_receipt_target_go_repeat), whose op_qualified is unresolved
+            # for want of a mutant re-baseline; when that tape is re-baselined and its
+            # selftest runs, the two fixtures should become one.
+            self.assertEqual(entry["repeat_delete"], {"repeats": [], "violations": [], "not_found": []})
+
+    def test_artifacts_carry_digests_and_verdicts_only(self) -> None:
+        self.check_artifacts()
+
+
+class RepeatTapeReceiptTest(_JoinCase):
+    """The four-request run: the repeat DELETE executed against the incumbent for real.
+
+    This is the receipt the cross-request claim was written for.  ``op_qualified`` is
+    unresolved on it and says so at ``corpus_constrains`` -- no mutant was re-baselined
+    on this tape and no selftest ran -- which is exactly why it is kept separately from
+    the qualified three-request fixture rather than replacing it.
+    """
+
+    TARGET = "DELETE /api/cloud/project/21/issues/31"
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._setup(replay_join.REPEAT_RECEIPT_DIR, Path(tempfile.mkdtemp(prefix="capcov-repeat-replay-out-")))
+
+    def test_export_and_kernels(self) -> None:
+        self.check_export()
+        self.check_kernels()
+        self.assertEqual(self.join.receipt["run"], "271d2dde86a0")
+        self.assertEqual(self.join.ops, ("delete-issue",))
+        relations = dict(self.join.result.python.relations)
+        self.assertEqual({row[1] for row in relations["replay_request"]},
+                         {"owner", "forbidden", "missing", "repeat"})
+
+    def test_the_repeat_delete_claim_holds_on_real_rows(self) -> None:
+        self._evaluated()
+        relations = dict(self.join.result.python.relations)
+        run = self.join.run
+        self.assertEqual(relations["repeat_delete"], ((run, "repeat", self.TARGET),))
+        self.assertEqual(relations["first_delete_committed"], ((run, "owner", self.TARGET),),
+                         "owner is the first delete of the target and the one that committed")
+        self.assertEqual(relations["earlier_delete"], ((run, "oracle", self.TARGET, 4),))
+        self.assertEqual(relations["repeat_delete_not_found"], ((run, self.TARGET),))
+        self.assertEqual(relations["repeat_delete_violation"], ())
+        self.assertEqual(relations["repeat_delete_has_effect"], ())
+        # what the systems actually did: the repeat answered 404 and wrote nothing at all,
+        # not even the bookkeeping rows the 403 request writes.  The exclusion guard on
+        # repeat_delete_has_effect is therefore not what carries the claim here (case 23
+        # is the shape that exercises it); the claim rests on empty effect tables.
+        self.assertEqual({row[2] for row in relations["php_response"] if row[1] == "repeat"}, {404})
+        self.assertEqual({row[2] for row in relations["go_response"] if row[1] == "repeat"}, {404})
+        for side in ("php", "go"):
+            self.assertEqual([row for row in relations[f"{side}_effect"] if row[1] == "repeat"], [],
+                             f"{side} recorded an effect for the repeat")
+            self.assertEqual([row for row in relations[f"{side}_effect_seq"] if row[1] == "repeat"], [])
+            self.assertTrue([row for row in relations[f"{side}_effect"] if row[1] == "forbidden"],
+                            f"{side} does write bookkeeping rows on the 403, which is why the guard exists")
+
+    def test_the_op_is_unresolved_and_says_where(self) -> None:
+        self._evaluated()
+        summary = replay_join.summary(self.join)
+        entry = summary["delete-issue"]
+        self.assertEqual(entry["op_qualified"], "unresolved")
+        self.assertEqual(entry["operational"], "complete")
+        self.assertEqual(entry["blocking_premise"], {"relation": "corpus_constrains", "holds": False},
+                         "no mutant was re-baselined on this tape")
+        self.assertFalse(entry["corpus_constrains"])
+        self.assertEqual(summary["stability"], {"rows": [], "oracle_stable": False, "oracle_unstable": False},
+                         "the selftest did not run on this tape")
+        self.assertEqual(summary["model_well_formed"], "missing",
+                         "no real receipt carries a Stage D certificate; the checker does not exist")
+        self.assertEqual(entry["qualification"], "unsupported",
+                         "a real blocker (the unbaselined corpus) outranks the pending Stage D premise")
+        # the gates that did run on it
+        self.assertEqual(entry["effect_order"], {"violations": [], "respected": [["go", "owner"], ["php", "owner"]],
+                                                 "exercised": True})
+        self.assertEqual(entry["repeat_delete"], {"repeats": [["repeat", self.TARGET]], "violations": [],
+                                                  "not_found": [self.TARGET]})
+        # the cross-request gate op_qualified_rt now carries, on the only real tape that
+        # has a repeat: the closure derives and no violation does, so the gate passes and
+        # this receipt is blocked by its unbaselined corpus alone
+        relations = dict(self.join.result.python.relations)
+        self.assertIn((self.join.run, "delete-issue"), set(relations["repeat_delete_closed"]))
+        self.assertEqual(relations["repeat_delete_any"], ())
+        self.assertEqual(relations["repeat_delete_violation"], ())
+        self.assertEqual(set(entry["exclusions_applied"]),
+                         {"authentication", "go_issue_outbox", "jobs_statuses", "redis"})
+
+    def test_artifacts(self) -> None:
+        document = self.check_artifact_hygiene()
+        entry = document["join"]["delete-issue"]
+        self.assertEqual(entry["op_qualified"], "unresolved")
+        self.assertEqual(entry["blocking_premise"], {"relation": "corpus_constrains", "holds": False})
+        self.assertFalse(entry["corpus_constrains"])
+        self.assertEqual(entry["repeat_delete"]["not_found"], [self.TARGET])
+        self.assertNotIn("claim:", json.dumps(entry))
+
+
+class LearnCampaignTest(_JoinCase):
+    """The learn receipt committed under the qualified fixture, and three edits of it.
+
+    A *learn campaign* is a separate producer chain (tape generator, PHP oracle,
+    model host) that replays generated tapes against both and reports where the
+    model predicted something the oracle did not do, and which ops it does not
+    model at all.  The judge reads two things from it: the claim
+    ``learn_consistent(run, op)``, and a **downgrade** of ``op_qualified_rt`` for
+    an op the campaign's closed unmodelled list names.  The downgrade can only
+    take qualification away; ``NoLearnReceiptTest`` below is the receipt with no
+    campaign, judged exactly as before.
+    """
+
+    TAPE = "learn-03-delete-delete"
+    STEP = "learn-03-delete-delete/03-1-delete"
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._setup(replay_join.COMMITTED_RECEIPT_DIR, Path(tempfile.mkdtemp(prefix="capcov-learn-out-")))
+
+    @classmethod
+    def _variant(cls, name: str, edit) -> Path:
+        """A temp copy of the committed fixture whose ``learn/<name>.json`` was edited."""
+        root = Path(tempfile.mkdtemp(prefix="capcov-learn-variant-")) / "receipt"
+        shutil.copytree(replay_join.COMMITTED_RECEIPT_DIR, root)
+        path = root / replay_facts.LEARN_DIR / f"{name}.json"
+        document = json.loads(path.read_text())
+        path.write_text(json.dumps(edit(document), indent=1, sort_keys=True) + "\n")
+        return root
+
+    def _relations(self, directory: Path):
+        """Build *and evaluate* a variant: the summary reads the evaluated closure."""
+        join = replay_join.build(directory)
+        self.assertEqual(join.contract_findings, [])
+        root = tempfile.mkdtemp(prefix="capcov-learn-variant-diff-")
+        self.addCleanup(shutil.rmtree, root, True)
+        replay_join.evaluate_join(join, root)
+        self.assertIsNone(join.mismatch, "kernels disagree on the variant")
+        self.assertIsNotNone(join.result)
+        return join, join.result.python, dict(join.result.python.relations)
+
+    def test_the_committed_campaign_is_consistent_and_downgrades_nothing_replayed(self) -> None:
+        self._evaluated()
+        summary = replay_join.summary(self.join)
+        learn = summary["learn"]
+        self.assertTrue(learn["present"])
+        self.assertTrue(learn["closed"])
+        self.assertEqual(learn["counterexamples"], [], "the campaign found no disagreement")
+        self.assertEqual(learn["consistent_ops"], ["delete-issue"])
+        # the ops the campaign says the model does not model are ops this tape never replayed,
+        # so nothing the receipt qualifies is downgraded
+        self.assertEqual(learn["unmodeled_ops"], ["create-issue", "delete-issues", "edit"])
+        self.assertNotIn("delete-issue", learn["unmodeled_ops"])
+        entry = summary["delete-issue"]
+        self.assertEqual(entry["learn_consistent"], "supported")
+        self.assertFalse(entry["learn_unmodeled"])
+        # and the op is still blocked only by the Stage D premise
+        self.assertEqual(entry["blocking_premise"], {"relation": "model_well_formed", "holds": False})
+        relations = dict(self.join.result.python.relations)
+        self.assertIn((self.join.run, "delete-issue"), set(relations["learn_unmodeled_gate_closed"]))
+        self.assertNotIn((self.join.run, "delete-issue"), set(relations["learn_unmodeled_any"]))
+        # the compatibility row the campaign is bound through
+        [binding] = relations["learn_describes_model"]
+        self.assertEqual(binding[1], self.join.receipt["model"])
+        self.assertEqual(len(relations["learn_run"]), 1)
+        self.assertEqual(relations["learn_run"][0][0], self.join.run,
+                         "learn rows are scoped to the replay run; the campaign's own id is the "
+                         "'campaign' column")
+
+    def test_a_planted_counterexample_leaves_learn_consistent_unresolved_naming_the_step(self) -> None:
+        def flip(document):
+            for row in document["rows"]:
+                if row["req"] == self.STEP and row["predicted"] == "ok":
+                    row["predicted"] = "forbidden"
+            return document
+
+        join, report, relations = self._relations(self._variant("learn_prediction", flip))
+        counterexamples = [r for r in relations["learn_counterexample"] if r[0] == join.run]
+        self.assertTrue(counterexamples, "the planted prediction disagrees with the oracle")
+        for row in counterexamples:
+            # (run, tape, req, op, predicted, observed): the step is named, and so is the pair
+            self.assertEqual((row[1], row[2], row[4], row[5]), (self.TAPE, self.STEP, "forbidden", "ok"))
+        self.assertIn((join.run, "delete-issue"), set(relations["learn_counterexample_any"]))
+        self.assertEqual(relations["learn_consistent"], (),
+                         "one counterexample for the op withdraws the claim for the op")
+        consistent = next(c for c in report.claims if c.key == join.claim_id("learn-consistent", "delete-issue"))
+        self.assertEqual(consistent.semantic, "unresolved")
+        summary = replay_join.summary(join)
+        [named] = summary["learn"]["counterexamples"]
+        self.assertEqual(named, [self.TAPE, self.STEP, "delete-issue", "forbidden", "ok"])
+        # the counterexample is about the model's predictions, not about the port: the op's
+        # own qualification is untouched and still blocked only by the Stage D premise
+        self.assertEqual(summary["delete-issue"]["blocking_premise"],
+                         {"relation": "model_well_formed", "holds": False})
+
+    def test_an_unmodeled_op_downgrades_its_qualification_and_says_so(self) -> None:
+        model = json.loads((replay_join.COMMITTED_RECEIPT_DIR / "receipt.json").read_text())["model"]
+
+        def add(document):
+            document["rows"].append({"model": model, "op": "delete-issue",
+                                     "learn": document["rows"][0]["learn"]})
+            return document
+
+        join, report, relations = self._relations(self._variant("learn_unmodeled", add))
+        self.assertIn((join.run, "delete-issue"), set(relations["learn_unmodeled_any"]))
+        self.assertEqual(relations["op_qualified_rt"], ())
+        summary = replay_join.summary(join)
+        entry = summary["delete-issue"]
+        self.assertTrue(entry["learn_unmodeled"])
+        self.assertEqual(entry["blocking_premise"], {"relation": "learn_unmodeled_any", "holds": True},
+                         "the downgrade outranks the Stage D premise, which is checked last")
+        self.assertIn("learn_unmodeled", entry["missing_premise"])
+        self.assertEqual(entry["qualification"], "unsupported",
+                         "an op the campaign says is unmodelled is a finding, not a pending premise")
+        self.assertIn("delete-issue", summary["learn"]["unmodeled_ops"])
+
+    def test_an_unclosed_unmodeled_list_downgrades_nothing(self) -> None:
+        """The positive half is read under its own closure: an open list licenses no downgrade."""
+        model = json.loads((replay_join.COMMITTED_RECEIPT_DIR / "receipt.json").read_text())["model"]
+
+        def add(document):
+            document["rows"].append({"model": model, "op": "delete-issue",
+                                     "learn": document["rows"][0]["learn"]})
+            return document
+
+        root = self._variant("learn_unmodeled", add)
+        header = root / replay_facts.LEARN_DIR / replay_facts.LEARN_RECEIPT_FILE
+        document = json.loads(header.read_text())
+        document["closed"]["learn_unmodeled"] = False
+        header.write_text(json.dumps(document, indent=1, sort_keys=True) + "\n")
+        join, _, relations = self._relations(root)
+        self.assertEqual(relations["learn_unmodeled_closed"], ())
+        self.assertEqual(relations["learn_unmodeled_any"], (),
+                         "an unmodelled list the producer did not close downgrades nothing")
+        self.assertEqual(replay_join.summary(join)["delete-issue"]["blocking_premise"],
+                         {"relation": "model_well_formed", "holds": False})
+
+    def test_a_campaign_against_another_model_is_stale_not_a_finding(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="capcov-learn-foreign-")) / "receipt"
+        shutil.copytree(replay_join.COMMITTED_RECEIPT_DIR, root)
+        header = root / replay_facts.LEARN_DIR / replay_facts.LEARN_RECEIPT_FILE
+        document = json.loads(header.read_text())
+        document["model"] = hashlib.sha256(b"another model entirely").hexdigest()
+        header.write_text(json.dumps(document, indent=1, sort_keys=True) + "\n")
+        result = replay_facts.export_bundle(root, run=self.join.run)
+        self.assertEqual(result.status, replay_facts.STATUS_STALE)
+        self.assertIn("the learn campaign was run against model", result.messages[0])
+
+
+class NoLearnReceiptTest(unittest.TestCase):
+    """A receipt with no learn campaign is judged exactly as it was before one existed."""
+
+    def test_absence_is_not_a_finding_and_licenses_the_downgrade_gate(self) -> None:
+        self.assertIsNotNone(shutil.which("souffle"), "souffle must be on PATH: run inside the nix devShell")
+        join = replay_join.build(replay_join.REPEAT_RECEIPT_DIR)
+        self.assertEqual(join.contract_findings, [])
+        self.assertTrue(any("no learn campaign is bound" in m for m in join.exported.messages))
+        root = tempfile.mkdtemp(prefix="capcov-no-learn-diff-")
+        self.addCleanup(shutil.rmtree, root, True)
+        replay_join.evaluate_join(join, root)
+        self.assertIsNone(join.mismatch)
+        relations = dict(join.result.python.relations)
+        for name in ("learn_run", "learn_prediction", "learn_observation", "learn_unmodeled",
+                     "learn_consistent", "learn_unmodeled_any"):
+            self.assertEqual(relations[name], (), name)
+        # the gate's completeness still derives, so !learn_unmodeled_any is licensed and
+        # the op reaches the premises it would have reached anyway
+        self.assertIn((join.run, "delete-issue"), set(relations["learn_unmodeled_gate_closed"]))
+        summary = replay_join.summary(join)
+        self.assertEqual(summary["learn"], {"present": False})
+        self.assertEqual(summary["delete-issue"]["blocking_premise"],
+                         {"relation": "corpus_constrains", "holds": False},
+                         "unchanged: the corpus gate, exactly as before the learn relations existed")
+        self.assertIsNone(summary["delete-issue"]["learn_consistent"])
+        self.assertFalse(summary["delete-issue"]["learn_unmodeled"])
+        self.assertNotIn("claim-learn-consistent-delete-issue",
+                         {claim.id for claim in join.bundle.claims},
+                         "no campaign, no claim about one")
+
+
+class UnqualifiedFixtureTest(_JoinCase):
+    """The earlier real receipt: the model declares only issue, so two business tables stay undeclared."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._setup(replay_join.UNQUALIFIED_RECEIPT_DIR, Path(tempfile.mkdtemp(prefix="capcov-unqualified-replay-out-")))
+
+    def test_export_kernels_and_corpus(self) -> None:
+        self.check_export()
+        self.check_kernels()
+        self.check_corpus_constrains()
+        self.check_agreement_and_corpus_hygiene()
+
+    def test_business_tables_the_model_does_not_declare_block_the_op(self) -> None:
+        self.check_undeclared_writes()
+        self.check_write_set_gap()
+        self.check_not_qualified_naming_the_blocker()
+        self.check_exclusions()
+        summary = replay_join.summary(self.join)
+        self.assertEqual({item["table"] for item in summary["exclusions"]},
+                         {"authentication", "jobs_statuses", "redis", "go_issue_outbox"})
+        entry = summary["delete-issue"]
+        self.assertEqual(set(entry["exclusions_applied"]), {"authentication", "jobs_statuses", "redis", "go_issue_outbox"})
+        self.assertEqual(entry["assumption_leaves"], 4)
+        # the earlier receipt carries none of the ordering relations, and is blocked before
+        # they would be reached: the write-set gap is still the blocking premise
+        self.assertEqual(summary["stability"], {"rows": [], "oracle_stable": False, "oracle_unstable": False})
+        self.assertEqual(entry["effect_order"], {"violations": [], "respected": [], "exercised": False})
+        tables = self._undeclared()["delete-issue"]
+        self.assertEqual(set(tables["php"]), {"entity_statistics", "mongo:issue"}, "PHP business writes the model does not declare")
+        self.assertEqual(set(tables["go"]), {"entity_statistics", "mongo:issue"}, "Go business writes the model does not declare")
+        self.assertEqual(entry["op_qualified"], "unresolved")
+        self.assertNotIn("qualified_under_exclusions", entry)
+
+    def test_artifacts(self) -> None:
+        self.check_artifacts()
+
+
+if __name__ == "__main__":
+    unittest.main()

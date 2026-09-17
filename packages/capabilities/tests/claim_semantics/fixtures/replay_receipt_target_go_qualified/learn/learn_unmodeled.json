@@ -1,0 +1,20 @@
+{
+ "producer": "shen fg-learn v1",
+ "rows": [
+  {
+   "learn": "4c70ec8595ea26fedb046dd08dc025cedcf27d6034195f845b70848f4c278879",
+   "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+   "op": "create-issue"
+  },
+  {
+   "learn": "4c70ec8595ea26fedb046dd08dc025cedcf27d6034195f845b70848f4c278879",
+   "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+   "op": "delete-issues"
+  },
+  {
+   "learn": "4c70ec8595ea26fedb046dd08dc025cedcf27d6034195f845b70848f4c278879",
+   "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+   "op": "edit"
+  }
+ ]
+}

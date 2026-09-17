@@ -1,0 +1,23 @@
+{
+  "producer": "shen fg-model-host v1",
+  "rows": [
+    {
+      "run": "333072ef11f5",
+      "model": "8410a39b2d935acfed8c7caab5792b7f9ab7773a9f27190afb28b41a5588f859",
+      "req": "owner",
+      "table": "audit",
+      "kind": "insert",
+      "pk": "eb1e33e8a81b697b75855af6bfcdbcbf7cbbde9f94962ceaec1ed8af21f5a50f",
+      "cols_digest": "88675b48ac2b52eeeb0482c2a0ead1faf56be4e0ea1768c55d74b4a3e4009816"
+    },
+    {
+      "run": "333072ef11f5",
+      "model": "8410a39b2d935acfed8c7caab5792b7f9ab7773a9f27190afb28b41a5588f859",
+      "req": "owner",
+      "table": "issue",
+      "kind": "update",
+      "pk": "eb1e33e8a81b697b75855af6bfcdbcbf7cbbde9f94962ceaec1ed8af21f5a50f",
+      "cols_digest": "db85f82a2154fe2c5eb8b58321e345db80a7e2e2cd1dd773a942af8c53372e97"
+    }
+  ]
+}
