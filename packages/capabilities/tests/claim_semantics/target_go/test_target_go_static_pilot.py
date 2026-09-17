@@ -656,11 +656,19 @@ class FgGoStaticPilotTest(unittest.TestCase):
             for op in join["ops"]:
                 entry = join[op]
                 self.assertTrue(entry["corpus_constrains"], op)
-                # the honest verdict is recorded as-is: qualified, or unresolved with the
-                # write-set gap named (test_target_go_replay_receipt asserts the same two shapes)
+                # The honest verdict is recorded as-is, in one of the three shapes
+                # test_target_go_replay_receipt asserts: qualified; pending the Stage D
+                # well-formedness certificate (every other premise holds); or unsupported
+                # with the write-set gap named.  Nothing else passes.
                 if entry["op_qualified"] == "supported":
+                    self.assertEqual(entry["qualification"], "qualified")
                     self.assertEqual(entry["missing_premise"], [])
+                elif entry["qualification"] == "pending model_well_formed":
+                    self.assertEqual(entry["op_qualified"], "unresolved", entry)
+                    self.assertEqual(entry["missing_premise"], ["model_well_formed"])
+                    self.assertEqual(entry["blocking_premise"], {"relation": "model_well_formed", "holds": False})
                 else:
+                    self.assertEqual(entry["qualification"], "unsupported", entry)
                     self.assertEqual(entry["op_qualified"], "unresolved", entry)
                     self.assertEqual(entry["missing_premise"], ["model_writes"])
                     self.assertEqual(entry["blocking_premise"]["relation"], "undeclared_any")

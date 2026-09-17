@@ -5776,3 +5776,59 @@ per-run temporary root. `scripts/with-heavy-lock.py` serializes disk-heavy steps
 this session's devShell runs were killed twice by the host's low-memory guard while seven of
 shen1's units ran unwrapped, and shen1 has adopted the lock for every later stage.
 
+### 2026-09-17 round-two replay judge integrated; the Stage D contract is live and honestly unmet
+
+shen1's `experiment/replay-claims`-line round two, `pyrex41/synapse` `experiment/r2-judge`
+`ae86257` (based on this line's `19ca3fc`; merges `1dd4c59` assumption registry with per-run
+impact and invalidation, `46d994e` ordering / repeat-delete / oracle-stability claims, `dd84698`
+compiled Soufflé checker as a gate with a three-kernel differential and a judge CLI, `746231c`
+the Stage D contract, then `e2ef499`, `f073faa`, `cb015a4`, `ae86257`), merged in two steps as
+`775e66d` and `b77be19`, no conflicts, zero identifier hits. Pack identity now 115 relations /
+71 rules, `program_digest 9addbe39…`.
+
+The Stage D contract, as agreed and now in `schema_replay_v1`: `model_well_formed(model, checker,
+checker_version, certificate)` (observation, context `model`, producer class `modelcheck`; `shen`
+and `reviewer` are refused by `evidence-producer`) and `model_checker_admitted(checker,
+checker_version)` (reviewer-owned allowlist, `model_checkers.json`), both positive premises of
+`op_qualified_rt` joined on the same model digest as `model_describes_run`; no closures. The
+receipt file is `model_well_formed.json` = `{"producer": "modelcheck <checker> <version>
+model:<digest12>", "rows": [...]}`; a row for a foreign model digest makes the export stale. The
+canonical input the checker must digest is the `.shen` source in `load.shen` order (shen1's
+recipe, served by the model host); nothing else joins.
+
+Integration finding, corrected before it reached the PR: `746231c` shipped every real-receipt
+fixture with a `model_well_formed` fact from checker `stage-d-typecheck 0.1-pending` whose
+certificate is `sha256("pending: checker not yet built")`, admitted by the fixtures' own
+allowlist, so the real op read `supported` on a premise no checker produced — a fabricated
+observation filling the very gate it was added to guard. shen1 agreed at once; `e2ef499` removes
+it from the real fixtures (the labelled-synthetic `replay_receipt_min` keeps a synthetic
+certificate as the corpus source), the real qualified receipt now reads `unresolved` with
+`model_well_formed` as its only missing premise and `qualification: pending model_well_formed`,
+and the compiled gate exits 5 for that state so a CI consumer can tell "pending checker" from
+"unsupported". The pilot's replay assertion (this line's two-shape rule from `86b2fe1`) gained
+that third shape and accepts nothing else.
+
+Runs on `b77be19` (pinned devShell, every heavy step under `with-heavy-lock.py`; the pilot
+visibly waited for one of shen1's compiled-judge steps, which is the lock doing its job): Shen
+22 OK with the runtime; replay 108; receipt 34; compiled kernel 8; compiled checker script 13;
+assumption registry 44; static differential 18; production CLI 19 (1 skipped); full regression
+`Ran 1343 tests in 698.9s`, `OK (skipped=153)`; live pilot at `01fe913` with the route trace
+receipt `Ran 10 tests in 181.9s OK`, `replay_join.status = complete`, `delete-issue`:
+`op_qualified = unresolved`, `qualification = pending model_well_formed`, four reviewer
+exclusions applied, effect order respected on both sides, no repeat-delete violations,
+`learn_consistent = supported`.
+
+Two results from shen1 recorded here because they bear on this line: (1) the target's newest
+replay receipt over the full lineage-derived corpus (98 mutants, 37 survivors, `mutants_closed`
+held) is judged NOT supported with blocking premise `corpus_constrains`, kernels matched — the
+judge withdrawing a verdict it had given on a six-mutant corpus, which is what the closure work
+was for; (2) on upstream PR #52 (advisory classifier for surviving mutants) a shared diagnostic
+hint in the request preamble swung all 35 classifications the same way in two opposite passes,
+while the neutral pass scored 5/8 and a pattern-packet pass with runtime facts as candidate-specific
+evidence items scored 6/8 with no unanimity — the "advisory only" boundary holds, and evidence for
+a classification must travel as an evidence field, never as prose.
+
+Stage D (typed well-formedness of the model, section 18 decision) can now start: the contract it
+must satisfy is fixed, the fixture that must flip from pending to qualified is named, and shen1's
+in-flight units are landed.
+
