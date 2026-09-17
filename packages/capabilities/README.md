@@ -16,6 +16,18 @@ coverage gates, and reports. Consumer repositories own reviewed behavior models,
 source scope, identities, startup/reset recipes, runtime fixtures, and target
 bindings. It works without a Synapse vault or a hosted service.
 
+The experimental claim-semantics workbench also includes a Jev advisory path
+for ranking a mechanically bounded candidate set before acquiring evidence:
+
+```sh
+JEV_API_KEY=... capcov experiment claims jev assess --request request.json
+```
+
+Its content-addressed output is explicitly an assumption: it may prioritize a
+runtime probe or human review, but cannot establish a fact, compatibility,
+completeness, coverage, or claim qualification. See
+`experiments/claim-semantics/jev/README.md`.
+
 ## Foundations
 
 Each mechanism has a lineage in testing and program-analysis literature.

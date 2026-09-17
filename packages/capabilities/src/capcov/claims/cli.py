@@ -2,6 +2,7 @@
 
 Reached only through the ``experiment`` namespace of ``capcov``::
 
+    capcov experiment claims jev assess --request REQUEST.json
     capcov experiment claims shen authority (--bundle B.json | --rules PACK.json)
     capcov experiment claims shen evaluate --bundle B.json --relation R --row '[...]'
     capcov experiment claims shen why-not  --bundle B.json --relation R --row '[...]'
@@ -22,7 +23,7 @@ from typing import Any
 
 from .ir import BundleIngestionError, bundle_from_json
 from .validation import ValidationError
-from . import shen
+from . import jev, shen
 from .static.certificate import DEFAULT_MAX_DEPTH, DEFAULT_MAX_NODES
 
 
@@ -71,6 +72,20 @@ def main(argv: list[str]) -> int:
     sub = parser.add_subparsers(dest="area", required=True)
     claims = sub.add_parser("claims", help="claim-semantics experiment commands")
     claims_sub = claims.add_subparsers(dest="tool", required=True)
+    jev_parser = claims_sub.add_parser(
+        "jev", help="advisory semantic judgments over bounded candidates")
+    jev_sub = jev_parser.add_subparsers(dest="command", required=True)
+    jev_assess = jev_sub.add_parser(
+        "assess", help="rank candidates without granting evidence authority")
+    jev_assess.add_argument("--request", required=True,
+                            help="capcov-jev request JSON")
+    jev_assess.add_argument("--response", default=None,
+                            help="offline TypeSafe response JSON (no API call)")
+    jev_assess.add_argument("--endpoint", default=None,
+                            help="TypeSafe endpoint override")
+    jev_assess.add_argument("--timeout", type=float, default=30.0)
+    jev_assess.add_argument("--out", default=None,
+                            help="also write the advisory artifact to this file")
     shen_parser = claims_sub.add_parser("shen", help="executable Shen semantic workbench (section 18)")
     shen_sub = shen_parser.add_subparsers(dest="command", required=True)
     _common(shen_sub.add_parser("authority", help="structural authority checks over a rule pack"), need_row=False)
@@ -79,6 +94,15 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     try:
+        if args.tool == "jev":
+            request = jev.AssessmentRequest.parse(_load_json(args.request))
+            if args.response:
+                artifact = jev.build_artifact(request, _load_json(args.response))
+            else:
+                artifact = jev.assess(
+                    request, endpoint=args.endpoint, timeout=args.timeout)
+            _emit(artifact, args.out)
+            return 0
         bundle = _load_bundle(args.bundle) if args.bundle else None
         rules = _load_json(args.rules) if args.rules else None
         if args.command == "authority":
@@ -100,6 +124,9 @@ def main(argv: list[str]) -> int:
         return 0
     except (BundleIngestionError, ValidationError, OSError, ValueError) as exc:
         _emit({"operational_failure": "invalid-input", "error": str(exc)}, args.out)
+        return 3
+    except jev.JevError as exc:
+        _emit({"operational_failure": exc.kind, "error": str(exc)}, args.out)
         return 3
     except shen.ShenUnavailable as exc:
         _emit({"operational_failure": exc.operational_failure, "error": str(exc)}, args.out)
