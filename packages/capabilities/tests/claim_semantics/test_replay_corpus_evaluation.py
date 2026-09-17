@@ -22,6 +22,7 @@ except ImportError:  # unittest discover -s imports this directory as top-level
                                     RUN)
 
 from capcov.claims import canonical_json
+from capcov.claims.ir import BundleIngestionError
 from capcov.claims.differential import DifferentialMismatch, compare
 from capcov.claims.evaluator import evaluate
 from capcov.claims.output import VerifiedProofEvidence, render_outputs
@@ -230,8 +231,11 @@ class PythonEvaluatorAgreesWithReviewedExpectations(unittest.TestCase):
         self.assertEqual(report.relation_rows("repeat_delete_not_found"), (),
                          "the negated premise fails: the repeat is not effect-free")
         self.assertEqual(set(report.relation_rows("op_qualified")),
-                         {(INDEX, RUN, CREATE), (INDEX, RUN, CLOSE), (INDEX, RUN, DELETE)},
-                         "op_qualified_rt is not gated on the repeat: the repeat is its own claim")
+                         {(INDEX, RUN, CREATE), (INDEX, RUN, CLOSE)},
+                         "op_qualified_rt is gated on the repeat, and the repeat belongs to delete-issue")
+        self.assertEqual(set(report.relation_rows("repeat_delete_closed")),
+                         {(RUN, op) for op in (CREATE, CLOSE, DELETE)},
+                         "the closure derives for every replayed op; only the violation is per-request")
         # the status pair is still 200/404, so no status violation was planted
         self.assertNotIn((RUN, REPEAT_DELETE, "php"), set(report.relation_rows("repeat_delete_violation")))
 
@@ -419,6 +423,70 @@ class PackMutationsFailTheCorpus(unittest.TestCase):
                          "supported", "without the binding the certificate need not be this model's")
         self.assertEqual(self._qualified_verdict(self._mutated(drop_binding), "27-model-not-well-formed"),
                          "unresolved", "an absent certificate is absent however the join is written")
+
+    def _delete_verdict(self, pack, stem: str) -> str:
+        report = evaluate(load_case(CASES_DIR / f"{stem}.json", pack))
+        self.assertEqual(report.status.value, "complete", report.message)
+        return next(entry.result.semantic.value for entry in report.claims
+                    if entry.claim.id == "claim-qualified-delete")
+
+    def test_dropping_the_repeat_gate_from_op_qualified_rt_flips_the_planted_case(self) -> None:
+        """The cross-request claim must be load-bearing, not merely derived.
+
+        Case 18 plants an ``issue`` update on the second delete of a committed
+        target.  Every per-request premise still holds, so with the gate removed the
+        op qualifies and the receipt's only defect is reported in a claim nothing
+        reads.  With the gate the op is unresolved, and the two halves are checked
+        separately: the negation alone and its completeness alone.
+        """
+        self.assertEqual(self._delete_verdict(load_pack(), "18-repeat-delete-with-effects"), "unresolved")
+
+        def drop_gate(pack):
+            rule = next(r for r in pack["rules"] if r["name"] == "op_qualified_rt")
+            rule["body"] = [a for a in rule["body"]
+                            if a.get("relation") not in {"repeat_delete_any", "repeat_delete_closed"}]
+
+        self.assertEqual(self._delete_verdict(self._mutated(drop_gate), "18-repeat-delete-with-effects"), "supported")
+
+        # the negation alone: without it the closure is a premise that proves nothing
+        def drop_negation(pack):
+            rule = next(r for r in pack["rules"] if r["name"] == "op_qualified_rt")
+            rule["body"] = [a for a in rule["body"] if a.get("relation") != "repeat_delete_any"]
+
+        self.assertEqual(self._delete_verdict(self._mutated(drop_negation), "18-repeat-delete-with-effects"),
+                         "supported")
+        # the other ops of the same run are untouched either way: the gate is per op
+        self.assertEqual(self._qualified_verdict(load_pack(), "18-repeat-delete-with-effects"), "supported")
+
+    def test_the_repeat_closure_is_what_licenses_the_negation(self) -> None:
+        """Case 31 opens the PHP response table; the gate withholds instead of passing.
+
+        Dropping ``repeat_delete_closed`` from the op gate makes the negation
+        unlicensed-but-free, and the case qualifies on a table the harness never
+        claimed was complete.  Dropping either response closure from
+        ``repeat_delete_closed`` itself does the same, which is what makes listing
+        every positive input of the negated chain load-bearing rather than decorative.
+        """
+        self.assertEqual(self._delete_verdict(load_pack(), "31-missing-response-closure"), "unresolved")
+
+        def drop_closure(pack):
+            rule = next(r for r in pack["rules"] if r["name"] == "op_qualified_rt")
+            rule["body"] = [a for a in rule["body"] if a.get("relation") != "repeat_delete_closed"]
+
+        # the strongest form: the closure cannot even be dropped.  Without it the
+        # negation is unsafe and the ingestion boundary refuses the pack outright,
+        # rather than letting a rule negate a table nobody closed.
+        with self.assertRaises(BundleIngestionError) as caught:
+            self._delete_verdict(self._mutated(drop_closure), "31-missing-response-closure")
+        self.assertIn("missing-completeness", str(caught.exception))
+        self.assertIn("repeat_delete_any", str(caught.exception))
+
+        def drop_response_input(pack):
+            rule = next(r for r in pack["rules"] if r["name"] == "repeat_delete_closed")
+            rule["body"] = [a for a in rule["body"] if a.get("relation") != "php_responses_closed"]
+
+        self.assertEqual(self._delete_verdict(self._mutated(drop_response_input), "31-missing-response-closure"),
+                         "supported")
 
     def test_dropping_the_gate_from_op_qualified_rt_flips_the_case(self) -> None:
         def drop_gate(pack):

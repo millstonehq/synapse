@@ -1,0 +1,26 @@
+{
+ "closed": {
+  "learn_observations": true,
+  "learn_predictions": true,
+  "learn_unmodeled": true
+ },
+ "learn": "4c70ec8595ea26fedb046dd08dc025cedcf27d6034195f845b70848f4c278879",
+ "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+ "receipts": {
+  "counts": {
+   "agree": 18,
+   "counterexample": 0,
+   "fixture-drift": 0,
+   "pinned": 14,
+   "tapes": 12,
+   "unjudged": 0
+  },
+  "observation_rows": 32,
+  "prediction_rows": 20,
+  "req_key": "<tape>/<request id>: a request id repeats across tapes",
+  "tapes": 12,
+  "tapes_generated": 12,
+  "unmodeled_rows": 3
+ },
+ "version": 1
+}

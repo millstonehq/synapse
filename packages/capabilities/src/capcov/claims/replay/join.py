@@ -56,15 +56,26 @@ REASONS = {
     "model_well_formed": "no typed checker certified that the model describing this run is well formed",
     "model_checker_admitted": "the reviewer admits no checker at the version that certified the model",
 }
+LEARN_UNMODELED_REASON = ("blocked by the learn campaign: its closed unmodelled list names this op, "
+                          "so the model the judge is qualifying against does not model it")
 UNDECLARED_REASON = "blocked by undeclared writes: PHP or Go wrote a table the model's closed write set does not declare for this op"
+# Premises whose absence is "not built yet" rather than a finding against the
+# port.  The Stage D typed checker does not exist, so no real receipt can carry
+# a ``model_well_formed`` certificate and none of the committed real fixtures
+# does: a run blocked *only* here is **pending**, which ``summary``,
+# ``judge.json`` and the CLI's exit code keep distinct from unsupported.  This
+# is why the pair sits last in ``_BLOCKING_ORDER``: any premise that is a real
+# finding about the systems, the model or the review must win over it, so a
+# receipt reported as ``pending model_well_formed`` is one where every other
+# premise of ``op_qualified`` was checked and held.
+PENDING_PREMISES = ("model_well_formed", "model_checker_admitted")
+QUALIFICATION_QUALIFIED = "qualified"
+QUALIFICATION_UNSUPPORTED = "unsupported"
 # The premises op_qualified_rt needs, in the order a reviewer checks them; the
 # first one that fails (or the first "any" that holds) is the blocking premise.
 _BLOCKING_ORDER = (
     ("replay_run_current", False), ("model_describes_run", False), ("replayed", False), ("op_exercised", False),
     ("corpus_constrains", False),
-    # the Stage D premise, checked after the corpus gate: a receipt whose mutants were never
-    # re-baselined is blocked by its corpus first, whether or not a checker ran
-    ("model_well_formed", False), ("model_checker_admitted", False),
     ("php_disagreement_closed", False), ("php_disagree_any", True),
     ("go_disagreement_closed", False), ("go_disagree_any", True), ("undeclared_writes_closed", False),
     ("model_scope_exclusions_closed", False), ("undeclared_any", True),
@@ -73,11 +84,19 @@ _BLOCKING_ORDER = (
     # a receipt without the sequence/response/stability relations is blocked earlier when it
     # has a write-set gap, and here otherwise)
     ("effect_order_closed", False), ("effect_order_any", True), ("effect_order_exercised", False),
-    # the repeat delete is its own claim (repeat_delete_not_found) and no premise of
-    # op_qualified_rt; the summary still reports its rows under "repeat_delete"
     ("oracle_stable", False),
+    # the cross-request gate: a second DELETE of a committed target that answered anything
+    # but 404 on either side, or wrote a row outside the reviewer's scope exclusions, blocks
+    # the op it belongs to.  The summary reports the rows themselves under "repeat_delete".
+    ("repeat_delete_closed", False), ("repeat_delete_any", True),
+    # the learn campaign's downgrade: an op its closed unmodelled list names does not
+    # qualify.  A run with no learn receipt derives no learn_unmodeled_any and passes.
+    ("learn_unmodeled_gate_closed", False), ("learn_unmodeled_any", True),
     ("kill_gap_closed", False), ("kill_closure_gap_any", True), ("index_describes_replay", False),
     ("op_declared", False),
+    # the Stage D premise, checked last (PENDING_PREMISES): the checker is not built, so an
+    # op that reaches it has passed every premise that says something about this port
+    ("model_well_formed", False), ("model_checker_admitted", False),
 )
 # per-run relations of _BLOCKING_ORDER whose only column is the run
 _RUN_ONLY = ("replay_run_current", "kill_gap_closed", "oracle_stable")
@@ -115,6 +134,35 @@ def well_formed_certificate(relations, run: str) -> dict[str, str] | list[dict[s
     if not certificates:
         return "missing"
     return certificates[0] if len(certificates) == 1 else certificates
+
+
+def learn_summary(relations, run: str) -> dict[str, Any]:
+    """What the learn campaign bound to ``run`` said, digest-free and reportable.
+
+    ``{"present": False}`` when no campaign is bound -- which is not a finding: the
+    downgrade can only take qualification away, never grant it, so a receipt with
+    no learn files is judged exactly as it was before the campaign existed.
+    """
+    rows = dict(relations) if not isinstance(relations, dict) else relations
+    runs = [r for r in rows.get("learn_run", ()) if r[0] == run]
+    if not runs:
+        return {"present": False}
+    campaign, model, learn = runs[0][1], runs[0][2], runs[0][3]
+    learns = {r[3] for r in runs}
+    unmodeled = sorted({r[1] for r in rows.get("learn_unmodeled_any", ()) if r[0] == run})
+    return {
+        "present": True,
+        "campaign": campaign,
+        "learn": learn,
+        "closed": bool([r for r in rows.get("learn_unmodeled_closed", ()) if r[0] == model and r[1] in learns]),
+        "predictions": len([r for r in rows.get("learn_prediction", ()) if r[0] == run]),
+        "observations": len([r for r in rows.get("learn_observation", ()) if r[0] == run]),
+        # (tape, req, op, predicted, observed) per disagreement: the step is named
+        "counterexamples": sorted([list(r[1:]) for r in rows.get("learn_counterexample", ()) if r[0] == run],
+                                  key=canonical_json),
+        "unmodeled_ops": unmodeled,
+        "consistent_ops": sorted({r[1] for r in rows.get("learn_consistent", ()) if r[0] == run}),
+    }
 
 
 def exclusions_applied(relations, run: str, op: str) -> list[str]:
@@ -169,6 +217,25 @@ def blocking_premise(relations, run: str, op: str, index: str = SYNTHETIC_INDEX)
         if not is_blocker and not present:
             return {"relation": name, "holds": False}
     return {"relation": "op_qualified_rt", "holds": False}
+
+
+def qualification(semantic: str | None, operational: str | None,
+                  blocking: dict[str, Any] | None) -> str:
+    """One word for what happened to ``op_qualified``, with *pending* split out.
+
+    ``"qualified"`` when the claim is supported and complete; ``"pending
+    <relation>"`` when the only premise that blocked it is one of
+    ``PENDING_PREMISES`` -- a premise no receipt can satisfy yet because the
+    artefact that would satisfy it (the Stage D typed checker) does not exist;
+    ``"unsupported"`` otherwise.  The split matters to a consumer gate: a
+    pending op is one whose every checkable premise held, and reporting it as
+    unsupported would read as a finding against the port that nobody made.
+    """
+    if semantic == "supported" and operational == "complete":
+        return QUALIFICATION_QUALIFIED
+    if blocking and not blocking.get("holds") and blocking.get("relation") in PENDING_PREMISES:
+        return f"pending {blocking['relation']}"
+    return QUALIFICATION_UNSUPPORTED
 
 
 def _explanation_summary(explanation: dict[str, Any]) -> dict[str, Any]:
@@ -276,7 +343,8 @@ def build(directory: Path) -> ReplayJoin:
     # the effect rows the model's closed write set does not cover, per op (what
     # the undeclared_write rules will derive from), so the why-not can name them
     exported_rows = {name: [] for name in ("replay_request", "php_effect", "go_effect", "model_writes", "model_writes_closed",
-                                           "model_scope_exclusion", "model_scope_exclusions_closed")}
+                                           "model_scope_exclusion", "model_scope_exclusions_closed",
+                                           "learn_run", "learn_unmodeled", "learn_unmodeled_closed")}
     evidence_of: dict[tuple[str, tuple], str] = {}
     for record in exported.bundle.evidence:
         if record.atom.relation in exported_rows:
@@ -287,6 +355,8 @@ def build(directory: Path) -> ReplayJoin:
     closed_ops = {r[1] for r in exported_rows["model_writes_closed"]}
     exclusions_closed = bool(exported_rows["model_scope_exclusions_closed"])
     excluded = {r[1] for r in exported_rows["model_scope_exclusion"]} if exclusions_closed else set()
+    learn_rows = {name: exported_rows[name] for name in
+                  ("learn_run", "learn_unmodeled", "learn_unmodeled_closed")}
     claims, diagnostics, outputs = [], [], []
     for op in ops:
         qualified = Claim("op_qualified", (Constant(SYNTHETIC_INDEX, "digest"), Constant(run, "symbol"), Constant(op, "symbol")),
@@ -298,6 +368,21 @@ def build(directory: Path) -> ReplayJoin:
         applied = Claim("exclusion_applied", (Constant(run, "symbol"), Constant(op, "symbol"), Variable("table")),
                         Context.from_mapping({"run": run}), id=join.claim_id("exclusions-applied", op))
         claims.extend([qualified, constrains, undeclared, applied])
+        if learn_rows["learn_run"]:
+            # only when a campaign is bound to this run: a claim about an absent
+            # campaign would be unresolved for want of the campaign, not for want
+            # of consistency, and would read as a finding about the model
+            claims.append(Claim("learn_consistent", (Constant(run, "symbol"), Constant(op, "symbol")),
+                                Context.from_mapping({"run": run}), id=join.claim_id("learn-consistent", op)))
+            downgrading = [evidence_of[("learn_unmodeled", row)] for row in learn_rows["learn_unmodeled"]
+                           if row[2] == op and learn_rows["learn_unmodeled_closed"]]
+            if downgrading:
+                diagnostics.append(DiagnosticRule("learn_unmodeled", "observation", "complete", (),
+                                                  claim_id=qualified.id))
+                outputs.append(OutputTemplate(
+                    "missing_premise", qualified.id, relation="learn_unmodeled",
+                    fields=(("reason", TemplateValue("constant", "", "symbol", LEARN_UNMODELED_REASON)),),
+                    requires_any_evidence=tuple(sorted(downgrading)), when_claim="unresolved"))
         requests = {r[1] for r in exported_rows["replay_request"] if r[4] == op}
         offending = [evidence_of[(side, row)] for side in ("php_effect", "go_effect") for row in exported_rows[side]
                      if row[1] in requests and op in closed_ops and exclusions_closed
@@ -312,6 +397,11 @@ def build(directory: Path) -> ReplayJoin:
         for relation in MODEL_WITNESSES:
             context = ("run",) if relation in ("model_describes_run", "model_admissible_closed") else ()
             diagnostics.append(DiagnosticRule(relation, "observation", "complete", context, claim_id=qualified.id))
+            if relation == "model_checker_admitted" and "model_well_formed" not in present:
+                # "the reviewer admits no checker at the version that certified the model" is
+                # not a premise a receipt with no certificate at all is missing: the missing
+                # premise is the certificate, and naming both would report one gap twice.
+                continue
             excludes = (present[relation],) if relation in present else ()
             outputs.append(OutputTemplate(
                 "missing_premise", qualified.id, relation=relation,
@@ -454,6 +544,9 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
         entry = {"corpus_constrains": constrains.get("semantic") == "supported",
                  "op_qualified": qualified.get("semantic"),
                  "operational": qualified.get("operational"),
+                 # "qualified" / "pending <relation>" / "unsupported": a pending op passed
+                 # every premise that is checkable today (see PENDING_PREMISES)
+                 "qualification": qualification(qualified.get("semantic"), qualified.get("operational"), blocking),
                  # template-rendered absent leaves; the evaluator's claim-id fallback is never reported here
                  "missing_premise": [json.loads(item)["relation"] for item in qualified.get("missing_premises", [])
                                      if item.startswith("{")],
@@ -482,6 +575,8 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
                                  if r[0] == join.run and r[2] in requests], key=canonical_json),
             "exercised": (join.run, op) in set(relations.get("effect_order_exercised", ())),
         }
+        entry["learn_consistent"] = (join.verdict(join.claim_id("learn-consistent", op)) or {}).get("semantic")
+        entry["learn_unmodeled"] = (join.run, op) in set(relations.get("learn_unmodeled_any", ()))
         entry["repeat_delete"] = {
             "repeats": sorted([list(r[1:]) for r in relations.get("repeat_delete", ())
                                if r[0] == join.run and r[1] in requests], key=canonical_json),
@@ -499,6 +594,7 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
     out["exclusions"] = exclusions(relations, join.run) if relations else []
     # the Stage D premise: what typechecked the model this run is judged against
     out["model_well_formed"] = well_formed_certificate(relations, join.run) if relations else "missing"
+    out["learn"] = learn_summary(relations, join.run) if relations else {"present": False}
     out["stability"] = {
         "rows": sorted([list(r[1:]) for r in relations.get("replay_stability", ()) if r[0] == join.run], key=canonical_json),
         "oracle_stable": (join.run,) in set(relations.get("oracle_stable", ())),
@@ -579,6 +675,9 @@ def write_artifacts(join: ReplayJoin, out_dir: Path) -> dict[str, Any]:
 
 
 __all__ = ["SYNTHETIC_INDEX", "REVIEWER_SOURCE", "CENSUS_ASSUMPTION_SOURCE", "INDEX_ASSUMPTION_SOURCE",
-           "MODEL_WITNESSES", "REASONS", "UNDECLARED_REASON", "ReplayJoin", "build", "evaluate_join",
+           "MODEL_WITNESSES", "REASONS", "UNDECLARED_REASON", "PENDING_PREMISES",
+           "QUALIFICATION_QUALIFIED", "QUALIFICATION_UNSUPPORTED", "qualification",
+           "ReplayJoin", "build", "evaluate_join",
            "summary", "write_artifacts", "blocking_premise", "undeclared_tables", "exclusions",
-           "exclusions_applied", "well_formed_certificate", "assumption_registry", "invalidate"]
+           "exclusions_applied", "well_formed_certificate", "learn_summary", "LEARN_UNMODELED_REASON",
+           "assumption_registry", "invalidate"]

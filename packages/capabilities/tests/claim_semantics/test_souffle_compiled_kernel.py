@@ -206,7 +206,12 @@ class TargetGoReceiptThreeKernelsTests(unittest.TestCase):
                 self.assertEqual(replay_join.summary(join)["kernels"],
                                  ["python", "souffle", "souffle-compiled"])
 
-    def test_the_qualified_receipt_is_supported_and_complete_in_all_three(self) -> None:
+    def test_the_qualified_receipt_is_pending_the_checker_in_all_three(self) -> None:
+        """The real receipt clears every checkable premise; no Stage D certificate exists.
+
+        All three kernels agree on that, which is the property this class is for:
+        the verdict is the same one everywhere, pending and not unsupported.
+        """
         join = self._join("qualified")
         self.assertEqual(join.ops, ("delete-issue",))
         claim_id = join.claim_id("qualified", "delete-issue")
@@ -214,11 +219,14 @@ class TargetGoReceiptThreeKernelsTests(unittest.TestCase):
         for report in join.closures():
             claim = next(c for c in report.claims if c.key == claim_id)
             with self.subTest(kernel=report.backend):
-                self.assertEqual(claim.semantic, "supported")
+                self.assertEqual(claim.semantic, "unresolved")
                 self.assertEqual(claim.operational, "complete")
-                self.assertEqual(claim.missing_premises, ())
+                self.assertEqual([json.loads(item)["relation"] for item in claim.missing_premises
+                                  if item.startswith("{")], ["model_well_formed"])
         entry = replay_join.summary(join)["delete-issue"]
-        self.assertEqual(entry["op_qualified"], "supported")
+        self.assertEqual(entry["op_qualified"], "unresolved")
+        self.assertEqual(entry["qualification"], "pending model_well_formed")
+        self.assertEqual(entry["blocking_premise"], {"relation": "model_well_formed", "holds": False})
         self.assertTrue(entry["corpus_constrains"])
         self.assertEqual(entry["exclusions_applied"],
                          ["authentication", "go_issue_outbox", "jobs_statuses", "redis"])
@@ -230,11 +238,14 @@ class TargetGoReceiptThreeKernelsTests(unittest.TestCase):
             claim = next(c for c in report.claims if c.key == claim_id)
             with self.subTest(kernel=report.backend):
                 self.assertEqual(claim.semantic, "unresolved")
-                self.assertEqual([json.loads(item)["relation"] for item in claim.missing_premises
-                                  if item.startswith("{")], ["model_writes"])
+                self.assertEqual(sorted(json.loads(item)["relation"] for item in claim.missing_premises
+                                        if item.startswith("{")),
+                                 ["model_well_formed", "model_writes"])
         entry = replay_join.summary(join)["delete-issue"]
-        self.assertEqual(entry["missing_premise"], ["model_writes"])
+        self.assertEqual(sorted(entry["missing_premise"]), ["model_well_formed", "model_writes"])
+        # a real blocker outranks the premise nothing can satisfy yet
         self.assertEqual(entry["blocking_premise"], {"relation": "undeclared_any", "holds": True})
+        self.assertEqual(entry["qualification"], "unsupported")
 
     def test_certificates_are_one_document_across_the_three_closures(self) -> None:
         for label in ("qualified", "unqualified"):

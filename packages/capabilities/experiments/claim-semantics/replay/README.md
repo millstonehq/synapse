@@ -8,7 +8,7 @@ census is qualified by this replay*.  The replay harness is a producer of
 observations, never an oracle; the judge is these rules.
 
 * `rules-replay-v1.json` - the rule pack in raw IR JSON wire form.
-* `cases/NN-*.json` - one positive control (`00`) and twenty-five adversarial
+* `cases/NN-*.json` - one positive control (`00`) and twenty-six adversarial
   shapes (the numbering is not contiguous: the gaps are the rejected cases);
   `rejected/NN-*.json` are the cases the ingestion boundary must refuse.
 * `expected.json` / `rejected.json` - the per-claim review tables duplicated
@@ -106,9 +106,22 @@ go_disagreement_closed(Run,Op)  :- the same body with go_post_states_closed(Run)
 undeclared_writes_closed(Run,Op):- replayed(Run,Op), replay_run_current(Run), model_describes_run(M,Run),
                                    replay_requests_closed(Run), php_effects_closed(Run), go_effects_closed(Run),
                                    model_writes_closed(M,Op), model_scope_exclusions_closed(M).
+learn_predicted(Run,Op)         :- learn_prediction(Run,_,_,_,_,Op,P,_), P != "unknown".
+learn_counterexample(Run,Tape,Req,Op,P,O)
+                                :- learn_prediction(Run,_,_,Tape,Req,Op,P,_), learn_observation(Run,Tape,Req,Op,O,_),
+                                   P != O, P != "unknown".
+learn_counterexample_any(Run,Op):- learn_counterexample(Run,_,_,Op,_,_).
+learn_counterexample_closed(Run,Op)
+                                :- learn_predicted(Run,Op), learn_run(Run,_,M,L,_,_), model_describes_run(M,Run),
+                                   learn_describes_model(L,M), learn_predictions_closed(Run,M),
+                                   learn_observations_closed(Run).
+learn_consistent(Run,Op)        :- learn_counterexample_closed(Run,Op), !learn_counterexample_any(Run,Op).
+learn_unmodeled_any(Run,Op)     :- learn_run(Run,_,M,L,_,_), model_describes_run(M,Run), learn_describes_model(L,M),
+                                   learn_unmodeled_closed(M,L), learn_unmodeled(M,L,Op).
+learn_unmodeled_gate_closed(Run,Op)
+                                :- replayed(Run,Op), replay_run_current(Run).
 op_qualified_rt(IX,Run,Op)      :- index_describes_replay(IX,Run), replayed(Run,Op), op_exercised(Run,Op),
-                                   model_describes_run(M,Run), model_well_formed(M,Checker,Version,Cert),
-                                   model_checker_admitted(Checker,Version),
+                                   model_describes_run(M,Run),
                                    corpus_constrains(Run,Op),
                                    php_disagreement_closed(Run,Op), !php_disagree_any(Run,Op),
                                    go_disagreement_closed(Run,Op),  !go_disagree_any(Run,Op),
@@ -116,7 +129,11 @@ op_qualified_rt(IX,Run,Op)      :- index_describes_replay(IX,Run), replayed(Run,
                                    post_state_gap_closed(Run,Op), !post_state_any(Run,Op),
                                    kill_gap_closed(Run), !kill_closure_gap_any(Run,Op),
                                    effect_order_closed(Run,Op), !effect_order_any(Run,Op),
-                                   effect_order_exercised(Run,Op), oracle_stable(Run).
+                                   effect_order_exercised(Run,Op), oracle_stable(Run),
+                                   repeat_delete_closed(Run,Op), !repeat_delete_any(Run,Op),
+                                   learn_unmodeled_gate_closed(Run,Op), !learn_unmodeled_any(Run,Op),
+                                   model_well_formed(M,Checker,Version,Cert),
+                                   model_checker_admitted(Checker,Version).
 op_qualified(IX,Run,Op)         :- op_declared(IX,Op), index_describes_replay(IX,Run), op_qualified_rt(IX,Run,Op).
 ```
 
@@ -256,14 +273,32 @@ Design points a reviewer should check:
   session-token touch, a cache key, a job-status row -- and a repeat DELETE
   that 404s still authenticates, so without the guard a correct port would
   fail the claim on rows the reviewer already accepted (case 23).
-  **`op_qualified_rt` is deliberately *not* gated on the repeat.**  The repeat
-  is a claim of its own (`repeat_delete_not_found`); a second delete that
-  answers 200 or writes a business table is caught for the op through the
-  model -- the model's `Admissible` refuses the post-state, so
-  `php_model_disagree` / `go_model_disagree` blocks `op_qualified` -- not
-  through a second cross-request gate.  Case 18 is the shape: the repeat
-  violation holds, the per-target claim is unresolved, and all three ops still
-  qualify.
+  **`op_qualified_rt` is gated on the repeat**: `repeat_delete_closed(Run, Op),
+  !repeat_delete_any(Run, Op)`, where `repeat_delete_any(run, op)` joins a
+  `repeat_delete_violation` to the *op of the violating request*, so one op's
+  repeat does not poison the run.  The earlier design left the repeat as a claim
+  of its own on the theory that a second delete which answers 200 or writes a
+  business table is caught through the model's `Admissible`.  That is not a
+  theorem: case 18 plants an `issue` update -- a **declared** table -- on the
+  second delete, and every per-request premise still holds, so without this gate
+  the op qualified and the receipt's only defect lived in a claim nothing read.
+  With it, case 18 leaves `delete-issue` unresolved (missing premise
+  `repeat_delete`) while `issues.create` / `issues.close` stay supported, and
+  `test_replay_corpus_evaluation` shows that dropping either half of the gate
+  flips it back.
+  `repeat_delete_closed(Run, Op)` lists the closure of **every** positive input
+  of the chain it negates: `replay_run_current`, `replay_requests_closed`,
+  `replay_request_seqs_closed` (the tape order `repeat_delete` reads),
+  `php_responses_closed` / `go_responses_closed` (the status half of
+  `repeat_delete_violation` and of `first_delete_committed`),
+  `php_effects_closed` / `go_effects_closed` (its effect half and
+  `repeat_delete_has_effect`) and -- because `repeat_delete_has_effect` itself
+  negates `model_scope_excluded` -- `model_describes_run(M, Run)` with
+  `model_scope_exclusions_closed(M)`.  Case 31 opens the PHP response table and
+  every op goes unresolved on `php_responses_closed`, while the per-target claim
+  `repeat_delete_not_found`, which reads the response rows *positively*, stays
+  supported: a positive claim may rest on the rows it was given, a negation may
+  not.
 * **The model typechecked** (Stage D premise).  `op_qualified_rt` carries the
   *positive* atom `model_well_formed(M, Checker, Version, Cert)`, joined on the
   same `M` as `model_describes_run(M, Run)`: the judge qualifies an op against a
@@ -277,16 +312,68 @@ Design points a reviewer should check:
   be believed is the reviewer's word**: the certificate's `(checker,
   checker_version)` must appear in the reviewer-owned primitive
   `model_checker_admitted`, so a certificate from an unknown or unadmitted
-  version admits nothing (case 29).  There is **no closure relation** on either:
+  version admits nothing (case 29).  The pair sits **last** in the rule body.  A
+  conjunct's position is nothing semantically, but the why-not walk reports the
+  first unsatisfied premise, and while the checker does not exist that premise
+  would otherwise mask every real gap a receipt has (the same reason
+  `replay.join.PENDING_PREMISES` sits last in `_BLOCKING_ORDER`).  There is **no closure relation** on either:
   nothing negates well-formedness, the premise is read positively, and a receipt
   with no certificate is simply unresolved (case 27) rather than qualified by
   silence.  The exporter reads `model_well_formed.json` (a row for another model
   is `stale`, not `invalid-input`: the certificate is for another artifact) and
-  the reviewer's `model_checkers.json`.  The checked-in fixtures carry a
-  **placeholder** certificate -- checker `stage-d-typecheck`, version
-  `0.1-pending`, certificate `sha256("pending: checker not yet built")` -- until
-  the real Stage D checker emits one; the shape of the premise, not the strength
-  of that certificate, is what the corpus fixes.
+  the reviewer's `model_checkers.json`.  **No certificate exists until the
+  checker does.**  The Stage D checker has not been built, so the three *real*
+  receipts (`fixtures/replay_receipt_target_go_{qualified,unqualified,repeat}`)
+  carry no `model_well_formed.json` and their `model_checkers.json` admits no
+  checker; only the **synthetic** `replay_receipt_min`, from which this corpus is
+  generated, carries the made-up certificate
+  `sha256("pending: checker not yet built")` under checker `stage-d-typecheck`
+  version `0.1-pending`, and that is what keeps case 00's positive control of the
+  premise alive.  A placeholder on a real receipt would have been a fabricated
+  observation satisfying exactly the gate this premise imposes.  Consequently
+  `op_qualified` on the real qualified receipt is *unresolved with
+  `model_well_formed` as its only missing premise*, which the judge reports as
+  `qualification: "pending model_well_formed"` (exit 5 from
+  `scripts/compiled_checker.py`) rather than as a finding against the port; see
+  `tests/claim_semantics/README.md`.  The shape of the premise, not the strength
+  of any certificate, is what the corpus fixes.
+* **The learn campaign** (v1 learn addendum).  A *learn campaign* is a separate
+  producer chain -- a tape generator, the PHP oracle and the model host -- that
+  replays generated tapes against the oracle and against the model and reports,
+  per tape position, what each said.  It is **optional**, and its receipt lives
+  in `learn/` beside `receipt.json` (`replay_facts` module docstring, THE LEARN
+  RECEIPT).  The judge reads two things from it.
+
+  `learn_consistent(run, op)` is the claim that, under `learn_predictions_closed`
+  and `learn_observations_closed`, no tape position of that op has the model
+  predicting a class the oracle did not produce.  `learn_counterexample(run,
+  tape, req, op, predicted, observed)` is such a position, and it names the step:
+  the `req` key is `<tape>/<request id>`, because a request id repeats across
+  tapes.  The reserved predicted class `"unknown"` means the model made no
+  prediction there and is never a counterexample.
+
+  `learn_unmodeled_any(run, op)` **downgrades** `op_qualified_rt`: an op the
+  campaign's *closed* unmodelled list names does not qualify, because the model
+  the judge is qualifying against does not model it.  Every input of that
+  relation is positive -- the campaign must be bound to the run (`learn_run`), to
+  the model (`model_describes_run`, `learn_describes_model`) and must have closed
+  its list (`learn_unmodeled_closed`) -- so a receipt with no `learn/` derives
+  nothing and is judged exactly as it was.  Its completeness
+  `learn_unmodeled_gate_closed(run, op)` therefore reads only `replayed` and
+  `replay_run_current`: what it licenses is "the downgrades **this bundle**
+  carries are all of them", never "the model covers every op", which no absence
+  could evidence.  **Absence of a learn campaign is not evidence of coverage.**
+  The gate can only take qualification away; that asymmetry is what makes it safe
+  to add to every receipt at once, and it is the one thing a reviewer must hold
+  on to here.
+
+  Producer authority is the usual split: `replay` owns `learn_run` and
+  `learn_observations_closed` (the harness ran the tapes), `php` owns
+  `learn_observation` (the oracle answered), and `shen` owns `learn_prediction`,
+  `learn_unmodeled`, their closures and the compatibility row
+  `learn_describes_model(learn, model)`.  A campaign whose header names another
+  model is `stale`, not `invalid-input`: it was run against another artifact.
+
 * **Cross-run stability** (v1 ordering addendum).  `replay_stability(run,
   run_a, run_b, side, stable)` binds the receipt's run to a *selftest* of the
   same oracle: two further runs of the same tape whose provenance (oracle
@@ -320,6 +407,16 @@ Design points a reviewer should check:
   delete (`issue` / `delete`) would need a second rule; the pack would report
   the repeat claim as unresolved rather than wrongly supported, which is the
   safe direction.
+* **A prediction is a set, but the counterexample rule compares one at a time.**
+  The model may admit several post-states for one tape position, so
+  `learn_prediction` is keyed by `(run, model, learn, tape, req, state_digest)`
+  and a position can carry more than one row.  `learn_counterexample` fires when
+  *some* predicted class differs from the observed one, which for a position
+  whose rows all agree on the class -- the only shape the model produces today --
+  is exact, and otherwise over-reports.  Over-reporting withdraws
+  `learn_consistent`, which is the safe direction; a model that assigns two
+  different classes to one position must refine the rule (compare against the
+  *set* under a per-position closure) before the pack can judge it.
 * **The order join is on `(table, kind)`, so a model that declared two
   statements with the same `(table, kind)` for one request** -- two `issue`
   updates, say -- would pair them crosswise and could report a violation that
@@ -347,8 +444,10 @@ Design points a reviewer should check:
   the selftest did not run, so `closed.mutant_kills` and
   `closed.replay_stability` are false.  Re-baselining the mutants on this tape
   and running the selftest is the open item; the three-request
-  `..._qualified` fixture stays the one where `op_qualified` is supported, and
-  its tape has no repeat (marked `TODO(four-request run)` there).
+  `..._qualified` fixture stays the one that reaches the *last* premise --
+  `op_qualified` there is `pending model_well_formed`, every other premise
+  having held -- and its tape has no repeat (marked `TODO(four-request run)`
+  there).
 
 ## One observation per key
 

@@ -1,0 +1,261 @@
+{
+ "producer": "php fg-replay v1",
+ "rows": [
+  {
+   "observed": "forbidden",
+   "op": "create-issue",
+   "req": "learn-01-create-delete/01-1-create",
+   "run": "eca6e7930af3",
+   "state_digest": "9d906d6169f4c2e75fd6288245243b1473bdbf81d656b692e4baeafc158ec7a7",
+   "tape": "learn-01-create-delete"
+  },
+  {
+   "observed": "ok",
+   "op": "delete-issue",
+   "req": "learn-01-create-delete/01-2-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-01-create-delete"
+  },
+  {
+   "observed": "forbidden",
+   "op": "edit",
+   "req": "learn-02-edit-delete/02-1-edit",
+   "run": "eca6e7930af3",
+   "state_digest": "9d906d6169f4c2e75fd6288245243b1473bdbf81d656b692e4baeafc158ec7a7",
+   "tape": "learn-02-edit-delete"
+  },
+  {
+   "observed": "ok",
+   "op": "delete-issue",
+   "req": "learn-02-edit-delete/02-2-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-02-edit-delete"
+  },
+  {
+   "observed": "ok",
+   "op": "delete-issue",
+   "req": "learn-03-delete-delete/03-1-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-03-delete-delete"
+  },
+  {
+   "observed": "missing",
+   "op": "delete-issue",
+   "req": "learn-03-delete-delete/03-2-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-03-delete-delete"
+  },
+  {
+   "observed": "ok",
+   "op": "delete-issues",
+   "req": "learn-04-delete-batch-delete/04-1-delete-batch",
+   "run": "eca6e7930af3",
+   "state_digest": "c87f14bd4390e8be20955929c9201c122a5e075252c4cd227668ced0ae45e4b7",
+   "tape": "learn-04-delete-batch-delete"
+  },
+  {
+   "observed": "ok",
+   "op": "delete-issue",
+   "req": "learn-04-delete-batch-delete/04-2-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "92bfa66703dedc81d34d6ddfc4a63a0d3f76b4e5ef1bcc0d4d9664384ed9681d",
+   "tape": "learn-04-delete-batch-delete"
+  },
+  {
+   "observed": "ok",
+   "op": "delete-issue",
+   "req": "learn-05-repeat-delete-delete/05-1-repeat-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-05-repeat-delete-delete"
+  },
+  {
+   "observed": "missing",
+   "op": "delete-issue",
+   "req": "learn-05-repeat-delete-delete/05-2-repeat-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-05-repeat-delete-delete"
+  },
+  {
+   "observed": "missing",
+   "op": "delete-issue",
+   "req": "learn-05-repeat-delete-delete/05-3-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-05-repeat-delete-delete"
+  },
+  {
+   "observed": "forbidden",
+   "op": "delete-issue",
+   "req": "learn-06-delete-as-other-delete/06-1-delete-as-other",
+   "run": "eca6e7930af3",
+   "state_digest": "9d906d6169f4c2e75fd6288245243b1473bdbf81d656b692e4baeafc158ec7a7",
+   "tape": "learn-06-delete-as-other-delete"
+  },
+  {
+   "observed": "ok",
+   "op": "delete-issue",
+   "req": "learn-06-delete-as-other-delete/06-2-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-06-delete-as-other-delete"
+  },
+  {
+   "observed": "ok",
+   "op": "delete-issue",
+   "req": "learn-07-delete-create-delete/07-1-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-07-delete-create-delete"
+  },
+  {
+   "observed": "forbidden",
+   "op": "create-issue",
+   "req": "learn-07-delete-create-delete/07-2-create",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-07-delete-create-delete"
+  },
+  {
+   "observed": "missing",
+   "op": "delete-issue",
+   "req": "learn-07-delete-create-delete/07-3-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-07-delete-create-delete"
+  },
+  {
+   "observed": "ok",
+   "op": "delete-issue",
+   "req": "learn-08-delete-edit-delete/08-1-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-08-delete-edit-delete"
+  },
+  {
+   "observed": "forbidden",
+   "op": "edit",
+   "req": "learn-08-delete-edit-delete/08-2-edit",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-08-delete-edit-delete"
+  },
+  {
+   "observed": "missing",
+   "op": "delete-issue",
+   "req": "learn-08-delete-edit-delete/08-3-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-08-delete-edit-delete"
+  },
+  {
+   "observed": "ok",
+   "op": "delete-issue",
+   "req": "learn-09-delete-delete-delete/09-1-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-09-delete-delete-delete"
+  },
+  {
+   "observed": "missing",
+   "op": "delete-issue",
+   "req": "learn-09-delete-delete-delete/09-2-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-09-delete-delete-delete"
+  },
+  {
+   "observed": "missing",
+   "op": "delete-issue",
+   "req": "learn-09-delete-delete-delete/09-3-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-09-delete-delete-delete"
+  },
+  {
+   "observed": "ok",
+   "op": "delete-issue",
+   "req": "learn-10-delete-delete-batch-delete/10-1-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-10-delete-delete-batch-delete"
+  },
+  {
+   "observed": "ok",
+   "op": "delete-issues",
+   "req": "learn-10-delete-delete-batch-delete/10-2-delete-batch",
+   "run": "eca6e7930af3",
+   "state_digest": "92bfa66703dedc81d34d6ddfc4a63a0d3f76b4e5ef1bcc0d4d9664384ed9681d",
+   "tape": "learn-10-delete-delete-batch-delete"
+  },
+  {
+   "observed": "missing",
+   "op": "delete-issue",
+   "req": "learn-10-delete-delete-batch-delete/10-3-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "92bfa66703dedc81d34d6ddfc4a63a0d3f76b4e5ef1bcc0d4d9664384ed9681d",
+   "tape": "learn-10-delete-delete-batch-delete"
+  },
+  {
+   "observed": "ok",
+   "op": "delete-issue",
+   "req": "learn-11-delete-repeat-delete-delete/11-1-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-11-delete-repeat-delete-delete"
+  },
+  {
+   "observed": "missing",
+   "op": "delete-issue",
+   "req": "learn-11-delete-repeat-delete-delete/11-2-repeat-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-11-delete-repeat-delete-delete"
+  },
+  {
+   "observed": "missing",
+   "op": "delete-issue",
+   "req": "learn-11-delete-repeat-delete-delete/11-3-repeat-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-11-delete-repeat-delete-delete"
+  },
+  {
+   "observed": "missing",
+   "op": "delete-issue",
+   "req": "learn-11-delete-repeat-delete-delete/11-4-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-11-delete-repeat-delete-delete"
+  },
+  {
+   "observed": "ok",
+   "op": "delete-issue",
+   "req": "learn-12-delete-delete-as-other-delete/12-1-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-12-delete-delete-as-other-delete"
+  },
+  {
+   "observed": "forbidden",
+   "op": "delete-issue",
+   "req": "learn-12-delete-delete-as-other-delete/12-2-delete-as-other",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-12-delete-delete-as-other-delete"
+  },
+  {
+   "observed": "missing",
+   "op": "delete-issue",
+   "req": "learn-12-delete-delete-as-other-delete/12-3-delete",
+   "run": "eca6e7930af3",
+   "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37",
+   "tape": "learn-12-delete-delete-as-other-delete"
+  }
+ ]
+}

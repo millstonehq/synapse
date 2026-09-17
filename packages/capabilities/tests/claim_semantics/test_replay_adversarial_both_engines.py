@@ -104,13 +104,17 @@ class AdversarialReplayCasesInBothEngines(unittest.TestCase):
                      "10-missing-effects-closure": 0, "11-missing-admissible-closure": 0,
                      "13-excluded-undeclared-write": 3, "14-exclusions-not-closed": 0, "15-no-exclusions-no-closure": 0,
                      # the ordering, repeat-delete and cross-run shapes
-                     "17-effect-order-violation": 2, "18-repeat-delete-with-effects": 3, "19-unstable-oracle": 0,
+                     # 18: the repeat's write blocks its own op only (repeat_delete_any is joined
+                     # on the violating request), so create and close still qualify
+                     "17-effect-order-violation": 2, "18-repeat-delete-with-effects": 2, "19-unstable-oracle": 0,
                      "20-missing-stability-closure": 0, "21-missing-effect-seq-closure": 0,
                      "23-repeat-delete-excluded-write": 3, "24-repeat-before-the-commit": 3,
                      "25-first-delete-not-committed": 2, "26-unstable-on-one-side": 0,
                      # the Stage D well-formedness premise: each half withheld in turn
                      "27-model-not-well-formed": 0, "28-well-formed-other-model": 0,
-                     "29-checker-not-admitted": 0}
+                     "29-checker-not-admitted": 0,
+                     # the completeness half of the cross-request gate
+                     "31-missing-response-closure": 0}
         # one derived row per shape the new rules are there to catch, in both kernels
         planted = {"17-effect-order-violation": ("effect_order_violation", 1),
                    "18-repeat-delete-with-effects": ("repeat_delete_violation", 1),

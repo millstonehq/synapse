@@ -746,7 +746,10 @@ class UniqueObservationTest(_Exported):
         self.assertEqual(set(replay_facts.UNIQUE_KEYS),
                          {"php_effect", "go_effect", "model_effect", "php_post_state", "go_post_state",
                           "php_effect_seq", "go_effect_seq", "model_effect_seq", "replay_request_seq",
-                          "php_response", "go_response", "replay_stability"})
+                          "php_response", "go_response", "replay_stability",
+                          # a prediction is a set of admissible states per tape position, so the
+                          # state digest is part of its key; the oracle answered once per position
+                          "learn_prediction", "learn_observation"})
         for relation, column, value in (("go_effect", "cols_digest", "d" * 64), ("model_effect", "cols_digest", "d" * 64),
                                         ("php_post_state", "state_digest", "e" * 64),
                                         ("go_post_state", "state_digest", "f" * 64)):
