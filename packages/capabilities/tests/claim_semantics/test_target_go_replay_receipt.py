@@ -150,7 +150,16 @@ class _JoinCase(unittest.TestCase):
         return {op: replay_join.undeclared_tables(relations, None, self.join.run, op) for op in self.join.ops}
 
     def _expect_qualified(self, op: str) -> bool:
+        """No write-set gap: the op clears every premise that says something about the port.
+
+        It is *not* on its own enough for ``op_qualified``: the Stage D
+        certificate is a separate, positive premise no real receipt carries.
+        """
         return not any(self._undeclared()[op].values())
+
+    def _has_certificate(self) -> bool:
+        """A typed checker certified the model this run is judged against."""
+        return bool(dict(self.join.result.python.relations).get("model_well_formed"))
 
     @classmethod
     def _setup(cls, directory: Path, out_dir: Path) -> None:
@@ -286,24 +295,29 @@ class _JoinCase(unittest.TestCase):
                     claim = next(c for c in report.claims if c.key == claim_id)
                     self.assertEqual((claim.semantic, claim.operational), ("unresolved", "complete"), report.backend)
                     named = [json.loads(item)["relation"] for item in claim.missing_premises if item.startswith("{")]
-                    self.assertEqual(named, ["model_writes"], claim.missing_premises)
+                    self.assertEqual(sorted(named), sorted(self._expected_missing()), claim.missing_premises)
                     self.assertFalse(any(item.startswith("claim:") for item in claim.missing_premises),
                                      "the evaluator's claim-id fallback must not be the why-not")
                 entry = replay_join.summary(self.join)[op]
                 self.assertEqual(entry["op_qualified"], "unresolved")
-                self.assertEqual(entry["missing_premise"], ["model_writes"])
+                self.assertEqual(sorted(entry["missing_premise"]), sorted(self._expected_missing()))
                 self.assertEqual(entry["blocking_premise"], {"relation": "undeclared_any", "holds": True})
+                # a real blocker outranks the pending Stage D premise: this is a finding
+                # against the port, not a checker that has not been built
+                self.assertEqual(entry["qualification"], "unsupported")
                 self.assertTrue(entry["blocked_by"].startswith("blocked by undeclared writes: "))
                 self.assertEqual(entry["undeclared_tables"], self._undeclared()[op])
                 explanation = entry["explanation"]
                 self.assertFalse(explanation["holds"])
                 self.assertFalse(explanation["refuted"])
                 attempts = explanation["attempts"]
+                # the why-not walk stops at the first unsatisfied premise, and the Stage D
+                # pair sits last in the rule body precisely so a real gap is what it reports
                 self.assertTrue(any(attempt["status"] == "blocked-by-presence"
                                     and attempt["relation"] == "undeclared_any"
                                     for attempt in attempts), attempts)
         self.assertEqual({row[2] for row in dict(self.join.result.python.relations)["op_qualified"]},
-                         {op for op in self.join.ops if self._expect_qualified(op)})
+                         {op for op in self.join.ops if self._expect_qualified(op)} if self._has_certificate() else set())
 
     def _raw_undeclared(self) -> dict[str, dict[str, set[str]]]:
         """From the receipt files alone: tables each side wrote for the op minus declared minus reviewer-excluded."""
@@ -378,6 +392,60 @@ class _JoinCase(unittest.TestCase):
                     self.assertNotIn("issue", tables[side])
                 self.assertNotIn("issue", {row[2] for row in relations["undeclared_write"] if row[1] == op})
 
+    def _expected_missing(self) -> list[str]:
+        """The why-not templates that fire for an op with a write-set gap.
+
+        ``model_writes`` always; ``model_well_formed`` as well whenever no typed
+        checker certified the model, which is every real receipt until Stage D
+        exists.  ``model_checker_admitted`` never fires without a certificate:
+        the missing premise is the certificate, and naming both would report one
+        gap twice (``replay.join.build``).
+        """
+        return ["model_writes"] if self._has_certificate() else ["model_writes", "model_well_formed"]
+
+    def check_pending_well_formed(self) -> None:
+        """Every premise of ``op_qualified`` holds but the one nothing can satisfy yet.
+
+        No real receipt carries a ``model_well_formed`` certificate because the
+        Stage D typed checker has not been built.  What the receipt can show is
+        that the claim *reaches* that premise: ``model_well_formed`` is last in
+        ``replay.join._BLOCKING_ORDER``, so it is reported as the blocker only
+        when every premise before it held, and this spells the rest out row by
+        row rather than resting on that ordering alone.
+        """
+        self._evaluated()
+        relations = dict(self.join.result.python.relations)
+        self.assertEqual(relations["model_well_formed"], (), "a real receipt carries no certificate yet")
+        self.assertEqual(relations["model_checker_admitted"], (), "the reviewer admits no checker yet")
+        self.assertIn("model_well_formed", replay_join.PENDING_PREMISES)
+        summary = replay_join.summary(self.join)
+        self.assertEqual(summary["model_well_formed"], "missing")
+        run = self.join.run
+        for name in ("replay_run_current", "kill_gap_closed", "oracle_stable"):
+            self.assertIn((run,), set(relations[name]), name)
+        self.assertEqual(relations["op_qualified_rt"], (), "the gate body derives nothing without a certificate")
+        self.assertEqual(relations["op_qualified"], ())
+        for op in self.join.ops:
+            with self.subTest(op=op):
+                entry = summary[op]
+                self.assertEqual((entry["op_qualified"], entry["operational"]), ("unresolved", "complete"))
+                self.assertEqual(entry["qualification"], "pending model_well_formed")
+                self.assertEqual(entry["blocking_premise"], {"relation": "model_well_formed", "holds": False})
+                self.assertEqual(entry["missing_premise"], ["model_well_formed"],
+                                 "the Stage D certificate is the ONLY missing premise")
+                # and every other premise of op_qualified_rt, spelled out
+                self.assertTrue(entry["corpus_constrains"])
+                self.assertIn((run, op), set(relations["op_exercised"]))
+                self.assertEqual([r for r in relations["surviving_mutant"] if r[1] == op], [])
+                self.assertEqual([r for r in relations["undeclared_write"] if r[1] == op], [])
+                self.assertEqual(self._undeclared()[op], {"php": [], "go": []})
+                for closed in ("php_disagreement_closed", "go_disagreement_closed", "undeclared_writes_closed",
+                               "post_state_gap_closed", "effect_order_closed", "effect_order_exercised"):
+                    self.assertIn((run, op), set(relations[closed]), closed)
+                for blocker in ("php_disagree_any", "go_disagree_any", "undeclared_any", "post_state_any",
+                                "effect_order_any", "kill_closure_gap_any"):
+                    self.assertNotIn((run, op), set(relations[blocker]), blocker)
+
     def check_qualified(self) -> None:
         self._evaluated()
         by_id = {record.id: record for record in self.join.bundle.evidence}
@@ -450,7 +518,7 @@ class _JoinCase(unittest.TestCase):
                 # (an unresolved op certifies no row, so there is nothing to carry)
                 certificate = self.join.certificates.get(self.join.claim_id("qualified", op))
                 if certificate is None:
-                    self.assertFalse(self._expect_qualified(op))
+                    self.assertFalse(self._expect_qualified(op) and self._has_certificate())
                     continue
                 for leaf in certificate["leaves"]:
                     if kinds.get(leaf) != "assumption":
@@ -461,13 +529,21 @@ class _JoinCase(unittest.TestCase):
             for op in self.join.ops:
                 entry = document["join"][op]
                 self.assertTrue(entry["corpus_constrains"])
-                if self._expect_qualified(op):
+                if self._expect_qualified(op) and self._has_certificate():
                     self.assertEqual(entry["op_qualified"], "supported")
+                    self.assertEqual(entry["qualification"], "qualified")
                     self.assertIsNone(entry["blocking_premise"])
+                elif self._expect_qualified(op):
+                    # nothing to fault the port for; the Stage D certificate does not exist yet
+                    self.assertEqual(entry["op_qualified"], "unresolved")
+                    self.assertEqual(entry["qualification"], "pending model_well_formed")
+                    self.assertEqual(entry["blocking_premise"], {"relation": "model_well_formed", "holds": False})
+                    self.assertEqual(entry["missing_premise"], ["model_well_formed"])
+                    self.assertNotIn("claim:", json.dumps(entry))
                 else:
                     self.assertEqual(entry["op_qualified"], "unresolved")
                     self.assertEqual(entry["blocking_premise"]["relation"], "undeclared_any")
-                    self.assertEqual(entry["missing_premise"], ["model_writes"])
+                    self.assertEqual(sorted(entry["missing_premise"]), sorted(self._expected_missing()))
                     self.assertIn("blocked by undeclared writes: ", entry["blocked_by"])
                     self.assertNotIn("claim:", json.dumps(entry))
 
@@ -607,16 +683,33 @@ class RealReceiptTest(_JoinCase):
         summary = replay_join.summary(self.join)
         self.assertTrue(summary["exclusions"], "the receipt carries a reviewer exclusion file")
 
-    def test_delete_issue_is_qualified_with_leaves_from_every_producer(self) -> None:
-        # runs on the default (qualified) fixture; conditional only while a receipt still has a write-set gap
-        self.check_qualified()
+    def test_delete_issue_is_pending_only_the_well_formedness_certificate(self) -> None:
+        """The real receipt would be qualified but for the premise Stage D has not built.
+
+        This is the assertion the previous "supported" one becomes: every other
+        premise of ``op_qualified`` holds (``check_pending_well_formed`` spells
+        them out), the Stage D certificate is the only missing premise, and the
+        judge reports ``pending model_well_formed`` rather than a finding.  The
+        *positive* path -- a supported ``op_qualified`` whose leaves span every
+        producer class -- is covered by the synthetic corpus alone
+        (``FixtureJoinTest``, corpus case 00), whose made-up checker fact is
+        honest because that corpus is labelled synthetic throughout.
+        """
+        if self._has_certificate():
+            self.check_qualified()
+        else:
+            self.check_pending_well_formed()
         if self.join.receipt_dir.resolve() == replay_join.COMMITTED_RECEIPT_DIR.resolve():
             entry = replay_join.summary(self.join)["delete-issue"]
             self.assertEqual(set(entry["exclusions_applied"]), {"authentication", "jobs_statuses", "redis", "go_issue_outbox"})
-            self.assertEqual(entry["qualified_under_exclusions"],
-                             "qualified under 4 reviewer exclusions: authentication, go_issue_outbox, jobs_statuses, redis")
+            if self._has_certificate():
+                self.assertEqual(entry["qualified_under_exclusions"],
+                                 "qualified under 4 reviewer exclusions: authentication, go_issue_outbox, jobs_statuses, redis")
+            else:
+                # nothing is "qualified under" anything while the claim is pending
+                self.assertNotIn("qualified_under_exclusions", entry)
             self.assertEqual(self._undeclared()["delete-issue"], {"php": [], "go": []})
-            # the ordering and cross-run gates the qualification now also passes
+            # the ordering and cross-run gates the op passes on its way to the pending premise
             self.assertEqual(entry["effect_order"]["violations"], [])
             self.assertEqual(entry["effect_order"]["respected"], [["go", "owner"], ["php", "owner"]])
             self.assertTrue(entry["effect_order"]["exercised"])
@@ -698,7 +791,9 @@ class RepeatTapeReceiptTest(_JoinCase):
         self.assertEqual(summary["stability"], {"rows": [], "oracle_stable": False, "oracle_unstable": False},
                          "the selftest did not run on this tape")
         self.assertEqual(summary["model_well_formed"], "missing",
-                         "this tape's receipt carries no Stage D certificate; the corpus gate blocks it first")
+                         "no real receipt carries a Stage D certificate; the checker does not exist")
+        self.assertEqual(entry["qualification"], "unsupported",
+                         "a real blocker (the unbaselined corpus) outranks the pending Stage D premise")
         # the gates that did run on it
         self.assertEqual(entry["effect_order"], {"violations": [], "respected": [["go", "owner"], ["php", "owner"]],
                                                  "exercised": True})

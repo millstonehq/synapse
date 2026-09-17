@@ -7,6 +7,17 @@ what happens when it is withdrawn.  These cases run on the committed qualified
 receipt fixture, so they need no replay environment -- only Soufflé, like the
 rest of the receipt suite.
 
+The fixture is staged with a **test-local synthetic Stage D certificate**
+(``_with_synthetic_certificate``).  The committed real receipts carry none --
+the typed checker has not been built, and a placeholder there would be a
+fabricated observation satisfying the gate ``op_qualified_rt`` imposes
+(``tests/claim_semantics/README.md``) -- so without one every ``op_qualified``
+here would be unresolved and there would be no supported claim whose
+assumptions could be registered or withdrawn.  What this module asserts is the
+*support structure* of a qualified claim, so it supplies the premise it is not
+about, in a temporary copy, and says so.  Nothing it writes goes back into the
+committed fixture.
+
 Three results here are worth reading before changing an expectation, because
 each one is a fact about the fixture's support structure rather than a choice:
 
@@ -45,6 +56,10 @@ except ImportError:  # unittest discover -s imports this directory as top-level
 
 FIXTURE = replay_join.COMMITTED_RECEIPT_DIR
 MODEL = "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b"
+#: The synthetic certificate this module stages (see the module docstring).  It is
+#: the corpus fixture's placeholder pair, never a real checker's output.
+SYNTHETIC_CHECKER = ("stage-d-typecheck", "0.1-pending")
+SYNTHETIC_CERTIFICATE = hashlib.sha256(b"pending: checker not yet built").hexdigest()
 QUALIFIED = "claim-qualified-delete-issue"
 CONSTRAINS = "claim-corpus-constrains-delete-issue"
 APPLIED = "claim-exclusions-applied-delete-issue"
@@ -59,6 +74,32 @@ PINNED_EXCLUSION_IDS = {
     "redis": "asm:49642fc6067a1b2e2208d5f0a64e86d5c186c6c8ea0d7041cd3f6010e441dedc",
     "go_issue_outbox": "asm:19b263a1498799695ee58224a587617f3bd97db7623587d9f3edc3ce7fdaecb3",
 }
+
+
+def _with_synthetic_certificate(source: Path, destination: Path) -> Path:
+    """Copy ``source`` and add the Stage D certificate the real receipt does not carry.
+
+    The premise is positive and has no closure, so without it ``op_qualified``
+    is unresolved on every real receipt and this module would have no supported
+    claim to register assumptions for.  The certificate is made up, lives only
+    in a temporary directory, and is never evidence about the port.
+    """
+    shutil.copytree(source, destination)
+    return _add_synthetic_certificate(destination)
+
+
+def _add_synthetic_certificate(destination: Path) -> Path:
+    """Write the synthetic ``model_well_formed`` / ``model_checkers`` pair into a staged copy."""
+    model = json.loads((destination / "receipt.json").read_text())["model"]
+    checker, version = SYNTHETIC_CHECKER
+    (destination / "model_well_formed.json").write_text(json.dumps(
+        {"producer": f"modelcheck {checker} {version} model:{model[:12]}",
+         "rows": [{"model": model, "checker": checker, "checker_version": version,
+                   "certificate": SYNTHETIC_CERTIFICATE}]}, indent=1, sort_keys=True) + "\n")
+    (destination / "model_checkers.json").write_text(json.dumps(
+        {"producer": "reviewer synthetic test-local admitted model checkers",
+         "rows": [{"checker": checker, "checker_version": version}]}, indent=1, sort_keys=True) + "\n")
+    return destination
 
 
 def _souffle() -> None:
@@ -76,7 +117,8 @@ class _EvaluatedFixture(unittest.TestCase):
     def setUpClass(cls) -> None:
         _souffle()
         cls.replay_root = tempfile.mkdtemp(prefix="capcov-assumption-registry-")
-        cls.join = replay_join.build(FIXTURE)
+        cls.staged = Path(tempfile.mkdtemp(prefix="capcov-assumption-registry-receipt-"))
+        cls.join = replay_join.build(_with_synthetic_certificate(FIXTURE, cls.staged / "receipt"))
         if cls.join.bundle is None:
             raise AssertionError("CONTRACT FINDING: " + "; ".join(cls.join.contract_findings))
         replay_join.evaluate_join(cls.join, cls.replay_root)
@@ -87,6 +129,7 @@ class _EvaluatedFixture(unittest.TestCase):
     @classmethod
     def tearDownClass(cls) -> None:
         shutil.rmtree(cls.replay_root, ignore_errors=True)
+        shutil.rmtree(cls.staged, ignore_errors=True)
 
     def entry(self, relation: str, key: str | None = None) -> dict:
         """The registry entry for a relation, optionally keyed by row[1] (a table or op)."""
@@ -469,6 +512,7 @@ class UnreferencedAssumptionTest(unittest.TestCase):
         document["rows"].append({"model": MODEL, "table": "never_written_table",
                                  "reason": "a reviewed exclusion for a table no side writes"})
         path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        _add_synthetic_certificate(cls.directory)  # the premise this module is not about
         cls.replay_root = tempfile.mkdtemp(prefix="capcov-assumption-unreferenced-diff-")
         cls.join = replay_join.build(cls.directory)
         if cls.join.bundle is None:
@@ -794,11 +838,22 @@ class TruncatedImpactTest(_EvaluatedFixture):
 
 
 class CommandLineTest(unittest.TestCase):
-    """``claims assumptions registry|invalidate`` over the committed fixture."""
+    """``claims assumptions registry|invalidate`` over the staged fixture.
+
+    Staged, not committed: the CLI's invalidation cases turn on ``op_qualified``
+    being *supported* first, which no real receipt is until the Stage D checker
+    exists (module docstring).
+    """
 
     @classmethod
     def setUpClass(cls) -> None:
         _souffle()
+        cls.tmp = Path(tempfile.mkdtemp(prefix="capcov-assumption-cli-receipt-"))
+        cls.receipt = _with_synthetic_certificate(FIXTURE, cls.tmp / "receipt")
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def _run(self, *argv: str) -> tuple[int, str]:
         import contextlib
@@ -820,14 +875,14 @@ class CommandLineTest(unittest.TestCase):
         before_roots = self._owned_replay_roots()
         try:
             code, text = self._run("claims", "assumptions", "registry",
-                                   "--receipt", str(FIXTURE), "--out", str(out))
+                                   "--receipt", str(self.receipt), "--out", str(out))
             self.assertEqual(code, 0, text[:2000])
             registry = json.loads(text)["registry"]
             self.assertEqual(len(registry["assumptions"]), 6)
             self.assertEqual(registry["unreferenced"], [])
             self.assertTrue((out / "assumptions.json").is_file())
 
-            code, text = self._run("claims", "assumptions", "invalidate", "--receipt", str(FIXTURE),
+            code, text = self._run("claims", "assumptions", "invalidate", "--receipt", str(self.receipt),
                                    "--drop", PINNED_EXCLUSION_IDS["authentication"])
             self.assertEqual(code, 0, text[:2000])
             document = json.loads(text)["invalidations"]
@@ -854,7 +909,7 @@ class CommandLineTest(unittest.TestCase):
         module.invalidate = raising
         before_roots = self._owned_replay_roots()
         try:
-            code, text = self._run("claims", "assumptions", "invalidate", "--receipt", str(FIXTURE),
+            code, text = self._run("claims", "assumptions", "invalidate", "--receipt", str(self.receipt),
                                    "--drop", PINNED_EXCLUSION_IDS["redis"])
         finally:
             module.invalidate = real
@@ -870,7 +925,7 @@ class CommandLineTest(unittest.TestCase):
 
     def test_unknown_drop_is_a_refusal(self) -> None:
         code, text = self._run("claims", "assumptions", "invalidate",
-                               "--receipt", str(FIXTURE), "--drop", "asm:" + "0" * 64)
+                               "--receipt", str(self.receipt), "--drop", "asm:" + "0" * 64)
         self.assertEqual(code, 2)
         self.assertIn("not an assumption", json.loads(text)["refusal"])
 

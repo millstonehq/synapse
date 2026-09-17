@@ -57,14 +57,23 @@ REASONS = {
     "model_checker_admitted": "the reviewer admits no checker at the version that certified the model",
 }
 UNDECLARED_REASON = "blocked by undeclared writes: PHP or Go wrote a table the model's closed write set does not declare for this op"
+# Premises whose absence is "not built yet" rather than a finding against the
+# port.  The Stage D typed checker does not exist, so no real receipt can carry
+# a ``model_well_formed`` certificate and none of the committed real fixtures
+# does: a run blocked *only* here is **pending**, which ``summary``,
+# ``judge.json`` and the CLI's exit code keep distinct from unsupported.  This
+# is why the pair sits last in ``_BLOCKING_ORDER``: any premise that is a real
+# finding about the systems, the model or the review must win over it, so a
+# receipt reported as ``pending model_well_formed`` is one where every other
+# premise of ``op_qualified`` was checked and held.
+PENDING_PREMISES = ("model_well_formed", "model_checker_admitted")
+QUALIFICATION_QUALIFIED = "qualified"
+QUALIFICATION_UNSUPPORTED = "unsupported"
 # The premises op_qualified_rt needs, in the order a reviewer checks them; the
 # first one that fails (or the first "any" that holds) is the blocking premise.
 _BLOCKING_ORDER = (
     ("replay_run_current", False), ("model_describes_run", False), ("replayed", False), ("op_exercised", False),
     ("corpus_constrains", False),
-    # the Stage D premise, checked after the corpus gate: a receipt whose mutants were never
-    # re-baselined is blocked by its corpus first, whether or not a checker ran
-    ("model_well_formed", False), ("model_checker_admitted", False),
     ("php_disagreement_closed", False), ("php_disagree_any", True),
     ("go_disagreement_closed", False), ("go_disagree_any", True), ("undeclared_writes_closed", False),
     ("model_scope_exclusions_closed", False), ("undeclared_any", True),
@@ -78,6 +87,9 @@ _BLOCKING_ORDER = (
     ("oracle_stable", False),
     ("kill_gap_closed", False), ("kill_closure_gap_any", True), ("index_describes_replay", False),
     ("op_declared", False),
+    # the Stage D premise, checked last (PENDING_PREMISES): the checker is not built, so an
+    # op that reaches it has passed every premise that says something about this port
+    ("model_well_formed", False), ("model_checker_admitted", False),
 )
 # per-run relations of _BLOCKING_ORDER whose only column is the run
 _RUN_ONLY = ("replay_run_current", "kill_gap_closed", "oracle_stable")
@@ -169,6 +181,25 @@ def blocking_premise(relations, run: str, op: str, index: str = SYNTHETIC_INDEX)
         if not is_blocker and not present:
             return {"relation": name, "holds": False}
     return {"relation": "op_qualified_rt", "holds": False}
+
+
+def qualification(semantic: str | None, operational: str | None,
+                  blocking: dict[str, Any] | None) -> str:
+    """One word for what happened to ``op_qualified``, with *pending* split out.
+
+    ``"qualified"`` when the claim is supported and complete; ``"pending
+    <relation>"`` when the only premise that blocked it is one of
+    ``PENDING_PREMISES`` -- a premise no receipt can satisfy yet because the
+    artefact that would satisfy it (the Stage D typed checker) does not exist;
+    ``"unsupported"`` otherwise.  The split matters to a consumer gate: a
+    pending op is one whose every checkable premise held, and reporting it as
+    unsupported would read as a finding against the port that nobody made.
+    """
+    if semantic == "supported" and operational == "complete":
+        return QUALIFICATION_QUALIFIED
+    if blocking and not blocking.get("holds") and blocking.get("relation") in PENDING_PREMISES:
+        return f"pending {blocking['relation']}"
+    return QUALIFICATION_UNSUPPORTED
 
 
 def _explanation_summary(explanation: dict[str, Any]) -> dict[str, Any]:
@@ -312,6 +343,11 @@ def build(directory: Path) -> ReplayJoin:
         for relation in MODEL_WITNESSES:
             context = ("run",) if relation in ("model_describes_run", "model_admissible_closed") else ()
             diagnostics.append(DiagnosticRule(relation, "observation", "complete", context, claim_id=qualified.id))
+            if relation == "model_checker_admitted" and "model_well_formed" not in present:
+                # "the reviewer admits no checker at the version that certified the model" is
+                # not a premise a receipt with no certificate at all is missing: the missing
+                # premise is the certificate, and naming both would report one gap twice.
+                continue
             excludes = (present[relation],) if relation in present else ()
             outputs.append(OutputTemplate(
                 "missing_premise", qualified.id, relation=relation,
@@ -454,6 +490,9 @@ def summary(join: ReplayJoin) -> dict[str, Any]:
         entry = {"corpus_constrains": constrains.get("semantic") == "supported",
                  "op_qualified": qualified.get("semantic"),
                  "operational": qualified.get("operational"),
+                 # "qualified" / "pending <relation>" / "unsupported": a pending op passed
+                 # every premise that is checkable today (see PENDING_PREMISES)
+                 "qualification": qualification(qualified.get("semantic"), qualified.get("operational"), blocking),
                  # template-rendered absent leaves; the evaluator's claim-id fallback is never reported here
                  "missing_premise": [json.loads(item)["relation"] for item in qualified.get("missing_premises", [])
                                      if item.startswith("{")],
@@ -579,6 +618,8 @@ def write_artifacts(join: ReplayJoin, out_dir: Path) -> dict[str, Any]:
 
 
 __all__ = ["SYNTHETIC_INDEX", "REVIEWER_SOURCE", "CENSUS_ASSUMPTION_SOURCE", "INDEX_ASSUMPTION_SOURCE",
-           "MODEL_WITNESSES", "REASONS", "UNDECLARED_REASON", "ReplayJoin", "build", "evaluate_join",
+           "MODEL_WITNESSES", "REASONS", "UNDECLARED_REASON", "PENDING_PREMISES",
+           "QUALIFICATION_QUALIFIED", "QUALIFICATION_UNSUPPORTED", "qualification",
+           "ReplayJoin", "build", "evaluate_join",
            "summary", "write_artifacts", "blocking_premise", "undeclared_tables", "exclusions",
            "exclusions_applied", "well_formed_certificate", "assumption_registry", "invalidate"]

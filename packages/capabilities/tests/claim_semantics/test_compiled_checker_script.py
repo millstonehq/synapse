@@ -5,7 +5,10 @@ receipt directory and gates its build on the exit code, so the tests drive the
 real CLI rather than its functions.  Both committed receipt fixtures are
 judged, the option-only invocation (no subcommand) that the producer's
 `make judge-compiled` uses is asserted to be the same as ``judge``, and every
-refusal path is pinned to its documented exit code.
+refusal path is pinned to its documented exit code -- including exit 5, the
+"pending a premise nothing can satisfy yet" state the real receipts are in
+while the Stage D typed checker does not exist, which a consumer gate must be
+able to tell apart from exit 1.
 
 souffle is a precondition, not a skip.  One compiled binary is shared by every
 case through ``CAPCOV_SOUFFLE_CACHE_DIR``; without it a temp cache compiles
@@ -33,6 +36,8 @@ HEX64 = r"^[0-9a-f]{64}$"
 CACHE_ENV = "CAPCOV_SOUFFLE_CACHE_DIR"
 JUDGE_KEYS = {"schema", "receipt", "pack", "compiled", "kernels", "ops", "required_ops",
               "contract_findings", "verdict", "exit_code"}
+# what a verdict that is not plain "supported" adds
+PENDING_KEYS = JUDGE_KEYS | {"unmet_ops", "pending_ops", "message"}
 
 
 class CompiledCheckerScriptTests(unittest.TestCase):
@@ -72,15 +77,24 @@ class CompiledCheckerScriptTests(unittest.TestCase):
                                     *extra)
         return completed, out
 
-    def test_the_qualified_receipt_is_supported_and_exits_zero(self) -> None:
+    def test_the_qualified_receipt_is_pending_the_checker_and_exits_five(self) -> None:
+        """The real receipt clears every checkable premise; the Stage D certificate does not exist.
+
+        Exit 5 is the point: a consumer gate must be able to tell "the typed
+        checker has not been built" from "this port is not qualified" (exit 1,
+        which the unqualified receipt still produces).
+        """
         completed, out = self.judge(replay_join.COMMITTED_RECEIPT_DIR, "qualified",
                                     "--require-supported", "delete-issue")
-        self.assertEqual(completed.returncode, 0, completed.stderr[-2000:])
+        self.assertEqual(completed.returncode, 5, completed.stderr[-2000:])
         document = json.loads((out / "judge.json").read_text())
-        self.assertEqual(set(document), JUDGE_KEYS)
+        self.assertEqual(set(document), PENDING_KEYS)
         self.assertEqual(document["schema"], "capcov-compiled-judge-v1")
-        self.assertEqual(document["verdict"], "supported")
-        self.assertEqual(document["exit_code"], 0)
+        self.assertEqual(document["verdict"], "pending-premise")
+        self.assertEqual(document["exit_code"], 5)
+        self.assertEqual(document["pending_ops"], ["delete-issue"])
+        self.assertEqual(document["unmet_ops"], ["delete-issue"])
+        self.assertIn("pending, not unsupported", document["message"])
         self.assertEqual(document["required_ops"], ["delete-issue"])
         self.assertEqual(document["contract_findings"], [])
         self.assertEqual(document["pack"]["id"], "rules-replay-v1")
@@ -100,15 +114,16 @@ class CompiledCheckerScriptTests(unittest.TestCase):
             self.assertGreater(kernels[field], 0.0, field)
 
         entry = document["ops"]["delete-issue"]
-        self.assertEqual(entry["verdict"], "supported")
+        self.assertEqual(entry["qualification"], "pending model_well_formed")
         self.assertEqual(entry["op_qualified"],
-                         {"semantic": "supported", "operational": "complete",
-                          "missing_premises": []})
+                         {"semantic": "unresolved", "operational": "complete",
+                          "missing_premises": ["model_well_formed"]})
+        self.assertEqual(entry["blocking_premise"], {"relation": "model_well_formed", "holds": False})
+        # everything the receipt *can* show still holds
         self.assertTrue(entry["corpus_constrains"])
-        self.assertIsNone(entry["blocking_premise"])
         self.assertEqual(entry["exclusions_applied"],
                          ["authentication", "go_issue_outbox", "jobs_statuses", "redis"])
-        self.assertRegex(entry["certificate_sha256"], HEX64)
+        self.assertIsNone(entry["certificate_sha256"], "an unresolved claim certifies no row")
 
         self.assertRegex(document["compiled"]["binary_sha256"], HEX64)
         self.assertEqual(document["compiled"]["schema"], "capcov-souffle-compiled-v1")
@@ -117,12 +132,37 @@ class CompiledCheckerScriptTests(unittest.TestCase):
         # the judge writes the join artifacts next to judge.json
         self.assertTrue((out / "receipt.json").is_file())
         certificates = sorted(p.name for p in out.glob("certificate-*.json"))
-        self.assertIn("certificate-claim-qualified-delete-issue.json", certificates)
+        self.assertIn("certificate-claim-corpus-constrains-delete-issue.json", certificates)
+        self.assertNotIn("certificate-claim-qualified-delete-issue.json", certificates)
+
+    def test_the_synthetic_receipt_is_supported_and_exits_zero(self) -> None:
+        """The positive exit-0 path, on the corpus fixture whose every fact is made up.
+
+        ``replay_receipt_min`` is the only receipt carrying a ``model_well_formed``
+        certificate, because it is synthetic throughout and labelled so; it is what
+        keeps the supported/complete path of the CLI exercised while Stage D does
+        not exist.  It is never evidence about the port.
+        """
+        completed, out = self.judge(replay_join.SYNTHETIC_RECEIPT_DIR, "synthetic",
+                                    "--require-supported", "delete-issue")
+        self.assertEqual(completed.returncode, 0, completed.stderr[-2000:])
+        document = json.loads((out / "judge.json").read_text())
+        self.assertEqual(set(document), JUDGE_KEYS)
+        self.assertEqual(document["verdict"], "supported")
+        self.assertEqual(document["exit_code"], 0)
+        entry = document["ops"]["delete-issue"]
+        self.assertEqual(entry["verdict"], "supported")
+        self.assertEqual(entry["qualification"], "qualified")
+        self.assertEqual(entry["op_qualified"],
+                         {"semantic": "supported", "operational": "complete", "missing_premises": []})
+        self.assertIsNone(entry["blocking_premise"])
+        self.assertRegex(entry["certificate_sha256"], HEX64)
+        self.assertTrue((out / "certificate-claim-qualified-delete-issue.json").is_file())
 
     def test_judge_artifacts_carry_no_local_paths(self) -> None:
         completed, out = self.judge(replay_join.COMMITTED_RECEIPT_DIR, "no-paths",
                                     "--require-supported", "delete-issue")
-        self.assertEqual(completed.returncode, 0, completed.stderr[-2000:])
+        self.assertEqual(completed.returncode, 5, completed.stderr[-2000:])
         for path in sorted(out.glob("*.json")):
             text = path.read_text()
             with self.subTest(artifact=path.name):
@@ -139,7 +179,7 @@ class CompiledCheckerScriptTests(unittest.TestCase):
         named = self.run_script("judge", "--receipt", str(replay_join.COMMITTED_RECEIPT_DIR),
                                 "--out", str(named_out), "--cache-dir", str(self.cache),
                                 "--souffle", "souffle", "--require-supported", "delete-issue")
-        self.assertEqual((bare.returncode, named.returncode), (0, 0), named.stderr[-2000:])
+        self.assertEqual((bare.returncode, named.returncode), (5, 5), named.stderr[-2000:])
         stable = ("schema", "receipt", "pack", "compiled", "ops", "required_ops", "verdict",
                   "exit_code", "contract_findings")
         left = json.loads((bare_out / "judge.json").read_text())
@@ -158,8 +198,12 @@ class CompiledCheckerScriptTests(unittest.TestCase):
         entry = document["ops"]["delete-issue"]
         self.assertEqual(entry["verdict"], "not-supported")
         self.assertEqual(entry["op_qualified"]["semantic"], "unresolved")
-        self.assertEqual(entry["op_qualified"]["missing_premises"], ["model_writes"])
+        self.assertEqual(sorted(entry["op_qualified"]["missing_premises"]),
+                         ["model_well_formed", "model_writes"])
         self.assertEqual(entry["blocking_premise"], {"relation": "undeclared_any", "holds": True})
+        # a real blocker outranks the pending Stage D premise: exit 1, not 5
+        self.assertEqual(entry["qualification"], "unsupported")
+        self.assertNotIn("pending_ops", document)
 
     def test_an_unreplayed_required_op_exits_one(self) -> None:
         completed, out = self.judge(replay_join.COMMITTED_RECEIPT_DIR, "unknown-op",
@@ -168,8 +212,10 @@ class CompiledCheckerScriptTests(unittest.TestCase):
         document = json.loads((out / "judge.json").read_text())
         self.assertEqual(document["verdict"], "not-supported")
         self.assertEqual(document["unmet_ops"], ["nope"])
-        # the replayed op itself is still judged and still supported
-        self.assertEqual(document["ops"]["delete-issue"]["op_qualified"]["semantic"], "supported")
+        # an op that was never replayed is an unmet requirement about this receipt,
+        # never "pending": exit 1, even though the replayed op is only pending
+        self.assertNotIn("pending_ops", document)
+        self.assertEqual(document["ops"]["delete-issue"]["qualification"], "pending model_well_formed")
 
     def test_no_required_op_derives_the_verdict_from_every_replayed_op(self) -> None:
         """A verdict over zero requirements would be vacuous; every replayed op decides it."""
@@ -183,13 +229,21 @@ class CompiledCheckerScriptTests(unittest.TestCase):
         self.assertEqual(document["ops"]["delete-issue"]["op_qualified"]["semantic"], "unresolved")
         self.assertTrue(document["kernels"]["matched"], "the kernels still agree")
 
-        # the qualified receipt needs no requirement to be judged supported
-        completed, out = self.judge(replay_join.COMMITTED_RECEIPT_DIR, "no-requirement-qualified")
+        # the synthetic receipt needs no requirement to be judged supported
+        completed, out = self.judge(replay_join.SYNTHETIC_RECEIPT_DIR, "no-requirement-synthetic")
         self.assertEqual(completed.returncode, 0, completed.stderr[-2000:])
         document = json.loads((out / "judge.json").read_text())
         self.assertEqual(document["required_ops"], [])
         self.assertEqual(document["verdict"], "supported")
         self.assertEqual(set(document), JUDGE_KEYS)
+
+        # and the real receipt, with no requirement either, is pending rather than supported
+        completed, out = self.judge(replay_join.COMMITTED_RECEIPT_DIR, "no-requirement-qualified")
+        self.assertEqual(completed.returncode, 5, completed.stderr[-2000:])
+        document = json.loads((out / "judge.json").read_text())
+        self.assertEqual(document["required_ops"], [])
+        self.assertEqual(document["verdict"], "pending-premise")
+        self.assertEqual(document["pending_ops"], ["delete-issue"])
 
     def test_an_extra_receipt_key_is_a_contract_finding_and_exits_three(self) -> None:
         copy = self.workspace / "receipt-with-extra-key"

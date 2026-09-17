@@ -27,21 +27,52 @@ The fixtures are synthetic controls until a real retained execution is added.
 `adapter.py` converts each fixture to strict bundle JSON and invokes the real
 `bundle_from_json(..., validate=True)` parser; it does not evaluate rules.
 
-## Model well-formedness (Stage D placeholder)
+## Model well-formedness: no certificate until the checker exists
 
-The committed replay receipts `replay_receipt_min`,
-`replay_receipt_target_go_qualified` and `replay_receipt_target_go_unqualified`
-carry a `model_well_formed.json` and a `model_checkers.json`.  Both are
-**placeholders**: the certificate is `sha256("pending: checker not yet built")`
-under checker `stage-d-typecheck` version `0.1-pending`, and the reviewer's
-list admits exactly that pair.  They exist so the corpus and the fixtures
-exercise the *shape* of the premise `op_qualified_rt` now carries -- a typed
-checker, named by class `modelcheck`, certifying the same model
-`model_describes_run` binds to the run, at a version the reviewer admits --
-not because any model has been typechecked.  Replace both files with the real
-checker's output when Stage D emits one; nothing else in the pack or the
-exporter has to change.  `replay_receipt_target_go_repeat` deliberately has
-neither file, which is how the join reports `model_well_formed: missing`.
+`op_qualified_rt` carries the positive premise `model_well_formed(M, Checker,
+Version, Cert)` under the reviewer's `model_checker_admitted(Checker,
+Version)`.  The Stage D typed checker that would emit such a certificate **has
+not been built**, so no *real* receipt carries one:
+
+* `replay_receipt_target_go_qualified`, `replay_receipt_target_go_unqualified`
+  and `replay_receipt_target_go_repeat` — the three receipts produced by
+  replaying real systems — have **no** `model_well_formed.json`, and their
+  `model_checkers.json` admits **no** checker (an empty `rows` list: the
+  reviewer has been asked and admits nothing yet).  A placeholder certificate
+  here would have been a fabricated observation satisfying the very gate the
+  premise exists to impose, and the judge would have reported a qualification
+  that nothing certified.
+* `replay_receipt_min` is the **synthetic** fixture the adversarial corpus is
+  generated from (`replay_rules/cases.py`; run `run-fixture-1`, commits
+  `php0000…`/`go0000…`).  Every fact in it is made up, including its
+  certificate (`sha256("pending: checker not yet built")` under checker
+  `stage-d-typecheck` version `0.1-pending`) and the reviewer list that admits
+  that pair.  That is honest because the corpus is labelled synthetic
+  throughout, and it is what keeps the *positive* control of the premise
+  (corpus case `00`, and `FixtureJoinTest`) exercised: a typed checker, named
+  by class `modelcheck`, certifying the same model `model_describes_run` binds
+  to the run, at a version the reviewer admits.
+
+The consequence for the real receipts is that `op_qualified` is **unresolved
+with `model_well_formed` as its missing premise**, and the join reports
+`model_well_formed: "missing"`.  That state is not the same as a finding
+against the port, so it is reported apart from one:
+
+* `replay.join.PENDING_PREMISES` names the premises nothing can satisfy yet,
+  and they sit **last** in `_BLOCKING_ORDER` — an op reported as pending is one
+  where every other premise was checked and held.
+* the per-op summary (and `judge.json`) carries
+  `qualification: "pending model_well_formed"`, distinct from `"qualified"` and
+  from `"unsupported"`;
+* `scripts/compiled_checker.py` exits **5** (`EXIT_PENDING_PREMISE`) rather than
+  1 when every op the verdict turns on is pending, so a consumer gate can tell
+  "the checker does not exist yet" from "this port is not qualified".  Exit 1
+  still wins whenever any op has a real blocker — as
+  `replay_receipt_target_go_unqualified` does (`undeclared_any`).
+
+When Stage D emits a real certificate, drop it into `model_well_formed.json`,
+add its `(checker, checker_version)` to `model_checkers.json`, and flip these
+expectations back; nothing in the pack or the exporter has to change.
 
 ## Assumption registry and invalidation
 

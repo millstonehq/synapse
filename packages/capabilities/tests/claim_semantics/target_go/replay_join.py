@@ -31,7 +31,11 @@ COMMITTED_RECEIPT_DIR = _FIXTURES / "replay_receipt_target_go_qualified"
 evidence paths scrubbed) against the model that declares every business table the
 systems write for delete-issue, with the reviewer's scope exclusions: the default
 the receipt suite judges, so it is never skip-gated on an untracked work directory.
-``CAPCOV_REPLAY_RECEIPT_DIR`` still overrides it."""
+``CAPCOV_REPLAY_RECEIPT_DIR`` still overrides it.  ``op_qualified`` is
+``pending model_well_formed`` here: every premise that says something about the
+port holds, and the one that does not is the Stage D typed-checker certificate,
+which no real receipt carries because the checker has not been built (see
+``tests/claim_semantics/README.md``)."""
 REPEAT_RECEIPT_DIR = _FIXTURES / "replay_receipt_target_go_repeat"
 """The four-request receipt (run 271d2dde86a0): owner (200), forbidden (403), missing
 (404) and -- for the first time against the incumbent -- repeat (404), a second DELETE
@@ -39,6 +43,12 @@ of the issue ``owner`` soft-deleted.  Neither the selftest nor a mutant re-basel
 run on this tape, so ``op_qualified`` is honestly unresolved at ``corpus_constrains``;
 this is the receipt on which ``repeat_delete_not_found`` is judged against real rows
 rather than a synthetic case."""
+SYNTHETIC_RECEIPT_DIR = _FIXTURES / "replay_receipt_min"
+"""The synthetic control receipt the adversarial corpus is generated from (run
+``run-fixture-1``, commits ``php0000…``/``go0000…``).  Every fact in it is made up,
+including the Stage D certificate the real receipts deliberately lack, which is what
+keeps the *positive* ``op_qualified`` path exercised while the typed checker does not
+exist.  Never cite it as evidence about the port."""
 UNQUALIFIED_RECEIPT_DIR = _FIXTURES / "replay_receipt_target_go_unqualified"
 """The earlier real receipt (run 333072ef11f5) whose model declared only ``issue``:
 with the reviewer's four exclusions applied, ``entity_statistics`` and ``mongo:issue``
@@ -52,7 +62,8 @@ def receipt_dir() -> Path | None:
     return COMMITTED_RECEIPT_DIR if (COMMITTED_RECEIPT_DIR / "receipt.json").is_file() else None
 
 
-__all__ = ["COMMITTED_RECEIPT_DIR", "REPEAT_RECEIPT_DIR", "UNQUALIFIED_RECEIPT_DIR", "RECEIPT_DIR_ENV",
+__all__ = ["COMMITTED_RECEIPT_DIR", "REPEAT_RECEIPT_DIR", "UNQUALIFIED_RECEIPT_DIR",
+           "SYNTHETIC_RECEIPT_DIR", "RECEIPT_DIR_ENV",
            "OUT_ENV", "SYNTHETIC_INDEX", "ReplayJoin", "receipt_dir", "build", "evaluate_join",
            "summary", "write_artifacts", "blocking_premise", "undeclared_tables", "exclusions",
            "exclusions_applied", "well_formed_certificate", "assumption_registry", "invalidate"]

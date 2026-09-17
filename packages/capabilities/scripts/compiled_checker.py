@@ -20,6 +20,18 @@ Exit codes (``judge``)::
     3  the receipt does not meet the exporter's contract (a contract finding)
     4  the toolchain or the judge's own environment is unavailable (no souffle,
        no souffle-compile.py, an unwritable cache or output directory)
+    5  every op the verdict turns on is *pending* a premise nothing can satisfy
+       yet -- today only the Stage D typed-checker certificate
+       (``model_well_formed``; ``replay.join.PENDING_PREMISES``).  Such an op
+       passed every premise that says something about this port: the systems
+       agreed with the model, nothing outside the reviewer's exclusions was
+       written, no mutant survived, the order and stability gates held.  Exit 5
+       is deliberately distinct from 1 so a consumer gate can tell "the checker
+       does not exist yet" from "this port is not qualified", and 1 wins over 5
+       whenever any op the verdict turns on has a real blocker.
+
+The per-op ``qualification`` field of ``judge.json`` carries the same three
+states in words: ``qualified``, ``pending <relation>``, ``unsupported``.
 
 Without ``--require-op`` the verdict is derived from every replayed op rather
 than from an empty requirement: a verdict over zero requirements would be
@@ -72,9 +84,11 @@ EXIT_NOT_SUPPORTED = 1
 EXIT_KERNEL = 2
 EXIT_CONTRACT = 3
 EXIT_UNAVAILABLE = 4
+EXIT_PENDING_PREMISE = 5
 
 VERDICT_SUPPORTED = "supported"
 VERDICT_NOT_SUPPORTED = "not-supported"
+VERDICT_PENDING_PREMISE = "pending-premise"
 VERDICT_KERNEL_MISMATCH = "kernel-mismatch"
 VERDICT_CONTRACT_FINDING = "contract-finding"
 VERDICT_UNAVAILABLE = "unavailable"
@@ -121,6 +135,9 @@ def _op_entry(join: replay_join.ReplayJoin, summary: dict[str, Any], op: str) ->
         # the pair; VERDICT_SUPPORTED only when the op is supported *and* complete
         "verdict": (VERDICT_SUPPORTED if qualified["semantic"] == "supported"
                     and qualified["operational"] == "complete" else VERDICT_NOT_SUPPORTED),
+        # "qualified" / "pending <relation>" / "unsupported" (replay.join.qualification):
+        # a pending op passed every premise that is checkable today
+        "qualification": entry.get("qualification", replay_join.QUALIFICATION_UNSUPPORTED),
         "op_qualified": qualified,
         "corpus_constrains": bool(entry.get("corpus_constrains")),
         "exclusions_applied": list(entry.get("exclusions_applied", [])),
@@ -174,6 +191,16 @@ def _judge_document(join: replay_join.ReplayJoin, required: list[str], *,
 
 def _op_is_supported(entry: dict[str, Any]) -> bool:
     return entry["verdict"] == VERDICT_SUPPORTED
+
+
+def _all_pending(replayed: dict[str, Any], unmet: list[str]) -> bool:
+    """Every unmet op is blocked only by a premise nothing can satisfy yet.
+
+    A required op that was never replayed has no entry and is never pending: it
+    is an unmet requirement about this receipt, which exit 1 is for.
+    """
+    return bool(unmet) and all(
+        str(replayed.get(op, {}).get("qualification", "")).startswith("pending ") for op in unmet)
 
 
 def _unmet_ops(replayed: dict[str, Any], required: list[str]) -> list[str]:
@@ -267,16 +294,25 @@ def judge(args: argparse.Namespace) -> int:
         document["unmet_ops"] = unmet
         if not judged:
             document["message"] = "no op was replayed and none was required; nothing is supported"
+        elif _all_pending(document["ops"], unmet):
+            # every unmet op is blocked only by a premise nothing can satisfy yet
+            document["verdict"] = VERDICT_PENDING_PREMISE
+            document["exit_code"] = EXIT_PENDING_PREMISE
+            document["pending_ops"] = list(unmet)
+            document["message"] = ("pending, not unsupported: " + ", ".join(
+                f"{op} is {document['ops'][op]['qualification']}" for op in unmet))
     _write_json(out_dir / JUDGE_FILE, document)
     for op, entry in sorted(document["ops"].items()):
-        print(f"{op}: {entry['verdict']} op_qualified={entry['op_qualified']['semantic']}"
+        print(f"{op}: {entry['qualification']} op_qualified={entry['op_qualified']['semantic']}"
               f"/{entry['op_qualified']['operational']}"
               f" missing={entry['op_qualified']['missing_premises']}"
               f" exclusions={entry['exclusions_applied']}")
     binary = document["compiled"]["binary_sha256"] if document["compiled"] else "-"
     print(f"verdict={document['verdict']} kernels_matched={document['kernels']['matched']}"
           f" binary={binary[:12]}")
-    if unmet:
+    if unmet and document["verdict"] == VERDICT_PENDING_PREMISE:
+        print(document["message"], file=sys.stderr)
+    elif unmet:
         label = "required" if required else "replayed"
         print(f"{label} ops not supported: {', '.join(unmet)}", file=sys.stderr)
     elif not judged:

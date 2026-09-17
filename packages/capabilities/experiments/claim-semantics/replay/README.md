@@ -107,8 +107,7 @@ undeclared_writes_closed(Run,Op):- replayed(Run,Op), replay_run_current(Run), mo
                                    replay_requests_closed(Run), php_effects_closed(Run), go_effects_closed(Run),
                                    model_writes_closed(M,Op), model_scope_exclusions_closed(M).
 op_qualified_rt(IX,Run,Op)      :- index_describes_replay(IX,Run), replayed(Run,Op), op_exercised(Run,Op),
-                                   model_describes_run(M,Run), model_well_formed(M,Checker,Version,Cert),
-                                   model_checker_admitted(Checker,Version),
+                                   model_describes_run(M,Run),
                                    corpus_constrains(Run,Op),
                                    php_disagreement_closed(Run,Op), !php_disagree_any(Run,Op),
                                    go_disagreement_closed(Run,Op),  !go_disagree_any(Run,Op),
@@ -116,7 +115,9 @@ op_qualified_rt(IX,Run,Op)      :- index_describes_replay(IX,Run), replayed(Run,
                                    post_state_gap_closed(Run,Op), !post_state_any(Run,Op),
                                    kill_gap_closed(Run), !kill_closure_gap_any(Run,Op),
                                    effect_order_closed(Run,Op), !effect_order_any(Run,Op),
-                                   effect_order_exercised(Run,Op), oracle_stable(Run).
+                                   effect_order_exercised(Run,Op), oracle_stable(Run),
+                                   model_well_formed(M,Checker,Version,Cert),
+                                   model_checker_admitted(Checker,Version).
 op_qualified(IX,Run,Op)         :- op_declared(IX,Op), index_describes_replay(IX,Run), op_qualified_rt(IX,Run,Op).
 ```
 
@@ -277,16 +278,31 @@ Design points a reviewer should check:
   be believed is the reviewer's word**: the certificate's `(checker,
   checker_version)` must appear in the reviewer-owned primitive
   `model_checker_admitted`, so a certificate from an unknown or unadmitted
-  version admits nothing (case 29).  There is **no closure relation** on either:
+  version admits nothing (case 29).  The pair sits **last** in the rule body.  A
+  conjunct's position is nothing semantically, but the why-not walk reports the
+  first unsatisfied premise, and while the checker does not exist that premise
+  would otherwise mask every real gap a receipt has (the same reason
+  `replay.join.PENDING_PREMISES` sits last in `_BLOCKING_ORDER`).  There is **no closure relation** on either:
   nothing negates well-formedness, the premise is read positively, and a receipt
   with no certificate is simply unresolved (case 27) rather than qualified by
   silence.  The exporter reads `model_well_formed.json` (a row for another model
   is `stale`, not `invalid-input`: the certificate is for another artifact) and
-  the reviewer's `model_checkers.json`.  The checked-in fixtures carry a
-  **placeholder** certificate -- checker `stage-d-typecheck`, version
-  `0.1-pending`, certificate `sha256("pending: checker not yet built")` -- until
-  the real Stage D checker emits one; the shape of the premise, not the strength
-  of that certificate, is what the corpus fixes.
+  the reviewer's `model_checkers.json`.  **No certificate exists until the
+  checker does.**  The Stage D checker has not been built, so the three *real*
+  receipts (`fixtures/replay_receipt_target_go_{qualified,unqualified,repeat}`)
+  carry no `model_well_formed.json` and their `model_checkers.json` admits no
+  checker; only the **synthetic** `replay_receipt_min`, from which this corpus is
+  generated, carries the made-up certificate
+  `sha256("pending: checker not yet built")` under checker `stage-d-typecheck`
+  version `0.1-pending`, and that is what keeps case 00's positive control of the
+  premise alive.  A placeholder on a real receipt would have been a fabricated
+  observation satisfying exactly the gate this premise imposes.  Consequently
+  `op_qualified` on the real qualified receipt is *unresolved with
+  `model_well_formed` as its only missing premise*, which the judge reports as
+  `qualification: "pending model_well_formed"` (exit 5 from
+  `scripts/compiled_checker.py`) rather than as a finding against the port; see
+  `tests/claim_semantics/README.md`.  The shape of the premise, not the strength
+  of any certificate, is what the corpus fixes.
 * **Cross-run stability** (v1 ordering addendum).  `replay_stability(run,
   run_a, run_b, side, stable)` binds the receipt's run to a *selftest* of the
   same oracle: two further runs of the same tape whose provenance (oracle
@@ -347,8 +363,10 @@ Design points a reviewer should check:
   the selftest did not run, so `closed.mutant_kills` and
   `closed.replay_stability` are false.  Re-baselining the mutants on this tape
   and running the selftest is the open item; the three-request
-  `..._qualified` fixture stays the one where `op_qualified` is supported, and
-  its tape has no repeat (marked `TODO(four-request run)` there).
+  `..._qualified` fixture stays the one that reaches the *last* premise --
+  `op_qualified` there is `pending model_well_formed`, every other premise
+  having held -- and its tape has no repeat (marked `TODO(four-request run)`
+  there).
 
 ## One observation per key
 
