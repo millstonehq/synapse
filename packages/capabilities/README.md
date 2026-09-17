@@ -380,6 +380,41 @@ or real credentials. Run the unittest suite and build/install checks before a PR
 The engine is distributed under the repository's MIT license, included in both
 Python distribution formats.
 
+## Many worktrees, many agents, one machine
+
+Every artifact binds to a source snapshot: sha256 over a sorted manifest of per-file
+hashes. Two caches make that cheap without making it weaker.
+
+- **Per-root manifest** (`~/.cache/capcov/tree-manifests-v1`): a file's digest is reused
+  while its size, times, inode and mode are unchanged. Cold for every new checkout.
+- **Shared blob index** (`~/.cache/capcov/blob-sha256-v1`): keyed by git blob id. For a
+  tracked file that git itself judges byte-identical to its index entry (`git diff-files`,
+  the judgement `git commit` relies on), the digest is a fact about the blob, so a fresh
+  `git worktree add` of a known commit hashes nothing it has seen in any other checkout.
+  Only read-only git plumbing is used. Files git would convert on checkout (filters,
+  CRLF, `ident`, working-tree encodings), symlinks, submodules, unmerged, skip-worktree
+  and assume-unchanged entries are never keyed by blob; untracked files are hashed.
+
+Both caches are off under `CAPCOV_NO_CACHE=1` and for every verification walk, and any
+reuse makes the snapshot inexact (`source_snapshot.verification: cached`). When the two
+caches disagree about a file, the bytes are read. The digest formula is unchanged, so no
+recorded identity moves. `snapshot_tree(...).verification` reports `files_reused_by_blob`,
+`blobs_learned` and a `blob_index` status (`hit`, `learned`, `ready`, `not-a-repo`,
+`disabled: core.autocrlf`, ...).
+
+When several agents run indexers, `nix develop` builds, full-tree snapshots or full test
+suites on one disk at the same time, none of them finishes. Serialize the heavy steps:
+
+```sh
+scripts/with-heavy-lock.py --label "regression" -- \
+  nix develop --command bash -lc 'PYTHONPATH="$PWD/src" python -m unittest discover -s tests -t .'
+```
+
+One advisory lock per machine (`$CAPCOV_HEAVY_LOCK`, else `~/.cache/capcov/heavy.lock`);
+the waiter says who holds it; the child's exit status passes through; `--timeout 0`
+fails fast with status 75 instead of waiting. It changes when a step runs, never what it
+does.
+
 ## Scoped outcome coverage with pytest
 
 ### Test capcov's own advancement gate
