@@ -1,0 +1,326 @@
+{
+  "closed": {
+    "go_effect_seqs": true,
+    "go_effects": true,
+    "go_post_states": true,
+    "go_responses": true,
+    "model_admissible": true,
+    "model_effect_seqs": true,
+    "model_scope_exclusions": true,
+    "mutant_kills": false,
+    "php_effect_seqs": true,
+    "php_effects": true,
+    "php_post_states": true,
+    "php_responses": true,
+    "replay_request_seqs": true,
+    "replay_requests": true,
+    "replay_stability": false
+  },
+  "go_commit": "7f2238a41145568c44cb61d5d821bfe05f106f53",
+  "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+  "model_writes_closed": [
+    {
+      "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+      "op": "delete-issue"
+    }
+  ],
+  "mutants_closed": [],
+  "nonce": "787e973cbdf9351df9945237edc57b8d46c18309122f2d67f4acfe40e1e078d4",
+  "php_commit": "9ff51ce59883b59a86499a1bc5d7df0614145abc",
+  "receipts": {
+    "blob_facts": "always empty: the fixture has no S3, [blob B] is never projected",
+    "canonicalizer": "fg-model-host",
+    "canonicalizer_fallback_reason": "",
+    "effect_folding": "one row per (req, table, kind, pk); a row touched twice in one request keeps its final cols_digest",
+    "effect_folding_counts": {
+      "go/forbidden": {
+        "net": 3,
+        "raw": 3,
+        "raw_recorded": 1,
+        "transient": 0
+      },
+      "go/missing": {
+        "net": 0,
+        "raw": 0,
+        "raw_recorded": 1,
+        "transient": 0
+      },
+      "go/owner": {
+        "net": 10,
+        "raw": 10,
+        "raw_recorded": 1,
+        "transient": 0
+      },
+      "go/repeat": {
+        "net": 0,
+        "raw": 0,
+        "raw_recorded": 1,
+        "transient": 0
+      },
+      "php/forbidden": {
+        "net": 9,
+        "raw": 9,
+        "raw_recorded": 1,
+        "transient": 0
+      },
+      "php/missing": {
+        "net": 0,
+        "raw": 0,
+        "raw_recorded": 1,
+        "transient": 0
+      },
+      "php/owner": {
+        "net": 30,
+        "raw": 34,
+        "raw_recorded": 1,
+        "transient": 0
+      },
+      "php/repeat": {
+        "net": 0,
+        "raw": 0,
+        "raw_recorded": 1,
+        "transient": 0
+      }
+    },
+    "effect_seq_reason": "every slice carries its recorded raw timeline",
+    "effect_seq_scope": "binlog-captured SQL tables only; redis/mongo:* have no timeline",
+    "effect_seq_unsequenced": {
+      "go": [],
+      "php": []
+    },
+    "fixture_note": "Committed fixture: the real four-request replay run 271d2dde86a0 -- the first run in which the `repeat` request (a second DELETE of the issue `owner` soft-deleted) was executed against the incumbent.  The tape is owner (200), forbidden (403), missing (404), repeat (404).  Neither the selftest nor a mutant re-baseline was run on this tape, so closed.replay_stability and closed.mutant_kills are false and op_qualified is honestly unresolved; the repeat-delete claim is what this receipt is kept for.  Local evidence paths replaced by <evidence>/ and the tenant symbol renamed to `oracle` for publication.",
+    "go_binary_sha256": "b52909b9756d41bb913f8d072df3fc58960687d36692b0655bea554e5cb8bb14",
+    "go_evidence_dir": "<evidence>/280467db6323",
+    "go_run_id": "280467db6323",
+    "model_effects_captured": true,
+    "model_errors": null,
+    "model_evidence_dir": "<evidence>/0e31ef72c4d0",
+    "model_host_sha256": "bdee7abfb83b45ac52c303f2e29e3128e59db76040dcc75731ac7b1c1ea06c83",
+    "model_run_id": "0e31ef72c4d0",
+    "model_scope_exclusions": {
+      "producer": "reviewer Reuben Brooks 2026-09-16 model:08380c9c336d run:271d2dde86a0",
+      "reviewed_against": {
+        "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+        "run": "271d2dde86a0"
+      },
+      "reviewed_at": "2026-09-16",
+      "reviewer": "Reuben Brooks",
+      "rows": [
+        {
+          "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+          "reason": "session token expiry touch on every authenticated request; not an issue-domain effect",
+          "table": "authentication"
+        },
+        {
+          "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+          "reason": "Laravel queue job bookkeeping",
+          "table": "jobs_statuses"
+        },
+        {
+          "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+          "reason": "cache and Horizon queue keys",
+          "table": "redis"
+        },
+        {
+          "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
+          "reason": "candidate's transactional outbox; delivered effects are compared, the outbox row itself is infrastructure",
+          "table": "go_issue_outbox"
+        }
+      ]
+    },
+    "model_write_tables": [
+      "entity_statistics",
+      "issue",
+      "mongo:issue"
+    ],
+    "oracle_dirty": false,
+    "php_evidence_dir": "<evidence>/271d2dde86a0",
+    "php_run_id": "271d2dde86a0",
+    "php_sha256": "c2a9f2bd44e3a5ec3f0ad2cdcc54682053a683732fe448917861ad0874b83996",
+    "producers": {
+      "go_effect": "go fg-replay v1",
+      "go_effect_seq": "go fg-replay v1",
+      "go_post_state": "go fg-replay v1",
+      "go_response": "go fg-replay v1",
+      "model_admissible": "shen fg-model-host v1",
+      "model_effect": "shen fg-model-host v1",
+      "model_effect_seq": "shen fg-model-host v1",
+      "model_writes": "shen fg-model-host v1",
+      "mutant": "mut fg-replay v1",
+      "mutant_killed": "mut fg-replay v1",
+      "php_effect": "php fg-replay v1",
+      "php_effect_seq": "php fg-replay v1",
+      "php_post_state": "php fg-replay v1",
+      "php_response": "php fg-replay v1",
+      "replay_request": "replay fg-replay v1",
+      "replay_request_seq": "replay fg-replay v1",
+      "replay_stability": "replay fg-replay v1"
+    },
+    "projected_issue_scope": "every issue of the request's project (path /api/cloud/project/{project}/)",
+    "projection": {
+      "go/forbidden": {
+        "blob_facts": "empty (no S3 in this fixture)",
+        "canonicalizer": "fg-model-host",
+        "issue_ids": [
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38
+        ]
+      },
+      "go/missing": {
+        "blob_facts": "empty (no S3 in this fixture)",
+        "canonicalizer": "fg-model-host",
+        "issue_ids": [
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38
+        ]
+      },
+      "go/owner": {
+        "blob_facts": "empty (no S3 in this fixture)",
+        "canonicalizer": "fg-model-host",
+        "issue_ids": [
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38
+        ]
+      },
+      "go/repeat": {
+        "blob_facts": "empty (no S3 in this fixture)",
+        "canonicalizer": "fg-model-host",
+        "issue_ids": [
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38
+        ]
+      },
+      "php/forbidden": {
+        "blob_facts": "empty (no S3 in this fixture)",
+        "canonicalizer": "fg-model-host",
+        "issue_ids": [
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38
+        ]
+      },
+      "php/missing": {
+        "blob_facts": "empty (no S3 in this fixture)",
+        "canonicalizer": "fg-model-host",
+        "issue_ids": [
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38
+        ]
+      },
+      "php/owner": {
+        "blob_facts": "empty (no S3 in this fixture)",
+        "canonicalizer": "fg-model-host",
+        "issue_ids": [
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38
+        ]
+      },
+      "php/repeat": {
+        "blob_facts": "empty (no S3 in this fixture)",
+        "canonicalizer": "fg-model-host",
+        "issue_ids": [
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38
+        ]
+      }
+    },
+    "recorded_at": "2026-09-16T20:10:21Z",
+    "relations": {
+      "go_effect": 13,
+      "go_effect_seq": 5,
+      "go_post_state": 4,
+      "go_response": 4,
+      "model_admissible": 4,
+      "model_effect": 3,
+      "model_effect_seq": 3,
+      "model_writes": 3,
+      "mutant": 0,
+      "mutant_killed": 0,
+      "php_effect": 39,
+      "php_effect_seq": 10,
+      "php_post_state": 4,
+      "php_response": 4,
+      "replay_request": 4,
+      "replay_request_seq": 4,
+      "replay_stability": 0
+    },
+    "schema_sha256": "a8ffc07d620d1666c170c85832692a85f3bff19f001e47cf3307e0840851e85f",
+    "seed_sha256": "54ccce662f40420ac8c79543381a4c0f025098db2c8fb67aa8e588935e1ba29a",
+    "stability": {
+      "per_request": {},
+      "provenance_match": false,
+      "reason": "no selftest",
+      "run_oracle_dirty": false,
+      "selftest_oracle_dirty": false,
+      "selftest_path": "",
+      "selftest_run_ids": [],
+      "selftest_tape": null
+    },
+    "tape_check": {
+      "mutants": "absent",
+      "mutants_bound": false,
+      "requests": [
+        "owner DELETE /api/cloud/project/21/issues/31",
+        "forbidden DELETE /api/cloud/project/21/issues/33",
+        "missing DELETE /api/cloud/project/21/issues/9999",
+        "repeat DELETE /api/cloud/project/21/issues/31"
+      ],
+      "runs_compared": [
+        "php",
+        "go",
+        "model"
+      ]
+    },
+    "target_go_dirty": false
+  },
+  "run": "271d2dde86a0",
+  "snapshot": "f386e8e7df8058f867206b2b7f5f506b68fbedb68fdaa122a2c75b0d5486da21",
+  "version": 1
+}

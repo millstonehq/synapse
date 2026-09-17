@@ -1,0 +1,85 @@
+{
+  "producer": "php fg-replay v1",
+  "rows": [
+    {
+      "kind": "update",
+      "pk": "ab0000bbff6e25728608fb8a89853602b0080c27d05dfdf456d423b868457b80",
+      "req": "forbidden",
+      "run": "271d2dde86a0",
+      "seq": 1,
+      "table": "authentication"
+    },
+    {
+      "kind": "update",
+      "pk": "70f071939d841dde8dac6062fafaa33a8b010854cda70f16eea26a23521ea90d",
+      "req": "owner",
+      "run": "271d2dde86a0",
+      "seq": 1,
+      "table": "authentication"
+    },
+    {
+      "kind": "update",
+      "pk": "eb1e33e8a81b697b75855af6bfcdbcbf7cbbde9f94962ceaec1ed8af21f5a50f",
+      "req": "owner",
+      "run": "271d2dde86a0",
+      "seq": 2,
+      "table": "issue"
+    },
+    {
+      "kind": "insert",
+      "pk": "0b0fa0b2280a09639e2059e56c8fa9328f4d76ab48e081dfdc80da7f0984f94e",
+      "req": "owner",
+      "run": "271d2dde86a0",
+      "seq": 3,
+      "table": "jobs_statuses"
+    },
+    {
+      "kind": "update",
+      "pk": "0b0fa0b2280a09639e2059e56c8fa9328f4d76ab48e081dfdc80da7f0984f94e",
+      "req": "owner",
+      "run": "271d2dde86a0",
+      "seq": 4,
+      "table": "jobs_statuses"
+    },
+    {
+      "kind": "update",
+      "pk": "7f2253d7e228b22a08bda1f09c516f6fead81df6536eb02fa991a34bb38d9be8",
+      "req": "owner",
+      "run": "271d2dde86a0",
+      "seq": 5,
+      "table": "entity_statistics"
+    },
+    {
+      "kind": "update",
+      "pk": "0b0fa0b2280a09639e2059e56c8fa9328f4d76ab48e081dfdc80da7f0984f94e",
+      "req": "owner",
+      "run": "271d2dde86a0",
+      "seq": 6,
+      "table": "jobs_statuses"
+    },
+    {
+      "kind": "insert",
+      "pk": "b6b52c0e41dd6e18a31636deb586175bfedea1f482fa94cc4c8ec46999ae8864",
+      "req": "owner",
+      "run": "271d2dde86a0",
+      "seq": 7,
+      "table": "jobs_statuses"
+    },
+    {
+      "kind": "update",
+      "pk": "b6b52c0e41dd6e18a31636deb586175bfedea1f482fa94cc4c8ec46999ae8864",
+      "req": "owner",
+      "run": "271d2dde86a0",
+      "seq": 8,
+      "table": "jobs_statuses"
+    },
+    {
+      "kind": "update",
+      "pk": "b6b52c0e41dd6e18a31636deb586175bfedea1f482fa94cc4c8ec46999ae8864",
+      "req": "owner",
+      "run": "271d2dde86a0",
+      "seq": 9,
+      "table": "jobs_statuses"
+    }
+  ]
+}

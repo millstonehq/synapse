@@ -1,13 +1,20 @@
 {
   "closed": {
+    "go_effect_seqs": true,
     "go_effects": true,
     "go_post_states": true,
+    "go_responses": true,
     "model_admissible": true,
+    "model_effect_seqs": true,
     "model_scope_exclusions": true,
     "mutant_kills": true,
+    "php_effect_seqs": true,
     "php_effects": true,
     "php_post_states": true,
-    "replay_requests": true
+    "php_responses": true,
+    "replay_request_seqs": true,
+    "replay_requests": true,
+    "replay_stability": true
   },
   "go_commit": "d584f44a7b9d5e265ed826b3f44395b7bb667c09",
   "model": "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b",
@@ -23,7 +30,7 @@
       "op": "delete-issue"
     }
   ],
-  "nonce": "902e9074c08a6d4ff01be33c13c38e46e32d769343807fc0199f8cd01d1c1bb8",
+  "nonce": "035045e242daed62fe6234ba3d5e37a5888e21f3959a71d2b5cab46f06e48e4c",
   "php_commit": "9ff51ce59883b59a86499a1bc5d7df0614145abc",
   "receipts": {
     "blob_facts": "always empty: the fixture has no S3, [blob B] is never projected",
@@ -62,6 +69,7 @@
         "transient": 0
       }
     },
+    "effect_seq_scope": "binlog-captured SQL tables only; redis/mongo:* have no timeline",
     "fixture_note": "Committed fixture: a real replay run eca6e7930af3 of the candidate service against the model that declares entity_statistics, issue and mongo:issue for delete-issue, with the reviewer's scope exclusions; local evidence paths replaced by <evidence>/ and the tenant symbol renamed to `oracle` for publication.",
     "go_binary_sha256": "72d1bb55ed65628d4ddb5aa2920eb7e04606485521ca45f66381778a35fc7171",
     "go_evidence_dir": "<evidence>/4122abc4a65e",
@@ -202,15 +210,22 @@
     "php_sha256": "c2a9f2bd44e3a5ec3f0ad2cdcc54682053a683732fe448917861ad0874b83996",
     "producers": {
       "go_effect": "go fg-replay v1",
+      "go_effect_seq": "go fg-replay v1",
       "go_post_state": "go fg-replay v1",
+      "go_response": "go fg-replay v1",
       "model_admissible": "shen fg-model-host v1",
       "model_effect": "shen fg-model-host v1",
+      "model_effect_seq": "shen fg-model-host v1",
       "model_writes": "shen fg-model-host v1",
       "mutant": "mut fg-replay v1",
       "mutant_killed": "mut fg-replay v1",
       "php_effect": "php fg-replay v1",
+      "php_effect_seq": "php fg-replay v1",
       "php_post_state": "php fg-replay v1",
-      "replay_request": "replay fg-replay v1"
+      "php_response": "php fg-replay v1",
+      "replay_request": "replay fg-replay v1",
+      "replay_request_seq": "replay fg-replay v1",
+      "replay_stability": "replay fg-replay v1"
     },
     "projected_issue_scope": "every issue of the request's project (path /api/cloud/project/{project}/)",
     "projection": {
@@ -299,21 +314,54 @@
         ]
       }
     },
-    "recorded_at": "2026-09-16T15:59:24Z",
+    "recorded_at": "2026-09-16T17:41:03Z",
     "relations": {
       "go_effect": 13,
+      "go_effect_seq": 5,
       "go_post_state": 3,
+      "go_response": 3,
       "model_admissible": 3,
       "model_effect": 3,
+      "model_effect_seq": 3,
       "model_writes": 3,
       "mutant": 6,
       "mutant_killed": 6,
       "php_effect": 39,
+      "php_effect_seq": 10,
       "php_post_state": 3,
-      "replay_request": 3
+      "php_response": 3,
+      "replay_request": 3,
+      "replay_request_seq": 3,
+      "replay_stability": 1
     },
     "schema_sha256": "a8ffc07d620d1666c170c85832692a85f3bff19f001e47cf3307e0840851e85f",
     "seed_sha256": "54ccce662f40420ac8c79543381a4c0f025098db2c8fb67aa8e588935e1ba29a",
+    "stability": {
+      "per_request": {
+        "forbidden": {
+          "effects_equal": true,
+          "http_equal": true,
+          "raw_equal": false
+        },
+        "missing": {
+          "effects_equal": true,
+          "http_equal": true,
+          "raw_equal": true
+        },
+        "owner": {
+          "effects_equal": true,
+          "http_equal": true,
+          "raw_equal": false
+        }
+      },
+      "provenance_match": true,
+      "reason": "selftest provenance equals the run's; every tape request compared",
+      "selftest_path": "<evidence>/selftest.json",
+      "selftest_run_ids": [
+        "183aac240a6d",
+        "9fb93efece74"
+      ]
+    },
     "target_go_dirty": false
   },
   "run": "eca6e7930af3",

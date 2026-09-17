@@ -16,13 +16,13 @@ import shutil
 import subprocess
 import tempfile
 import time
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
-from .ir import (Atom, Bundle, Comparison, Constant, OutputKind, Rule, Term,
+from ..ir import (Atom, Bundle, Comparison, Constant, OutputKind, Rule, Term,
                  TypeName, Variable, canonical_dict, canonical_json, digest)
-from .output import output_triggered, relevant_evidence_ids
-from .validation import assert_valid
-from .verdicts import EvaluationBasis, EvaluationResult, OperationalStatus, SemanticVerdict, verdict
+from ..output import output_triggered, relevant_evidence_ids
+from ..validation import assert_valid
+from ..verdicts import EvaluationBasis, EvaluationResult, OperationalStatus, SemanticVerdict, verdict
 
 
 MAX_SECONDS = 30.0
@@ -497,6 +497,130 @@ def _store_translation(cache_dir: str | os.PathLike[str], key: str,
                 pass
 
 
+@dataclass(frozen=True)
+class _Limits:
+    timeout: float
+    max_rows: int
+    max_output_bytes: int
+    max_processes: int
+
+
+def _execute(bundle: Bundle, translated: SouffleProgram, argv: list[str], *,
+             budget: _ExecutionBudget, limits: _Limits,
+             rerun: Callable[[Bundle, _ExecutionBudget], SouffleResult],
+             runtime: str | None = None, started: float | None = None) -> SouffleResult:
+    """Execute ``argv`` in a temp root holding ``translated`` and fold the outputs.
+
+    This is the one execution path every Souffle kernel shares: the temp root
+    with ``program.dl`` and ``facts/*.facts``, the Popen/poll/budget loop, the
+    ``outputs/*.csv`` parse, normalization and claim folding.  ``argv`` is the
+    interpreter (``souffle --jobs 1 program.dl``) or a compiled checker binary
+    (``checker -j1``); the process is started with ``cwd`` = the temp root so
+    the program's relative IO paths resolve identically for both.  ``rerun`` is
+    called for the eligible-bundle recursion so a compiled kernel re-runs the
+    compiled binary, never the interpreter.  Only the return code decides
+    failure: both runtimes write warnings to stderr with rc 0.
+    """
+    if started is None:
+        started = time.monotonic()
+    relation_map = {r.name: r for r in bundle.relations}
+    relation_aliases = _aliases([r.name for r in bundle.relations])
+    root = Path(tempfile.mkdtemp(prefix="capcov-souffle-"))
+    try:
+        (root / "facts").mkdir(); (root / "outputs").mkdir()
+        (root / "program.dl").write_text(translated.program, encoding="utf-8")
+        for relation in bundle.relations:
+            alias = relation_aliases[relation.name]
+            (root / "facts" / f"{alias}.facts").write_text(translated.facts[alias], encoding="utf-8")
+        input_rows = len(bundle.facts)
+        if input_rows > limits.max_rows:
+            raise OverflowError(f"Souffle input rows exceed {limits.max_rows}")
+        if budget.remaining_processes <= 0:
+            raise OverflowError(f"Souffle evaluation exceeded {limits.max_processes} processes")
+        if time.monotonic() > budget.deadline:
+            raise TimeoutError(f"Souffle evaluation exceeded {limits.timeout:.1f}s total")
+        budget.remaining_processes -= 1
+        try:
+            proc = subprocess.Popen(argv, cwd=root,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        except OSError as exc:
+            raise SouffleUnavailable(f"Souffle executable could not be started: {argv[0]}: {exc}") from exc
+        while proc.poll() is None:
+            output_bytes = sum(p.stat().st_size for p in (root / "outputs").glob("*") if p.is_file())
+            if output_bytes > limits.max_output_bytes:
+                proc.kill(); proc.communicate()
+                raise OverflowError(f"Souffle outputs exceed {limits.max_output_bytes} bytes during execution")
+            if time.monotonic() > budget.deadline:
+                proc.kill(); proc.communicate()
+                raise TimeoutError(f"Souffle evaluation exceeded {limits.timeout:.1f}s total")
+            time.sleep(0.005)
+        stdout, stderr = proc.communicate()
+        if proc.returncode:
+            raise RuntimeError((stderr or stdout)[-4000:])
+        output_bytes = sum(p.stat().st_size for p in (root / "outputs").glob("*") if p.is_file())
+        if output_bytes > limits.max_output_bytes:
+            raise OverflowError(f"Souffle outputs exceed {limits.max_output_bytes} bytes")
+        relations: dict[str, tuple[tuple[Any, ...], ...]] = {}
+        total_rows = input_rows
+        fact_rows: dict[str, list[tuple[Any, ...]]] = {name: [] for name in relation_map}
+        for fact in bundle.facts:
+            fact_rows[fact.relation].append(tuple(term.value for term in fact.terms if isinstance(term, Constant)))
+        for name, relation in relation_map.items():
+            path = root / "outputs" / f"{relation_aliases[name]}.csv"
+            rows = []
+            if path.exists():
+                for line in path.read_text(encoding="utf-8").splitlines():
+                    if relation.arity == 0:
+                        rows.append(())
+                        continue
+                    if not line: continue
+                    fields = line.split("\t")
+                    if len(fields) != relation.arity: raise ValueError(f"malformed output row for {name}")
+                    rows.append(tuple(_parse_value(v, c.type) for v, c in zip(fields, relation.columns)))
+            # Primitive inputs omitted from the requested output subset remain
+            # part of the normalized relation model and resource accounting.
+            if name not in translated.outputs and relation.primitive:
+                rows = fact_rows[name]
+            if name in translated.outputs and relation.primitive:
+                # Output rows include inputs; they were already counted above.
+                total_rows += max(0, len(rows) - len(fact_rows[name]))
+            else:
+                total_rows += len(rows) if not relation.primitive else 0
+            if total_rows > limits.max_rows: raise OverflowError(f"Souffle rows exceed {limits.max_rows}")
+            # JSON metadata values decode to mappings and are intentionally not
+            # hashable.  Canonical keys preserve set semantics without mutating
+            # or stringifying the public normalized values.
+            unique = {canonical_json(row): row for row in rows}
+            relations[name] = tuple(unique[key] for key in sorted(unique))
+        output_digest = hashlib.sha256(b"".join((k + "=" + repr(v)).encode() for k, v in sorted(relations.items()))).hexdigest()
+        claim_results = []
+        eligible_cache: dict[str, Mapping[str, tuple[tuple[Any, ...], ...]]] = {}
+        for claim in bundle.claims:
+            eligible = _eligible_bundle(claim, bundle, relations, relation_map)
+            semantic_relations = relations
+            if eligible is not None:
+                # Souffle independently recomputes closure after removing only
+                # fact propositions whose every producer path depends on the
+                # claim's forbidden assumption.  This preserves an independent
+                # producer for the same proposition and avoids claim-global
+                # revocation based on unrelated evidence.
+                eligible_digest = digest(eligible)
+                semantic_relations = eligible_cache.get(eligible_digest)
+                if semantic_relations is None:
+                    semantic_relations = rerun(eligible, budget).relations
+                    eligible_cache[eligible_digest] = semantic_relations
+            claim_results.append(_claim_result(claim, relation_map[claim.relation],
+                                               semantic_relations, relations,
+                                               relation_map, bundle))
+        claim_results = tuple(claim_results)
+        if runtime is None:
+            runtime = next((line.strip() for line in stdout.splitlines() if line.strip().startswith("Version:")), translated.runtime)
+        evidence_digest = hashlib.sha256((translated.bundle_digest + translated.program_digest + runtime + output_digest).encode()).hexdigest()
+        return SouffleResult(translated.bundle_digest, translated.program_digest, runtime, relations, claim_results, output_digest, evidence_digest, time.monotonic() - started)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def run_bundle(bundle: Bundle, *, executable: str = "souffle", timeout: float = MAX_SECONDS,
                max_rows: int = MAX_ROWS, max_output_bytes: int = MAX_OUTPUT_BYTES,
                max_processes: int = MAX_PROCESSES,
@@ -539,108 +663,40 @@ def run_bundle(bundle: Bundle, *, executable: str = "souffle", timeout: float = 
             translated = translate_bundle(bundle, outputs=output_names)
             if executable_identity is not None:
                 _store_translation(cache_dir, cache_key, basis, translated)
-    relation_map = {r.name: r for r in bundle.relations}
-    relation_aliases = _aliases([r.name for r in bundle.relations])
-    root = Path(tempfile.mkdtemp(prefix="capcov-souffle-"))
-    try:
-        (root / "facts").mkdir(); (root / "outputs").mkdir()
-        (root / "program.dl").write_text(translated.program, encoding="utf-8")
-        for relation in bundle.relations:
-            alias = relation_aliases[relation.name]
-            (root / "facts" / f"{alias}.facts").write_text(translated.facts[alias], encoding="utf-8")
-        input_rows = len(bundle.facts)
-        if input_rows > max_rows:
-            raise OverflowError(f"Souffle input rows exceed {max_rows}")
-        if _budget.remaining_processes <= 0:
-            raise OverflowError(f"Souffle evaluation exceeded {max_processes} processes")
-        if time.monotonic() > _budget.deadline:
-            raise TimeoutError(f"Souffle evaluation exceeded {timeout:.1f}s total")
-        _budget.remaining_processes -= 1
-        try:
-            proc = subprocess.Popen([resolved, "--jobs", "1", "program.dl"], cwd=root,
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        except OSError as exc:
-            raise SouffleUnavailable(f"Souffle executable could not be started: {resolved}: {exc}") from exc
-        while proc.poll() is None:
-            output_bytes = sum(p.stat().st_size for p in (root / "outputs").glob("*") if p.is_file())
-            if output_bytes > max_output_bytes:
-                proc.kill(); proc.communicate()
-                raise OverflowError(f"Souffle outputs exceed {max_output_bytes} bytes during execution")
-            if time.monotonic() > _budget.deadline:
-                proc.kill(); proc.communicate()
-                raise TimeoutError(f"Souffle evaluation exceeded {timeout:.1f}s total")
-            time.sleep(0.005)
-        stdout, stderr = proc.communicate()
-        if proc.returncode:
-            raise RuntimeError((stderr or stdout)[-4000:])
-        output_bytes = sum(p.stat().st_size for p in (root / "outputs").glob("*") if p.is_file())
-        if output_bytes > max_output_bytes:
-            raise OverflowError(f"Souffle outputs exceed {max_output_bytes} bytes")
-        relations: dict[str, tuple[tuple[Any, ...], ...]] = {}
-        total_rows = input_rows
-        fact_rows: dict[str, list[tuple[Any, ...]]] = {name: [] for name in relation_map}
-        for fact in bundle.facts:
-            fact_rows[fact.relation].append(tuple(term.value for term in fact.terms if isinstance(term, Constant)))
-        for name, relation in relation_map.items():
-            path = root / "outputs" / f"{relation_aliases[name]}.csv"
-            rows = []
-            if path.exists():
-                for line in path.read_text(encoding="utf-8").splitlines():
-                    if relation.arity == 0:
-                        rows.append(())
-                        continue
-                    if not line: continue
-                    fields = line.split("\t")
-                    if len(fields) != relation.arity: raise ValueError(f"malformed output row for {name}")
-                    rows.append(tuple(_parse_value(v, c.type) for v, c in zip(fields, relation.columns)))
-            # Primitive inputs omitted from the requested output subset remain
-            # part of the normalized relation model and resource accounting.
-            if name not in translated.outputs and relation.primitive:
-                rows = fact_rows[name]
-            if name in translated.outputs and relation.primitive:
-                # Output rows include inputs; they were already counted above.
-                total_rows += max(0, len(rows) - len(fact_rows[name]))
-            else:
-                total_rows += len(rows) if not relation.primitive else 0
-            if total_rows > max_rows: raise OverflowError(f"Souffle rows exceed {max_rows}")
-            # JSON metadata values decode to mappings and are intentionally not
-            # hashable.  Canonical keys preserve set semantics without mutating
-            # or stringifying the public normalized values.
-            unique = {canonical_json(row): row for row in rows}
-            relations[name] = tuple(unique[key] for key in sorted(unique))
-        output_digest = hashlib.sha256(b"".join((k + "=" + repr(v)).encode() for k, v in sorted(relations.items()))).hexdigest()
-        claim_results = []
-        eligible_cache: dict[str, Mapping[str, tuple[tuple[Any, ...], ...]]] = {}
-        for claim in bundle.claims:
-            eligible = _eligible_bundle(claim, bundle, relations, relation_map)
-            semantic_relations = relations
-            if eligible is not None:
-                # Souffle independently recomputes closure after removing only
-                # fact propositions whose every producer path depends on the
-                # claim's forbidden assumption.  This preserves an independent
-                # producer for the same proposition and avoids claim-global
-                # revocation based on unrelated evidence.
-                eligible_digest = digest(eligible)
-                semantic_relations = eligible_cache.get(eligible_digest)
-                if semantic_relations is None:
-                    semantic_relations = run_bundle(
-                        eligible, executable=resolved, timeout=timeout,
-                        max_rows=max_rows, max_output_bytes=max_output_bytes,
-                        max_processes=max_processes,
-                        outputs=(decl.name for decl in eligible.relations),
-                        cache_dir=cache_dir,
-                        _budget=_budget,
-                    ).relations
-                    eligible_cache[eligible_digest] = semantic_relations
-            claim_results.append(_claim_result(claim, relation_map[claim.relation],
-                                               semantic_relations, relations,
-                                               relation_map, bundle))
-        claim_results = tuple(claim_results)
-        runtime = next((line.strip() for line in stdout.splitlines() if line.strip().startswith("Version:")), translated.runtime)
-        evidence_digest = hashlib.sha256((translated.bundle_digest + translated.program_digest + runtime + output_digest).encode()).hexdigest()
-        return SouffleResult(translated.bundle_digest, translated.program_digest, runtime, relations, claim_results, output_digest, evidence_digest, time.monotonic() - started)
-    finally:
-        shutil.rmtree(root, ignore_errors=True)
+
+    def rerun(eligible: Bundle, budget: _ExecutionBudget) -> SouffleResult:
+        return run_bundle(
+            eligible, executable=resolved, timeout=timeout,
+            max_rows=max_rows, max_output_bytes=max_output_bytes,
+            max_processes=max_processes,
+            outputs=(decl.name for decl in eligible.relations),
+            cache_dir=cache_dir,
+            _budget=budget,
+        )
+
+    return _execute(bundle, translated, [resolved, "--jobs", "1", "program.dl"],
+                    budget=_budget,
+                    limits=_Limits(timeout, max_rows, max_output_bytes, max_processes),
+                    rerun=rerun, started=started)
+
+
+def program_for_pack(bundle: Bundle) -> SouffleProgram:
+    """The fact-independent Souffle program of ``bundle``'s declarations and rules.
+
+    Facts, evidence, claims, mappings, diagnostics and output templates are
+    stripped and every declared relation is an output, so the program text --
+    and therefore ``program_digest`` -- is a function of the relation
+    declarations (in bundle order) and the rules alone.  Two bundles built
+    from the same schema and rule pack through the same combiner share one
+    program; that program is what a compiled checker is built from.
+    """
+    stripped = replace(bundle, facts=(), evidence=(), claims=(), mappings=(),
+                       diagnostics=(), outputs=())
+    return translate_bundle(stripped, outputs=tuple(decl.name for decl in bundle.relations))
+
+
+# Identity schema of a compiled checker (``capcov.claims.souffle.compile``).
+PROGRAM_SCHEMA = "capcov-souffle-compiled-v1"
 
 
 def _claim_matches(row, terms, relation, context):
@@ -943,7 +999,7 @@ def _claim_result(claim, relation, relations, diagnostic_relations, relation_map
         terms = tuple(Constant(row[positions[term.name]], relation.columns[i].type)
                       if isinstance(term, Variable) and term.name in positions else term
                       for i, term in enumerate(claim.terms))
-        from .ir import Claim
+        from ..ir import Claim
         subclaim = Claim(claim.relation, terms, claim.context, "exists", None, claim.id)
         subresults.append(_exists_state(subclaim, relation, relations, diagnostic_relations,
                                         relation_map, bundle))
@@ -970,4 +1026,5 @@ def _claim_result(claim, relation, relations, diagnostic_relations, relation_map
 
 
 __all__ = ["SouffleProgram", "SouffleResult", "SouffleUnavailable", "translate_bundle", "run_bundle",
+           "program_for_pack", "PROGRAM_SCHEMA",
            "MAX_SECONDS", "MAX_ROWS", "MAX_OUTPUT_BYTES", "MAX_PROCESSES"]

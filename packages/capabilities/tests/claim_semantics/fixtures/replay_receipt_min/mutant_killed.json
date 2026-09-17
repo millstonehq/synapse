@@ -10,6 +10,11 @@
       "mutant": "m-2",
       "req": "req-2",
       "run": "run-fixture-1"
+    },
+    {
+      "mutant": "m-3",
+      "req": "req-4",
+      "run": "run-fixture-1"
     }
   ]
 }

@@ -1,0 +1,25 @@
+{
+  "producer": "php fg-replay v1",
+  "rows": [
+    {
+      "req": "forbidden",
+      "run": "271d2dde86a0",
+      "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37"
+    },
+    {
+      "req": "missing",
+      "run": "271d2dde86a0",
+      "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37"
+    },
+    {
+      "req": "owner",
+      "run": "271d2dde86a0",
+      "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37"
+    },
+    {
+      "req": "repeat",
+      "run": "271d2dde86a0",
+      "state_digest": "ac94745395778e945a94ce014b7bf2e187fba6377a5c76543effe089ff53ed37"
+    }
+  ]
+}

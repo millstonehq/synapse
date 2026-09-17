@@ -1,0 +1,23 @@
+{
+  "producer": "replay fg-replay v1",
+  "rows": [
+    {
+      "req": "forbidden",
+      "run": "eca6e7930af3",
+      "seq": 2,
+      "target": "DELETE /api/cloud/project/21/issues/33"
+    },
+    {
+      "req": "missing",
+      "run": "eca6e7930af3",
+      "seq": 3,
+      "target": "DELETE /api/cloud/project/21/issues/9999"
+    },
+    {
+      "req": "owner",
+      "run": "eca6e7930af3",
+      "seq": 1,
+      "target": "DELETE /api/cloud/project/21/issues/31"
+    }
+  ]
+}

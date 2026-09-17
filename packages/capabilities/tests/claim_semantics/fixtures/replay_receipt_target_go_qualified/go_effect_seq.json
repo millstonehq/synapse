@@ -1,0 +1,45 @@
+{
+  "producer": "go fg-replay v1",
+  "rows": [
+    {
+      "kind": "update",
+      "pk": "ab0000bbff6e25728608fb8a89853602b0080c27d05dfdf456d423b868457b80",
+      "req": "forbidden",
+      "run": "eca6e7930af3",
+      "seq": 1,
+      "table": "authentication"
+    },
+    {
+      "kind": "update",
+      "pk": "70f071939d841dde8dac6062fafaa33a8b010854cda70f16eea26a23521ea90d",
+      "req": "owner",
+      "run": "eca6e7930af3",
+      "seq": 1,
+      "table": "authentication"
+    },
+    {
+      "kind": "update",
+      "pk": "eb1e33e8a81b697b75855af6bfcdbcbf7cbbde9f94962ceaec1ed8af21f5a50f",
+      "req": "owner",
+      "run": "eca6e7930af3",
+      "seq": 2,
+      "table": "issue"
+    },
+    {
+      "kind": "insert",
+      "pk": "865e4479268450c660ebf2573acc81eec4e29b6869adcbd1bfc3120a28ea2307",
+      "req": "owner",
+      "run": "eca6e7930af3",
+      "seq": 3,
+      "table": "go_issue_outbox"
+    },
+    {
+      "kind": "update",
+      "pk": "7f2253d7e228b22a08bda1f09c516f6fead81df6536eb02fa991a34bb38d9be8",
+      "req": "owner",
+      "run": "eca6e7930af3",
+      "seq": 4,
+      "table": "entity_statistics"
+    }
+  ]
+}
