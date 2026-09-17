@@ -1235,6 +1235,59 @@ Tests include malformed and cyclic certificates, substituted evidence IDs, remov
 
 ## 18. Stage D — Executable Shen workbench
 
+### 2026-09-17 Stage D built: `capcov experiment claims modelcheck` (branch `agent/modelcheck`)
+
+Delivered against shen1's contract (section 26, 2026-09-17): `claims/modelcheck.py`,
+`shen/modelcheck/prelude.shen` (untyped reification), `shen/modelcheck/types/*.shen` (one datatype or
+one judgement per file), the CLI, `tests/claim_semantics/test_modelcheck.py` with the
+labelled-synthetic `fixtures/model_min` and eight ill-formed mutants, each failing exactly the
+judgement its defect breaks. Checker `capcov-modelcheck` version `1.0.0`, producer class
+`modelcheck`; the fact and certificate files are what `replay_facts` reads.
+
+How the type checker is actually used, with the facts that were measured first (shen-go `c12933d`
+and shen-cl agree on every one): Shen decides once, when a `load` begins, whether that file is
+typechecked, so a `(tc +)` inside a script never applies to the script's own forms — the driver's
+top level runs untyped and only its nested loads after `(tc +)` are typed, which is exactly the
+boundary wanted. A datatype side condition sees the *syntactic* term being typed (`[cons X [cons Y
+[]]]`), so a whole-list predicate must walk that syntax (`tt.value`) and a condition on the head
+of a `(cons X Xs)` pattern sees the literal atom; a computed predicate applied to the raw term
+answers about the wrong object and never gates. Side conditions whose variables arrive through
+*type parameters* (`X : (notin (cons Y Ys))`, `(ne A B)`) do not gate and provoke "changing the
+type of F" warnings; structural rules with literal conclusions and pure unification do. A load
+unit with two definitions, or a bare define, is declared twice and stops gating. Every predicate a
+rule uses must be total, because the checker tries the rule against unrelated terms during search.
+
+The judgements (`prelude.shen` computes the literal; `types/` decides): `writes:<op>` — the
+declared write-set is a distinct string list, every table is one the effect vocabulary can write
+for the op, and it equals as a set the tables the as-is effects touch across three live witness
+states; `matrix:<op>` — admissibility over {committed, aborted, unknown} × {live, non-live} is
+total, disjoint and has the documented shape (committed on a non-live target refused, aborted
+admits exactly the pre-state, unknown admits one or two); `atlas:<endpoint>` — both atomicity
+facts and the failure policy exist with documented values; `registry:<n>:<id>` — the entry names an
+indexed rule and a known endpoint and both dispatch predicates run on the witness; `registry-ids`
+— distinct, none malformed. Ops without an as-is target on any live witness are reported skipped,
+never presumed. The model digest is the model's own recipe (sha256 over `shen/load.shen` and the
+files it loads, in order), and the run fails closed unless the loader loaded exactly those files.
+The certificate binds model files, checker sources, runtime binary, driver, the exact literals
+judged and the transcript; `recheck` recomputes everything but the type judgements and refuses
+tampering; a stale `model_well_formed.json` is removed when a model turns ill-formed.
+
+Results on the real models (read only, this host): the qualified receipt's model `08380c9c…f7b`
+is **well-formed** — 11 judgements pass, certificate `a00a096a…a41f`, fact emitted. The
+unqualified receipt's older model `8410a39b…f859` is **ill-formed**: `writes:delete-issue` fails
+because it declares `["issue"]` while its as-is effects touch `["issue" "mongo:issue"]` — the
+undeclared audit write the replay judge found at runtime, now refused statically from the model
+alone, before any receipt exists. Certificate `d6cc68ac…9515`, no fact. Suites: modelcheck 11 OK
+(live model included when `CAPCOV_MODEL_DIR` names it), Shen workbench 22 OK, assumptions 44 OK,
+CLI 19 OK.
+
+Not done and said so: the admitted row `(capcov-modelcheck, 1.0.0)` in `model_checkers.json` is
+the reviewer's signature and is left for the repository owner; the two certificate files go into
+shen1's fixtures as one commit after their CI fix, and shen1 flips the qualified receipt's
+expectation together with the signed row. The rule-pack walker of the earlier Stage D stays in
+the tree until its certificate-equality evidence is superseded. Well-formed is not "correct
+against PHP": that remains the judge's and the mutants' question.
+
 ### 2026-09-16 Stage D redefined: typed well-formedness of the Shen domain model (decision, repository owner)
 
 Verdict on the delivered workbench: it works (section 18 record, merged as `114a35a`) but its
