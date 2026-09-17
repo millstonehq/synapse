@@ -5885,3 +5885,29 @@ Stage D (typed well-formedness of the model, section 18 decision) can now start:
 must satisfy is fixed, the fixture that must flip from pending to qualified is named, and shen1's
 in-flight units are landed.
 
+### 2026-09-17 PR #50 CI repaired: the judge's rule pack ships as package data; Stage D lands on the line
+
+Upstream's "Test and build capability package" job installs the wheel into a fresh prefix and
+runs `unittest discover -s tests` with that interpreter, so `__file__`-relative resolution lands
+in the installed tree. shen1's round two resolved `rules-replay-v1.json` and the replay join that
+way and went red on `49b4ab7` (2 failures, 20 errors: `test_assumption_registry.CommandLineTest`,
+`test_target_go_replay_receipt.NoLearnReceiptTest`, `test_souffle_compile_unit.ProgramIdentityTests`).
+Fix on `experiment/r2-judge` `2ddd1d3`: `7376d00` ships the pack as package data through
+`importlib.resources` with a byte-identity test against the reviewed `experiments/` copy, which
+stays canonical; `2ddd1d3` makes the assumptions CLI refuse a bad `--receipt` before importing
+the join and never writes a refusal into `--out`; source-tree-only tests skip precisely when the
+tree is absent. Merged as `350af8b`; the job's condition reproduced here independently (wheel
+built, installed into a venv, `unittest discover -s tests` with that python, no source on the
+path): `Ran 1360 tests`, `OK (skipped=160)` at `d861154`. Source-tree regression bound to `d861154`: `Ran 1360
+tests in 577.9s`, `OK (skipped=160)`. Stage D (`675a388`, `e6d2b8a`) and the
+pilot's widened pending shape (`d861154`) ride the same push.
+
+Certificate hygiene found on the way: the checker's runtime record carried the launcher and
+binary as absolute host paths; `e6d2b8a` records basenames and the binary's sha256 only, which
+is the evidence. The three fixture files (qualified: fact + certificate `65cffd45…9b`; unqualified:
+ill-formed certificate `b377e6bc…`) sit on `agent/modelcheck-fixtures` `251433b` on
+`pyrex41/synapse`, not on the line: placing the fact without the reviewer's admitted row moves
+the qualified receipt's missing premise from `model_well_formed` to `model_checker_admitted`
+(measured: six of shen1's assertions move), so fact, signed row and assertion flip land as one
+reviewable change owned by shen1, waiting on the repository owner's signature.
+
