@@ -663,10 +663,14 @@ class FgGoStaticPilotTest(unittest.TestCase):
                 if entry["op_qualified"] == "supported":
                     self.assertEqual(entry["qualification"], "qualified")
                     self.assertEqual(entry["missing_premise"], [])
-                elif entry["qualification"] == "pending model_well_formed":
+                elif entry["qualification"].startswith("pending "):
+                    # pending one Stage D premise: the well-formedness certificate itself, or
+                    # the reviewer's admission of the checker that produced it
+                    premise = entry["qualification"].split(" ", 1)[1]
+                    self.assertIn(premise, ("model_well_formed", "model_checker_admitted"))
                     self.assertEqual(entry["op_qualified"], "unresolved", entry)
-                    self.assertEqual(entry["missing_premise"], ["model_well_formed"])
-                    self.assertEqual(entry["blocking_premise"], {"relation": "model_well_formed", "holds": False})
+                    self.assertEqual(entry["missing_premise"], [premise])
+                    self.assertEqual(entry["blocking_premise"], {"relation": premise, "holds": False})
                 else:
                     self.assertEqual(entry["qualification"], "unsupported", entry)
                     self.assertEqual(entry["op_qualified"], "unresolved", entry)
