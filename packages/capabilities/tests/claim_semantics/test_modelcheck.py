@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from capcov.claims import modelcheck
@@ -209,6 +210,33 @@ class CheckerTest(unittest.TestCase):
                                   tempfile.mkdtemp(prefix="capcov-no-model-")], capture_output=True, text=True, env=env, timeout=600)
         self.assertEqual(missing.returncode, 3)
         self.assertEqual(json.loads(missing.stdout)["operational_failure"], "modelcheck-failure")
+
+
+class PreflightTest(unittest.TestCase):
+    """The profile entry never raises and names what is missing."""
+
+    def test_unavailable_runtime_is_a_named_refusal(self) -> None:
+        with unittest.mock.patch.dict(os.environ, {"BIFROST_SHEN_GO": ""}):
+            report = modelcheck.preflight(MODEL_MIN)
+        self.assertEqual(report["status"], "unavailable")
+        self.assertIsNone(report["fact"])
+        self.assertIn("BIFROST_SHEN_GO", report["error"])
+
+    def test_not_a_model_is_a_failure_not_a_verdict(self) -> None:
+        report = modelcheck.preflight(tempfile.mkdtemp(prefix="capcov-no-model-"))
+        self.assertIn(report["status"], ("failed", "unavailable"))
+        self.assertIsNone(report["fact"])
+
+    @unittest.skipIf(RUNTIME_REASON, RUNTIME_REASON or "")
+    def test_verdicts_carry_the_fact_only_when_well_formed(self) -> None:
+        good = modelcheck.preflight(MODEL_MIN)
+        self.assertEqual(good["status"], "well-formed")
+        self.assertEqual(good["fact"]["checker"], modelcheck.CHECKER)
+        self.assertEqual(good["fact"]["certificate"], good["certificate_sha256"])
+        bad = modelcheck.preflight(_mutate("atlas-missing-required-fact"))
+        self.assertEqual(bad["status"], "ill-formed")
+        self.assertIsNone(bad["fact"])
+        self.assertEqual([f["id"] for f in bad["failures"]], ["atlas:delete-issue"])
 
 
 @unittest.skipIf(RUNTIME_REASON, RUNTIME_REASON or "")

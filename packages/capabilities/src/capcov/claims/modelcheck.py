@@ -417,6 +417,36 @@ def check(model_dir: str | os.PathLike[str], *, out_dir: str | os.PathLike[str] 
             shutil.rmtree(workdir, ignore_errors=True)
 
 
+def preflight(model_dir: str | os.PathLike[str], *, out_dir: str | os.PathLike[str] | None = None,
+              timeout: float | None = None) -> dict[str, Any]:
+    """The one call a producer profile makes.  Never raises.
+
+    ``status`` is ``well-formed`` / ``ill-formed`` (a verdict of the type
+    checker), ``unavailable`` (the pinned runtime or the checker sources are
+    missing -- a named refusal for the caller to surface, never a downgrade),
+    or ``failed`` (the checker could not reach a verdict).  Only ``well-formed``
+    carries a ``fact`` row.
+    """
+    try:
+        result = check(model_dir, out_dir=out_dir, timeout=timeout)
+    except ModelcheckUnavailable as exc:
+        return {"status": "unavailable", "model": None, "fact": None, "certificate_sha256": None,
+                "failures": [], "error": str(exc)}
+    except ModelcheckFailure as exc:
+        digest = None
+        try:
+            digest = model_digest(model_dir)
+        except ModelcheckFailure:
+            pass
+        return {"status": "failed", "model": digest, "fact": None, "certificate_sha256": None,
+                "failures": [], "error": str(exc)}
+    return {"status": result.status, "model": result.model_digest,
+            "fact": result.fact["rows"][0] if result.fact else None,
+            "certificate_sha256": result.certificate["certificate_sha256"],
+            "failures": [{"id": j.id, "message": j.message} for j in result.failures],
+            "error": None}
+
+
 def recheck(certificate: dict[str, Any], model_dir: str | os.PathLike[str] | None = None) -> RecheckResult:
     """Recompute what needs no runtime: the certificate's own digest, the model
     digest and file hashes against ``model_dir`` when given, every unit's text
@@ -471,5 +501,5 @@ def recheck(certificate: dict[str, Any], model_dir: str | os.PathLike[str] | Non
 
 __all__ = ["CHECKER", "CHECKER_VERSION", "CERTIFICATE_KIND", "PRODUCER_CLASS", "DATATYPES", "JUDGES",
            "ModelcheckUnavailable", "ModelcheckFailure", "Runtime", "Judgement", "CheckResult", "RecheckResult",
-           "model_files", "model_digest", "modelcheck_dir", "runtime", "render_driver", "check", "recheck",
+           "model_files", "model_digest", "modelcheck_dir", "runtime", "render_driver", "check", "preflight", "recheck",
            "certificate_digest", "well_formed_file"]
