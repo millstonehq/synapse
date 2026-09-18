@@ -49,21 +49,20 @@ underlying evidence.
 
 ## Implementation state
 
-On the optional-profile branch, the claims judge gate and evaluator selection
-have focused reviews; the producer-profile name is present. The Shen model
-preflight, static residue and scoped call-graph witness, lazy Jev registration,
-wheel/import-hygiene proof, documentation and CI integration remain to be
-completed. The stated verification is bounded: no-extras wheel install,
-golden comparison, one regression run and one CI job, each with a ten-minute
-integration-test ceiling. This ADR accepts the compatibility direction; it
-does not claim the entire profile matrix is implemented.
+The claims judge gate, evaluator selection, Shen model preflight, static residue
+and scoped call-graph witness, and lazy Jev registration have focused tests. The
+default compatibility gate builds a CPython 3.13 wheel, installs it with no
+extras, asserts that the source checkout is not imported, and compares
+normalized default outputs byte for byte with the upstream golden. CI runs that
+gate as a separate ten-minute job. This ADR accepts the compatibility direction;
+it does not claim live SCIP or Shen qualification.
 
 ## Evidence and limits
 
-The optional branch head `d8cdeba` is based on upstream compatibility reference
-`1b6a47a`. Public source entry points include
+The optional branch's compatibility reference is upstream `649be7f`. Public
+source entry points include
 `packages/capabilities/src/capcov/claims/replay/judge.py`,
 `packages/capabilities/src/capcov/claims/static/closure.py`, and
-`packages/capabilities/tests/test_cli_judge.py`. The branch recorded a 672-test
-upstream baseline. That historical result does not establish the unfinished
-profile matrix: the no-extras wheel proof and CI job remain pending.
+`packages/capabilities/tests/test_cli_judge.py`. The retained 672-test upstream
+suite record is historical evidence from `1b6a47a`; the installed-wheel golden
+job is the current default-path compatibility gate.

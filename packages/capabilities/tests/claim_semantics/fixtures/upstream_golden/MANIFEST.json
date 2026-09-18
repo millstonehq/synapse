@@ -61,7 +61,7 @@
     "outcomes/help.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
     "outcomes/help.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "outcomes/help.stdout": "62a578680886ba7b2fe140e9e7aa341c0e008b026f07bd3a5d35d9d4032bf7f5",
-    "python_app/capabilities.json": "3a7c3d3f7ee8457e433c7d8a0eca66d9b0d6e84c993c659a513ad8198af95751",
+    "python_app/capabilities.json": "a956969709d391a0fbdc40bc53b47a007ca4f795509055265bf5fea449d26d3e",
     "python_app/capcov.toml": "b4e4efa7c6f04786e1ad7ccb75f164c3131a41088fed8ee63a92884ce031c02c",
     "python_app/coverage.json": "7ed8698733b26ae899e68a12169ff41afddf8bea0cf3cf2a73a6b24023ac7cd7",
     "python_app/discover.cmd": "9c084aa7774a10fdfdba66852bec7625d53bd50384978f9107b6bd448e7cf50d",
@@ -81,7 +81,7 @@
     "python_app/observe.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
     "python_app/observe.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "python_app/observe.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "python_app/observed.json": "bb9f3f1c7965834adf3d18ac668755a26ea48b591397b97e930566fab42388fd",
+    "python_app/observed.json": "2e8626cf93d542a8440565dc524c711ba0e4194eb6028b2b82c6c4ee36ffb98b",
     "python_app/reconcile.cmd": "fcf240f04f06373be0c1b757bce8a816c9eab1196c07f6c41eebebbadb252191",
     "python_app/reconcile.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
     "python_app/reconcile.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -90,7 +90,7 @@
     "python_app/report.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
     "python_app/report.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "python_app/report.stdout": "1421015f95bd360eaff90c3b574d2c7d0d3bd79ad5975cd583e5cd560f6660cf",
-    "structured_spec/capabilities.json": "fc8548ee305a7284bb59f5f76504d8cb9b81dd0ce6c6cbb79473d1e051065daf",
+    "structured_spec/capabilities.json": "e87b193908665f8ed284f653fbada865ab4edb2d11679c221712ac28bba6fc87",
     "structured_spec/capcov.toml": "922a96a0255e7b843bfa2106b0799426863612edc77469241462813d2f1a5a8d",
     "structured_spec/discover.cmd": "2302d5c578943ee0cb1c9c706c0e0f92e155694d20c3fa4cbb21eea20050cc18",
     "structured_spec/discover.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
@@ -100,6 +100,6 @@
     "suite/skips.txt": "b59ef2d36222bc6a91b677bf74b29445e918abbf5dbe02205f75c1a4a53aee8a",
     "suite/summary.txt": "2b85de861c52f01996ec5c73c9762ec13751d024ad4c4d6362a4a53e95caf97c"
   },
-  "upstream_commit": "1b6a47a571a32c68fa056a4fe44c51258c2d8f42",
-  "upstream_commit_short": "1b6a47a"
+  "upstream_commit": "649be7f84f5cb191531e3f65688615f16f55bb65",
+  "upstream_commit_short": "649be7f"
 }

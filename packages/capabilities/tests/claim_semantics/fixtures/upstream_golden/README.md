@@ -10,7 +10,7 @@ reproduce all of it byte-for-byte after normalization when no flag and no
 
 | | |
 |---|---|
-| upstream commit | `1b6a47a571a32c68fa056a4fe44c51258c2d8f42` (`1b6a47a`, "Merge pull request #49 from pyrex41/perf/incremental-source-snapshots") |
+| upstream commit | `649be7f84f5cb191531e3f65688615f16f55bb65` (`649be7f`, "Merge pull request #51 from pyrex41/perf/blob-keyed-snapshot-cache") |
 | package | `packages/capabilities` of that checkout, referred to below as `<upstream>/packages/capabilities` |
 | python | CPython **3.13.12** (`3.13.12 (main, Feb  3 2026, 17:53:27) [Clang 21.1.7]`), the host interpreter — no `nix develop`, no venv |
 | installed extras | **none**. `tree_sitter`, `tree_sitter_language_pack`, `pytest`, `yaml` are all absent from the interpreter |
@@ -38,7 +38,13 @@ hidden PATH is what removes it. The other five are absent host-wide.)
 `git` resolves to `/usr/bin/git`, which upstream's own
 `tests/test_cli_engine.py` needs to fetch its pre-unification baseline blob.
 
-## 1. Upstream's full unittest suite
+## 1. Historical upstream full unittest suite
+
+The suite transcript below remains the run from `1b6a47a`. It is retained as
+historical context and is not used by the byte comparison. The CLI artifacts
+and manifest provenance were refreshed at `649be7f` after the upstream blob
+cache added three source-verification fields; the optional-profile gate runs
+the focused artifact comparison from an installed wheel.
 
 ```
 cd <upstream>/packages/capabilities

@@ -1,6 +1,6 @@
 """With no flag and no optional tool, this branch reproduces upstream main byte for byte.
 
-`fixtures/upstream_golden/` was produced by upstream main (commit 1b6a47a) from
+`fixtures/upstream_golden/` was produced by upstream main (commit 649be7f) from
 a separate read-only checkout, with the optional toolchain hidden from PATH and
 no extras installed -- see its README.md.  This test replays the same
 `generate.py` against THIS tree, through the same `normalize.py`, and requires
@@ -94,6 +94,7 @@ INSTALLED_EXTRAS = _installed_extras()
 #: exactly like the extras precondition above: this is a statement about which
 #: interpreter the fixture describes, never a verdict about the branch.
 GOLDEN_PYTHON = (3, 13)
+INSTALLED_WHEEL_ENV = "CAPCOV_TEST_INSTALLED_WHEEL"
 
 
 def _wrong_interpreter() -> str:
@@ -144,14 +145,29 @@ class UpstreamGoldenTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.workspace = Path(tempfile.mkdtemp(prefix="capcov-golden-"))
         raw, cls.actual = cls.workspace / "raw", cls.workspace / "normalized"
+        pythonpath = [str(PACKAGE_ROOT)]
+        if os.environ.get(INSTALLED_WHEEL_ENV) != "1":
+            pythonpath.insert(0, str(PACKAGE_ROOT / "src"))
         env = {
             "PATH": _hidden_path(),
             "HOME": os.environ.get("HOME", str(cls.workspace)),
             "TERM": "dumb",
             "LANG": "en_US.UTF-8",
-            "PYTHONPATH": os.pathsep.join([str(PACKAGE_ROOT / "src"), str(PACKAGE_ROOT)]),
+            # The wheel proof keeps only the test support package on PYTHONPATH;
+            # capcov itself must then resolve from the installed distribution.
+            "PYTHONPATH": os.pathsep.join(pythonpath),
             "CAPCOV_CAP_ROOT": str(PACKAGE_ROOT),
         }
+        if os.environ.get(INSTALLED_WHEEL_ENV) == "1":
+            imported = subprocess.run(
+                [sys.executable, "-c", "import pathlib, capcov; print(pathlib.Path(capcov.__file__).resolve())"],
+                cwd=str(cls.workspace), env=env, text=True, capture_output=True,
+            )
+            assert imported.returncode == 0, imported.stdout + imported.stderr
+            assert not imported.stdout.strip().startswith(str(PACKAGE_ROOT / "src")), (
+                "installed-wheel proof imported capcov from the source checkout: "
+                + imported.stdout.strip()
+            )
         generated = subprocess.run([sys.executable, str(GENERATE), str(raw)],
                                    cwd=str(PACKAGE_ROOT), env=env, text=True,
                                    capture_output=True)
@@ -292,6 +308,11 @@ class GoldenPreconditionsAreTheOnesTheFixtureRecordsTests(unittest.TestCase):
         for name in GOLDEN_EXTRAS:
             with self.subTest(name):
                 self.assertIn(name, readme)
+
+    def test_installed_wheel_proof_cannot_skip(self) -> None:
+        """CI's wheel gate must fail instead of passing only the guard tests."""
+        if os.environ.get(INSTALLED_WHEEL_ENV) == "1":
+            self.assertEqual(GOLDEN_PRECONDITION, "")
 
 
 if __name__ == "__main__":
