@@ -223,10 +223,9 @@ def certify_claims(bundle: Bundle, result: Any, *,
     against each closure; otherwise the disagreement is raised rather than
     reported, because a judge with two answers has none.
 
-    ``result`` may carry two closures (python, interpreted Souffle) or three
-    (plus the compiled Souffle checker, as ``result.compiled``); every closure
-    present is held to the same agreement, so admitting the compiled kernel
-    does not widen what a certificate is allowed to rest on.
+    ``result`` may be one selected ``KernelReport``, carry two differential
+    closures, or carry three (plus compiled Souffle). Every closure present is
+    checked; a single-kernel certificate records exactly that selected engine.
     """
     closures = _closures(result)
     certificates: dict[str, dict[str, Any]] = {}
@@ -254,11 +253,13 @@ def certify_claims(bundle: Bundle, result: Any, *,
 
 
 def _closures(result: Any) -> list[tuple[Any, str]]:
-    """Every agreeing kernel's relations and backend name, python first.
+    """Every selected or agreeing kernel's relations and backend name.
 
     A three-way result carries ``compiled``; a two-way one does not, and a
     hand-built stand-in need not name its backends.
     """
+    if hasattr(result, "relations") and hasattr(result, "backend"):
+        return [(result.relations, result.backend)]
     reports = [result.python, result.souffle]
     compiled = getattr(result, "compiled", None)
     if compiled is not None:

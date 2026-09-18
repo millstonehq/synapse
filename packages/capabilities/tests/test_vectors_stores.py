@@ -16,6 +16,7 @@ returning.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import socketserver
 import sys
@@ -272,6 +273,8 @@ class _FakeRedisHandler(socketserver.StreamRequestHandler):
             state.values.clear()
             state.ttls.clear()
             return b"+OK\r\n"
+        if name == b"DBSIZE":
+            return b":%d\r\n" % len(state.values)
         if name == b"SCAN":
             keys = sorted(state.values)
             start = int(args[1])
@@ -408,8 +411,25 @@ class RedisStoreTests(unittest.TestCase):
         inspection = self.store(queues={"default": "queues:default", "mail": "queues:mail"}).inspect()
         self.assertEqual(inspection, {
             "redis_keys": ["cache:x", "cache:y", "queues:default", "session:1", "session:2"],
+            "redis": {key.decode(): {"sha256": hashlib.sha256(payload).hexdigest(), "expiring": ttl > 0}
+                      for key, ttl, payload in self.store().snapshot()},
             "queues": {"default": 2, "mail": 0},
         })
+
+    def test_observer_detects_same_key_value_and_expiry_changes_without_leaking_values(self):
+        self.seed()
+        store = self.store()
+        mark = store.mark()
+        client = store.connect()
+        try:
+            client.call("SET", "session:1", "private-new-value")
+            client.call("PEXPIRE", "cache:x", 60000)
+        finally:
+            client.close()
+        changes = store.changes_since(mark)
+        self.assertEqual(changes["informational"]["redis.values"]["changed"],
+                         ["cache:x", "session:1"])
+        self.assertNotIn("private-new-value", json.dumps(changes))
 
     def test_select_is_issued_for_a_non_default_db(self):
         self.store(db=3).ping()
@@ -526,6 +546,7 @@ class ComposedFixtureTests(unittest.TestCase):
             "collections": {"audit": [{"n": 1}]},
             "queues": {"default": 1},
             "redis_keys": ["a", "b"],
+            "redis": {},
             "objects": {"bucket-a": {"k": "e"}},
         })
 

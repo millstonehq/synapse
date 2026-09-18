@@ -15,6 +15,7 @@ socket mid-reply is ``RedisError`` too, never a truncated snapshot.
 
 from __future__ import annotations
 
+import hashlib
 import socket
 
 
@@ -160,43 +161,58 @@ class RedisStore:
             client.close()
 
     def inspect(self) -> dict:
-        """``{"redis_keys": [sorted keys], "queues": {name: length}}``."""
+        """Keys plus secret-free DUMP digests and expiry presence."""
         client = self.connect()
         try:
-            keys = sorted(key.decode(errors="replace") for key in client.keys())
+            entries = client.snapshot()
+            keys = sorted(key.decode(errors="replace") for key, _, _ in entries)
+            values = {key.decode(errors="replace"): {
+                "sha256": hashlib.sha256(payload).hexdigest(), "expiring": ttl > 0}
+                for key, ttl, payload in entries}
             queues = {name: int(client.call("LLEN", key)) for name, key in sorted(self.queues.items())}
         finally:
             client.close()
-        return {"redis_keys": keys, "queues": queues}
+        return {"redis_keys": keys, "redis": values, "queues": queues}
 
     # -- observation ----------------------------------------------------------
-    # Key-value changes are informational (a cache is inside the box), so the
-    # cheap honest signal is DBSIZE: when it moved, list keys and diff; when it
-    # did not, report nothing. A value rewritten in place under an existing key
-    # is not observed here -- that is the documented limit of this store.
+    # Values are represented only by DUMP digests plus whether they expire;
+    # evidence never contains the Redis payload.  The scan is bounded.  Above
+    # the bound the store reports an unbound change rather than claiming a
+    # same-size database was unchanged.
 
-    def mark(self) -> tuple[int, list[str]]:
+    def mark(self) -> dict:
         client = self.connect()
         try:
             size = int(client.call("DBSIZE"))
-            keys = sorted(key.decode(errors="replace") for key in client.keys()) if size <= self.observe_keys_up_to else []
+            if size > self.observe_keys_up_to:
+                return {"size": size, "bounded": False}
+            entries = client.snapshot()
         finally:
             client.close()
-        return (size, keys)
+        return {"size": size, "bounded": True,
+                "values": {key.decode(errors="replace"): (hashlib.sha256(payload).hexdigest(), ttl > 0)
+                           for key, ttl, payload in entries}}
 
-    def changes_since(self, mark: tuple[int, list[str]]) -> dict:
-        size_before, keys_before = mark
+    def changes_since(self, mark: dict) -> dict:
         client = self.connect()
         try:
             size = int(client.call("DBSIZE"))
-            if size == size_before:
-                return {"rows": {}, "collections": {}, "unbound": []}
-            keys = sorted(key.decode(errors="replace") for key in client.keys())
+            if not mark.get("bounded") or size > self.observe_keys_up_to:
+                return {"rows": {}, "collections": {}, "unbound": ["redis:state-over-limit"]}
+            entries = client.snapshot()
         finally:
             client.close()
-        before = set(keys_before)
-        added, removed = sorted(set(keys) - before), sorted(before - set(keys))
+        current = {key.decode(errors="replace"): (hashlib.sha256(payload).hexdigest(), ttl > 0)
+                   for key, ttl, payload in entries}
+        previous = mark.get("values") or {}
+        before, after = set(previous), set(current)
+        added, removed = sorted(after - before), sorted(before - after)
+        changed = sorted(key for key in before & after if previous[key] != current[key])
+        if not (added or removed or changed):
+            return {"rows": {}, "collections": {}, "unbound": []}
         return {"rows": {}, "collections": {}, "unbound": [],
-                "redis": {"added": added, "removed": removed, "size": [size_before, size]}}
+                "informational": {"redis.values": {"added": added, "removed": removed,
+                                                      "changed": changed,
+                                                      "size": [mark["size"], size]}}}
 
     observe_keys_up_to = 20000

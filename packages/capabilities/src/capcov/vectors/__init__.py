@@ -31,8 +31,11 @@ The design, fixed here and not per consumer:
 * **Normalization happens at compare time.** Recorded vectors stay raw. The
   versioned policy in ``normalize`` masks volatile values (timestamps, tokens,
   generated ids) on BOTH sides when they are compared, so a policy change never
-  forces a re-record and a recorded artifact is always what the incumbent
-  actually said.
+  forces a re-record. Replay artifact v3 separately binds frozen policy config,
+  imported source bytes and loaded normalizer code identity; replay refuses to
+  publish if the source file drifts before publication. Recording provenance
+  remains the capture-time account. These identities are local disclosures,
+  not authenticated execution attestations.
 * **Gaps are never faked.** A cell that cannot be driven, a store that cannot
   be inspected, a fault that cannot be injected: each is a named gap carried
   through the artifacts to the rollup. A vector count that silently excludes
@@ -49,4 +52,17 @@ Modules:
 * ``normalize``  the compare-time volatility policy, versioned
 * ``diff``       store deltas between two inspections; first difference of two
                  recorded results
+* ``replay``     the candidate-side producer, bound to exact vector bytes
+* ``claims``     strict ingestion into Python/Souffle claims and certificates
+
+The claim adapter deliberately does not close a whole-system census.  It
+proves one operation artifact at a time; the consumer must bind the complete,
+versioned operation census and require every operation before reporting a
+system-wide percentage.
+
+``vectors.json`` and ``replay.json`` contain executable inputs and observed
+responses, so writers mark them ``private-evidence`` and mode 0600. They are
+not publication artifacts. The claim adapter exports only identities and
+digests and treats replay leaves as local assumptions until a separate,
+reviewed producer attestation promotes them.
 """
