@@ -376,13 +376,24 @@ class ArtifactRoundTripTests(unittest.TestCase):
         artifact = schema.ReplayArtifact(operation="orders.update", mutant="no-permission-check", vectors_recorded=2,
                                          vectors_passing=1, gaps_recorded=1, candidate_sha256="def",
                                          vectors_provenance={"snapshot_sha256": "abc"},
+                                         comparison_policy=normalize.comparison_policy_identity(),
                                          results=[schema.ReplayResult("authorized", "authorized happy path", True),
                                                   schema.ReplayResult("no-permission", "actor without the permission", False,
                                                                       "/steps[0]/status: expected 403 got 200")])
         data = artifact.to_json()
+        self.assertEqual(data["version"], 3)
         self.assertEqual(data["results"][1]["pass"], False)
         self.assertEqual(data["gaps_recorded"], 1)
         self.assertEqual(schema.ReplayArtifact.from_json(data), artifact)
+        missing_policy = {**data}
+        del missing_policy["comparison_policy"]
+        with self.assertRaisesRegex(ValueError, "comparison_policy"):
+            schema.ReplayArtifact.from_json(missing_policy)
+        # Legacy v2 replay data has only recording provenance. Do not infer an
+        # executed policy identity while loading it for historical judging.
+        legacy_v2 = {**data, "version": 2}
+        with self.assertRaisesRegex(ValueError, "version must be 3"):
+            schema.ReplayArtifact.from_json(legacy_v2)
 
     def test_unknown_versions_are_refused(self) -> None:
         with self.assertRaises(ValueError) as caught:

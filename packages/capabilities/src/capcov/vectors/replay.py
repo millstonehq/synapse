@@ -47,6 +47,8 @@ def replay(operations, fixture, candidate, out_dir, mutant=None, *,
     if not isinstance(run, str) or not run:
         raise ValueError("run_id must be a non-empty string")
     say = log or (lambda line: None)
+    normalizer = normalize.normalize
+    comparison_policy = normalize.comparison_policy_identity()
     token = fixture.snapshot()
     session = Session(fixture, token)
     summary = {"run_id": run, "operations": [], "vectors_recorded": 0,
@@ -65,8 +67,8 @@ def replay(operations, fixture, candidate, out_dir, mutant=None, *,
                 raise ValueError(f"candidate cannot drive recorded vector {vector.id!r}: {planned.reason}")
             actual = run_vector(planned, fixture, token, candidate, vectors.declared_stores,
                                 informational, session)
-            expected_normal = normalize.normalize(vector.expected)
-            actual_normal = normalize.normalize(actual)
+            expected_normal = normalizer(vector.expected)
+            actual_normal = normalizer(actual)
             difference = diff.first_difference(expected_normal, actual_normal)
             result = ReplayResult(vector.id, vector.cell, difference is None, difference)
             results.append(result)
@@ -75,6 +77,7 @@ def replay(operations, fixture, candidate, out_dir, mutant=None, *,
             operation=operation.id, mutant=mutant, vectors_recorded=len(vectors.vectors),
             vectors_passing=sum(item.passed for item in results), gaps_recorded=len(vectors.gaps),
             candidate_sha256=candidate_digest, vectors_provenance=dict(vectors.provenance),
+            comparison_policy=comparison_policy,
             vectors_sha256=_sha256(vectors.to_json()), run_id=run, results=results)
         write_replay(out_dir, operation, artifact)
         summary["operations"].append({"id": operation.id, "vectors": len(results),

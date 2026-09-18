@@ -27,7 +27,7 @@ ACCESS_CLASSES = ("read", "write", "webhook", "scheduled", "queued", "command")
 REQUEST_KINDS = ("http", "shell")
 
 VECTORS_ARTIFACT_VERSION = 2
-REPLAY_ARTIFACT_VERSION = 2
+REPLAY_ARTIFACT_VERSION = 3
 
 # Header names whose values are credentials. Redacted from every serialized
 # request; the set is by NAME, generic across products, and deliberately small.
@@ -388,6 +388,10 @@ class ReplayArtifact:
     ``gaps_recorded`` is carried from the vectors artifact so the rollup can
     show the cells that never ran beside the ones that did: a passing count
     over a shrunken denominator is not a pass.
+
+    Version 3 adds ``comparison_policy``: the exact normalizer source/config
+    identity used by the replay, separate from copied vectors recording
+    provenance. Older replay artifacts are refused by version check.
     """
 
     operation: str
@@ -397,6 +401,7 @@ class ReplayArtifact:
     gaps_recorded: int
     candidate_sha256: str | None
     vectors_provenance: dict
+    comparison_policy: dict
     vectors_sha256: str | None = None
     run_id: str | None = None
     operational_failure: str | None = None
@@ -413,6 +418,7 @@ class ReplayArtifact:
             "gaps_recorded": self.gaps_recorded,
             "candidate_sha256": self.candidate_sha256,
             "vectors_provenance": dict(self.vectors_provenance),
+            "comparison_policy": dict(self.comparison_policy),
             "vectors_sha256": self.vectors_sha256,
             "run_id": self.run_id,
             "operational_failure": self.operational_failure,
@@ -422,6 +428,8 @@ class ReplayArtifact:
     @classmethod
     def from_json(cls, data: dict) -> "ReplayArtifact":
         _require_version(data, REPLAY_ARTIFACT_VERSION, "replay artifact")
+        if not isinstance(data.get("comparison_policy"), dict):
+            raise ValueError("replay artifact comparison_policy must be an object")
         for name in ("vectors_recorded", "vectors_passing", "gaps_recorded"):
             if type(data.get(name)) is not int or data[name] < 0:
                 raise ValueError(f"replay artifact {name} must be a non-negative integer")
@@ -433,6 +441,7 @@ class ReplayArtifact:
             gaps_recorded=data["gaps_recorded"],
             candidate_sha256=data.get("candidate_sha256"),
             vectors_provenance=dict(data.get("vectors_provenance") or {}),
+            comparison_policy=dict(data["comparison_policy"]),
             vectors_sha256=data.get("vectors_sha256"),
             run_id=data.get("run_id"),
             operational_failure=data.get("operational_failure"),

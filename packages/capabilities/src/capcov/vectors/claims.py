@@ -39,6 +39,7 @@ from ..claims.souffle.compile import CompiledChecker
 from ..claims.ir import (Atom, Bundle, Claim, Column, Constant, Context, Evidence,
                          EvidenceMapping, RelationDecl, Rule, Variable, digest)
 from ..claims.validation import assert_valid
+from . import normalize
 from .schema import ReplayArtifact, VectorsArtifact
 
 RECORDER_PRODUCER = "capcov-vectors-recorder-v1"
@@ -124,6 +125,9 @@ def build_bundle(vectors: VectorsArtifact, replay: ReplayArtifact) -> Bundle:
         raise VectorClaimError("replay is not bound to the exact vectors artifact")
     if replay.vectors_provenance != vectors.provenance:
         raise VectorClaimError("replay and vectors provenance differ")
+    if not normalize.validate_comparison_policy_identity(replay.comparison_policy):
+        raise VectorClaimError(
+            "replay comparison-policy identity is missing, malformed, or internally inconsistent")
 
     expected = {vector.id: vector for vector in vectors.vectors}
     if len(expected) != len(vectors.vectors):
@@ -232,6 +236,8 @@ def build_bundle(vectors: VectorsArtifact, replay: ReplayArtifact) -> Bundle:
     bundle = Bundle(
         (passed, failed, matched, recorded, gap), tuple(facts), rules, tuple(claims),
         metadata=(("candidate_sha256", candidate), ("operation", operation),
+                  ("comparison_policy", replay.comparison_policy),
+                  ("comparison_policy_sha256", replay.comparison_policy["policy_sha256"]),
                   ("producer_authority", "local-unattested"),
                   ("replay_sha256", digest(replay.to_json())), ("vectors_sha256", recording)),
         evidence=tuple(evidence), mappings=tuple(mappings))

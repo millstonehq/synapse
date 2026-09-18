@@ -4,10 +4,12 @@ from dataclasses import replace
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from capcov.claims.differential import run_python
-from capcov.claims.ir import canonical_json
+from capcov.claims.ir import canonical_json, digest
 from capcov.vectors.claims import VectorClaimError, artifact_digest, build_bundle, judge
+from capcov.vectors import normalize
 from capcov.vectors.recorder import read_vectors, record, write_vectors
 from capcov.vectors.replay import read_replay, replay as replay_vectors
 from capcov.vectors.schema import Operation, ReplayArtifact, ReplayResult, StepSpec, Vector, VectorsArtifact
@@ -29,6 +31,7 @@ def pair(*, passed: bool = True, gaps=()):
         operation=vectors.operation, mutant=None, vectors_recorded=1,
         vectors_passing=int(passed), gaps_recorded=len(vectors.gaps),
         candidate_sha256=CANDIDATE, vectors_provenance=PROVENANCE,
+        comparison_policy=normalize.comparison_policy_identity(),
         vectors_sha256=artifact_digest(vectors), run_id="run-1",
         results=[ReplayResult("orders.update:authorized", "authorized", passed,
                               None if passed else "/steps[0]/status: expected 200 got 500")])
@@ -76,6 +79,7 @@ class VectorClaimTests(unittest.TestCase):
             self.assertEqual((Path(directory) / "health" / "replay.json").stat().st_mode & 0o777, 0o600)
         self.assertEqual(summary["vectors_passing"], 1)
         self.assertEqual(replay.vectors_sha256, artifact_digest(vectors))
+        self.assertEqual(replay.comparison_policy, normalize.comparison_policy_identity())
         self.assertEqual(replay.run_id, "run-1")
 
     def test_replay_json_rejects_string_boolean(self):
@@ -118,6 +122,10 @@ class VectorClaimTests(unittest.TestCase):
         got = verdicts(bundle)
         self.assertEqual([claim.semantic for claim in got.values()], ["supported", "supported"])
         self.assertEqual(dict(bundle.metadata)["vectors_sha256"], artifact_digest(vectors))
+        self.assertEqual(digest(dict(bundle.metadata)["comparison_policy"]),
+                         digest(replay.comparison_policy))
+        self.assertEqual(dict(bundle.metadata)["comparison_policy_sha256"],
+                         replay.comparison_policy["policy_sha256"])
         self.assertEqual(dict(bundle.metadata)["producer_authority"], "local-unattested")
         self.assertEqual({record.kind for record in bundle.evidence
                           if record.atom.relation.startswith("vector_replay_")}, {"assumption"})
@@ -139,6 +147,33 @@ class VectorClaimTests(unittest.TestCase):
         vectors, replay = pair()
         with self.assertRaisesRegex(VectorClaimError, "exact vectors artifact"):
             build_bundle(vectors, replace(replay, vectors_sha256="0" * 64))
+
+    def test_executed_comparison_policy_identity_is_required_and_exact(self):
+        vectors, replay = pair()
+        with self.assertRaisesRegex(VectorClaimError, "comparison-policy identity"):
+            build_bundle(vectors, replace(replay, comparison_policy=None))
+        for field in ("source_sha256", "config_sha256", "policy_sha256"):
+            with self.subTest(field=field):
+                tampered = dict(replay.comparison_policy)
+                tampered[field] = "0" * 64
+                with self.assertRaisesRegex(VectorClaimError, "comparison-policy identity"):
+                    build_bundle(vectors, replace(replay, comparison_policy=tampered))
+        tampered_config = dict(replay.comparison_policy)
+        tampered_config["config"] = {
+            **tampered_config["config"], "mask_volatile": "<changed>"}
+        with self.assertRaisesRegex(VectorClaimError, "comparison-policy identity"):
+            build_bundle(vectors, replace(replay, comparison_policy=tampered_config))
+
+    def test_historical_policy_identity_does_not_require_current_config(self):
+        vectors, replay = pair()
+        historical_identity = replay.comparison_policy
+        with patch("capcov.vectors.normalize.MASK_VOLATILE", "<changed-policy>"):
+            self.assertNotEqual(normalize.comparison_policy_identity(), historical_identity)
+            bundle = build_bundle(vectors, replay)
+        # Rejudging validates the recorded identity's self-consistency. It does
+        # not silently reinterpret old results under today's comparison policy.
+        self.assertEqual(digest(dict(bundle.metadata)["comparison_policy"]),
+                         digest(historical_identity))
 
     def test_required_cell_cannot_disappear_from_both_vectors_and_gaps(self):
         vectors, replay = pair()
@@ -192,6 +227,10 @@ class VectorClaimTests(unittest.TestCase):
         self.assertEqual(result.report.backend, "python")
         self.assertEqual(dict(result.bundle.metadata)["claim_kernel"], "python")
         self.assertEqual(len(result.certificates), 2)
+        self.assertEqual(digest(dict(result.bundle.metadata)["comparison_policy"]),
+                         digest(replay.comparison_policy))
+        self.assertTrue(all(certificate["bundle_digest"] == digest(result.bundle)
+                            for certificate in result.certificates.values()))
         self.assertTrue(all(value["certificate_sha256"] for value in result.verdicts().values()))
 
     def test_souffle_mode_runs_only_compiled_souffle(self):
