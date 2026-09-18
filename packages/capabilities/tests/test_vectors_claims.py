@@ -180,16 +180,41 @@ class VectorClaimTests(unittest.TestCase):
             with self.subTest(bad=bad), self.assertRaises(VectorClaimError):
                 build_bundle(vectors, bad)
 
-    def test_two_kernel_agreement_produces_certificates(self):
+    def test_python_mode_runs_only_python_and_produces_certificates(self):
         vectors, replay = pair()
+        calls = []
         with tempfile.TemporaryDirectory() as directory:
-            result = judge(vectors, replay, replay_root=directory,
-                           python_runner=run_python,
-                           souffle_runner=lambda bundle: replace(run_python(bundle), backend="souffle"),
+            result = judge(vectors, replay, replay_root=directory, kernel="python",
+                           python_runner=lambda bundle: calls.append("python") or run_python(bundle),
+                           compiled_runner=lambda bundle: calls.append("souffle") or run_python(bundle),
                            authority_runner=lambda bundle: Authority())
-        self.assertTrue(result.result.matched)
+        self.assertEqual(calls, ["python"])
+        self.assertEqual(result.report.backend, "python")
+        self.assertEqual(dict(result.bundle.metadata)["claim_kernel"], "python")
         self.assertEqual(len(result.certificates), 2)
         self.assertTrue(all(value["certificate_sha256"] for value in result.verdicts().values()))
+
+    def test_souffle_mode_runs_only_compiled_souffle(self):
+        vectors, replay = pair()
+        calls = []
+        result = judge(
+            vectors, replay, kernel="souffle",
+            python_runner=lambda bundle: calls.append("python") or run_python(bundle),
+            compiled_runner=lambda bundle: calls.append("souffle")
+            or replace(run_python(bundle), backend="souffle-compiled"),
+            authority_runner=lambda bundle: Authority())
+        self.assertEqual(calls, ["souffle"])
+        self.assertEqual(result.report.backend, "souffle-compiled")
+        self.assertEqual(dict(result.bundle.metadata)["claim_kernel"], "souffle")
+        self.assertEqual(len(result.certificates), 2)
+
+    def test_selected_kernel_failure_is_not_certified(self):
+        vectors, replay = pair()
+        failed = replace(run_python(build_bundle(vectors, replay)),
+                         backend="souffle-compiled", operational_failure="souffle-unavailable")
+        with self.assertRaisesRegex(VectorClaimError, "souffle-unavailable"):
+            judge(vectors, replay, kernel="souffle", compiled_runner=lambda bundle: failed,
+                  authority_runner=lambda bundle: Authority())
 
 
 if __name__ == "__main__":

@@ -2,7 +2,9 @@
 
 This is deliberately an adapter, not another vector roll-up.  It validates
 that a replay is the exact counterpart of one recorded artifact, emits typed
-evidence, and asks the existing Python and Souffle kernels to judge it.
+evidence, and asks the explicitly selected Python or Souffle kernel to judge
+it. Differential execution is an opt-in qualification gate, not the runtime
+default.
 
 Two claims stay separate:
 
@@ -24,14 +26,15 @@ that lets a caller self-promote them.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import re
 from pathlib import Path
 from typing import Any, Callable
 
 from ..claims import assumptions
 from ..claims import shen
-from ..claims.differential import KernelReport, compare, compare_three
+from ..claims.differential import (KernelReport, compare_three, run_python,
+                                   run_souffle_compiled)
 from ..claims.souffle.compile import CompiledChecker
 from ..claims.ir import (Atom, Bundle, Claim, Column, Constant, Context, Evidence,
                          EvidenceMapping, RelationDecl, Rule, Variable, digest)
@@ -55,6 +58,13 @@ class VectorJudgment:
     certificates: dict[str, dict[str, Any]]
     row_certificates: dict[str, list[dict[str, Any]]]
 
+    @property
+    def report(self) -> KernelReport:
+        """The report used for verdicts, independent of execution mode."""
+        if isinstance(self.result, KernelReport):
+            return self.result
+        return self.result.compiled
+
     def verdicts(self) -> dict[str, dict[str, Any]]:
         return {
             claim.key: {
@@ -65,7 +75,7 @@ class VectorJudgment:
                 "certificate_sha256": (assumptions.certificate_sha256(self.certificates[claim.key])
                                        if claim.key in self.certificates else None),
             }
-            for claim in self.result.python.claims
+            for claim in self.report.claims
         }
 
 
@@ -230,28 +240,42 @@ def build_bundle(vectors: VectorsArtifact, replay: ReplayArtifact) -> Bundle:
 
 def judge(vectors: VectorsArtifact, replay: ReplayArtifact, *,
           replay_root: str | Path = ".capcov/vector-claims",
-          kernels: str = "two", checker: CompiledChecker | None = None,
+          kernel: str = "souffle", checker: CompiledChecker | None = None,
           cache_dir: str | Path = ".capcov/compiled", executable: str = "souffle",
           python_runner: Callable[[Bundle], KernelReport] | None = None,
-          souffle_runner: Callable[[Bundle], KernelReport] | None = None,
+          compiled_runner: Callable[[Bundle], KernelReport] | None = None,
           authority_runner: Callable[[Bundle], Any] = shen.authority) -> VectorJudgment:
-    """Require Shen rule authority, then run kernels and certify supported rows."""
+    """Judge with one selected kernel, or opt into the differential gate.
+
+    ``python`` executes only the Python evaluator. ``souffle`` executes only
+    the compiled Souffle checker. ``differential`` is the explicit publication
+    gate and runs Python, interpreted Souffle, and compiled Souffle.
+    """
     bundle = build_bundle(vectors, replay)
+    if kernel not in ("python", "souffle", "differential"):
+        raise ValueError("kernel must be 'python', 'souffle', or 'differential'")
+    bundle = replace(bundle, metadata=(*bundle.metadata, ("claim_kernel", kernel)))
     authority = authority_runner(bundle)
     if not authority.ok:
         raise VectorClaimError(f"Shen authority rejected vector rules: {authority.failed_checks()}")
-    if kernels not in ("two", "three"):
-        raise ValueError("kernels must be 'two' or 'three'")
-    options: dict[str, Any] = {"replay_root": replay_root}
-    if python_runner is not None:
-        options["python_runner"] = python_runner
-    if souffle_runner is not None:
-        options["souffle_runner"] = souffle_runner
-    if kernels == "two":
-        result = compare(bundle, **options)
+    selected_python = python_runner or run_python
+    if compiled_runner is None:
+        selected_compiled = lambda candidate: run_souffle_compiled(
+            candidate, checker=checker, cache_dir=cache_dir, executable=executable)
     else:
-        options.update({"checker": checker, "cache_dir": cache_dir, "executable": executable})
-        result = compare_three(bundle, **options)
+        selected_compiled = compiled_runner
+    if kernel == "python":
+        result = selected_python(bundle)
+    elif kernel == "souffle":
+        result = selected_compiled(bundle)
+    else:
+        result = compare_three(
+            bundle, replay_root=replay_root, checker=checker, cache_dir=cache_dir,
+            executable=executable, python_runner=selected_python,
+            compiled_runner=selected_compiled)
+    if isinstance(result, KernelReport) and result.operational_failure:
+        raise VectorClaimError(
+            f"{result.backend} kernel failed: {result.operational_failure}: {result.message}")
     certificates, rows = assumptions.certify_claims(bundle, result)
     return VectorJudgment(bundle, authority, result, certificates, rows)
 
