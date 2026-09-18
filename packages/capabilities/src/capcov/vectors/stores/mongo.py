@@ -160,3 +160,85 @@ class ObservingMongoStore(MongoStore):
             if docs and name not in shrunk:
                 collections[name] = {"appended": docs, "removed": 0, "count": [mark.get(name, 0), counts.get(name, 0)]}
         return {"rows": {}, "collections": collections, "unbound": shrunk}
+
+
+class WireMongoStore:
+    """The observing document store over the wire protocol: no shell process.
+
+    Same contract as ``ObservingMongoStore`` -- inspect, snapshot (drop mode),
+    restore, mark, changes_since -- through ``mongowire.MongoWireClient``. A
+    connection is opened per operation so a server restart between vectors is
+    never a stale socket, and each operation is a few milliseconds instead of a
+    shell start-up. The archive snapshot mode needs the dump tools and is not
+    offered here; a non-empty database at snapshot time is refused as in the
+    drop-mode store.
+    """
+
+    def __init__(self, host: str, port: int, database: str, timeout: float = 30.0) -> None:
+        if not database:
+            raise ValueError("WireMongoStore: database name is empty")
+        self.host, self.port, self.database, self.timeout = host, int(port), database, timeout
+
+    def _client(self):
+        from .mongowire import MongoWireClient
+        return MongoWireClient(self.host, self.port, self.timeout)
+
+    def queue_depths(self) -> dict[str, int]:
+        return {}
+
+    def inspect(self) -> dict:
+        client = self._client()
+        try:
+            collections = {}
+            for name in client.collections(self.database):
+                docs = client.find(self.database, name)
+                if docs:
+                    collections[name] = docs
+        finally:
+            client.close()
+        return {"collections": collections}
+
+    def snapshot(self) -> dict:
+        counts = {name: len(docs) for name, docs in self.inspect()["collections"].items()}
+        if counts:
+            raise MongoSnapshotUnsupported(
+                f"{self.database}: drop-mode snapshot of a non-empty database "
+                f"({', '.join(f'{k}={v}' for k, v in sorted(counts.items()))})"
+            )
+        return {"mode": "drop"}
+
+    def restore(self, token: dict) -> None:
+        if not isinstance(token, dict) or token.get("mode") != "drop":
+            raise ValueError("WireMongoStore.restore: token is not a drop-mode snapshot")
+        client = self._client()
+        try:
+            client.drop_database(self.database)
+        finally:
+            client.close()
+
+    def mark(self) -> dict[str, int]:
+        client = self._client()
+        try:
+            return {name: client.count(self.database, name) for name in client.collections(self.database)}
+        finally:
+            client.close()
+
+    def changes_since(self, mark: dict[str, int]) -> dict:
+        client = self._client()
+        try:
+            names = client.collections(self.database)
+            counts = {name: client.count(self.database, name) for name in names}
+            shrunk = sorted(name for name, n in counts.items() if n < mark.get(name, 0))
+            collections = {}
+            for name in names:
+                if name in shrunk:
+                    continue
+                skip = mark.get(name, 0)
+                if counts[name] <= skip:
+                    continue
+                docs = client.find(self.database, name, skip=skip)
+                if docs:
+                    collections[name] = {"appended": docs, "removed": 0, "count": [skip, counts[name]]}
+        finally:
+            client.close()
+        return {"rows": {}, "collections": collections, "unbound": shrunk}
