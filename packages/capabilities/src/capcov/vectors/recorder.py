@@ -122,21 +122,48 @@ def plan_cell(op: Operation, cell: Cell, endpoint, manifest: Mapping | None, inp
     return planned
 
 
+class ActorLost(RuntimeError):
+    """The run's own credentialed actor stopped being accepted mid-run.
+
+    One refusal on a permitted cell is a fact about one operation. A refusal
+    on a cell that the SAME credential passed earlier in the run is a fact
+    about the fixture -- a token that lapsed, a session the restore did not
+    bring back -- and every vector recorded after it would be the incumbent
+    refusing a dead credential. The recorder stops and names the vector.
+    """
+
+
 class Session:
     """Per-run state the recorder threads through every vector: whether the
     fixture is known to be at the snapshot, so a clean read does not pay a
-    restore before the next vector."""
+    restore before the next vector; and which actors have been accepted, so a
+    later refusal of the same actor halts the run instead of poisoning it."""
 
-    def __init__(self, fixture, token) -> None:
+    REFUSED = (401,)
+
+    def __init__(self, fixture, token, halt_on_actor_loss: bool = True) -> None:
         self.fixture = fixture
         self.token = token
         self.pristine = False
         self.restores = 0
+        self.halt_on_actor_loss = halt_on_actor_loss
+        self.accepted_actors: set = set()
         # A fixture says whether it can observe (a composition whose stores all
         # can); a bare protocol check would pass for any composition, observing
         # or not, because the methods exist and refuse at call time.
         flag = getattr(fixture, "observing", None)
         self.observing = bool(flag) if flag is not None else isinstance(fixture, ObservingFixture)
+
+    def note_actor(self, actor, statuses: list[int], label: str) -> None:
+        """Record that ``actor`` was accepted, or halt if it was accepted before and is refused now."""
+        if actor is None or not statuses:
+            return
+        if all(status in self.REFUSED for status in statuses):
+            if self.halt_on_actor_loss and actor in self.accepted_actors:
+                raise ActorLost(f"actor {actor!r} was accepted earlier in this run and is now refused "
+                                f"({statuses}) on {label}; the fixture no longer holds a live credential for it")
+            return
+        self.accepted_actors.add(actor)
 
     def ensure_pristine(self) -> None:
         if not self.pristine:
@@ -186,6 +213,8 @@ def run_vector(
     session.ensure_pristine()
     drain = _drain_of(endpoint, fixture)
     steps = []
+    actor = planned[0][0].actor if planned else None
+    label = f"{planned[0][1][0].method} {planned[0][1][0].path}" if planned and planned[0][1] else "<no request>"
     if session.observing:
         mark = fixture.mark()
         for step, requests in planned:
@@ -194,6 +223,7 @@ def run_vector(
                 steps.append({"request": request.to_json(), "status": status, "body": body})
             if step.drain:
                 drain()
+        session.note_actor(actor, [step["status"] for step in steps], label)
         changes = fixture.changes_since(mark)
         compared, info = _split_observed(changes, declared, tuple(informational))
         # Pristine means nothing that matters changed: a row in a table the run
@@ -214,6 +244,7 @@ def run_vector(
             steps.append({"request": request.to_json(), "status": status, "body": body})
         if step.drain:
             drain()
+    session.note_actor(actor, [step["status"] for step in steps], label)
     after = fixture.inspect()
     compared, info = diff.store_delta(before, after, declared, tuple(informational))
     session.pristine = False

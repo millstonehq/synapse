@@ -6,7 +6,7 @@ import copy
 import unittest
 
 from capcov.vectors.fixture import ComposedFixture, FixtureError, ObservingFixture
-from capcov.vectors.recorder import Session, run_vector
+from capcov.vectors.recorder import ActorLost, Session, run_vector
 from capcov.vectors.schema import Request, StepSpec
 
 
@@ -122,6 +122,57 @@ class ObservingPathTests(unittest.TestCase):
                             {"rows": ["notes"]}, ("orders",), self.session)
         self.assertEqual(result["delta"], {})
         self.assertIn("rows.orders", result["informational"])
+
+
+class ActorLossTests(unittest.TestCase):
+    """A credential that worked and then stops working halts the run with the culprit named."""
+
+    def setUp(self) -> None:
+        self.store = LogStore(ROWS)
+        self.fixture = ComposedFixture({"db": self.store})
+        self.token = self.fixture.snapshot()
+        self.session = Session(self.fixture, self.token)
+
+    def test_refusal_after_acceptance_halts_and_names_the_vector(self) -> None:
+        class Flaky(Endpoint):
+            calls = 0
+            def send(self, request):
+                Flaky.calls += 1
+                return (200, {}) if Flaky.calls == 1 else (401, {"userMessage": "Session Timeout"})
+        ep = Flaky(self.store)
+        run_vector(planned("GET"), self.fixture, self.token, ep, "*", (), self.session)
+        self.assertEqual(self.session.accepted_actors, {11})
+        with self.assertRaisesRegex(ActorLost, r"actor 11 was accepted earlier.*GET /orders/31"):
+            run_vector(planned("GET"), self.fixture, self.token, ep, "*", (), self.session)
+
+    def test_a_first_refusal_is_a_recorded_fact_not_a_halt(self) -> None:
+        class Refuses(Endpoint):
+            def send(self, request):
+                return 401, {}
+        result = run_vector(planned("GET"), self.fixture, self.token, Refuses(self.store), "*", (), self.session)
+        self.assertEqual(result["steps"][0]["status"], 401)
+        self.assertEqual(self.session.accepted_actors, set())
+
+    def test_anonymous_refusals_never_count(self) -> None:
+        step = StepSpec(actor=None, method="GET", path="/orders/31", params={}, body=None, query={}, headers={}, drain=False)
+        anon = [(step, [Request(kind="http", method="GET", path="/orders/31", headers={}, body=None, argv=[])])]
+        class Refuses(Endpoint):
+            def send(self, request):
+                return 401, {}
+        run_vector(anon, self.fixture, self.token, Refuses(self.store), "*", (), self.session)
+        run_vector(anon, self.fixture, self.token, Refuses(self.store), "*", (), self.session)
+
+    def test_halt_can_be_disabled_for_a_deliberately_expiring_run(self) -> None:
+        session = Session(self.fixture, self.token, halt_on_actor_loss=False)
+        class Flaky(Endpoint):
+            calls = 0
+            def send(self, request):
+                Flaky.calls += 1
+                return (200, {}) if Flaky.calls == 1 else (401, {})
+        ep = Flaky(self.store)
+        run_vector(planned("GET"), self.fixture, self.token, ep, "*", (), session)
+        result = run_vector(planned("GET"), self.fixture, self.token, ep, "*", (), session)
+        self.assertEqual(result["steps"][0]["status"], 401)
 
 
 class InspectDiffPathTests(unittest.TestCase):
