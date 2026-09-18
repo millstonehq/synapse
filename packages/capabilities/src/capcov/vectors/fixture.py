@@ -47,7 +47,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Protocol, runtime_checkable
 
-INSPECTION_KEYS = ("rows", "collections", "queues", "redis_keys", "objects")
+INSPECTION_KEYS = ("rows", "collections", "queues", "redis_keys", "redis", "objects")
 
 
 class FixtureError(RuntimeError):
@@ -109,7 +109,7 @@ class ObservingFixture(Protocol):
 
 
 def empty_inspection() -> dict:
-    return {"rows": {}, "collections": {}, "queues": {}, "redis_keys": [], "objects": {}}
+    return {"rows": {}, "collections": {}, "queues": {}, "redis_keys": [], "redis": {}, "objects": {}}
 
 
 def merge_inspections(parts: dict[str, dict]) -> dict:

@@ -358,17 +358,18 @@ class FirstDifferenceTests(unittest.TestCase):
 class ArtifactRoundTripTests(unittest.TestCase):
     def test_vectors_artifact(self) -> None:
         cells, gaps = templates.cells_for(op("write"), MANIFEST, {"orders.update": {"body": {"status": "open"}}})
-        vectors = [schema.Vector(id=c.id, cell=c.note, actor=c.actor, steps=c.steps,
+        vectors = [schema.Vector(id=c.id, cell=c.id, actor=c.actor, steps=c.steps,
                                  expected={"steps": [{"status": 200, "body": {"ok": True}}], "delta": {}, "informational": {}},
-                                 seconds=0.5) for c in cells]
+                                 seconds=0.5, note=c.note) for c in cells]
         artifact = schema.VectorsArtifact(operation="orders.update", template_version=templates.TEMPLATE_VERSION,
                                           declared_stores={"rows": ["orders"]}, provenance={"snapshot_sha256": "abc"},
-                                          vectors=vectors, gaps=gaps)
+                                          vectors=vectors, gaps=gaps,
+                                          required_cells=[cell.id for cell in cells] + [item["cell"] for item in gaps])
         data = artifact.to_json()
-        self.assertEqual(data["version"], 1)
+        self.assertEqual(data["version"], 2)
         self.assertEqual(data["vectors"][0]["input"]["actor"], 11)
         self.assertEqual(data["vectors"][0]["input"]["steps"][0]["body"], {"status": "open"})
-        self.assertEqual(sorted(data), ["declared_stores", "gaps", "operation", "provenance", "template_version", "vectors", "version"])
+        self.assertEqual(sorted(data), ["declared_stores", "gaps", "operation", "provenance", "required_cells", "template_version", "vectors", "version"])
         self.assertEqual(schema.VectorsArtifact.from_json(data), artifact)
 
     def test_replay_artifact(self) -> None:
@@ -385,7 +386,7 @@ class ArtifactRoundTripTests(unittest.TestCase):
 
     def test_unknown_versions_are_refused(self) -> None:
         with self.assertRaises(ValueError) as caught:
-            schema.VectorsArtifact.from_json({"version": 2, "operation": "x"})
+            schema.VectorsArtifact.from_json({"version": 999, "operation": "x"})
         self.assertIn("vectors artifact", str(caught.exception))
         with self.assertRaises(ValueError) as caught:
             schema.ReplayArtifact.from_json({"operation": "x"})

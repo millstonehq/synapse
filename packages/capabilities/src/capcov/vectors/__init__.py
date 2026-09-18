@@ -49,4 +49,17 @@ Modules:
 * ``normalize``  the compare-time volatility policy, versioned
 * ``diff``       store deltas between two inspections; first difference of two
                  recorded results
+* ``replay``     the candidate-side producer, bound to exact vector bytes
+* ``claims``     strict ingestion into Python/Souffle claims and certificates
+
+The claim adapter deliberately does not close a whole-system census.  It
+proves one operation artifact at a time; the consumer must bind the complete,
+versioned operation census and require every operation before reporting a
+system-wide percentage.
+
+``vectors.json`` and ``replay.json`` contain executable inputs and observed
+responses, so writers mark them ``private-evidence`` and mode 0600. They are
+not publication artifacts. The claim adapter exports only identities and
+digests and treats replay leaves as local assumptions until a separate,
+reviewed producer attestation promotes them.
 """

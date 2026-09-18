@@ -26,8 +26,8 @@ from dataclasses import dataclass, field
 ACCESS_CLASSES = ("read", "write", "webhook", "scheduled", "queued", "command")
 REQUEST_KINDS = ("http", "shell")
 
-VECTORS_ARTIFACT_VERSION = 1
-REPLAY_ARTIFACT_VERSION = 1
+VECTORS_ARTIFACT_VERSION = 2
+REPLAY_ARTIFACT_VERSION = 2
 
 # Header names whose values are credentials. Redacted from every serialized
 # request; the set is by NAME, generic across products, and deliberately small.
@@ -284,6 +284,7 @@ class Vector:
     steps: list[StepSpec]
     expected: dict
     seconds: float = 0.0
+    note: str = ""
 
     def to_json(self) -> dict:
         return {
@@ -292,6 +293,7 @@ class Vector:
             "input": {"actor": self.actor, "steps": [s.to_json() for s in self.steps]},
             "expected": self.expected,
             "seconds": self.seconds,
+            "note": self.note,
         }
 
     @classmethod
@@ -304,6 +306,7 @@ class Vector:
             steps=[StepSpec.from_json(s) for s in given.get("steps") or []],
             expected=dict(data.get("expected") or {}),
             seconds=float(data.get("seconds") or 0.0),
+            note=data.get("note") or "",
         )
 
 
@@ -323,6 +326,7 @@ class VectorsArtifact:
     provenance: dict
     vectors: list[Vector] = field(default_factory=list)
     gaps: list[dict] = field(default_factory=list)
+    required_cells: list[str] = field(default_factory=list)
     version: int = VECTORS_ARTIFACT_VERSION
 
     def to_json(self) -> dict:
@@ -334,6 +338,7 @@ class VectorsArtifact:
             "provenance": dict(self.provenance),
             "vectors": [v.to_json() for v in self.vectors],
             "gaps": [dict(g) for g in self.gaps],
+            "required_cells": list(self.required_cells),
         }
 
     @classmethod
@@ -346,6 +351,7 @@ class VectorsArtifact:
             provenance=dict(data.get("provenance") or {}),
             vectors=[Vector.from_json(v) for v in data.get("vectors") or []],
             gaps=[dict(g) for g in data.get("gaps") or []],
+            required_cells=list(data.get("required_cells") or []),
             version=data["version"],
         )
 
@@ -364,10 +370,13 @@ class ReplayResult:
 
     @classmethod
     def from_json(cls, data: dict) -> "ReplayResult":
+        passed = data.get("pass")
+        if type(passed) is not bool:
+            raise ValueError("replay result pass must be a boolean")
         return cls(
             id=data["id"],
             cell=data.get("cell") or "",
-            passed=bool(data.get("pass")),
+            passed=passed,
             difference=data.get("difference"),
         )
 
@@ -388,6 +397,9 @@ class ReplayArtifact:
     gaps_recorded: int
     candidate_sha256: str | None
     vectors_provenance: dict
+    vectors_sha256: str | None = None
+    run_id: str | None = None
+    operational_failure: str | None = None
     results: list[ReplayResult] = field(default_factory=list)
     version: int = REPLAY_ARTIFACT_VERSION
 
@@ -401,20 +413,29 @@ class ReplayArtifact:
             "gaps_recorded": self.gaps_recorded,
             "candidate_sha256": self.candidate_sha256,
             "vectors_provenance": dict(self.vectors_provenance),
+            "vectors_sha256": self.vectors_sha256,
+            "run_id": self.run_id,
+            "operational_failure": self.operational_failure,
             "results": [r.to_json() for r in self.results],
         }
 
     @classmethod
     def from_json(cls, data: dict) -> "ReplayArtifact":
         _require_version(data, REPLAY_ARTIFACT_VERSION, "replay artifact")
+        for name in ("vectors_recorded", "vectors_passing", "gaps_recorded"):
+            if type(data.get(name)) is not int or data[name] < 0:
+                raise ValueError(f"replay artifact {name} must be a non-negative integer")
         return cls(
             operation=data["operation"],
             mutant=data.get("mutant"),
-            vectors_recorded=int(data.get("vectors_recorded") or 0),
-            vectors_passing=int(data.get("vectors_passing") or 0),
-            gaps_recorded=int(data.get("gaps_recorded") or 0),
+            vectors_recorded=data["vectors_recorded"],
+            vectors_passing=data["vectors_passing"],
+            gaps_recorded=data["gaps_recorded"],
             candidate_sha256=data.get("candidate_sha256"),
             vectors_provenance=dict(data.get("vectors_provenance") or {}),
+            vectors_sha256=data.get("vectors_sha256"),
+            run_id=data.get("run_id"),
+            operational_failure=data.get("operational_failure"),
             results=[ReplayResult.from_json(r) for r in data.get("results") or []],
             version=data["version"],
         )

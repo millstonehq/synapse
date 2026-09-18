@@ -125,6 +125,12 @@ def store_delta(before: dict, after: dict, declared="*", informational=(), extra
     b_keys, a_keys = set(before.get("redis_keys") or []), set(after.get("redis_keys") or [])
     if b_keys != a_keys:
         info["redis.keys"] = {"added": sorted(a_keys - b_keys), "removed": sorted(b_keys - a_keys)}
+    before_redis, after_redis = before.get("redis") or {}, after.get("redis") or {}
+    if before_redis != after_redis:
+        changed = sorted(key for key in set(before_redis) & set(after_redis)
+                         if before_redis[key] != after_redis[key])
+        if changed:
+            info["redis.values"] = {"changed": changed}
 
     queues = after.get("queues") or {}
     if any(queues.values()):

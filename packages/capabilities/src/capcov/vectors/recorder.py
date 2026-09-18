@@ -324,11 +324,12 @@ def record(
             vectors.append(
                 Vector(
                     id=cell.id,
-                    cell=cell.note,
+                    cell=cell.id,
                     actor=cell.actor,
                     steps=list(cell.steps),
                     expected=result,
                     seconds=round(time.monotonic() - started, 3),
+                    note=cell.note,
                 )
             )
             say(
@@ -344,6 +345,7 @@ def record(
             provenance=prov,
             vectors=vectors,
             gaps=gaps,
+            required_cells=sorted({cell.id for cell in cells} | {item["cell"] for item in gaps}),
         )
         write_vectors(out_dir, op, artifact)
         summary["operations"].append({"id": op.id, "vectors": len(vectors), "gaps": [g["reason"] for g in gaps]})
@@ -357,11 +359,13 @@ def write_vectors(out_dir: Path, op: Operation, artifact: VectorsArtifact) -> Pa
     """Publish one operation's vectors as a capcov artifact of kind ``vectors``."""
     body = artifact.to_json()
     body["operation_record"] = op.to_json()
+    body["publication"] = "private-evidence"
     derived_from = artifacts.provenance(
         f"vectors:{op.id}", _sha256_json(artifact.provenance), EXTRACTOR + ".record", len(artifact.vectors)
     )
     path = op_dir(out_dir, op.id) / VECTORS_FILE
     artifacts.write(path, VECTORS_KIND, derived_from, body)
+    path.chmod(0o600)
     return path
 
 
