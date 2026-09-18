@@ -31,9 +31,11 @@ The design, fixed here and not per consumer:
 * **Normalization happens at compare time.** Recorded vectors stay raw. The
   versioned policy in ``normalize`` masks volatile values (timestamps, tokens,
   generated ids) on BOTH sides when they are compared, so a policy change never
-  forces a re-record. Replay artifact v3 separately binds the exact policy
-  source/config identity that executed; recording provenance remains the
-  capture-time account.
+  forces a re-record. Replay artifact v3 separately binds frozen policy config,
+  imported source bytes and loaded normalizer code identity; replay refuses to
+  publish if the source file drifts before publication. Recording provenance
+  remains the capture-time account. These identities are local disclosures,
+  not authenticated execution attestations.
 * **Gaps are never faked.** A cell that cannot be driven, a store that cannot
   be inspected, a fault that cannot be injected: each is a named gap carried
   through the artifacts to the rollup. A vector count that silently excludes

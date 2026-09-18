@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import importlib.util
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+import uuid
 
 from capcov.claims.differential import run_python
 from capcov.claims.ir import canonical_json, digest
@@ -81,6 +84,87 @@ class VectorClaimTests(unittest.TestCase):
         self.assertEqual(replay.vectors_sha256, artifact_digest(vectors))
         self.assertEqual(replay.comparison_policy, normalize.comparison_policy_identity())
         self.assertEqual(replay.run_id, "run-1")
+
+    def test_replay_freezes_config_before_fixture_callbacks(self):
+        operation = Operation("health", "route", "custom", "http",
+                              request={"method": "GET", "path": "/health"})
+        step = StepSpec(actor=None, role="anonymous", method="GET", path="/health", drain=False)
+        expected = {"steps": [{"request": {"kind": "http", "method": "GET", "path": "/health",
+                                              "headers": {"Accept": "application/json"},
+                                              "body": None, "argv": []},
+                               "status": 200, "body": {"important": "A"}}],
+                    "delta": {}, "informational": {}, "observed_by": "inspect-diff"}
+        vectors = VectorsArtifact(operation.id, "boundary-v1", "*", PROVENANCE,
+                                  [Vector("health:anonymous", "anonymous", None, [step], expected)],
+                                  [], ["anonymous"])
+        original_pattern = normalize.VOLATILE_KEY.pattern
+
+        class Fixture:
+            def snapshot(self):
+                normalize.VOLATILE_KEY = normalize.re.compile("important")
+                return "snapshot"
+            def restore(self, token): pass
+            def inspect(self): return {"rows": {}, "collections": {}, "queues": {}, "redis_keys": []}
+            def drain(self): pass
+
+        class Candidate:
+            base_url = "http://127.0.0.1"
+            candidate_sha256 = CANDIDATE
+            def send(self, request): return 200, {"important": "B"}
+
+        with patch.object(normalize, "VOLATILE_KEY", normalize.VOLATILE_KEY):
+            with tempfile.TemporaryDirectory() as directory:
+                write_vectors(Path(directory), operation, vectors)
+                replay_vectors([operation], Fixture(), Candidate(), directory, run_id="mutate-config")
+                replay = read_replay(Path(directory) / "health" / "replay.json")
+        self.assertFalse(replay.results[0].passed)
+        self.assertEqual(replay.comparison_policy["config"]["volatile_key_pattern"], original_pattern)
+
+    def test_replay_refuses_imported_source_drift_before_publication(self):
+        operation = Operation("health", "route", "custom", "http",
+                              request={"method": "GET", "path": "/health"})
+        step = StepSpec(actor=None, role="anonymous", method="GET", path="/health", drain=False)
+        expected = {"steps": [{"request": {"kind": "http", "method": "GET", "path": "/health",
+                                              "headers": {"Accept": "application/json"},
+                                              "body": None, "argv": []},
+                               "status": 200, "body": {"ok": True}}],
+                    "delta": {}, "informational": {}, "observed_by": "inspect-diff"}
+        vectors = VectorsArtifact(operation.id, "boundary-v1", "*", PROVENANCE,
+                                  [Vector("health:anonymous", "anonymous", None, [step], expected)],
+                                  [], ["anonymous"])
+
+        class Candidate:
+            base_url = "http://127.0.0.1"
+            candidate_sha256 = CANDIDATE
+            def send(self, request): return 200, {"ok": True}
+
+        with tempfile.TemporaryDirectory() as directory:
+            source_copy = Path(directory) / "normalize_imported.py"
+            source_copy.write_bytes(Path(normalize.__file__).read_bytes())
+            module_name = f"capcov_normalize_imported_{uuid.uuid4().hex}"
+            spec = importlib.util.spec_from_file_location(module_name, source_copy)
+            self.assertIsNotNone(spec)
+            isolated = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = isolated
+            try:
+                spec.loader.exec_module(isolated)
+
+                class Fixture:
+                    def snapshot(self):
+                        source_copy.write_bytes(source_copy.read_bytes() + b"\n# changed after import\n")
+                        return "snapshot"
+                    def restore(self, token): pass
+                    def inspect(self): return {"rows": {}, "collections": {}, "queues": {}, "redis_keys": []}
+                    def drain(self): pass
+
+                output = Path(directory) / "run"
+                write_vectors(output, operation, vectors)
+                with patch("capcov.vectors.replay.normalize", isolated):
+                    with self.assertRaisesRegex(RuntimeError, "changed since import"):
+                        replay_vectors([operation], Fixture(), Candidate(), output, run_id="drift-source")
+                self.assertFalse((output / "health" / "replay.json").exists())
+            finally:
+                sys.modules.pop(module_name, None)
 
     def test_replay_json_rejects_string_boolean(self):
         vectors, replay = pair()

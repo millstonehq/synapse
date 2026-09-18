@@ -47,8 +47,11 @@ def replay(operations, fixture, candidate, out_dir, mutant=None, *,
     if not isinstance(run, str) or not run:
         raise ValueError("run_id must be a non-empty string")
     say = log or (lambda line: None)
-    normalizer = normalize.normalize
-    comparison_policy = normalize.comparison_policy_identity()
+    policy = normalize.freeze_comparison_policy()
+    # Capture the actual recursive closure, not the method/global resolver.
+    normalizer = policy._normalizer
+    comparison_policy = policy.identity()
+    normalize.assert_comparison_policy_source_unchanged(policy)
     token = fixture.snapshot()
     session = Session(fixture, token)
     summary = {"run_id": run, "operations": [], "vectors_recorded": 0,
@@ -79,7 +82,7 @@ def replay(operations, fixture, candidate, out_dir, mutant=None, *,
             candidate_sha256=candidate_digest, vectors_provenance=dict(vectors.provenance),
             comparison_policy=comparison_policy,
             vectors_sha256=_sha256(vectors.to_json()), run_id=run, results=results)
-        write_replay(out_dir, operation, artifact)
+        write_replay(out_dir, operation, artifact, policy)
         summary["operations"].append({"id": operation.id, "vectors": len(results),
                                       "passing": artifact.vectors_passing, "gaps": len(vectors.gaps)})
         summary["vectors_recorded"] += len(results)
@@ -89,7 +92,8 @@ def replay(operations, fixture, candidate, out_dir, mutant=None, *,
     return summary
 
 
-def write_replay(out_dir: Path, operation: Operation, replay: ReplayArtifact) -> Path:
+def write_replay(out_dir: Path, operation: Operation, replay: ReplayArtifact,
+                 policy: normalize.FrozenComparisonPolicy) -> Path:
     body = replay.to_json()
     body["operation_record"] = operation.to_json()
     body["publication"] = "private-evidence"
@@ -97,6 +101,7 @@ def write_replay(out_dir: Path, operation: Operation, replay: ReplayArtifact) ->
         f"vectors-replay:{operation.id}", replay.vectors_sha256 or "", EXTRACTOR + ".replay",
         len(replay.results))
     path = op_dir(Path(out_dir), operation.id) / REPLAY_FILE
+    normalize.assert_comparison_policy_source_unchanged(policy)
     artifacts.write(path, REPLAY_KIND, derived_from, body)
     path.chmod(0o600)
     return path
