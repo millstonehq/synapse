@@ -141,12 +141,18 @@ class Session:
 
     REFUSED = (401,)
 
-    def __init__(self, fixture, token, halt_on_actor_loss: bool = True) -> None:
+    def __init__(self, fixture, token, halt_on_actor_loss: bool = True,
+                 credential_lost: Callable[[int, object], bool] | None = None) -> None:
         self.fixture = fixture
         self.token = token
         self.pristine = False
         self.restores = 0
         self.halt_on_actor_loss = halt_on_actor_loss
+        # Systems reuse 401 for "who are you" and for "you may not"; only the
+        # first means the fixture lost a credential. The consumer knows its
+        # system's phrases and says which refusals are credential loss. With
+        # no predicate every 401 counts, which is the conservative reading.
+        self.credential_lost = credential_lost or (lambda status, body: status in self.REFUSED)
         self.accepted_actors: set = set()
         # A fixture says whether it can observe (a composition whose stores all
         # can); a bare protocol check would pass for any composition, observing
@@ -154,14 +160,22 @@ class Session:
         flag = getattr(fixture, "observing", None)
         self.observing = bool(flag) if flag is not None else isinstance(fixture, ObservingFixture)
 
-    def note_actor(self, actor, statuses: list[int], label: str) -> None:
-        """Record that ``actor`` was accepted, or halt if it was accepted before and is refused now."""
+    def note_actor(self, actor, statuses: list[int], label: str, bodies: list | None = None) -> None:
+        """Record that ``actor`` was accepted, or halt if it was accepted before and is refused now.
+
+        The halt carries the system's own refusal text: a lapsed session, a
+        revoked token and a permission denial can all be 401 and each points
+        at a different fault in the fixture."""
         if actor is None or not statuses:
             return
+        bodies = list(bodies or [None] * len(statuses))
         if all(status in self.REFUSED for status in statuses):
-            if self.halt_on_actor_loss and actor in self.accepted_actors:
+            lost = all(self.credential_lost(status, body) for status, body in zip(statuses, bodies))
+            if lost and self.halt_on_actor_loss and actor in self.accepted_actors:
+                said = json.dumps(bodies[0], default=str)[:300] if bodies else ""
                 raise ActorLost(f"actor {actor!r} was accepted earlier in this run and is now refused "
-                                f"({statuses}) on {label}; the fixture no longer holds a live credential for it")
+                                f"({statuses}) on {label}; the system said {said}; "
+                                f"the fixture no longer holds a live credential for it")
             return
         self.accepted_actors.add(actor)
 
@@ -223,7 +237,7 @@ def run_vector(
                 steps.append({"request": request.to_json(), "status": status, "body": body})
             if step.drain:
                 drain()
-        session.note_actor(actor, [step["status"] for step in steps], label)
+        session.note_actor(actor, [step["status"] for step in steps], label, [step["body"] for step in steps])
         changes = fixture.changes_since(mark)
         compared, info = _split_observed(changes, declared, tuple(informational))
         # Pristine means nothing that matters changed: a row in a table the run
@@ -244,7 +258,7 @@ def run_vector(
             steps.append({"request": request.to_json(), "status": status, "body": body})
         if step.drain:
             drain()
-    session.note_actor(actor, [step["status"] for step in steps], label)
+    session.note_actor(actor, [step["status"] for step in steps], label, [step["body"] for step in steps])
     after = fixture.inspect()
     compared, info = diff.store_delta(before, after, declared, tuple(informational))
     session.pristine = False

@@ -162,6 +162,25 @@ class ActorLossTests(unittest.TestCase):
         run_vector(anon, self.fixture, self.token, Refuses(self.store), "*", (), self.session)
         run_vector(anon, self.fixture, self.token, Refuses(self.store), "*", (), self.session)
 
+    def test_a_permission_401_is_not_credential_loss_when_the_consumer_says_so(self) -> None:
+        def lost(status, body):
+            return status == 401 and isinstance(body, dict) and "timed out" in str(body.get("message", ""))
+        session = Session(self.fixture, self.token, credential_lost=lost)
+        class Flaky(Endpoint):
+            calls = 0
+            def send(self, request):
+                Flaky.calls += 1
+                return (200, {}) if Flaky.calls == 1 else (401, {"message": "User is not support"})
+        ep = Flaky(self.store)
+        run_vector(planned("GET"), self.fixture, self.token, ep, "*", (), session)
+        result = run_vector(planned("GET"), self.fixture, self.token, ep, "*", (), session)
+        self.assertEqual(result["steps"][0]["status"], 401, "a permission refusal is recorded, not a halt")
+        class Timed(Endpoint):
+            def send(self, request):
+                return 401, {"message": "Your session has timed out"}
+        with self.assertRaisesRegex(ActorLost, "timed out"):
+            run_vector(planned("GET"), self.fixture, self.token, Timed(self.store), "*", (), session)
+
     def test_halt_can_be_disabled_for_a_deliberately_expiring_run(self) -> None:
         session = Session(self.fixture, self.token, halt_on_actor_loss=False)
         class Flaky(Endpoint):
