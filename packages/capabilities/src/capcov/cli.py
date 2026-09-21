@@ -1264,8 +1264,12 @@ def main(argv: list[str] | None = None) -> int:
             "--static",
             default=None,
             metavar="BUNDLE.json",
-            help="join a static bundle (capcov experiment claims static --out, with "
-            "rules-static-v1 merged) to the receipt: judge.json gains a 'static' "
+            # No option name but this one may appear in this string: the golden
+            # help comparison reads every `--token` in the printed help as an
+            # option the command has, so naming a sibling command's flag here
+            # would invent a flag on this one.
+            help="join a static bundle (the bundle `capcov experiment claims static` "
+            "writes, with rules-static-v1 merged) to the receipt: judge.json gains a 'static' "
             "section with the routes the index binds, the reflexion cells, the dead "
             "and blocked entities and what is bound statically but never requested. "
             "The bundle must carry index_describes_run for this run or it is reported "

@@ -62,10 +62,12 @@ META = {"README.md", "MANIFEST.json", "generate.py", "normalize.py"}
 # the two commands that gained the opt-in --judge flags; pinned by their own test
 HELP_WITH_JUDGE = {"cli/help_reconcile.stdout", "cli/help_gate.stdout"}
 #: Every option the two commands gained, and the whole of it: the judge itself,
-#: what it judges, where it writes, which kernels run and which producer profile
-#: runs before it.  Growing this set is a deliberate act -- an opt-in flag lands
-#: with its entry here or the golden comparison fails.
-JUDGE_FLAGS = {"--judge", "--receipt", "--judge-out", "--evaluator", "--model"}
+#: what it judges, where it writes, which kernels run, which producer profile
+#: runs before it and which static bundle joins it.  Growing this set is a
+#: deliberate act -- an opt-in flag lands with its entry here or the golden
+#: comparison fails.
+JUDGE_FLAGS = {"--judge", "--receipt", "--judge-out", "--evaluator", "--model",
+               "--static"}
 
 
 #: The golden was recorded with **no extras installed** (README: "installed

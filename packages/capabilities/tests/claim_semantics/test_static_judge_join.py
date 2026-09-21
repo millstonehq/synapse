@@ -38,7 +38,9 @@ built from the committed go_app golden index the way
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import json
 import os
 import subprocess
@@ -46,6 +48,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from capcov.claims.ir import canonical_dict, canonical_json
 from capcov.claims.static import closure, join as static_join, reflexion, scip_facts
@@ -61,6 +64,10 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 SRC = PACKAGE_ROOT / "src"
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 RECEIPT = FIXTURES / "replay_receipt_min"
+#: A second committed receipt, whose ``replay_request`` rows spell their route
+#: with no method at all -- the shape disagreement this repository already has.
+QUALIFIED_RECEIPT = FIXTURES / "replay_receipt_target_go_qualified"
+QUALIFIED_RUN = "eca6e7930af3"
 COVERAGE = FIXTURES / "upstream_golden" / "python_app" / "coverage.json"
 #: Explains every unexplained row in COVERAGE, so the gate's exit code is the
 #: claims judge's verdict alone -- `--judge claims` adds a verdict, never replaces one.
@@ -93,19 +100,24 @@ def _ast(residue=()) -> dict:
     return ast
 
 
-def _model() -> reflexion.CapabilityModel:
+def _model(edges_closed: bool = True) -> reflexion.CapabilityModel:
+    """The pilot's reviewer model; ``edges_closed=False`` is a reviewer who did
+    not say their edge model is complete."""
     return reflexion.model_from_documents(
         dict(read_json(PILOT / "capability-map.json"), closed=True),
-        dict(read_json(PILOT / "capability-edges.json"), closed=True))
+        dict(read_json(PILOT / "capability-edges.json"), closed=edges_closed))
 
 
-def _bundle_text(*, describes: str | None = RUN, residue=(), base_pack: bool = True) -> str:
+def _bundle_text(*, describes: str | None = RUN, residue=(), base_pack: bool = True,
+                 edges_closed: bool = True) -> str:
     """A static bundle as ``claims static --out`` writes one, for a chosen run.
 
     ``describes`` is the run the static producer vouches this index describes
     (``scip_facts.export_bundle``'s ``describes_runs``); ``None`` exports a
     bundle that vouches for no run at all.  ``base_pack=False`` leaves
-    ``rules-static-v1`` out, which is the bundle the profile writes on its own.
+    ``rules-static-v1`` out, which is the bundle the profile writes on its own;
+    ``edges_closed=False`` leaves ``capability_edge_closed`` unemitted, which is
+    the reviewer declining to say their edge model is complete.
     """
     from capcov.scip import runner
 
@@ -120,7 +132,7 @@ def _bundle_text(*, describes: str | None = RUN, residue=(), base_pack: bool = T
     if base_pack:
         extra += (pack_bundle(),)
     bundle = reflexion.attach(
-        exported.bundle, _model(), *extra,
+        exported.bundle, _model(edges_closed), *extra,
         tree_digest=dict(dict(exported.bundle.metadata)["tree"])["digest"])
     return canonical_json(canonical_dict(bundle)) + "\n"
 
@@ -259,11 +271,25 @@ class WhatTheBoundBundleSaysTests(unittest.TestCase):
         self.assertEqual(section["underived"], [])
 
     def test_one_unresolved_call_site_turns_dead_into_blocked_via_its_symbol(self) -> None:
-        """The pack's own answer, carried through the join unchanged."""
+        """The pack's own answer, carried through the join unchanged.
+
+        One unresolved call site withholds ``call_graph_closed``, so the two
+        negations it licenses are withheld with it: ``dead`` is ``null`` and
+        named in ``withheld``, not an empty list, because "nothing is dead" and
+        "the call graph is not closed, so we cannot tell" are different
+        sentences.  ``blocked`` is positive and says which symbol the doubt
+        goes through.
+        """
         section = _section("residue", residue=RESIDUE)
-        self.assertEqual(section["dead"], [])
+        self.assertIsNone(section["dead"])
+        self.assertEqual(section["withheld"][static_join.DEAD_RELATION],
+                         [static_join.CALL_GRAPH_CLOSED_RELATION])
+        self.assertEqual(
+            section["closure_witnesses"][static_join.CALL_GRAPH_CLOSED_RELATION], [])
         self.assertEqual(section["blocked"], [[SURFACE, UNREACHED_ENTITY, VIA]])
-        self.assertEqual(section["capabilities"]["jobs_api"][static_join.ABSENCE_RELATION], [])
+        self.assertIsNone(section["capabilities"]["jobs_api"][static_join.ABSENCE_RELATION])
+        self.assertEqual(section["withheld"][static_join.ABSENCE_RELATION],
+                         [static_join.CALL_GRAPH_CLOSED_RELATION])
         self.assertEqual(
             section["capabilities"]["jobs_api"][static_join.ABSENCE_UNRESOLVED_RELATION],
             ["metrics"])
@@ -271,18 +297,57 @@ class WhatTheBoundBundleSaysTests(unittest.TestCase):
     def test_a_bundle_without_the_base_pack_names_what_it_cannot_derive(self) -> None:
         """An empty ``routes`` from a bundle with no rule for it is not "it binds nothing".
 
-        ``rules-static-v1`` is what heads ``static_capability_op``; the profile's
-        own bundle declares it and derives it nowhere.  Reported as empty it
-        would read as an index that binds no route at all, which is why the
-        relation is named in ``underived`` instead -- and why the negation over
-        it, ``static_only``, is withheld.
+        ``rules-static-v1`` is what heads ``static_capability_op`` *and*
+        ``static_edge``; the profile's own bundle declares both and derives
+        neither.  Reported as empty they would read as an index that binds no
+        route and a model every edge of which the code is missing -- the second
+        is the worse one, because ``static_absence`` is a negation licensed by
+        ``call_graph_closed``, which here certifies the completeness of a
+        relation this bundle cannot derive at all.  So derivability is
+        transitive: every reported relation whose premises this bundle cannot
+        populate is named and withheld, and the negations over them with it.
         """
         section = _section("no_base_pack", base_pack=False)
         self.assertEqual(section["join"]["status"], static_join.JOIN_BOUND)
-        self.assertEqual(section["underived"], [static_join.BIND_RELATION])
-        self.assertEqual(section["routes"], {})
+        self.assertEqual(sorted(section["underived"]),
+                         sorted(static_join.REPORTED_RELATIONS),
+                         "static_edge is ruleless, so nothing that reads it is derivable")
+        self.assertEqual(section["withheld"],
+                         {name: [static_join.UNDERIVED_REASON]
+                          for name in static_join.REPORTED_RELATIONS})
+        for key in ("routes", "dead", "blocked", "unresolved", "static_only"):
+            with self.subTest(key=key):
+                self.assertIsNone(section[key])
+        self.assertEqual(
+            section["capabilities"]["jobs_api"],
+            {relation: None for relation in static_join.CELL_RELATIONS},
+            "every model edge would otherwise be 'absent' from a ruleless static_edge")
         self.assertIsNone(section["static_only"],
                           "nothing binds, so nothing is bound-but-unobserved")
+
+    def test_an_unclosed_edge_model_withholds_divergence_and_names_the_witness(self) -> None:
+        """A reviewer who did not close their edge model licenses no divergence.
+
+        ``static_divergence`` negates ``capability_edge`` under
+        ``capability_edge_closed``.  Without that witness the kernel derives
+        nothing -- and an empty list would read exactly like the closed model's
+        agreement.  The section says which witnesses the index carries instead,
+        and nulls what the missing one licensed; ``static_convergence``, which
+        negates nothing, is unaffected.
+        """
+        section = _section("edges_unclosed", edges_closed=False)
+        cells = section["capabilities"]
+        self.assertIsNone(cells["bootstrap"][static_join.DIVERGENCE_RELATION])
+        self.assertEqual(section["withheld"][static_join.DIVERGENCE_RELATION],
+                         [static_join.EDGE_CLOSED_RELATION])
+        self.assertEqual(
+            section["closure_witnesses"][static_join.EDGE_CLOSED_RELATION], [])
+        self.assertEqual(section["closure_witnesses"][static_join.CALL_GRAPH_CLOSED_RELATION],
+                         section["join"]["indexes"])
+        self.assertEqual(cells["jobs_api"][static_join.CONVERGENCE_RELATION], ["jobs_service"])
+        self.assertEqual(_section("bound")["capabilities"]["bootstrap"]
+                         [static_join.DIVERGENCE_RELATION], ["jobs_api"],
+                         "the closed model is what an empty list would have looked like")
 
 
 class StaticOnlyIsLicensedByTheRuntimeWitnessTests(unittest.TestCase):
@@ -313,6 +378,44 @@ class StaticOnlyIsLicensedByTheRuntimeWitnessTests(unittest.TestCase):
         self.assertEqual(section["runtime"], static_join.RUNTIME_ABSENT)
         self.assertEqual(section["runtime_routes"], 0)
         self.assertIsNone(section["static_only"])
+
+    def test_a_request_set_not_spelled_like_a_surface_licenses_no_negation(self) -> None:
+        """Closed licenses "complete"; it does not license "spelled the same way".
+
+        ``static_only`` compares a surface id with a route by equality, and
+        ``schema_replay_v1`` mandates no shape for a route.  Handed a closed
+        request set that is not ``<METHOD> <path>``, every statically bound
+        surface would compare unequal to every request and be reported as bound
+        but never requested -- a negation from a naming difference.  The routes
+        that cannot be compared are named instead, and the negation withheld.
+        """
+        section = _section("bound", routes={ROUTE_OF_SURFACE.split(" ", 1)[1]},
+                           routes_closed=True)
+        self.assertEqual(section["runtime"], static_join.RUNTIME_OBSERVED)
+        self.assertIsNone(section["static_only"])
+        self.assertIsNone(section["static_only_licensed_by"])
+        self.assertEqual(section["runtime_routes_not_comparable"],
+                         [ROUTE_OF_SURFACE.split(" ", 1)[1]])
+        comparable = _section("bound", routes={ROUTE_OF_SURFACE}, routes_closed=True)
+        self.assertEqual(comparable["runtime_routes_not_comparable"], [])
+        self.assertEqual(comparable["static_only"], [],
+                         "the same route, spelled comparably, was requested")
+
+    def test_a_committed_receipt_that_omits_the_method_is_named_not_negated(self) -> None:
+        """Not a hand-made shape: a receipt fixture this repository already has."""
+        from capcov.claims.replay import replay_facts
+
+        exported = replay_facts.export_bundle(QUALIFIED_RECEIPT, run=QUALIFIED_RUN)
+        self.assertEqual(exported.status, replay_facts.STATUS_COMPLETE, exported.messages)
+        side = static_join.runtime_side(exported, QUALIFIED_RUN)
+        self.assertTrue(side["routes_closed"], "closed, and still not comparable")
+        self.assertEqual(sorted(side["routes"]),
+                         ["/api/cloud/project/{project}/issues/{issue}"])
+        section = static_join.section(_loaded("bound"), run=RUN, routes=side["routes"],
+                                      routes_closed=side["routes_closed"])
+        self.assertIsNone(section["static_only"])
+        self.assertIsNone(section["static_only_licensed_by"])
+        self.assertEqual(section["runtime_routes_not_comparable"], sorted(side["routes"]))
 
     def test_the_receipts_own_requests_are_what_the_cli_compares_against(self) -> None:
         """Not a hand-made route set: the routes the exporter read out of the receipt."""
@@ -355,6 +458,67 @@ class AskingForItWronglyIsExitTwoTests(_CliTestCase):
             env={**os.environ, "PYTHONPATH": str(SRC)})
         self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
         self.assertIn("--static is only meaningful with --judge claims", proc.stderr)
+
+
+class TheJoinThatWillNotEvaluateTests(_CliTestCase):
+    """A bound bundle the kernel cannot close: named, counted as nothing, not a traceback.
+
+    ``evaluate`` returns ``RESOURCE_EXHAUSTED``/``UNSUPPORTED_CONSTRUCT`` rather
+    than raising, and its defaults are finite (10k iterations, 100k derived
+    rows, 100k provenance nodes, 30 s), so this path is reachable on a big
+    enough bundle.  It is driven here by evaluating the same bundle under a
+    one-row bound, which is the same failure with a smaller number in it.  The
+    clamp is on this module's own limits, so the claims judge's evaluation of
+    the receipt -- the verdict and exit code asserted below -- is untouched.
+    """
+
+    def _clamped(self):
+        from capcov.claims import evaluator
+
+        return mock.patch.object(static_join, "LIMITS",
+                                 evaluator.ResourceLimits(max_derived_rows=1))
+
+    def _in_process(self, *extra: str):
+        """The gate, in this process, so the clamp reaches the join and nothing else."""
+        from capcov import cli
+
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            code = cli.main(["gate", str(COVERAGE), "--judge", "claims", "--exemptions",
+                             str(EXEMPTIONS), "--receipt", str(RECEIPT),
+                             "--judge-out", str(self.out / "judge"), *extra])
+        document_path = self.out / "judge" / "judge.json"
+        document = (json.loads(document_path.read_text(encoding="utf-8"))
+                    if document_path.is_file() else None)
+        return code, out.getvalue(), document
+
+    def test_the_section_names_the_failure_and_reports_no_row(self) -> None:
+        with self._clamped():
+            section = _section("bound")
+        self.assertEqual(section["join"]["status"], static_join.JOIN_BOUND)
+        self.assertIn("did not evaluate", section["error"])
+        for key in ("routes", "capabilities", "dead", "blocked", "unresolved",
+                    "static_only", "underived", "withheld", "closure_witnesses"):
+            with self.subTest(key=key):
+                self.assertIsNone(section[key], "an unevaluated bundle reports nothing")
+
+    def test_the_summary_line_says_it_instead_of_counting_what_is_not_there(self) -> None:
+        with self._clamped():
+            section = _section("bound")
+        line = static_join.summary_line(section)
+        self.assertIn("no rows read", line)
+        self.assertIn(section["error"], line)
+
+    def test_the_cli_names_it_and_still_exits_with_the_judges_own_code(self) -> None:
+        """The line is printed after judge.json is written: it may not replace a verdict."""
+        plain_code, _, plain = self._in_process()
+        with self._clamped():
+            code, out, document = self._in_process("--static", str(_Bundles.path("bound")))
+        self.assertEqual(code, plain_code)
+        self.assertEqual(document["verdict"], plain["verdict"])
+        self.assertEqual(document["exit_code"], plain["exit_code"])
+        self.assertIn("no rows read", out)
+        self.assertIn("did not evaluate", document["static"]["error"])
 
 
 if __name__ == "__main__":  # pragma: no cover
