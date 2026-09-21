@@ -26,3 +26,19 @@ Findings: `static_bind` = `static_capability_op` = `fixpoint.bind`
 `blocked(sessions via Service#Fetch)`.  The rules here gate every negation on
 `call_graph_closed`; a production pack must additionally attribute `maps` and
 `high_edge` to a reviewer producer class and put them behind their own closure.
+
+**Landed.**  `rules-static-reflexion-v1` (`src/capcov/claims/static/reflexion.py`)
+is that production pack: the same rows, with `maps`/`high_edge` as
+`capability_map`/`capability_edge` under producer class `reviewer`, a closure
+witness each, and `capability_map_describes_index` binding the model document to
+the index.  `facts/{maps,high_edge}.facts` are kept as the experiment's record;
+`capability-map.json` / `capability-edges.json` are the same model as documents
+the profile reads:
+
+    capcov experiment claims static --static scip --target tests/fixtures/go_app \
+        --capability-map experiments/claim-semantics/static/reflexion-pilot/capability-map.json \
+        --capability-edges experiments/claim-semantics/static/reflexion-pilot/capability-edges.json \
+        --out bundle.json
+
+`tests/claim_semantics/test_static_reflexion.py` pins the derived rows to the
+`expected/` tables above, in both kernels.
