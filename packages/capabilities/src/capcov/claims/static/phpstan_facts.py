@@ -65,7 +65,12 @@ if the report enumerated its files and **no** unresolved site falls in any of
 them -- zero ``mixed`` receivers, zero magic calls, zero unattributed sites.
 On the fixture the ``*`` token is withheld for exactly one ``__call`` site, and
 a ``document_set`` scope closes the files that do not contain it, one document
-at a time.
+at a time.  The report is an untrusted input file, so both halves of that
+contract are checked rather than assumed: a report carrying a fact about a file
+it does not name as analysed is refused by ``export_bundle`` (its residue would
+sit outside the census the guard reads), and a fragment built from a fact set
+other than the export's is refused by ``closure_fragment`` (the export records
+which one that was, in ``index_file_digest``).
 
 IDENTITY
 --------
@@ -312,6 +317,16 @@ def export_bundle(
         return ExportResult(STATUS_RESOURCE_EXHAUSTED, None, {"documents": len(analysed)},
                             (f"documents {len(analysed)} exceed limit {limits.documents}",))
 
+    outside = _facts_outside_the_census(facts, analysed)
+    if outside:
+        named = ", ".join(f"{path} ({'/'.join(sorted(kinds))})"
+                          for path, kinds in outside[:3])
+        return ExportResult(
+            STATUS_INVALID_INPUT, None, {},
+            (f"the report carries facts about {len(outside)} file(s) it does not name as "
+             f"analysed ({named}); the census would not cover its own facts, and a closure "
+             f"witness over it would be silence about a file the census omits",))
+
     patterns = artifacts.patterns_for(LANGUAGE)
     manifest = artifacts.tree_manifest(Path(source_root), patterns)
     tree_digest = artifacts.manifest_sha256(manifest)
@@ -516,6 +531,30 @@ def export_bundle(
     return ExportResult(STATUS_COMPLETE, bundle, accumulator.counts(), tuple(messages))
 
 
+def _facts_outside_the_census(facts: tuple[dict[str, Any], ...],
+                              analysed: Iterable[str]) -> list[tuple[str, set[str]]]:
+    """``(path, kinds)`` per file a fact is about that the report did not analyse.
+
+    The census *is* the analysis (``analysed`` is what ``in_scope_documents`` and
+    so every closure scope token is drawn from), so a fact about a file outside
+    it is a report that contradicts itself -- and the contradiction is not
+    symmetric: an ``unresolved`` fact outside the census is a residue row the
+    closure guard cannot see, because it intersects the residue files with the
+    in-scope documents, so ``call_graph_closed`` would fire *over* an enumerated
+    unresolved site.  Refusing the export is the only reading that keeps the
+    witness meaning what it says.  Files carrying an ``unresolved`` fact are
+    named first.
+    """
+    census = set(analysed)
+    outside: dict[str, set[str]] = {}
+    for fact in facts:
+        path = fact.get("path")
+        if isinstance(path, str) and path and path not in census:
+            outside.setdefault(path, set()).add(str(fact.get("fact")))
+    return sorted(outside.items(),
+                  key=lambda item: ("unresolved" not in item[1], item[0]))
+
+
 def _input_problem(facts: tuple[dict[str, Any], ...], scope: Scope,
                    analyser_version: str) -> str | None:
     if not isinstance(analyser_version, str) or not analyser_version:
@@ -546,13 +585,26 @@ def closure_fragment(export: Bundle, facts: Iterable[Mapping[str, Any]]) -> Bund
     Same emission contract as ``closure.closure_bundle`` -- the residue as rows
     in every case, the witness only for a scope token whose documents carry
     none of them -- over the collector's census instead of the SCIP resolver's.
+
+    ``facts`` must be the fact set ``export`` was built from, and is checked
+    against the identity the export records (``index_file_digest``): a fragment
+    built from some other census would emit a witness about a residue set the
+    bundle does not carry.
     """
     facts = tuple(dict(fact) for fact in facts)
     metadata = dict(export.metadata)
-    for key in ("index_digest", "scope", "in_scope_documents", "census_available"):
+    for key in ("index_digest", "index_file_digest", "scope", "in_scope_documents",
+                "census_available"):
         if key not in metadata:
             raise ReportInputError(f"the export carries no {key!r} metadata; pass a bundle "
                                    f"from phpstan_facts.export_bundle")
+    digest = report_digest(facts)
+    if digest != metadata["index_file_digest"]:
+        raise ReportInputError(
+            f"these facts are not the ones the export was built from: they hash to {digest} "
+            f"and the export records index_file_digest {metadata['index_file_digest']}; the "
+            f"witness says 'this index's census carries no unresolved site', so the fragment's "
+            f"census must be the export's census")
     index = str(metadata["index_digest"])
     decls = closure.relation_decls()
     depends_on = tuple(sorted(record.id for record in export.evidence

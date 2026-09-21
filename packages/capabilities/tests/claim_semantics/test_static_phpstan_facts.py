@@ -350,6 +350,33 @@ class TheWitnessIsWithheldForTheMagicSiteTests(unittest.TestCase):
         self.assertEqual([row[:2] for row in _rows(bundle, "scip_unresolved_site")],
                          [row[:2] for row in _rows(bundle, closure.UNRESOLVED_RELATION)])
 
+    def test_a_report_whose_census_omits_its_own_residue_is_refused(self) -> None:
+        """The guard reads the census, so a residue row outside it would close the index."""
+        facts = tuple(fact for fact in _facts()
+                      if not (fact["fact"] == "analysed" and fact["path"] == MAGIC_SITE[0]))
+        self.assertIn(MAGIC_SITE, [(path, line) for path, line, _callee
+                                   in phpstan_facts.unresolved_rows(facts)],
+                      "the magic site is still enumerated; it is the census that lost the file")
+        result = phpstan_facts.export_bundle(facts, source_root=PHP_APP,
+                                             analyser_version=ANALYSER_VERSION,
+                                             observe_tree=True)
+        self.assertEqual(result.status, phpstan_facts.STATUS_INVALID_INPUT)
+        self.assertIn(MAGIC_SITE[0], result.messages[0])
+        self.assertIsNone(result.bundle,
+                          "no bundle may carry that residue row together with the witness")
+
+    def test_a_fact_set_the_export_was_not_built_from_is_refused(self) -> None:
+        """The witness is about the census the index was hashed from, or about nothing."""
+        export = _incumbent().bundle
+        other = _facts(drop_magic=True)
+        with self.assertRaises(phpstan_facts.ReportInputError) as caught:
+            phpstan_facts.closure_fragment(export, other)
+        message = str(caught.exception)
+        self.assertIn(str(dict(export.metadata)["index_file_digest"]), message)
+        self.assertIn(phpstan_facts.report_digest(other), message)
+        with self.assertRaises(phpstan_facts.ReportInputError):
+            phpstan_facts.attach(export, other, phpstan_facts.pack_bundle())
+
 
 class ParityIsALicensedJoinTests(unittest.TestCase):
     def test_both_sides_reaching_a_table_converges(self) -> None:
