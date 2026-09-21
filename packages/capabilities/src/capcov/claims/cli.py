@@ -36,7 +36,12 @@ It indexes the tree with the SCIP toolchain, exports the static facts exactly as
 the exporter always has, and ADDITIONALLY emits the resolver's enumerated
 residue as ``static_unresolved_call_site`` rows plus, for each scope whose
 residue is empty, the ``call_graph_closed`` witness a negative static claim needs
-(``rules-static-closure-v1``).  Exit 0 with a bundle, 2 for a usage refusal, 3
+(``rules-static-closure-v1``).  Adding ``--capability-map MAP.json``
+(and optionally ``--capability-edges EDGES.json``) merges a third, reviewer-owned
+fragment beside those two: the capability map, the intended capability model and
+their closures (``rules-static-reflexion-v1``), which is what turns the call
+graph into a reflexion model.  Without the flag not one reflexion row is emitted
+and the bundle is what it was.  Exit 0 with a bundle, 2 for a usage refusal, 3
 for a named operational failure -- an absent SCIP toolchain reported in
 ``capcov discover --resolver scip``'s own words among them.
 
@@ -455,6 +460,26 @@ def _static(args) -> int:
     except ValueError as exc:
         _emit({"refusal": str(exc)}, None)
         return 2
+    if args.capability_edges and not args.capability_map:
+        _emit({"refusal": "--capability-edges needs --capability-map: an edge model over "
+                          "capabilities nothing is mapped to derives nothing"}, None)
+        return 2
+    reflexion_summary = {}
+    model = None
+    if args.capability_map:
+        from .static import reflexion
+
+        try:
+            model = reflexion.load_model(args.capability_map, args.capability_edges)
+        except reflexion.ReflexionInputError as exc:
+            _emit({"refusal": str(exc)}, None)
+            return 2
+        reflexion_summary = {"reflexion_pack": reflexion.PACK_ID,
+                             "model_digest": model.digest,
+                             "capability_map": len(model.capabilities),
+                             "capability_map_closed": model.closed,
+                             "capability_edge": len(model.edges),
+                             "capability_edge_closed": model.edges_closed}
     ast_raw = {}
     if args.ast_raw:
         try:
@@ -516,11 +541,28 @@ def _static(args) -> int:
         _emit({"operational_failure": "static-export-failed", "status": exported.status,
                "messages": list(exported.messages)}, None)
         return 3
-    try:
-        bundle = closure.attach(exported.bundle, raw)
-    except (ValidationError, ValueError) as exc:
-        _emit({"operational_failure": "static-closure-failed", "error": str(exc)}, None)
-        return 3
+    if model is None:
+        try:
+            bundle = closure.attach(exported.bundle, raw)
+        except (ValidationError, ValueError) as exc:
+            _emit({"operational_failure": "static-closure-failed", "error": str(exc)}, None)
+            return 3
+    else:
+        # One merge, not two: the reviewer fragment is built against the export
+        # and merged beside the closure fragment, so the reviewer's rows depend
+        # on the index and never the other way round.
+        try:
+            bundle = reflexion.attach(
+                exported.bundle, model, closure.closure_bundle(exported.bundle, raw),
+                tree_digest=dict(dict(exported.bundle.metadata)["tree"])["digest"])
+        except reflexion.ReflexionInputError as exc:
+            # A map naming a symbol this index does not have is a usage error,
+            # and saying which symbols is the only safe way to fail.
+            _emit({"refusal": str(exc)}, None)
+            return 2
+        except (ValidationError, ValueError) as exc:
+            _emit({"operational_failure": "static-reflexion-failed", "error": str(exc)}, None)
+            return 3
     if args.out:
         Path(args.out).write_text(canonical_json(canonical_dict(bundle)) + "\n", encoding="utf-8")
     rows = {}
@@ -535,6 +577,7 @@ def _static(args) -> int:
            closure.UNRESOLVED_RELATION: rows.get(closure.UNRESOLVED_RELATION, 0),
            closure.CLOSED_RELATION: closed,
            "row_counts": rows, "out": args.out,
+           **reflexion_summary,
            "messages": list(exported.messages)}, None)
     return 0
 
@@ -653,6 +696,12 @@ def main(argv: list[str]) -> int:
                         help="all (default), package:PREFIX or documents:A,B")
     static.add_argument("--timeout-seconds", type=int, default=600,
                         help="hard timeout for the indexer")
+    static.add_argument("--capability-map", default=None, metavar="FILE",
+                        help="reviewer capability map (symbol -> capability) to lift the "
+                             "call graph through; without it no reflexion row is emitted")
+    static.add_argument("--capability-edges", default=None, metavar="FILE",
+                        help="reviewer capability model (the intended edges) compared with "
+                             "the lifted call graph; needs --capability-map")
     static.add_argument("--out", default=None, help="write the combined bundle JSON here")
     mc = claims_sub.add_parser("modelcheck", help="Stage D: typed well-formedness of a Shen domain model")
     mc.add_argument("--model", required=True, help="model directory holding shen/load.shen")
