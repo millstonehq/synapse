@@ -38,10 +38,12 @@ WHAT IS EMITTED
 ``static_cha_unexpanded_site(index, path, line, interface_symbol, reason)``
     Every dispatch site the expansion could not cover, with the reason:
     ``caller_unattributed`` (module scope -- there is no ``from`` to expand from),
-    ``no_implementation_in_index`` (nothing implements it here) or
+    ``no_implementation_in_index`` (nothing implements it here),
     ``implementation_out_of_scope`` (an implementation this slice does not
-    define).  Enumerated, never dropped: these are the sites that keep the
-    expansion from being complete, and they are why the witness below is withheld.
+    define) or ``co_located_residue`` (the census gives this line more than one
+    unresolved callee, and discharge cannot tell them apart -- see below).
+    Enumerated, never dropped: these are the sites that keep the expansion from
+    being complete, and they are why the witness below is withheld.
 
 ``static_edge_cha_closed(index)``
     The expansion's own completeness witness, emitted only when no site was
@@ -57,6 +59,10 @@ WHAT IS EMITTED
     that scope is discharged by an expansion **of that exact site**.  A residue
     row that is not a dispatch site (reflection, a dynamic method name) is never
     discharged, and one unexpanded site withholds the witness for every token.
+    "That exact site" is a ``(path, line)`` join -- the residue's callee is not a
+    column the dispatch site carries -- so a line carrying both a dispatch and a
+    reflective call is expanded not at all rather than expanded and joined
+    loosely, which would discharge the reflective call along with it.
 
     It completes ``static_reaches_cha``, and it is what the ``*_cha`` verdicts
     rest on instead of ``call_graph_closed``, which is withheld on precisely the
@@ -87,7 +93,7 @@ from typing import Any, Iterable, Mapping
 
 from ...scip import map as scip_map
 from ..ir import Bundle, RelationDecl, bundle_from_json
-from . import closure, scip_facts
+from . import closure, reflexion, scip_facts
 from .combine import combine
 
 PACK_NAME = "rules-static-cha-v1.json"
@@ -126,6 +132,12 @@ INTERFACE_MEMBER_KINDS = frozenset({"MethodSpecification"})
 REASON_UNATTRIBUTED = "caller_unattributed"
 REASON_NO_IMPLEMENTATION = "no_implementation_in_index"
 REASON_OUT_OF_SCOPE = "implementation_out_of_scope"
+#: A site the census gives more than one unresolved callee for.  Discharge is a
+#: join on ``(path, line)`` -- the residue row's callee is not a column the
+#: dispatch site carries -- so expanding one call on a line would discharge
+#: every unresolved call on it, including calls no expansion covers.  Such a
+#: site is expanded not at all and enumerated instead.
+REASON_CO_LOCATED_RESIDUE = "co_located_residue"
 
 #: What a ``source_tree_observed`` row emitted by this module says it is.
 TREE_OBSERVATION_SOURCE = "scip claim-time observation of the indexed tree"
@@ -142,6 +154,15 @@ class ChaInputError(ValueError):
 
 class DispatchUnsupported(ChaInputError):
     """No measurement says this indexer emits SCIP implementation relationships."""
+
+
+class MapCoverageUnsatisfied(reflexion.ReflexionInputError):
+    """A closed capability map omits a symbol the expansion's edges run through.
+
+    A ``ReflexionInputError``: the document at fault is the reviewer's map, and
+    a caller that already treats a map/index mismatch as a usage refusal treats
+    this one the same way.
+    """
 
 
 def load_pack() -> dict[str, Any]:
@@ -172,7 +193,9 @@ def require_measured_indexer(producers: Mapping[str, Any]) -> None:
     ``producers`` is the export metadata's ``{"indexer", "indexer_version", ...}``.
     The refusal says what was measured rather than asserting what the unmeasured
     indexer does: this module cannot tell "emits none" from "was never looked at",
-    and only one of those is a fact.
+    and only one of those is a fact.  It ends with the remedy, as every other
+    absent-capability refusal in this package does: ``--dispatch cha`` is an
+    optional expansion, and dropping it still produces the resolved bundle.
     """
     indexer = str(producers.get("indexer") or "")
     version = str(producers.get("indexer_version") or "")
@@ -182,7 +205,9 @@ def require_measured_indexer(producers: Mapping[str, Any]) -> None:
     named = " ".join(part for part in (indexer or "this indexer", version) if part)
     raise DispatchUnsupported(
         f"unsupported: no measurement that {named} emits SCIP implementation "
-        f"relationships; --dispatch cha is measured for {measured}")
+        f"relationships; --dispatch cha is measured for {measured}. "
+        f"Re-run with --dispatch none (the default) for the resolved account alone, "
+        f"or index with an indexer the measurement covers")
 
 
 def implementations(export: Bundle) -> dict[str, tuple[str, ...]]:
@@ -240,6 +265,65 @@ def dispatch_sites(export: Bundle, normalized: Mapping[str, Any],
     return sorted(set(rows), key=lambda row: (row[2], row[3], row[1], row[0] or ""))
 
 
+def co_located_residue_sites(ast_raw: Mapping[str, Any]) -> frozenset[tuple[str, int]]:
+    """``(path, line)`` the census gives more than one unresolved callee for.
+
+    ``static_cha_site_discharged`` joins the residue to the dispatch site on
+    ``(path, line)`` alone -- the residue row's callee is the census's column,
+    not the index's, and the dispatch site has no such column to join on.  So a
+    line carrying two unresolved calls, only one of them a dispatch, would have
+    both discharged by the one expansion, and ``call_graph_closed_cha`` would be
+    emitted over a call graph that still contains the other.  Naming those sites
+    is what lets :func:`cha_bundle` expand none of them.
+    """
+    seen: dict[tuple[str, int], set[str]] = {}
+    for path, line, callee in closure.residue_rows(ast_raw):
+        seen.setdefault((path, line), set()).add(callee)
+    return frozenset(site for site, callees in seen.items() if len(callees) > 1)
+
+
+def expansion_edge_symbols(expanded: Iterable[tuple[str, str]],
+                           hierarchy: Mapping[str, tuple[str, ...]]) -> frozenset[str]:
+    """Every symbol ``static_edge_cha`` runs through, from ``(caller, member)`` pairs.
+
+    The ``src`` and ``dst`` of the edges the expansion will derive -- the CHA
+    mirror of :func:`reflexion.edge_endpoint_symbols`, which reads
+    ``scip_may_reference`` and therefore cannot see an endpoint that exists only
+    because of this expansion.  The interface is not among them: it is the
+    edge's ``via_interface`` witness, not one of the two symbols the lift reads.
+    """
+    out: set[str] = set()
+    for caller, member in expanded:
+        out.add(caller)
+        out.update(hierarchy.get(member) or ())
+    return frozenset(out)
+
+
+def require_mapped_expansion(model: reflexion.CapabilityModel | None,
+                             symbols: Iterable[str]) -> None:
+    """Refuse a *closed* capability map that omits a symbol the expansion runs through.
+
+    ``reflexion.model_bundle`` makes exactly this check for the resolved graph,
+    reading ``scip_may_reference``; a CHA endpoint is in neither that relation
+    nor that check, so a closed map may omit one, fail to lift the expanded edge
+    and then report the reviewer's edge as ``static_absence_cha`` -- a claim that
+    the code lacks an edge the bundle demonstrably carries.  Same shape, same
+    refusal, same reason: coverage is the one part of a reviewer's say-so this
+    package can check, and it is checked before the witness is emitted.  An open
+    map licenses no negation and is free to be partial.
+    """
+    if model is None or not model.closed:
+        return
+    mapped = frozenset(model.symbols)
+    unmapped = tuple(sorted(symbol for symbol in symbols if symbol not in mapped))
+    if not unmapped:
+        return
+    raise MapCoverageUnsatisfied(
+        f"the capability map declares closure but does not map {len(unmapped)} "
+        f"symbol(s) the dispatch expansion's edges run through: "
+        f"{', '.join(unmapped[:5])}" + (" ..." if len(unmapped) > 5 else ""))
+
+
 def unexpanded_reason(caller: str | None, member: str,
                       hierarchy: Mapping[str, tuple[str, ...]],
                       defined: frozenset[str]) -> str | None:
@@ -255,7 +339,8 @@ def unexpanded_reason(caller: str | None, member: str,
 
 
 def cha_bundle(export: Bundle, normalized: Mapping[str, Any], ast_raw: Mapping[str, Any],
-               *, tree_digest: str | None = None) -> Bundle:
+               *, model: reflexion.CapabilityModel | None = None,
+               tree_digest: str | None = None) -> Bundle:
     """The fragment: dispatch sites, unexpanded sites, both witnesses, the rules.
 
     Built against a finished ``scip_facts`` export (its identity, its scope and
@@ -271,6 +356,13 @@ def cha_bundle(export: Bundle, normalized: Mapping[str, Any], ast_raw: Mapping[s
     ``static_index_current`` -- and so ``static_capability_op_cha``, and so every
     ``*_cha`` entity row -- rests on.  ``reflexion.model_bundle`` emits the same
     row, so a caller merging both fragments passes it to exactly one of them.
+
+    ``model`` is the reviewer's :class:`reflexion.CapabilityModel` when this
+    fragment is built beside one.  A *closed* map that omits a symbol the
+    expansion's edges run through is refused by name
+    (:func:`require_mapped_expansion`): ``reflexion``'s own coverage check reads
+    ``scip_may_reference`` and cannot see a CHA endpoint, and an omitted one
+    turns a real expanded edge into a ``static_absence_cha`` the code refutes.
     """
     metadata = closure._metadata(export)
     producers = dict(metadata["producers"])
@@ -295,15 +387,31 @@ def cha_bundle(export: Bundle, normalized: Mapping[str, Any], ast_raw: Mapping[s
     hierarchy = implementations(export)
     defined = defined_symbols(export)
     sites = dispatch_sites(export, normalized, metadata["in_scope_documents"])
+    co_located = co_located_residue_sites(ast_raw)
     expanded: set[tuple[str, int]] = set()
+    expansions: list[tuple[str, str, str, int]] = []
     unexpanded = []
     for caller, member, path, line in sites:
         reason = unexpanded_reason(caller, member, hierarchy, defined)
+        # Discharge is a join on (path, line), so a dispatch site sharing its
+        # line with another unresolved callee is expanded not at all: expanding
+        # it would discharge that other call too, and close a call graph that
+        # still runs through it.
+        if reason is None and (path, line) in co_located:
+            reason = REASON_CO_LOCATED_RESIDUE
         if reason is None:
-            add(DISPATCH_RELATION, [caller, member, path, line], indexer_source)
-            expanded.add((path, line))
+            expansions.append((caller, member, path, line))
         else:
             unexpanded.append((path, line, member, reason))
+    # Refuse before a row is emitted: edges running through a symbol a CLOSED
+    # map omits would lift incompletely and read as an absence in the code.
+    require_mapped_expansion(
+        model,
+        expansion_edge_symbols(((caller, member) for caller, member, _, _ in expansions),
+                               hierarchy))
+    for caller, member, path, line in expansions:
+        add(DISPATCH_RELATION, [caller, member, path, line], indexer_source)
+        expanded.add((path, line))
     for path, line, member, reason in sorted(set(unexpanded)):
         add(UNEXPANDED_RELATION, [path, line, member, reason], indexer_source)
 
@@ -355,7 +463,8 @@ def cha_bundle(export: Bundle, normalized: Mapping[str, Any], ast_raw: Mapping[s
 
 
 def attach(export: Bundle, normalized: Mapping[str, Any], ast_raw: Mapping[str, Any],
-           *bundles: Bundle, tree_digest: str | None = None, validate: bool = True,
+           *bundles: Bundle, model: reflexion.CapabilityModel | None = None,
+           tree_digest: str | None = None, validate: bool = True,
            **combine_kwargs: Any) -> Bundle:
     """``export`` plus the CHA fragment (plus any further bundles), validated.
 
@@ -364,7 +473,9 @@ def attach(export: Bundle, normalized: Mapping[str, Any], ast_raw: Mapping[str, 
     ``static_reaches``; both are merged by the caller in ``bundles``, exactly as
     ``reflexion.attach`` expects them.
     """
-    return combine(export, cha_bundle(export, normalized, ast_raw, tree_digest=tree_digest),
+    return combine(export,
+                   cha_bundle(export, normalized, ast_raw, model=model,
+                              tree_digest=tree_digest),
                    *bundles, validate=validate, **combine_kwargs)
 
 
@@ -374,7 +485,10 @@ __all__ = ["PACK_NAME", "PACK_ID", "BASE_PACK_ID", "CLOSURE_PACK_ID", "REFLEXION
            "CLOSED_RELATION", "RELATIONSHIP_RELATION", "IMPLEMENTATION",
            "SYMBOL_RELATION", "INTERFACE_MEMBER_KINDS", "REASON_UNATTRIBUTED",
            "REASON_NO_IMPLEMENTATION", "REASON_OUT_OF_SCOPE",
-           "TREE_OBSERVATION_SOURCE", "MEASURED_INDEXERS", "ChaInputError", "DispatchUnsupported", "load_pack",
+           "REASON_CO_LOCATED_RESIDUE",
+           "TREE_OBSERVATION_SOURCE", "MEASURED_INDEXERS", "ChaInputError", "DispatchUnsupported",
+           "MapCoverageUnsatisfied", "load_pack",
            "pack_relations", "pack_bundle", "relation_decls", "require_measured_indexer",
-           "implementations", "interface_members", "defined_symbols", "dispatch_sites", "unexpanded_reason",
-           "cha_bundle", "attach"]
+           "implementations", "interface_members", "defined_symbols", "dispatch_sites",
+           "co_located_residue_sites", "expansion_edge_symbols", "require_mapped_expansion",
+           "unexpanded_reason", "cha_bundle", "attach"]

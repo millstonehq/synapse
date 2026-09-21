@@ -571,11 +571,17 @@ def _static(args) -> int:
         # reviewer's when there is one, this one otherwise, so `--dispatch cha`
         # alone still derives the entity rows that rest on static_index_current.
         try:
-            cha_fragment = cha.cha_bundle(exported.bundle, normalized, raw,
+            cha_fragment = cha.cha_bundle(exported.bundle, normalized, raw, model=model,
                                           tree_digest=None if model else tree_digest)
         except cha.DispatchUnsupported as exc:
             _emit({"operational_failure": "dispatch-unsupported", "error": str(exc)}, None)
             return 3
+        except reflexion.ReflexionInputError as exc:
+            # A CLOSED map that omits a symbol the expansion's edges run through:
+            # the same usage refusal, and for the same reason, as a map that
+            # omits a resolved edge endpoint.
+            _emit({"refusal": str(exc)}, None)
+            return 2
         except (ValidationError, ValueError, KeyError) as exc:
             _emit({"operational_failure": "static-dispatch-failed", "error": str(exc)}, None)
             return 3

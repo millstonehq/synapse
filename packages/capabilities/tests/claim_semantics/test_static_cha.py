@@ -1,6 +1,6 @@
 """Class-hierarchy expansion: a second account of the call graph, never a wider one.
 
-Six properties, one per section.
+Seven properties, one per section.
 
 1. **The measurement, not an assumption.**  ``scip-go`` 0.2.7 emits SCIP
    ``is_implementation`` relationships for Go interfaces -- for the method
@@ -38,6 +38,9 @@ Six properties, one per section.
    different.**  A residue row that is *not* a dispatch site is never discharged:
    ``call_graph_closed_cha`` goes, ``static_entity_dead_cha`` goes with it, and
    ``static_entity_blocked_cha`` names the symbol the undischarged site sits on.
+   A residue row on the dispatch site's own *line* is the same problem at closer
+   range -- discharge joins on ``(path, line)`` -- so that site is expanded not
+   at all and enumerated with its reason, and nothing is claimed over it.
    An index that declares an interface member and implements it nowhere -- a Go
    interface whose implementations live in another module -- still *sees* the
    site (membership is read from the symbol's kind, not from the hierarchy it
@@ -47,7 +50,15 @@ Six properties, one per section.
    claims nothing at all: the witness is licensed only over the whole index.
 
 6. **An unmeasured indexer is refused.**  Not "emits none": this module cannot
-   tell that from "nobody looked", and only one of those is a fact.
+   tell that from "nobody looked", and only one of those is a fact -- and the
+   refusal names the remedy, because ``--dispatch cha`` is optional and dropping
+   it still produces the resolved bundle.
+
+7. **A reviewer's model beside the expansion.**  The reflexion lift over
+   ``static_edge_cha``: what converges, what diverges, and the one absence the
+   expansion licenses that the resolved account can only call unresolved.  A
+   closed capability map omitting a symbol only the expansion's edges run
+   through would manufacture that absence, and is refused by name.
 
 The two live classes index the fixture with the real toolchain -- one checks the
 committed golden against a fresh index, the other runs ``--dispatch cha`` end to
@@ -96,6 +107,7 @@ SQL_TYPE = _PREFIX + f"`{MODULE}/store`/SQL#"
 MEMORY_FETCH = _PREFIX + f"`{MODULE}/store`/Memory#Fetch()."
 MEMORY_TYPE = _PREFIX + f"`{MODULE}/store`/Memory#"
 QUERY = _PREFIX + f"`{MODULE}/store`/query()."
+HANDLE = _PREFIX + f"`{MODULE}/api`/handle()."
 
 SURFACE = "http:GET /things/{id}"
 ENTITY = "things"
@@ -116,6 +128,31 @@ DISPATCH_RESIDUE = [{"file": "api/api.go", "line": DISPATCH_LINE, "callee": "rep
 #: A residue row no expansion can discharge: it is not a dispatch site at all.
 REFLECTIVE_RESIDUE = [{"file": "store/store.go", "line": OP_LINE, "callee": "m.byName",
                        "kind": "unresolved", "reason": "dynamic method"}]
+#: The same kind of row, on the dispatch site's own LINE.  Discharge is a join on
+#: ``(path, line)``, so expanding the dispatch here would discharge this call too.
+CO_LOCATED_RESIDUE = [{"file": "api/api.go", "line": DISPATCH_LINE,
+                       "callee": "reflect.ValueOf(x).Call", "kind": "unresolved",
+                       "reason": "reflection"}]
+
+#: A reviewer model over this fixture: six symbols, six capabilities, three
+#: intended edges.  ``things_api -> things_sql`` is the one the resolved lift
+#: cannot exhibit (the call goes through the interface) and ``things_api ->
+#: metrics`` is the one nothing in the code exhibits at all.
+CAPABILITY_MAP = {REGISTER: "bootstrap", HANDLE: "bootstrap", GET_THING: "things_api",
+                  SQL_FETCH: "things_sql", MEMORY_FETCH: "things_memory",
+                  QUERY: "sql_driver"}
+MODEL_EDGES = [["things_api", "things_sql"], ["things_api", "metrics"],
+               ["things_sql", "sql_driver"]]
+
+#: What the two lifts carry.  The resolved one has no edge out of the handler.
+RESOLVED_LIFTED_EDGES = [["bootstrap", "things_api"], ["things_sql", "sql_driver"]]
+CHA_LIFTED_EDGES = sorted(RESOLVED_LIFTED_EDGES + [["things_api", "things_memory"],
+                                                   ["things_api", "things_sql"]])
+CONVERGENCE_CHA = [["things_api", "things_sql"], ["things_sql", "sql_driver"]]
+DIVERGENCE_CHA = [["bootstrap", "things_api"], ["things_api", "things_memory"]]
+ABSENCE_CHA = [["things_api", "metrics"]]
+#: Without the expansion the model edge through the interface is unsettled too.
+UNRESOLVED_WITHOUT_CHA = sorted(ABSENCE_CHA + [["things_api", "things_sql"]])
 
 _HAVE_SOUFFLE = shutil.which(os.environ.get("SOUFFLE") or "souffle") is not None
 _HAVE_SCIP = bool(shutil.which("scip-go") and shutil.which("scip") and shutil.which("go"))
@@ -148,6 +185,17 @@ def _ast(residue=DISPATCH_RESIDUE) -> dict:
     }
 
 
+def _model(*, closed: bool = True, edges_closed: bool = True,
+           without: tuple[str, ...] = ()) -> reflexion.CapabilityModel:
+    """The reviewer model above, optionally open or missing a mapped symbol."""
+    capabilities = {symbol: capability for symbol, capability in CAPABILITY_MAP.items()
+                    if symbol not in without}
+    return reflexion.model_from_documents(
+        {"schema_version": 1, "closed": closed, "capabilities": capabilities},
+        {"schema_version": 1, "closed": edges_closed,
+         "edges": [list(edge) for edge in MODEL_EDGES]})
+
+
 def _golden() -> dict:
     return json.loads(GOLDEN.read_text(encoding="utf-8"))
 
@@ -167,14 +215,23 @@ def _export(ast: dict, scope=None):
     return result
 
 
-def _bundle(ast: dict, *, dispatch: bool = True, scope=None) -> tuple[Bundle, str]:
-    """Export + closure fragment + (optionally) the CHA fragment + the base pack."""
+def _bundle(ast: dict, *, dispatch: bool = True, scope=None,
+            model: reflexion.CapabilityModel | None = None) -> tuple[Bundle, str]:
+    """Export + closure fragment + (optionally) the reviewer's and CHA fragments.
+
+    ``model`` merges the reflexion fragment beside the others, which is what the
+    CLI does for ``--capability-map ... --dispatch cha``; the claim-time tree
+    observation stays with the CHA fragment, so it is emitted exactly once.
+    """
     exported = _export(ast, scope=scope)
     index = dict(exported.bundle.metadata)["index_digest"]
     tree = dict(dict(exported.bundle.metadata)["tree"])["digest"]
     fragments = [closure.closure_bundle(exported.bundle, ast), pack_bundle()]
+    if model is not None:
+        fragments.append(reflexion.model_bundle(exported.bundle, model))
     if dispatch:
-        bundle = cha.attach(exported.bundle, _normalized(), ast, *fragments, tree_digest=tree)
+        bundle = cha.attach(exported.bundle, _normalized(), ast, *fragments,
+                            model=model, tree_digest=tree)
     else:
         from capcov.claims.static import pilot
 
@@ -200,6 +257,24 @@ def _payload(relations: dict[str, list[list]], name: str) -> list[list]:
 def _rows(bundle: Bundle, relation: str) -> list[list]:
     return sorted([term.value for term in fact.terms][1:]
                   for fact in bundle.facts if fact.relation == relation)
+
+
+def _certified_relations(artifact: dict) -> set[str]:
+    """Every relation the certificate's derivation tree runs through."""
+    seen: set[str] = set()
+
+    def walk(node):
+        if not isinstance(node, dict):
+            return
+        if "relation" in node:
+            seen.add(node["relation"])
+        for premise in node.get("premises") or ():
+            walk(premise)
+        for absent in node.get("negated") or ():
+            walk(absent)
+
+    walk(artifact.get("derivation"))
+    return seen
 
 
 class TheGoldenIsWhatTheIndexerSaysTests(unittest.TestCase):
@@ -377,6 +452,24 @@ class WhatTheExpansionSettlesTests(unittest.TestCase):
         result = certificate.recheck(self.bundle, artifact, self.relations)
         self.assertTrue(result.ok, result.problems)
 
+    def test_a_certificate_for_a_dead_entity_names_both_witnesses(self) -> None:
+        """The negative claim, and the two witnesses it is not licensed without.
+
+        A certificate is where a completeness witness shows up as support: if a
+        later rule edit dropped ``call_graph_closed_cha`` or
+        ``static_edge_cha_closed`` from the rule, the claim would still derive
+        and its support would no longer name them.
+        """
+        row = [self.index, SURFACE, UNREACHED_ENTITY]
+        artifact = certificate.certify(self.bundle, self.relations,
+                                       "static_entity_dead_cha", row)
+        self.assertFalse(artifact.get("truncated"), artifact)
+        result = certificate.recheck(self.bundle, artifact, self.relations)
+        self.assertTrue(result.ok, result.problems)
+        supported = _certified_relations(artifact)
+        self.assertIn(cha.CLOSED_RELATION, supported)
+        self.assertIn(cha.EDGE_CLOSED_RELATION, supported)
+
     def test_the_resolved_account_is_the_same_with_the_fragment_and_without(self) -> None:
         """The expansion widens nothing: it adds relations, it does not move one."""
         plain = _closure_of(_bundle(_ast(), dispatch=False)[0])
@@ -397,9 +490,11 @@ class WhatTheExpansionSettlesTests(unittest.TestCase):
 
 
 class AWitnessCanAlwaysBeWithheldTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.residue_bundle, self.index = _bundle(_ast(DISPATCH_RESIDUE + REFLECTIVE_RESIDUE))
+
     def test_a_residue_row_that_is_not_a_dispatch_site_is_never_discharged(self) -> None:
-        bundle, _ = _bundle(_ast(DISPATCH_RESIDUE + REFLECTIVE_RESIDUE))
-        relations = _closure_of(bundle)
+        relations = _closure_of(self.residue_bundle)
         self.assertEqual(_payload(relations, "static_cha_site_discharged"),
                          [["api/api.go", DISPATCH_LINE]])
         self.assertEqual(_payload(relations, "static_cha_site_undischarged"),
@@ -415,6 +510,64 @@ class AWitnessCanAlwaysBeWithheldTests(unittest.TestCase):
         self.assertEqual(_payload(relations, "static_capability_op_cha"),
                          [[SURFACE, ENTITY, "read"]],
                          "what is reached does not move; only what is closed does")
+
+    def test_a_certificate_for_a_blocked_entity_names_the_undischarged_site(self) -> None:
+        """The other side of the dead certificate: what the doubt rests on."""
+        relations = _closure_of(self.residue_bundle)
+        row = [self.index, SURFACE, UNREACHED_ENTITY, SQL_FETCH]
+        artifact = certificate.certify(self.residue_bundle, relations,
+                                       "static_entity_blocked_cha", row)
+        self.assertFalse(artifact.get("truncated"), artifact)
+        result = certificate.recheck(self.residue_bundle, artifact, relations)
+        self.assertTrue(result.ok, result.problems)
+        supported = _certified_relations(artifact)
+        self.assertIn("static_cha_site_undischarged", supported)
+        self.assertNotIn(cha.CLOSED_RELATION, supported,
+                         "a blocked entity is exactly the claim the witness does not license")
+
+    @unittest.skipUnless(_HAVE_SOUFFLE, "needs the souffle executable")
+    def test_both_kernels_agree_with_the_witness_withheld(self) -> None:
+        """Where two kernels can disagree is a stratified negation under a
+        withheld witness, which is this bundle and not the closed one."""
+        from capcov.claims.differential import compare
+
+        with tempfile.TemporaryDirectory() as tmp:
+            result = compare(self.residue_bundle, replay_root=str(Path(tmp) / "cha-residue"))
+            self.assertTrue(result.matched, result.replay_path)
+
+    def test_a_second_unresolved_callee_on_the_dispatch_line_expands_nothing(self) -> None:
+        """Discharge joins on ``(path, line)``, so a shared line is not expanded.
+
+        Without this the one expansion would discharge the reflective call
+        sitting beside it, ``call_graph_closed_cha`` would be emitted over a
+        call graph that still runs through reflection, and
+        ``static_entity_dead_cha`` would be licensed by it.
+        """
+        bundle, _ = _bundle(_ast(DISPATCH_RESIDUE + CO_LOCATED_RESIDUE))
+        relations = _closure_of(bundle)
+        self.assertEqual(_payload(relations, cha.UNEXPANDED_RELATION),
+                         [["api/api.go", DISPATCH_LINE, REPO_FETCH,
+                           cha.REASON_CO_LOCATED_RESIDUE]])
+        self.assertEqual(_payload(relations, cha.DISPATCH_RELATION), [])
+        self.assertEqual(_payload(relations, "static_edge_cha"), [])
+        self.assertEqual(_payload(relations, cha.EDGE_CLOSED_RELATION), [])
+        self.assertEqual(_payload(relations, cha.CLOSED_RELATION), [])
+        self.assertEqual(_payload(relations, "static_cha_site_discharged"), [],
+                         "neither call on the line is discharged by the other")
+        self.assertEqual(_payload(relations, "static_entity_dead_cha"), [])
+        self.assertEqual(_payload(relations, "static_capability_op_cha"), [],
+                         "an unexpanded site reaches nothing, and says so")
+
+    def test_the_two_residue_rows_are_both_enumerated_either_way(self) -> None:
+        """Whatever the expansion does, no census row is dropped on the floor."""
+        for label, residue in (("co-located", CO_LOCATED_RESIDUE),
+                               ("elsewhere", REFLECTIVE_RESIDUE)):
+            with self.subTest(residue=label):
+                bundle, _ = _bundle(_ast(DISPATCH_RESIDUE + residue))
+                self.assertEqual(
+                    _payload(_closure_of(bundle), "static_unresolved_call_site"),
+                    sorted([[row["file"], row["line"], row["callee"]]
+                            for row in DISPATCH_RESIDUE + residue]))
 
     def test_a_slice_cannot_see_what_it_is_missing_and_claims_nothing(self) -> None:
         """The interface lives in the document the slice drops: no rows, no witness."""
@@ -490,6 +643,125 @@ class AWitnessCanAlwaysBeWithheldTests(unittest.TestCase):
                          "but a call graph nobody censused is not closed by it")
 
 
+class ReflexionBesideTheExpansionTests(unittest.TestCase):
+    """Section 7: a reviewer's model lifted through the expansion.
+
+    The reflexion fragment reads ``static_edge``; on this fixture that graph has
+    no edge out of the handler at all, so the resolved lift can neither exhibit
+    the reviewer's ``things_api -> things_sql`` edge nor call it absent -- the
+    dispatch site is in the residue and ``call_graph_closed`` is withheld, so it
+    comes out ``static_absence_unresolved``.  Under the expansion the same model
+    converges on it, diverges on the implementation the reviewer did not model,
+    and reports exactly one real absence.
+
+    That last claim is the one with teeth: ``static_absence_cha`` says the code
+    does not have an edge the reviewer intended.  It is licensed by two
+    witnesses (``call_graph_closed_cha``, ``static_edge_cha_closed``) and by the
+    reviewer's own ``capability_map_closed`` -- and a closed map that omits a
+    symbol the *expansion's* edges run through would manufacture one, which is
+    why building this fragment beside such a map is refused by name.
+    """
+
+    def setUp(self) -> None:
+        self.bundle, self.index = _bundle(_ast(), model=_model())
+        self.relations = _closure_of(self.bundle)
+
+    def test_the_lift_carries_the_edges_only_the_expansion_has(self) -> None:
+        self.assertEqual(_payload(self.relations, "static_low_edge"), RESOLVED_LIFTED_EDGES)
+        self.assertEqual(_payload(self.relations, "static_low_edge_cha"), CHA_LIFTED_EDGES)
+
+    def test_convergence_divergence_and_absence_under_the_expansion(self) -> None:
+        self.assertEqual(_payload(self.relations, "static_convergence_cha"), CONVERGENCE_CHA)
+        self.assertEqual(_payload(self.relations, "static_divergence_cha"), DIVERGENCE_CHA)
+        self.assertEqual(_payload(self.relations, "static_model_edge_unlifted_cha"), ABSENCE_CHA)
+        self.assertEqual(_payload(self.relations, "static_absence_cha"), ABSENCE_CHA)
+        self.assertEqual(_payload(self.relations, "static_absence_unresolved_cha"), [])
+
+    def test_the_resolved_account_settles_less_and_never_more(self) -> None:
+        self.assertEqual(_payload(self.relations, "static_convergence"),
+                         [["things_sql", "sql_driver"]])
+        self.assertEqual(_payload(self.relations, "static_absence"), [],
+                         "call_graph_closed is withheld: the dispatch site is residue")
+        self.assertEqual(_payload(self.relations, "static_absence_unresolved"),
+                         UNRESOLVED_WITHOUT_CHA)
+
+    def test_a_certificate_for_a_cha_absence_rechecks(self) -> None:
+        row = [self.index, *ABSENCE_CHA[0]]
+        artifact = certificate.certify(self.bundle, self.relations, "static_absence_cha", row)
+        self.assertFalse(artifact.get("truncated"), artifact)
+        result = certificate.recheck(self.bundle, artifact, self.relations)
+        self.assertTrue(result.ok, result.problems)
+        supported = _certified_relations(artifact)
+        self.assertIn(cha.CLOSED_RELATION, supported)
+        self.assertIn(cha.EDGE_CLOSED_RELATION, supported)
+        self.assertIn(reflexion.MAP_CLOSED_RELATION, supported)
+
+    def test_a_model_that_declares_no_closure_settles_nothing_negative(self) -> None:
+        relations = _closure_of(_bundle(_ast(), model=_model(closed=False,
+                                                             edges_closed=False))[0])
+        self.assertEqual(_payload(relations, "static_low_edge_cha"), CHA_LIFTED_EDGES)
+        self.assertEqual(_payload(relations, "static_convergence_cha"), CONVERGENCE_CHA,
+                         "what is exhibited needs no closure")
+        for relation in ("static_low_edge_closed_cha", "static_model_edge_unlifted_cha",
+                         "static_absence_cha", "static_divergence_cha"):
+            with self.subTest(relation=relation):
+                self.assertEqual(_payload(relations, relation), [])
+
+    def test_an_undischarged_site_turns_the_cha_absence_into_a_question(self) -> None:
+        relations = _closure_of(
+            _bundle(_ast(DISPATCH_RESIDUE + REFLECTIVE_RESIDUE), model=_model())[0])
+        self.assertEqual(_payload(relations, "static_absence_cha"), [])
+        self.assertEqual(_payload(relations, "static_absence_unresolved_cha"), ABSENCE_CHA)
+        self.assertEqual(_payload(relations, "static_convergence_cha"), CONVERGENCE_CHA,
+                         "the lift does not move; only what is closed does")
+
+    def test_an_unclosed_expansion_licenses_no_absence_either(self) -> None:
+        """The expansion's own witness, withheld: the co-located site of section 5."""
+        relations = _closure_of(
+            _bundle(_ast(DISPATCH_RESIDUE + CO_LOCATED_RESIDUE), model=_model())[0])
+        self.assertEqual(_payload(relations, cha.EDGE_CLOSED_RELATION), [])
+        self.assertEqual(_payload(relations, "static_low_edge_closed_cha"), [])
+        self.assertEqual(_payload(relations, "static_absence_cha"), [])
+
+    def test_a_closed_map_that_omits_a_dispatch_endpoint_is_refused_by_name(self) -> None:
+        """The hole ``reflexion``'s own coverage check cannot see.
+
+        ``Memory#Fetch`` is an endpoint of ``static_edge_cha`` and of no
+        ``scip_may_reference`` edge, so a closed map omitting it passes
+        ``unmapped_edge_symbols`` -- and then fails to lift
+        ``things_api -> things_memory``, which the reviewer's model would have
+        been told is absent from the code.
+        """
+        export = _export(_ast()).bundle
+        model = _model(without=(MEMORY_FETCH,))
+        self.assertEqual(reflexion.unmapped_edge_symbols(export, model), (),
+                         "the resolved coverage check sees nothing wrong with this map")
+        with self.assertRaises(cha.MapCoverageUnsatisfied) as caught:
+            _bundle(_ast(), model=model)
+        message = str(caught.exception)
+        self.assertIn("declares closure", message)
+        self.assertIn(MEMORY_FETCH, message)
+        self.assertIsInstance(caught.exception, reflexion.ReflexionInputError,
+                              "the document at fault is the reviewer's map")
+
+    def test_an_open_map_may_omit_a_dispatch_endpoint(self) -> None:
+        """An open map licenses no negation, so partial coverage is honest."""
+        relations = _closure_of(_bundle(_ast(), model=_model(closed=False,
+                                                             without=(MEMORY_FETCH,)))[0])
+        self.assertEqual(_payload(relations, "static_low_edge_cha"),
+                         [edge for edge in CHA_LIFTED_EDGES
+                          if edge != ["things_api", "things_memory"]])
+        self.assertEqual(_payload(relations, "static_absence_cha"), [])
+
+    @unittest.skipUnless(_HAVE_SOUFFLE, "needs the souffle executable")
+    def test_both_kernels_agree(self) -> None:
+        from capcov.claims.differential import compare
+
+        with tempfile.TemporaryDirectory() as tmp:
+            result = compare(self.bundle, replay_root=str(Path(tmp) / "cha-model"))
+            self.assertTrue(result.matched, result.replay_path)
+
+
 class AnUnmeasuredIndexerIsRefusedTests(unittest.TestCase):
     def test_the_measured_indexer_passes(self) -> None:
         self.assertIsNone(cha.require_measured_indexer(
@@ -504,6 +776,9 @@ class AnUnmeasuredIndexerIsRefusedTests(unittest.TestCase):
         self.assertIn("scip-go 0.2.7", message)
         self.assertNotIn("emits no", message,
                          "'never measured' is not 'emits none'; only one of them is a fact")
+        self.assertIn("--dispatch none", message,
+                      "an optional expansion's absence names the tool AND the remedy: "
+                      "dropping the flag still produces the resolved bundle")
 
 
 class TheFlagIsOptionalTests(unittest.TestCase):
