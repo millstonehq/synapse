@@ -1,0 +1,33 @@
+# Explains every unexplained row in upstream_golden/python_app/coverage.json, so
+# `capcov gate` over that artifact passes its OWN judge.
+#
+# A claims-judge test that wants the judge's verdict to be what the exit code
+# says passes this file: `--judge claims` adds a verdict, it never replaces the
+# coverage artifact's, so a gate over an artifact that fails the four-cell gate
+# is exit 1 whatever the receipt says.  The golden artifact is a recorded
+# fixture, not this repo's coverage, which is why these reasons are about the
+# fixture rather than about work someone owes.
+
+[[exempt]]
+entity = "crates"
+cell = "static_only"
+reason = "recorded upstream fixture: the golden pins a FAILING gate, not a target to fix"
+date = "2026-09-17"
+
+[[exempt]]
+entity = "ghosts"
+cell = "static_only"
+reason = "recorded upstream fixture: the golden pins a FAILING gate, not a target to fix"
+date = "2026-09-17"
+
+[[exempt]]
+entity = "widgets"
+cell = "static_only"
+reason = "recorded upstream fixture: the golden pins a FAILING gate, not a target to fix"
+date = "2026-09-17"
+
+[[exempt]]
+entity = "unresolved:load:driver"
+cell = "unresolved"
+reason = "recorded upstream fixture: the load probe ships the contract, not the observation"
+date = "2026-09-17"

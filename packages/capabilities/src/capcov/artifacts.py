@@ -24,6 +24,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - the blob fast path is disabled on Windows
+    fcntl = None
+
 SCHEMA_VERSION = 1
 
 # The source glob set a tree hash is taken over when nothing else is declared.
@@ -385,12 +390,27 @@ class _BlobIndex:
         disk NOW, so a concurrent writer's additions survive instead of being
         clobbered by a stale copy."""
         for prefix in sorted(self._dirty):
-            merged = {**self._load(prefix), **self._shards[prefix]}
+            # Atomic replacement protects readers, but without a lock two
+            # writers can both read the same old shard and the last rename
+            # silently loses the other writer's additions.  Serialize the
+            # complete read/merge/write transaction per shard.
+            self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+            lock_fd: int | None = None
             try:
+                lock_fd = os.open(
+                    self.directory / f".{prefix}.lock", os.O_RDWR | os.O_CREAT, 0o600
+                )
+                if fcntl is None:
+                    raise OSError("blob shard locking is unavailable on this platform")
+                fcntl.flock(lock_fd, fcntl.LOCK_EX)
+                merged = {**self._load(prefix), **self._shards[prefix]}
                 if not _write_blob_shard(self.directory / f"{prefix}.json", merged):
                     self.write_errors += 1
             except OSError:
                 self.write_errors += 1
+            finally:
+                if lock_fd is not None:
+                    os.close(lock_fd)
         self._dirty.clear()
 
 

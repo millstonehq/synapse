@@ -1,0 +1,646 @@
+{
+  "base_pack": "rules-static-v1",
+  "borrowed_declarations": [
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_entity",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "scope_kind",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "scope_value",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_scope",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_edge",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "verb",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_path_to_storage",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": true,
+      "modality": "derived",
+      "name": "static_route_declared_surface",
+      "nonempty": true,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    }
+  ],
+  "derived": [
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_table",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_route_reaches_table",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "static_route_reaches_table",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "static_route_reaches_table_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "static_route_no_table",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    }
+  ],
+  "description": "Opt-in call-graph closure layer over rules-static-v1: the SCIP resolver's enumerated residue as static_unresolved_call_site, the scoped completeness witness call_graph_closed it licenses when that residue is empty, and the negative route/table claim those two make resolvable.",
+  "id": "rules-static-closure-v1",
+  "primitives": [
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "file",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_unresolved_call_site",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "scip"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "scope",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "static_edge",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "call_graph_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "scip"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "body": [
+        {
+          "relation": "static_entity",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "E"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "T"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_table",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "T"
+          }
+        ]
+      },
+      "name": "static_table_from_entity"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_path_to_storage",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            },
+            {
+              "variable": "Verb"
+            }
+          ]
+        },
+        {
+          "relation": "static_entity",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "E"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "T"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_route_reaches_table",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "T"
+          }
+        ]
+      },
+      "name": "static_route_reaches_table_via_storage"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_route_declared_surface",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        },
+        {
+          "relation": "static_scope",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "type": "symbol",
+              "value": "all"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "call_graph_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_route_reaches_table_closed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          }
+        ]
+      },
+      "name": "static_route_reaches_table_closed_whole_index"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_route_declared_surface",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        },
+        {
+          "relation": "static_scope",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "type": "symbol",
+              "value": "package_prefix"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "call_graph_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_route_reaches_table_closed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          }
+        ]
+      },
+      "name": "static_route_reaches_table_closed_package_prefix"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_route_declared_surface",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        },
+        {
+          "relation": "static_table",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "T"
+            }
+          ]
+        },
+        {
+          "relation": "static_route_reaches_table_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "static_route_reaches_table",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "T"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_route_no_table",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "T"
+          }
+        ]
+      },
+      "name": "static_route_no_table_under_closed_call_graph"
+    }
+  ],
+  "schema_version": 1
+}

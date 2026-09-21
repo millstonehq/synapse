@@ -1,0 +1,213 @@
+{
+  "binding_history": [
+    2,
+    2,
+    3,
+    3
+  ],
+  "blind_spots": [
+    {
+      "blind": true,
+      "expr": "getattr",
+      "file": "app/dynamics.py",
+      "in": "app.dynamics:by_computed",
+      "kind": "attribute_by_name",
+      "line": 6,
+      "resolved_name": null
+    },
+    {
+      "blind": true,
+      "expr": "vars",
+      "file": "app/dynamics.py",
+      "in": "app.dynamics:namespaced",
+      "kind": "namespace_lookup",
+      "line": 9,
+      "resolved_name": null
+    }
+  ],
+  "capabilities": [
+    {
+      "entity": "crates",
+      "evidence": {
+        "chain": [
+          "app.api:get_crate"
+        ],
+        "hops": 0,
+        "kind": "direct"
+      },
+      "operations": [
+        "read"
+      ],
+      "surface": "GET /v1/things/crates/{crate_id}"
+    },
+    {
+      "entity": "ghosts",
+      "evidence": {
+        "chain": [
+          "app.orphan:ghosts"
+        ],
+        "hops": 0,
+        "kind": "direct"
+      },
+      "operations": [],
+      "surface": "GET /lonely/ghosts"
+    },
+    {
+      "entity": "widgets",
+      "evidence": {
+        "chain": [
+          "app.api:get_widgets",
+          "app.service:list_widgets",
+          "app.repo:fetch_widgets"
+        ],
+        "hops": 2,
+        "kind": "call-chain:2"
+      },
+      "operations": [
+        "read"
+      ],
+      "surface": "GET /v1/things/widgets"
+    },
+    {
+      "entity": "widgets",
+      "evidence": {
+        "chain": [
+          "app.api:post_widget",
+          "app.service:create_widget",
+          "app.repo:make_widget"
+        ],
+        "hops": 2,
+        "kind": "call-chain:2"
+      },
+      "operations": [
+        "create"
+      ],
+      "surface": "POST /v1/things/widgets"
+    }
+  ],
+  "derived_from": {
+    "artifact": "src",
+    "artifact_files": 9,
+    "artifact_sha256": "85f5c1814a47b1870e7e3f6bb022f1ac1d4f6baed92c2f36cbc79a7d993c10dd",
+    "extracted_at": "<timestamp>",
+    "extractor": "capcov python-fastapi-sqlalchemy",
+    "source_snapshot": {
+      "files": 9,
+      "manifest_sha256": "85f5c1814a47b1870e7e3f6bb022f1ac1d4f6baed92c2f36cbc79a7d993c10dd",
+      "verification": "exact",
+      "version": 1
+    }
+  },
+  "entities": [
+    {
+      "file": "app/models.py",
+      "line": 7,
+      "module": "app.models",
+      "name": "crates",
+      "symbol": "Crate"
+    },
+    {
+      "file": "app/models.py",
+      "line": 10,
+      "module": "app.models",
+      "name": "ghosts",
+      "symbol": "Ghost"
+    },
+    {
+      "file": "app/models.py",
+      "line": 4,
+      "module": "app.models",
+      "name": "widgets",
+      "symbol": "Widget"
+    }
+  ],
+  "kind": "capabilities",
+  "residue": [],
+  "residue_summary": {
+    "ambiguous": 0,
+    "builtin_shadowed": 0,
+    "chained": 0,
+    "external": 8,
+    "resolved_by_import": 8,
+    "resolved_by_name": 0
+  },
+  "resolved_dynamic_access": [
+    {
+      "blind": false,
+      "expr": "getattr",
+      "file": "app/dynamics.py",
+      "in": "app.dynamics:by_literal",
+      "kind": "attribute_by_name",
+      "line": 3,
+      "resolved_name": "known_field"
+    }
+  ],
+  "schema_version": 1,
+  "surfaces": [
+    {
+      "file": "app/main.py",
+      "handler": "app.main:create_app.healthz",
+      "id": "GET /healthz",
+      "kind": "http",
+      "line": 9,
+      "method": "GET",
+      "mounted": true,
+      "path": "/healthz"
+    },
+    {
+      "file": "app/orphan.py",
+      "handler": "app.orphan:ghosts",
+      "id": "GET /lonely/ghosts",
+      "kind": "http",
+      "line": 8,
+      "method": "GET",
+      "mounted": false,
+      "path": "/lonely/ghosts"
+    },
+    {
+      "file": "app/api.py",
+      "handler": "app.api:get_crate",
+      "id": "GET /v1/things/crates/{crate_id}",
+      "kind": "http",
+      "line": 17,
+      "method": "GET",
+      "mounted": true,
+      "path": "/v1/things/crates/{crate_id}"
+    },
+    {
+      "file": "app/api.py",
+      "handler": "app.api:get_widgets",
+      "id": "GET /v1/things/widgets",
+      "kind": "http",
+      "line": 9,
+      "method": "GET",
+      "mounted": true,
+      "path": "/v1/things/widgets"
+    },
+    {
+      "file": "app/api.py",
+      "handler": "app.api:post_widget",
+      "id": "POST /v1/things/widgets",
+      "kind": "http",
+      "line": 13,
+      "method": "POST",
+      "mounted": true,
+      "path": "/v1/things/widgets"
+    }
+  ],
+  "timing": {
+    "discover_ms": 0,
+    "source_verification": {
+      "blob_index": "not-a-repo",
+      "blobs_learned": 0,
+      "cache": "miss",
+      "cache_hit": false,
+      "duration_ms": 0,
+      "exact": true,
+      "files_hashed": 9,
+      "files_reused": 0,
+      "files_reused_by_blob": 0
+    }
+  },
+  "unbound_entry_points": []
+}

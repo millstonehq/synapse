@@ -1,0 +1,8 @@
+capcov features: <upstream>/packages/capabilities/examples/feature-model-authentication.json is a valid feature model
+Authentication [auth] (root)
+  Multi-Factor Authentication [mfa] (optional)
+  Password [password] (mandatory)
+    Second Factor [secondFactor] (optional, alternative group)
+      Authenticator App [authenticatorApp] (group member)
+      Passkey [passkey] (group member)
+      SMS Code [sms] (group member)

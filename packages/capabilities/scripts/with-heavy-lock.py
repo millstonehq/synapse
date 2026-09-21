@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import fcntl
+import json
 import os
 import signal
 import subprocess
@@ -93,6 +94,23 @@ def release(fd: int) -> None:
         os.close(fd)
 
 
+def write_timing(path: Path | None, *, acquired: bool, lock_wait: float,
+                 command_seconds: float | None, exit_code: int) -> None:
+    """Write opt-in bounded timing metadata without recording command arguments."""
+    if path is None:
+        return
+    document = {
+        "schema": "capcov-heavy-lock-timing-v1",
+        "lock_acquired": acquired,
+        "lock_wait_seconds": round(lock_wait, 6),
+        "command_seconds": round(command_seconds, 6) if command_seconds is not None else None,
+        "exit_code": exit_code,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path.write_text(json.dumps(document, sort_keys=True) + "\n", encoding="utf-8")
+    path.chmod(0o600)
+
+
 def run(command: list[str]) -> int:
     child = subprocess.Popen(command)
 
@@ -118,6 +136,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout", type=float, default=3600.0,
                         help="seconds to wait for the lock; 0 = fail immediately (default 3600)")
     parser.add_argument("--label", default="", help="who is holding the lock, for the waiting message")
+    parser.add_argument("--timing-json", type=Path, default=None,
+                        help="write lock/child timings without command arguments (optional)")
     parser.add_argument("command", nargs=argparse.REMAINDER, help="-- COMMAND [ARG...]")
     args = parser.parse_args(argv)
     command = list(args.command)
@@ -127,13 +147,23 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_usage(sys.stderr)
         return EX_USAGE
     label = args.label or os.path.basename(command[0])
+    lock_started = time.monotonic()
     fd = acquire(args.lock or default_lock_path(), args.timeout, label)
+    lock_wait = time.monotonic() - lock_started
     if fd is None:
+        write_timing(args.timing_json, acquired=False, lock_wait=lock_wait,
+                     command_seconds=None, exit_code=EX_TEMPFAIL)
         return EX_TEMPFAIL
+    command_started = time.monotonic()
+    result = EX_TEMPFAIL
     try:
-        return run(command)
+        result = run(command)
+        return result
     finally:
+        command_seconds = time.monotonic() - command_started
         release(fd)
+        write_timing(args.timing_json, acquired=True, lock_wait=lock_wait,
+                     command_seconds=command_seconds, exit_code=result)
 
 
 if __name__ == "__main__":

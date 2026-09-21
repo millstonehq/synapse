@@ -1,0 +1,25 @@
+usage: capcov [-h] [--quiet]
+              {flows,outcomes,features,discover,observe,reconcile,gate,report} ...
+
+capcov command line: discover, observe, reconcile, gate, report. `discover`
+and `observe` both always run. There is no static-only mode and no threshold
+that switches between them -- that was a rejected design, and what it amounted
+to was a tool that sometimes does not work with the answer bolted on beside
+it.
+
+positional arguments:
+  {flows,outcomes,features,discover,observe,reconcile,gate,report}
+    flows               source obligations, flow planning, and browser outcome
+                        evidence
+    outcomes            scoped behavior obligations and fresh pytest evidence
+    features            FODA feature-model validation, configuration check,
+                        coverage rollup
+    discover            static: entities, surfaces, bindings
+    observe             runtime: run the exercises with the probe
+    reconcile           the four-way diff
+    gate                fail on anything unexplained
+    report              human-readable coverage table
+
+options:
+  -h, --help            show this help message and exit
+  --quiet

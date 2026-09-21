@@ -1,0 +1,16 @@
+entity   cell          tests  surfaces  operations
+crates   static_only       0         1  read
+ghosts   static_only       0         1  
+widgets  static_only       0         2  create,read
+
+both: 0, static_only: 3, runtime_only: 0, neither: 0
+
+surfaces no exercise reached (4):
+  GET /healthz
+  GET /v1/things/crates/{crate_id}
+  GET /v1/things/widgets
+  POST /v1/things/widgets
+
+static blind spots (2):
+  app/dynamics.py:6  getattr  (attribute_by_name)
+  app/dynamics.py:9  vars  (namespace_lookup)

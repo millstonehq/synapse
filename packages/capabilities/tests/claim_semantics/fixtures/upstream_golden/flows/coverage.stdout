@@ -1,0 +1,2 @@
+capcov flows: DEPRECATED -- `flows coverage` is superseded by `capcov reconcile` on the four-cell engine, fed by `capcov observe --probe browser`.
+capcov flows: {'covered': 2, 'unproven': 0, 'unmapped': 0}; assurance=test-fixture

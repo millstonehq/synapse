@@ -1,0 +1,20 @@
+usage: capcov observe [-h] [--target TARGET] [--source SOURCE]
+                      [--adapter ADAPTER] [--quiet] [--out OUT]
+                      [--probe PROBE] [--only ONLY]
+                      ...
+
+positional arguments:
+  command
+
+options:
+  -h, --help         show this help message and exit
+  --target TARGET    the project root
+  --source SOURCE    source root under --target
+  --adapter ADAPTER
+  --quiet
+  --out OUT
+  --probe PROBE      runtime-evidence probe: 'pytest' (default, unchanged) |
+                     'browser' | 'load' | 'har'. Falls back to [capcov] probe,
+                     then pytest.
+  --only ONLY        optional inner-loop selector, passed to the probe as
+                     CAPCOV_ONLY

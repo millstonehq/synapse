@@ -1,0 +1,188 @@
+{
+  "binding_history": [
+    2
+  ],
+  "blind_spots": [],
+  "capabilities": [
+    {
+      "entity": "http:GET /items",
+      "evidence": {
+        "chain": [
+          "http:GET /items"
+        ],
+        "hops": 0,
+        "kind": "direct"
+      },
+      "operations": [
+        "read"
+      ],
+      "surface": "http:GET /items"
+    },
+    {
+      "entity": "http:POST /items",
+      "evidence": {
+        "chain": [
+          "http:POST /items"
+        ],
+        "hops": 0,
+        "kind": "direct"
+      },
+      "operations": [
+        "create"
+      ],
+      "surface": "http:POST /items"
+    }
+  ],
+  "derived_from": {
+    "artifact": "src",
+    "artifact_files": 0,
+    "artifact_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "extracted_at": "<timestamp>",
+    "extractor": "capcov structured-spec",
+    "source_snapshot": {
+      "files": 0,
+      "manifest_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "verification": "exact",
+      "version": 1
+    }
+  },
+  "entities": [
+    {
+      "file": "openapi.json",
+      "line": 1,
+      "module": "openapi",
+      "name": "http:GET /items",
+      "symbol": null
+    },
+    {
+      "file": "openapi.json",
+      "line": 1,
+      "module": "openapi",
+      "name": "http:POST /items",
+      "symbol": null
+    }
+  ],
+  "excluded_surfaces": {
+    "count": 0,
+    "surfaces": []
+  },
+  "kind": "capabilities",
+  "residue": [],
+  "residue_summary": {
+    "ambiguous": 0,
+    "builtin_shadowed": 0,
+    "chained": 0,
+    "external": 0,
+    "resolved_by_import": 0,
+    "resolved_by_name": 0
+  },
+  "resolved_dynamic_access": [],
+  "schema_version": 1,
+  "surfaces": [
+    {
+      "file": "openapi.json",
+      "handler": "http:GET /items",
+      "handler_symbol": null,
+      "id": "http:GET /items",
+      "kind": "http",
+      "line": 1,
+      "method": "GET",
+      "mounted": true,
+      "path": "/items"
+    },
+    {
+      "file": "openapi.json",
+      "handler": "http:POST /items",
+      "handler_symbol": null,
+      "id": "http:POST /items",
+      "kind": "http",
+      "line": 1,
+      "method": "POST",
+      "mounted": true,
+      "path": "/items"
+    }
+  ],
+  "timing": {
+    "discover_ms": 0,
+    "source_verification": {
+      "blob_index": "disabled",
+      "blobs_learned": 0,
+      "cache": "miss",
+      "cache_hit": false,
+      "duration_ms": 0,
+      "exact": true,
+      "files_hashed": 0,
+      "files_reused": 0,
+      "files_reused_by_blob": 0
+    }
+  },
+  "unbound_entry_points": [],
+  "unresolved": [
+    {
+      "adapter": "structured-spec",
+      "id": "boundary:openapi:877350ac653696d4:business-outcomes",
+      "kind": "boundary",
+      "reason": "schemas do not establish business outcomes, branches or external effects",
+      "source": {
+        "file": "openapi.json",
+        "line": 1,
+        "pointer": ""
+      }
+    },
+    {
+      "adapter": "structured-spec",
+      "id": "boundary:openapi:877350ac653696d4:callbacks-webhooks-and-extensions",
+      "kind": "boundary",
+      "reason": "callbacks, webhooks and specification extensions are not inventoried as operations",
+      "source": {
+        "file": "openapi.json",
+        "line": 1,
+        "pointer": ""
+      }
+    },
+    {
+      "adapter": "structured-spec",
+      "id": "boundary:openapi:877350ac653696d4:roles-and-configurations",
+      "kind": "boundary",
+      "reason": "authorization and deployment configurations require separate evidence",
+      "source": {
+        "file": "openapi.json",
+        "line": 1,
+        "pointer": ""
+      }
+    },
+    {
+      "adapter": "structured-spec",
+      "id": "boundary:openapi:877350ac653696d4:runtime-and-omitted-routes",
+      "kind": "boundary",
+      "reason": "declared operations do not confirm mounted routes or discover omitted routes",
+      "source": {
+        "file": "openapi.json",
+        "line": 1,
+        "pointer": ""
+      }
+    },
+    {
+      "adapter": "structured-spec",
+      "id": "boundary:openapi:877350ac653696d4:schemas-and-references",
+      "kind": "boundary",
+      "reason": "parameters, responses, schemas and references are not resolved or validated",
+      "source": {
+        "file": "openapi.json",
+        "line": 1,
+        "pointer": ""
+      }
+    },
+    {
+      "adapter": "structured-spec",
+      "id": "boundary:openapi:877350ac653696d4:servers-and-bindings",
+      "kind": "boundary",
+      "reason": "server URLs are not selected; consumer must verify the explicit path prefix and target binding",
+      "source": {
+        "file": "openapi.json",
+        "line": 1,
+        "pointer": ""
+      }
+    }
+  ]
+}

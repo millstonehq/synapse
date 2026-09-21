@@ -516,7 +516,447 @@ def _publish_verified(snapshot, out: Path, phase_started: int) -> int:
     return 0
 
 
+JUDGE_ENGINES = ("four-cell", "claims")
+JUDGE_DEFAULT = "four-cell"
+JUDGE_OUT_DEFAULT = "capcov-judge"
+#: Which evaluators the claims judge runs when nobody says: the stdlib kernel
+#: alone, so `--judge claims` needs no optional tool either.  `souffle` and
+#: `souffle-compiled` are asked for by name, exactly like `--resolver scip`.
+JUDGE_EVALUATOR_DEFAULT = "python"
+#: Producer profiles `--model` can run before judging.  A profile re-sources one
+#: premise of the verdict from a producer the receipt did not carry; naming one
+#: is the whole opt-in, exactly like `--resolver scip` and `--evaluator souffle`.
+JUDGE_MODEL_PROFILES = ("shen",)
+SHEN_GO_INSTALL_HINT = (
+    "enter the pinned devShell with `nix develop` (it pins shen-go) and put the "
+    "bifrost launcher on PATH, or name the binary in $SHEN_GO"
+)
+
+
+class _JudgeUsage(Exception):
+    """The caller asked for a judge configuration that does not name a run.
+
+    Reported like argparse reports a bad argument -- the message on stderr, exit
+    2 -- because it is the same class of mistake, and never a claim about the
+    system under test.
+    """
+
+
+#: capcov.toml paths this process has already said it could not read, so the
+#: line below is written once per file however many `[judge]` keys are looked up
+#: over it (engine, evaluator and model are three separate lookups of one file).
+_JUDGE_BLOCK_UNREADABLE: set[str] = set()
+
+
+def _judge_block(command: str) -> dict:
+    """The working directory's ``[judge]`` table, or an empty one.
+
+    `reconcile` and `gate` take artifact paths rather than a project root, so the
+    config is read from the working directory those paths are already relative
+    to.  Neither command read capcov.toml before these flags existed, so a file
+    that cannot be read or parsed must not turn a working default run into a
+    failure: it is passed over and the defaults stand.
+
+    Passed over, but never in silence.  A team that opted in with ``[judge]
+    engine = "claims"`` and later broke an unrelated line of that same file would
+    otherwise get the four-cell gate's usual PASS and nothing anywhere saying the
+    judge they believe is gating did not run -- "a flag that silently does
+    nothing is how a gate goes green for the wrong reason", moved into the config
+    file.  So the fallback keeps the exit code and the stdout it always had and
+    names itself on **stderr**: one line saying which file could not be parsed,
+    why, and what is deciding instead.  A missing capcov.toml and a well-formed
+    one are untouched -- neither reaches this branch.
+    """
+    config = Path("capcov.toml")
+    if not config.exists():
+        return {}
+    import tomllib
+
+    try:
+        data = tomllib.loads(config.read_text())
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        key = str(config.resolve())
+        if key not in _JUDGE_BLOCK_UNREADABLE:
+            _JUDGE_BLOCK_UNREADABLE.add(key)
+            print(
+                f"capcov {command}: {config} could not be parsed ({error}); no "
+                f"[judge] key is read from it, so the judge is whatever --judge "
+                f"names, or {JUDGE_DEFAULT} when it names nothing",
+                file=sys.stderr,
+            )
+        return {}
+    block = data.get("judge", {})
+    return block if isinstance(block, dict) else {}
+
+
+def _judge_engine(args: argparse.Namespace, command: str) -> str:
+    """Which judge decides: ``--judge``, then ``[judge] engine``, then four-cell.
+
+    With no flag and no key the answer is ``four-cell`` and nothing under
+    `capcov.claims` is imported -- that is the whole point of the default.
+    ``--judge`` on the command line never consults capcov.toml at all, so an
+    explicit ask is never lost to an unreadable one.
+    """
+    engine = getattr(args, "judge", None)
+    source = "--judge"
+    if engine is None:
+        config = Path("capcov.toml")
+        engine = _judge_block(command).get("engine")
+        source = f"[judge] engine in {config}"
+    if engine is None:
+        return JUDGE_DEFAULT
+    if engine not in JUDGE_ENGINES:
+        raise _JudgeUsage(
+            f"capcov {command}: unknown judge engine {engine!r} ({source}); "
+            f"expected one of {', '.join(JUDGE_ENGINES)}"
+        )
+    return engine
+
+
+def _judge_evaluators(args: argparse.Namespace, command: str) -> tuple[str, ...]:
+    """Which kernels judge: ``--evaluator``, then ``[judge] evaluator``, then python.
+
+    Reached only from the claims branch, so naming an evaluator is the second
+    half of an opt-in and the import below is behind it.  The default is the
+    stdlib kernel alone; ``souffle`` and ``souffle-compiled`` need the Souffle
+    2.5 executable, and asking for one that is not here is refused before any
+    judging with a message that names the tool, where it was looked for, how to
+    install it and the flag that needs nothing -- the ``--resolver scip``
+    convention.  `reconcile` is the producer of coverage.json and writes it
+    before the judge is reached at all, so "before any judging" is the honest
+    claim, not "before any work".  ``all`` is every evaluator whose tool is
+    present, so it is the one spelling that cannot fail for an absent one.
+    """
+    from .claims import differential
+
+    value = getattr(args, "evaluator", None)
+    source = "--evaluator"
+    if value is None:
+        value = _judge_block(command).get("evaluator")
+        source = "[judge] evaluator in capcov.toml"
+    if value is None:
+        value = JUDGE_EVALUATOR_DEFAULT
+        source = "the default"
+    if not isinstance(value, str) and not isinstance(value, (list, tuple)):
+        raise _JudgeUsage(
+            f"capcov {command} --judge claims: {source} must name evaluators, got {value!r}")
+    try:
+        names = differential.resolve_evaluators(value)
+    except differential.UnknownEvaluator as error:
+        raise _JudgeUsage(f"capcov {command} --judge claims: {error} ({source})") from error
+    try:
+        differential.require_evaluators(names)
+    except differential.EvaluatorUnavailable as error:
+        raise _JudgeUsage(f"capcov {command} --judge claims: {error}") from error
+    return names
+
+
+def _shen_go_binary() -> str | None:
+    """The shen-go binary the Stage D checker will run, or None.
+
+    ``$BIFROST_SHEN_GO`` (what ``claims.modelcheck`` itself reads) first, then
+    ``$SHEN_GO``, then ``shen-go`` on PATH.  Resolving the last two here rather
+    than in ``modelcheck`` keeps the checker's own contract -- name the pinned
+    binary explicitly -- exactly as it was; this is the CLI saying which binary
+    the flag meant.
+    """
+    import shutil
+
+    for value in (os.environ.get("BIFROST_SHEN_GO"), os.environ.get("SHEN_GO")):
+        if value and os.path.isfile(value) and os.access(value, os.X_OK):
+            return value
+    return shutil.which("shen-go")
+
+
+def _require_shen_go(command: str) -> str:
+    """The binary ``--model shen`` needs, or a named refusal that judges nothing.
+
+    The ``--resolver scip`` convention: raised before any judging, naming the tool,
+    where it was looked for, how to install it, and what to do instead -- here,
+    drop the flag and judge the ``model_*`` files the receipt already carries,
+    which needs nothing.
+    """
+    import shutil
+
+    missing = []
+    if shutil.which("bifrost") is None:
+        missing.append("the bifrost launcher is not on PATH")
+    binary = _shen_go_binary()
+    if binary is None:
+        missing.append("the shen-go binary is not on PATH, $SHEN_GO or $BIFROST_SHEN_GO")
+    if missing:
+        raise _JudgeUsage(
+            f"capcov {command} --judge claims: --model shen needs shen-go and "
+            f"{'; '.join(missing)}. Install it with: {SHEN_GO_INSTALL_HINT}; or drop "
+            f"--model and judge the model_* files the receipt already carries"
+        )
+    return binary
+
+
+def _judge_model(args: argparse.Namespace, command: str) -> tuple[str, Path, str] | None:
+    """Which producer profile runs before the judge: ``--model``, then ``[judge] model``.
+
+    ``None`` -- the default -- means no profile runs, nothing under
+    ``capcov.claims.modelcheck`` is imported, and the judge reads whatever
+    ``model_*`` files the receipt already has.  A receipt with none is judged,
+    not refused: its model premises are reported as missing and the ops they
+    carry come out unresolved, which is the honest answer.
+
+    ``PROFILE:DIR`` is the spelling (``shen:<model dir>`` today), and the
+    profile's runtime is probed here, before any judging.
+    """
+    value = getattr(args, "model", None)
+    source = "--model"
+    if value is None:
+        value = _judge_block(command).get("model")
+        source = "[judge] model in capcov.toml"
+    if value is None:
+        return None
+    if not isinstance(value, str) or ":" not in value:
+        raise _JudgeUsage(
+            f"capcov {command} --judge claims: {source} names a producer profile and a "
+            f"directory, PROFILE:DIR (for instance shen:<model dir>), got {value!r}"
+        )
+    profile, _, directory = value.partition(":")
+    if profile not in JUDGE_MODEL_PROFILES:
+        raise _JudgeUsage(
+            f"capcov {command} --judge claims: unknown model profile {profile!r} "
+            f"({source}); expected one of {', '.join(JUDGE_MODEL_PROFILES)}"
+        )
+    if not directory or not Path(directory).is_dir():
+        raise _JudgeUsage(
+            f"capcov {command} --judge claims: --model {profile}: {directory!r} is not a "
+            f"model directory"
+        )
+    return profile, Path(directory), _require_shen_go(command)
+
+
+def _judge_out(args: argparse.Namespace, command: str, receipt: Path) -> Path:
+    """Where the claims judge writes, and never inside the evidence it judges.
+
+    The judge's own output directory contains a ``receipt.json`` of its own (its
+    summary document, written by ``replay.join.write_artifacts``).  Pointed at
+    the receipt it just judged it would overwrite the evidence; pointed at a
+    previous ``--judge-out`` it would read that summary as if it were a receipt.
+    Both are refused here, by name, before any judging.
+    """
+    out_dir = Path(getattr(args, "judge_out", None) or JUDGE_OUT_DEFAULT)
+    resolved, evidence = out_dir.resolve(), receipt.resolve()
+    if resolved == evidence or evidence in resolved.parents:
+        raise _JudgeUsage(
+            f"capcov {command} --judge claims: --judge-out {out_dir} is the receipt "
+            f"directory {receipt} or inside it; the judge writes its own receipt.json "
+            f"there and would overwrite the evidence it judged. Name a directory "
+            f"outside --receipt."
+        )
+    return out_dir
+
+
+def _judge_setup(
+    args: argparse.Namespace, command: str
+) -> tuple[str, tuple[str, ...], tuple[str, Path, str] | None, Path | None]:
+    """Resolve the engine, the evaluators, the model profile and the output
+    directory, and refuse an incoherent combination.
+
+    ``--receipt``, ``--judge-out``, ``--evaluator`` and ``--model`` say nothing
+    to the four-cell judge, so passing *any* of them without asking for the
+    claims judge is refused rather than silently ignored -- including a
+    ``--judge-out`` that happens to spell the default, which is why the option
+    defaults to ``None`` and the default is resolved in the claims branch below.
+    A flag that does nothing is how a gate ends up green for the wrong reason.
+    """
+    engine = _judge_engine(args, command)
+    if engine == "claims":
+        receipt = getattr(args, "receipt", None)
+        if not receipt:
+            raise _JudgeUsage(
+                f"capcov {command} --judge claims: the claims judge judges a replay "
+                f"receipt directory; pass --receipt DIR"
+            )
+        if not (Path(receipt) / "receipt.json").is_file():
+            raise _JudgeUsage(
+                f"capcov {command} --judge claims: {receipt} is not a replay receipt "
+                f"directory (no receipt.json in it)"
+            )
+        out_dir = _judge_out(args, command, Path(receipt))
+        return engine, _judge_evaluators(args, command), _judge_model(args, command), out_dir
+    for flag, value in (("--receipt", getattr(args, "receipt", None)),
+                        ("--judge-out", getattr(args, "judge_out", None)),
+                        ("--evaluator", getattr(args, "evaluator", None)),
+                        ("--model", getattr(args, "model", None))):
+        if value is not None:
+            raise _JudgeUsage(
+                f"capcov {command}: {flag} is only meaningful with --judge claims"
+            )
+    return engine, (), None, None
+
+
+def _run_model_preflight(args: argparse.Namespace, command: str,
+                         model: tuple[str, Path, str]) -> int | None:
+    """Run the named producer profile over the model, into the receipt directory.
+
+    Stage D's checker (``capcov experiment claims modelcheck --model DIR --out
+    <receipt>``) is the profile, reached by importing its module here -- inside
+    the branch ``--model shen`` selects -- so a judge without the flag never
+    loads it.  It writes ``modelcheck-certificate.json``, the transcript and,
+    for a well-formed model only, the ``model_well_formed.json`` the exporter
+    reads; an ill-formed verdict removes a stale one rather than leaving it.
+
+    Returns an exit code when the run must stop, ``None`` when the judge should
+    go on.  A checker that reached no verdict stops the run (exit 2): judging
+    on could silently read a *previous* run's certificate and call it this
+    model's.  An ill-formed model does not stop it -- the certificate says so,
+    no fact was written, and the judge reports the missing premise, which is
+    the honest verdict rather than a refusal.
+    """
+    profile, root, binary = model
+    from .claims import modelcheck
+
+    receipt = Path(args.receipt)
+    # the checker names its runtime through $BIFROST_SHEN_GO and refuses to guess;
+    # the flag already resolved which binary it meant (PATH / $SHEN_GO included),
+    # so tell it, rather than widening what `modelcheck` will accept
+    os.environ["BIFROST_SHEN_GO"] = binary
+    report = modelcheck.preflight(root, out_dir=receipt)
+    status = report["status"]
+    if status == "unavailable":
+        # probed in _judge_setup before any judging; only a racing environment gets here
+        print(f"capcov {command} --judge claims: --model {profile}: the checker's runtime "
+              f"became unavailable: {report['error']}", file=sys.stderr)
+        return 2
+    if status == "failed":
+        print(f"capcov {command} --judge claims: --model {profile}: the checker reached no "
+              f"verdict, so this model is unchecked: {report['error']}", file=sys.stderr)
+        return 2
+    digest = str(report["model"] or "")[:12]
+    if status == "ill-formed":
+        failures = ", ".join(f"{failure['id']}: {failure['message']}"
+                             for failure in report["failures"]) or "no judgement passed"
+        print(f"capcov {command} --judge claims: --model {profile}: model {digest} is "
+              f"ill-formed ({failures}); no model_well_formed fact was written",
+              file=sys.stderr)
+        return None
+    if not args.quiet:
+        print(f"capcov {command} --judge claims: --model {profile}: model {digest} is "
+              f"well-formed (certificate {str(report['certificate_sha256'])[:12]}); wrote "
+              f"{receipt / 'model_well_formed.json'}")
+    return None
+
+
+def _gated_artifact(path: Path, coverage: dict, four_cell: str,
+                    unexplained: int | None = None) -> dict:
+    """The identity of the artifact the claims verdict was handed, for judge.json.
+
+    A replay receipt names a run of the system under test; a coverage artifact
+    names a source tree.  Neither names the other, so the CLI does not pretend
+    the two are bound -- it records both identities, and the commands require
+    BOTH verdicts.  Without this a judge.json read on its own could be taken for
+    a verdict about whatever artifact happened to be on the command line.
+
+    Digests and counts only, never the producing path: judge artifacts are
+    publishable.
+    """
+    import hashlib
+
+    derived = coverage.get("derived_from") if isinstance(coverage, dict) else None
+    snapshot = derived.get("source_snapshot") if isinstance(derived, dict) else None
+    document: dict = {
+        "kind": "coverage",
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "source_snapshot": snapshot if isinstance(snapshot, dict) else None,
+        "summary": coverage.get("summary") if isinstance(coverage, dict) else None,
+        # what the artifact's own judge said; the claims verdict is recorded
+        # beside it, never instead of it
+        "four_cell": four_cell,
+    }
+    if unexplained is not None:
+        document["four_cell_unexplained"] = unexplained
+    return document
+
+
+def _run_claims_judge(args: argparse.Namespace, command: str,
+                      evaluators: tuple[str, ...],
+                      model: tuple[str, Path, str] | None = None,
+                      out_dir: Path | None = None,
+                      gated: dict | None = None) -> int:
+    """Judge the receipt with the claims judge and collapse its verdict to pass/fail.
+
+    The one place `capcov.cli` reaches into `capcov.claims`, and it is reached
+    only from the `claims` branch, so the default path never imports it.
+
+    Every evaluator was resolved and checked in `_judge_setup`, before any
+    judging: an asked-for kernel whose tool is absent is a named, actionable exit
+    2 there -- the convention `capcov discover --resolver scip` set for a missing
+    indexer -- never a quiet degradation to a smaller differential here. The
+    judge's own six exit codes are written into judge.json; what the CLI returns
+    is 0 when every op the verdict turns on is qualified and 1 otherwise,
+    because `gate` answers one question.
+
+    ``gated`` is the identity of the artifact the calling command judged with
+    its own judge, recorded into judge.json so the receipt's verdict is never
+    readable as a verdict about that artifact.  The caller combines the two.
+    """
+    from .claims.replay import judge as claims_judge
+
+    if model is not None:
+        refusal = _run_model_preflight(args, command, model)
+        if refusal is not None:
+            return refusal
+    receipt = Path(args.receipt)
+    out_dir = Path(out_dir if out_dir is not None else (args.judge_out or JUDGE_OUT_DEFAULT))
+    try:
+        document, diagnostics = claims_judge.judge_receipt(receipt, out_dir, [],
+                                                           evaluators=evaluators)
+    except claims_judge.ReceiptContractFinding as error:
+        # the receipt does not meet the exporter's contract: a finding about the
+        # evidence, reported as one, never a traceback and never a verdict
+        raise SystemExit(f"capcov {command} --judge claims: contract finding: {error}")
+    except OSError as error:
+        # the judge's own I/O -- its output directory -- not a finding about the receipt
+        raise SystemExit(
+            f"capcov {command} --judge claims: judge environment unavailable: {error}"
+        )
+    if gated is not None:
+        # written after the judge, over the document it wrote: what the judge
+        # decided is about the receipt, and this says what it was asked about
+        # beside.  Every judge_receipt path wrote judge.json, so this rewrites
+        # exactly one file, verdict included.
+        document["gated_artifact"] = gated
+        try:
+            claims_judge.write_json(out_dir / claims_judge.JUDGE_FILE, document)
+        except OSError as error:
+            raise SystemExit(
+                f"capcov {command} --judge claims: judge environment unavailable: {error}"
+            )
+    if not args.quiet and document["verdict"] in claims_judge.JUDGED_VERDICTS:
+        for line in claims_judge.summary_lines(document):
+            print(f"capcov {command} --judge claims: {line}")
+    for line in diagnostics:
+        print(f"capcov {command} --judge claims: {line}", file=sys.stderr)
+    exit_code = int(document["exit_code"])
+    # `--quiet` governs what this flag adds, as it governs the rest of the
+    # command: the per-op summary above and this closing line are the judge's,
+    # and a quiet run prints neither, leaving stdout exactly what it is without
+    # `--judge claims` at all.  Nothing is lost by the silence -- judge.json
+    # carries the verdict, the kernels and the judge's own exit code, and this
+    # process's exit code answers the gate's question either way.  Diagnostics
+    # stay on stderr, which `--quiet` has never governed.
+    if not args.quiet:
+        print(
+            f"capcov {command} --judge claims: {document['verdict']} "
+            f"(judge exit {exit_code}); kernels {', '.join(document['kernels']) or '-'}; "
+            f"differential {document['differential']}; "
+            f"wrote {out_dir / claims_judge.JUDGE_FILE}"
+        )
+    return 0 if exit_code == claims_judge.EXIT_OK else 1
+
+
 def cmd_reconcile(args: argparse.Namespace) -> int:
+    try:
+        engine, evaluators, model, judge_out = _judge_setup(args, "reconcile")
+    except _JudgeUsage as error:
+        print(str(error), file=sys.stderr)
+        return 2
     phase_started = time.perf_counter_ns()
     capabilities = artifacts.read(Path(args.capabilities), "capabilities")
     observed = artifacts.read(Path(args.observed), "observed")
@@ -599,13 +1039,58 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
                 f"edges resolved, {rs['unresolved_enumerated']} call sites "
                 "unresolved-enumerated (each named in scip_residue)"
             )
+    # The four-cell reconcile above is unchanged and coverage.json is written
+    # either way -- reconcile is the producer of that artifact. What --judge
+    # claims adds is a second verdict over a replay receipt: a successful
+    # reconcile runs it, a failed one is reconcile's own answer and runs nothing,
+    # and either way the artifact reconcile just wrote is named by digest in
+    # judge.json so the receipt's verdict is never readable as a verdict on it.
+    if engine == "claims" and rc == 0:
+        out = Path(args.out)
+        gated = (_gated_artifact(out, doc, "reconciled") if out.is_file() else None)
+        return _run_claims_judge(args, "reconcile", evaluators, model, judge_out, gated)
     return rc
 
 
 def cmd_gate(args: argparse.Namespace) -> int:
+    try:
+        engine, evaluators, model, judge_out = _judge_setup(args, "gate")
+    except _JudgeUsage as error:
+        print(str(error), file=sys.stderr)
+        return 2
     coverage = artifacts.read(Path(args.coverage), "coverage")
     exemptions = Path(args.exemptions) if args.exemptions else None
     failures = gate_mod.gate(coverage, exemptions)
+    rc = _report_gate(args, coverage, failures)
+    if engine != "claims":
+        return rc
+    # `--judge claims` ADDS a verdict; it never speaks for the coverage artifact.
+    # The receipt names a run of the system under test and the artifact names a
+    # source tree, so nothing in either binds them: the gate runs both judges,
+    # records the artifact's identity and its own verdict in judge.json, and
+    # passes only when both pass.  Anything else makes the positional argument
+    # decorative -- any supported receipt would turn any artifact green.
+    judged = _run_claims_judge(args, "gate", evaluators, model, judge_out,
+                               _gated_artifact(Path(args.coverage), coverage,
+                                               "pass" if rc == 0 else "fail",
+                                               len(failures)))
+    if rc != 0:
+        print(
+            "capcov gate --judge claims: the four-cell gate over this coverage "
+            f"artifact failed ({len(failures)} unexplained), so the gate fails "
+            "whatever the receipt says: the claims judge adds a verdict, it does "
+            "not replace the artifact's",
+            file=sys.stderr,
+        )
+    return 0 if rc == 0 and judged == 0 else 1
+
+
+def _report_gate(args: argparse.Namespace, coverage: dict, failures: list) -> int:
+    """The four-cell gate's own answer, printed exactly as it always was.
+
+    Split out of `cmd_gate` so it runs under either judge: the artifact's own
+    verdict is not something an opt-in flag may skip.
+    """
     if not failures:
         s = coverage["summary"]
         print(
@@ -682,6 +1167,56 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--adapter", default=None)
         p.add_argument("--quiet", action="store_true")
 
+    def judge_options(p: argparse.ArgumentParser) -> None:
+        """The opt-in claims judge, off unless asked for -- the --resolver scip shape.
+
+        With no flag and no ``[judge] engine`` key nothing under `capcov.claims`
+        is imported and the command behaves exactly as it did before these
+        options existed.
+        """
+        p.add_argument(
+            "--judge",
+            choices=JUDGE_ENGINES,
+            default=None,
+            help="which judge decides: 'four-cell' (default, today's behavior) or "
+            "'claims' (the replay judge over a receipt directory; needs --receipt DIR). "
+            "Falls back to [judge] engine in capcov.toml, then four-cell.",
+        )
+        p.add_argument(
+            "--evaluator",
+            default=None,
+            metavar="NAME[,NAME...]",
+            help="which kernels --judge claims runs: 'python' (default, stdlib only), "
+            "'souffle', 'souffle-compiled' (both need the souffle 2.5 executable on "
+            "PATH or $SOUFFLE), a comma list of them, or 'all' for every one present. "
+            "Two or more run the fail-closed differential; one records "
+            "differential 'not-run (single evaluator)'. Falls back to [judge] "
+            "evaluator in capcov.toml, then python.",
+        )
+        p.add_argument(
+            "--model",
+            default=None,
+            metavar="PROFILE:DIR",
+            help="run a producer profile over a model before judging: 'shen:DIR' "
+            "typechecks the Shen domain model in DIR (Stage D) and writes "
+            "model_well_formed.json and the certificate into --receipt. Needs shen-go "
+            "(bifrost plus $SHEN_GO/$BIFROST_SHEN_GO or shen-go on PATH) and is refused "
+            "by name when it is absent. Without the flag the judge reads the model_* "
+            "files the receipt already carries. Falls back to [judge] model in "
+            "capcov.toml.",
+        )
+        p.add_argument(
+            "--receipt",
+            default=None,
+            help="the replay receipt directory --judge claims judges (required with it)",
+        )
+        p.add_argument(
+            "--judge-out",
+            default=None,
+            help="where --judge claims writes judge.json and the certificates "
+            "(default: capcov-judge); must be outside --receipt",
+        )
+
     d = sub.add_parser("discover", help="static: entities, surfaces, bindings")
     common(d)
     d.add_argument("--out", default="capabilities.json")
@@ -729,12 +1264,14 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="compare artifacts derived from different trees (it is not a finding)",
     )
+    judge_options(r)
     r.set_defaults(func=cmd_reconcile)
 
     g = sub.add_parser("gate", help="fail on anything unexplained")
     g.add_argument("coverage")
     g.add_argument("--exemptions", default=None)
     g.add_argument("--quiet", action="store_true")
+    judge_options(g)
     g.set_defaults(func=cmd_gate)
 
     p = sub.add_parser("report", help="human-readable coverage table")

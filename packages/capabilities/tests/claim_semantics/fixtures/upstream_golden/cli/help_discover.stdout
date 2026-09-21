@@ -1,0 +1,19 @@
+usage: capcov discover [-h] [--target TARGET] [--source SOURCE]
+                       [--adapter ADAPTER] [--quiet] [--out OUT] [--check]
+                       [--no-name-match] [--resolver {ast,scip}]
+
+options:
+  -h, --help            show this help message and exit
+  --target TARGET       the project root
+  --source SOURCE       source root under --target
+  --adapter ADAPTER
+  --quiet
+  --out OUT
+  --check               re-derive and diff
+  --no-name-match       resolve calls through imports only; report every name-
+                        match as residue
+  --resolver {ast,scip}
+                        call-graph resolver: 'ast' (default, hand-rolled,
+                        stdlib-only) or 'scip' (type-aware cross-file; needs a
+                        SCIP indexer + the scip CLI). The AST pass runs either
+                        way and stays the blind-spot enumerator.

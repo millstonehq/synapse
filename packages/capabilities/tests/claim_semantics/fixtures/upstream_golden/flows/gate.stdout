@@ -1,0 +1,2 @@
+capcov flows: DEPRECATED -- the flows freeform baseline gate is superseded by `capcov gate` with a core exemptions.toml (cell-typed, dated); see the migration note in this module.
+0 total gaps; 0 baselined; complete=True

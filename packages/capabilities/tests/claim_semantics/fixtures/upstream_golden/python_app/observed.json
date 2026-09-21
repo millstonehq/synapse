@@ -1,0 +1,44 @@
+{
+  "bindings": [],
+  "derived_from": {
+    "artifact": "src",
+    "artifact_files": 9,
+    "artifact_sha256": "85f5c1814a47b1870e7e3f6bb022f1ac1d4f6baed92c2f36cbc79a7d993c10dd",
+    "extracted_at": "<timestamp>",
+    "extractor": "capcov load-probe (stub)",
+    "source_snapshot": {
+      "files": 9,
+      "manifest_sha256": "85f5c1814a47b1870e7e3f6bb022f1ac1d4f6baed92c2f36cbc79a7d993c10dd",
+      "verification": "exact",
+      "version": 1
+    }
+  },
+  "excluded_surfaces": {
+    "count": 0,
+    "surfaces": []
+  },
+  "exercises": 0,
+  "kind": "observed",
+  "schema_version": 1,
+  "timing": {
+    "observe_ms": 0,
+    "source_verification": {
+      "blob_index": "disabled",
+      "blobs_learned": 0,
+      "cache": "disabled",
+      "cache_hit": false,
+      "duration_ms": 0,
+      "exact": true,
+      "files_hashed": 9,
+      "files_reused": 0,
+      "files_reused_by_blob": 0
+    }
+  },
+  "unresolved": [
+    {
+      "adapter": "load",
+      "kind": "driver",
+      "reason": "headless ELT load driver not yet implemented; this probe ships the contract, not the observation"
+    }
+  ]
+}

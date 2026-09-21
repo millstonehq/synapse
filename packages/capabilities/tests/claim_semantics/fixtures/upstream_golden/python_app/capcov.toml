@@ -1,0 +1,4 @@
+[capcov]
+adapter = "python-fastapi-sqlalchemy"
+source = "src"
+probe = "load"

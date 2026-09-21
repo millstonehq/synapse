@@ -365,6 +365,20 @@ def _ts_language(language: str):
     return ts, get_language(language)
 
 
+def require_census_tools(language: str) -> None:
+    """Check that the complete call-site census can run for ``language``.
+
+    Static producers call this before starting an indexer, so an absent optional
+    parser is reported without paying for SCIP work. Python's census is stdlib
+    only; Go and PHP need their tree-sitter grammar from the ``treesitter`` extra.
+    """
+    if language == "python":
+        return
+    if language not in _TS_EXTENSIONS:
+        raise ValueError(f"no call-site census strategy for language {language!r}")
+    _ts_language(language)
+
+
 def _ts_files(root: str | Path, language: str):
     """Every source file of ``language`` under ``root``, sorted, tree-relative.
 

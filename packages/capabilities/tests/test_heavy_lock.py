@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 import subprocess
 import sys
 import tempfile
@@ -71,6 +72,19 @@ class HeavyLockTest(unittest.TestCase):
     def test_missing_command_is_a_usage_error(self) -> None:
         result = self._run()
         self.assertEqual(result.returncode, 64)
+
+    def test_opt_in_timing_does_not_record_command_arguments(self) -> None:
+        timing = Path(self.tmp.name) / "timing.json"
+        result = self._run("--timing-json", str(timing), "--", sys.executable, "-c", "pass")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        document = json.loads(timing.read_text())
+        self.assertEqual(document["schema"], "capcov-heavy-lock-timing-v1")
+        self.assertTrue(document["lock_acquired"])
+        self.assertGreaterEqual(document["lock_wait_seconds"], 0)
+        self.assertGreaterEqual(document["command_seconds"], 0)
+        self.assertEqual(document["exit_code"], 0)
+        self.assertNotIn("command", document)
+        self.assertEqual(timing.stat().st_mode & 0o777, 0o600)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,14 @@
+usage: capcov reconcile [-h] [--out OUT] [--check] [--quiet] [--allow-drift]
+                        capabilities observed
+
+positional arguments:
+  capabilities
+  observed
+
+options:
+  -h, --help     show this help message and exit
+  --out OUT
+  --check
+  --quiet
+  --allow-drift  compare artifacts derived from different trees (it is not a
+                 finding)

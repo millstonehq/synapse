@@ -1,0 +1,9 @@
+usage: capcov gate [-h] [--exemptions EXEMPTIONS] [--quiet] coverage
+
+positional arguments:
+  coverage
+
+options:
+  -h, --help            show this help message and exit
+  --exemptions EXEMPTIONS
+  --quiet

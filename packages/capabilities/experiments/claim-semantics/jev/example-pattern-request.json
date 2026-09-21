@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "subject_id": "patch:example",
+  "pattern": {
+    "id": "lost-update",
+    "definition": "A read-modify-write sequence can overwrite a concurrent update.",
+    "positive_signatures": [
+      "A value is read and later written without an established serialization edge"
+    ],
+    "required_evidence": [
+      "Synchronization, transaction, or runtime ordering evidence for the read and write"
+    ],
+    "exclusions": [
+      "The operation is serialized by a lock, atomic primitive, or transaction"
+    ]
+  },
+  "evidence": [
+    {
+      "id": "scip:read:1",
+      "kind": "static",
+      "fact": {"operation": "read", "symbol": "Account.balance", "line": 20}
+    },
+    {
+      "id": "patch:write:1",
+      "kind": "patch",
+      "fact": {"operation": "write", "symbol": "Account.balance", "line": 24}
+    }
+  ],
+  "missing_evidence": [
+    "Runtime interleaving trace",
+    "A static happens-before or serialization witness"
+  ]
+}

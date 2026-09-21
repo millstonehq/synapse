@@ -1,0 +1,138 @@
+{
+  "blind_spots": [
+    {
+      "blind": true,
+      "expr": "getattr",
+      "file": "app/dynamics.py",
+      "in": "app.dynamics:by_computed",
+      "kind": "attribute_by_name",
+      "line": 6,
+      "resolved_name": null
+    },
+    {
+      "blind": true,
+      "expr": "vars",
+      "file": "app/dynamics.py",
+      "in": "app.dynamics:namespaced",
+      "kind": "namespace_lookup",
+      "line": 9,
+      "resolved_name": null
+    }
+  ],
+  "derived_from": {
+    "artifact": "src",
+    "artifact_files": 9,
+    "artifact_sha256": "85f5c1814a47b1870e7e3f6bb022f1ac1d4f6baed92c2f36cbc79a7d993c10dd",
+    "extracted_at": "<timestamp>",
+    "extractor": "capcov reconcile",
+    "runtime_from": "capcov load-probe (stub)",
+    "source_snapshot": {
+      "files": 9,
+      "manifest_sha256": "85f5c1814a47b1870e7e3f6bb022f1ac1d4f6baed92c2f36cbc79a7d993c10dd",
+      "verification": "exact",
+      "version": 1
+    },
+    "static_from": "capcov python-fastapi-sqlalchemy"
+  },
+  "excluded_surfaces": {
+    "count": 0,
+    "surfaces": []
+  },
+  "kind": "coverage",
+  "orphan_tests": [],
+  "reached_only_by_tests": [],
+  "residue": [],
+  "residue_summary": {
+    "ambiguous": 0,
+    "builtin_shadowed": 0,
+    "chained": 0,
+    "external": 8,
+    "resolved_by_import": 8,
+    "resolved_by_name": 0
+  },
+  "rows": [
+    {
+      "cell": "static_only",
+      "declared": true,
+      "entity": "crates",
+      "reached_only_by_tests": false,
+      "runtime_operations": [],
+      "runtime_surfaces": [],
+      "static_operations": [
+        "read"
+      ],
+      "static_surfaces": [
+        "GET /v1/things/crates/{crate_id}"
+      ],
+      "tests": [],
+      "untested_operations": [
+        "read"
+      ]
+    },
+    {
+      "cell": "static_only",
+      "declared": true,
+      "entity": "ghosts",
+      "reached_only_by_tests": false,
+      "runtime_operations": [],
+      "runtime_surfaces": [],
+      "static_operations": [],
+      "static_surfaces": [
+        "GET /lonely/ghosts"
+      ],
+      "tests": [],
+      "untested_operations": []
+    },
+    {
+      "cell": "static_only",
+      "declared": true,
+      "entity": "widgets",
+      "reached_only_by_tests": false,
+      "runtime_operations": [],
+      "runtime_surfaces": [],
+      "static_operations": [
+        "create",
+        "read"
+      ],
+      "static_surfaces": [
+        "GET /v1/things/widgets",
+        "POST /v1/things/widgets"
+      ],
+      "tests": [],
+      "untested_operations": [
+        "create",
+        "read"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "summary": {
+    "both": 0,
+    "neither": 0,
+    "runtime_only": 0,
+    "static_only": 3
+  },
+  "timing": {
+    "discover_ms": 0,
+    "observe_ms": 0,
+    "reconcile_ms": 0,
+    "total_ms": 0
+  },
+  "unexercised_surfaces": [
+    "GET /healthz",
+    "GET /v1/things/crates/{crate_id}",
+    "GET /v1/things/widgets",
+    "POST /v1/things/widgets"
+  ],
+  "unknown_surfaces": [],
+  "unmounted_surfaces": [
+    "GET /lonely/ghosts"
+  ],
+  "unresolved": [
+    {
+      "adapter": "load",
+      "kind": "driver",
+      "reason": "headless ELT load driver not yet implemented; this probe ships the contract, not the observation"
+    }
+  ]
+}

@@ -405,8 +405,11 @@ class FgGoStaticPilotTest(unittest.TestCase):
         if directory is None:
             return "none: no CAPCOV_REPLAY_RECEIPT_DIR receipt directory was named"
         join = replay_join.build(directory)
-        if join.bundle is not None and shutil.which("souffle") is not None:
-            replay_join.evaluate_join(join, tempfile.mkdtemp(prefix="capcov-target-go-pilot-replay-join-"))
+        if join.bundle is not None:
+            # every evaluator whose tool is present: python alone in a plain
+            # checkout, all three in the devShell, and never a skipped judgement
+            replay_join.evaluate_join(join, tempfile.mkdtemp(prefix="capcov-target-go-pilot-replay-join-"),
+                                      evaluators="all")
         return replay_join.summary(join)
 
     @classmethod

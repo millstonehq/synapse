@@ -83,9 +83,34 @@ jobs:
           path: packages/capabilities/dist/*
           if-no-files-found: error
 
+  test-capabilities-default-compatibility:
+    name: Test no-extras wheel against upstream golden
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: packages/capabilities
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Build and install wheel without extras
+        run: |
+          python -m pip install uv
+          uv build --wheel
+          python -m venv /tmp/capabilities-no-extras
+          /tmp/capabilities-no-extras/bin/python -m pip install dist/*.whl
+      - name: Compare installed wheel with upstream golden
+        timeout-minutes: 10
+        env:
+          CAPCOV_TEST_INSTALLED_WHEEL: '1'
+        run: /tmp/capabilities-no-extras/bin/python -m unittest -v tests.claim_semantics.test_upstream_golden
+
   release-capabilities:
     name: Release capability package
-    needs: test-capabilities
+    needs: [test-capabilities, test-capabilities-default-compatibility]
     if: startsWith(github.ref, 'refs/tags/capabilities-v')
     runs-on: ubuntu-latest
     permissions:

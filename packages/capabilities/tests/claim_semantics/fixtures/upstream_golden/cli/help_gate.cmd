@@ -1,0 +1,1 @@
+capcov gate --help

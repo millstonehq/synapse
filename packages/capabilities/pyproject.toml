@@ -50,6 +50,26 @@ probe-python = ["sqlalchemy>=2.0", "pytest>=8"]
 # code -- and core discovery stays stdlib-only, this extra is never imported by
 # `capcov gate`.
 treesitter = ["tree-sitter>=0.25,<0.27", "tree-sitter-language-pack>=0.7"]
+# The optional claims judge (`capcov reconcile|gate --judge claims`, and the
+# `capcov experiment claims ...` namespace behind it). Both markers are EMPTY
+# and neither installs anything -- they are metadata, and they are named here
+# so `pip install .[judge]` is a documented no-op rather than an error, and so
+# the requirement is discoverable from the distribution:
+#
+#   * `judge`   -- the judge itself is stdlib-only. Nothing to install: what
+#                  gates it is the `--judge claims` flag (or `[judge] engine =
+#                  "claims"` in capcov.toml), not a package. capcov.cli does not
+#                  import capcov.claims unless one of those asks for it.
+#   * `souffle` -- names the EXTERNAL binary the judge's differential needs
+#                  (Souffle 2.5, an interpreter, not a Python package; the
+#                  pinned devShell in flake.nix has it). `pip install
+#                  .[souffle]` cannot give you souffle any more than a `[scip]`
+#                  extra could give you an indexer -- install it from
+#                  https://souffle-lang.github.io/install or run `nix develop`.
+#                  `--judge claims` fails with a named, actionable error, and
+#                  judges nothing, when it is absent.
+judge = []
+souffle = []
 #
 # The other two probes (`capcov observe --probe browser|load`) declare no pip
 # extra, for the same reason the SCIP resolver below declares none: their real
@@ -85,6 +105,16 @@ where = ["src"]
 # compiled checker and `capcov experiment claims assumptions` run from an
 # installed wheel with no source tree (tests/claim_semantics/
 # test_replay_pack_package_data.py fails if the two ever drift).
+#
+# capcov.claims.observation carries BOTH of its JSON documents the same way --
+# schema_observation_v1.json (read by ``load_observation_schema``) and the
+# judge's rule pack rules-observation-v1.json (read by ``observation.pack``).
+# Unlike the replay pack there is no experiments/ mirror to compare against: the
+# shipped file is the reviewed file, so if it does not travel in the wheel the
+# observation judge does not run outside a source checkout at all
+# (tests/claim_semantics/test_observation_pack_package_data.py fails if it is
+# dropped from here).
 [tool.setuptools.package-data]
 "capcov.claims.static" = ["*.json"]
 "capcov.claims.replay" = ["*.json"]
+"capcov.claims.observation" = ["*.json"]

@@ -13,3 +13,6 @@ content/** merge=ours
 
 # Schemas can merge (but custom/ directories are protected)
 schemas/custom/** merge=ours
+
+# Preserve byte-exact upstream CLI output, including trailing spaces.
+packages/capabilities/tests/claim_semantics/fixtures/upstream_golden/python_app/report.stdout whitespace=-blank-at-eol

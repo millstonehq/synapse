@@ -1,0 +1,249 @@
+{
+ "receipts": {
+  "qualified": {
+   "contract_findings": [],
+   "exit_code": 5,
+   "learn": {
+    "campaign": "learn-b40826cba2f4f8b3",
+    "closed": true,
+    "consistent_ops": [
+     "delete-issue"
+    ],
+    "counterexamples": [],
+    "learn": "4c70ec8595ea26fedb046dd08dc025cedcf27d6034195f845b70848f4c278879",
+    "observations": 32,
+    "predictions": 20,
+    "present": true,
+    "unmodeled_ops": [
+     "create-issue",
+     "delete-issues",
+     "edit"
+    ]
+   },
+   "message": "pending, not unsupported: delete-issue is pending model_well_formed",
+   "ops": {
+    "delete-issue": {
+     "blocking_premise": {
+      "holds": false,
+      "relation": "model_well_formed"
+     },
+     "certificate_sha256": null,
+     "corpus_constrains": true,
+     "exclusions_applied": [
+      "authentication",
+      "go_issue_outbox",
+      "jobs_statuses",
+      "redis"
+     ],
+     "learn_consistent": "supported",
+     "learn_unmodeled": false,
+     "op_qualified": {
+      "missing_premises": [
+       "model_well_formed"
+      ],
+      "operational": "complete",
+      "semantic": "unresolved"
+     },
+     "qualification": "pending model_well_formed",
+     "repeat_delete": {
+      "not_found": [],
+      "repeats": [],
+      "violations": []
+     },
+     "verdict": "not-supported"
+    }
+   },
+   "pending_ops": [
+    "delete-issue"
+   ],
+   "required_ops": [],
+   "unmet_ops": [
+    "delete-issue"
+   ],
+   "verdict": "pending-premise"
+  },
+  "repeat": {
+   "contract_findings": [],
+   "exit_code": 1,
+   "learn": {
+    "present": false
+   },
+   "ops": {
+    "delete-issue": {
+     "blocking_premise": {
+      "holds": false,
+      "relation": "corpus_constrains"
+     },
+     "certificate_sha256": null,
+     "corpus_constrains": false,
+     "exclusions_applied": [
+      "authentication",
+      "go_issue_outbox",
+      "jobs_statuses",
+      "redis"
+     ],
+     "learn_consistent": null,
+     "learn_unmodeled": false,
+     "op_qualified": {
+      "missing_premises": [
+       "model_well_formed"
+      ],
+      "operational": "complete",
+      "semantic": "unresolved"
+     },
+     "qualification": "unsupported",
+     "repeat_delete": {
+      "not_found": [
+       "DELETE /api/cloud/project/21/issues/31"
+      ],
+      "repeats": [
+       [
+        "repeat",
+        "DELETE /api/cloud/project/21/issues/31"
+       ]
+      ],
+      "violations": []
+     },
+     "verdict": "not-supported"
+    }
+   },
+   "required_ops": [],
+   "unmet_ops": [
+    "delete-issue"
+   ],
+   "verdict": "not-supported"
+  },
+  "synthetic": {
+   "contract_findings": [],
+   "exit_code": 0,
+   "learn": {
+    "present": false
+   },
+   "ops": {
+    "delete-issue": {
+     "blocking_premise": null,
+     "certificate_sha256": "d5720b4a7a4035e209082a3882b36104b67b1fc2488796318449f14220acd32f",
+     "corpus_constrains": true,
+     "exclusions_applied": [],
+     "learn_consistent": null,
+     "learn_unmodeled": false,
+     "op_qualified": {
+      "missing_premises": [],
+      "operational": "complete",
+      "semantic": "supported"
+     },
+     "qualification": "qualified",
+     "repeat_delete": {
+      "not_found": [
+       "DELETE /api/issues/1"
+      ],
+      "repeats": [
+       [
+        "req-5",
+        "DELETE /api/issues/1"
+       ]
+      ],
+      "violations": []
+     },
+     "verdict": "supported"
+    },
+    "issues.close": {
+     "blocking_premise": null,
+     "certificate_sha256": "b6e3c31c1069fe3eed6a725a6d05c54060930159d34e3776f67d7e53ee15d4c5",
+     "corpus_constrains": true,
+     "exclusions_applied": [],
+     "learn_consistent": null,
+     "learn_unmodeled": false,
+     "op_qualified": {
+      "missing_premises": [],
+      "operational": "complete",
+      "semantic": "supported"
+     },
+     "qualification": "qualified",
+     "repeat_delete": {
+      "not_found": [
+       "DELETE /api/issues/1"
+      ],
+      "repeats": [],
+      "violations": []
+     },
+     "verdict": "supported"
+    },
+    "issues.create": {
+     "blocking_premise": null,
+     "certificate_sha256": "70079b51e5a45767614523a2ffb50d131a39c3c473af1cda8fc8967937af148a",
+     "corpus_constrains": true,
+     "exclusions_applied": [],
+     "learn_consistent": null,
+     "learn_unmodeled": false,
+     "op_qualified": {
+      "missing_premises": [],
+      "operational": "complete",
+      "semantic": "supported"
+     },
+     "qualification": "qualified",
+     "repeat_delete": {
+      "not_found": [
+       "DELETE /api/issues/1"
+      ],
+      "repeats": [],
+      "violations": []
+     },
+     "verdict": "supported"
+    }
+   },
+   "required_ops": [],
+   "verdict": "supported"
+  },
+  "unqualified": {
+   "contract_findings": [],
+   "exit_code": 1,
+   "learn": {
+    "present": false
+   },
+   "ops": {
+    "delete-issue": {
+     "blocking_premise": {
+      "holds": true,
+      "relation": "undeclared_any"
+     },
+     "certificate_sha256": null,
+     "corpus_constrains": true,
+     "exclusions_applied": [
+      "authentication",
+      "go_issue_outbox",
+      "jobs_statuses",
+      "redis"
+     ],
+     "learn_consistent": null,
+     "learn_unmodeled": false,
+     "op_qualified": {
+      "missing_premises": [
+       "model_writes",
+       "model_well_formed"
+      ],
+      "operational": "complete",
+      "semantic": "unresolved"
+     },
+     "qualification": "unsupported",
+     "repeat_delete": {
+      "not_found": [],
+      "repeats": [],
+      "violations": []
+     },
+     "verdict": "not-supported"
+    }
+   },
+   "required_ops": [],
+   "unmet_ops": [
+    "delete-issue"
+   ],
+   "verdict": "not-supported"
+  }
+ },
+ "recorded_with": [
+  "python",
+  "souffle",
+  "souffle-compiled"
+ ]
+}

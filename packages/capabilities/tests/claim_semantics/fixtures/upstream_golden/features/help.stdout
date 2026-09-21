@@ -1,0 +1,17 @@
+usage: capcov features [-h]
+                       {example,validate,check,rollup,coverage,map,report,reconcile} ...
+
+positional arguments:
+  {example,validate,check,rollup,coverage,map,report,reconcile}
+    example             emit the canonical Authentication model as JSON
+    validate            structural validity of a feature model, then its tree
+    check               is a configuration valid against the model?
+    rollup              binary: does coverage roll up to complete?
+    coverage            numeric completeness vector rolled up the tree
+    map                 project discovered surfaces onto features
+    report              the completeness vector as a Markdown or CSV table
+                        with Harvey glyphs
+    reconcile           derive feature coverage from native outcome evidence
+
+options:
+  -h, --help            show this help message and exit

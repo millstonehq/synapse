@@ -1,0 +1,1 @@
+capcov features --help

@@ -45,6 +45,9 @@ NONCONFORMING_DIR = Path(os.environ.get("CAPCOV_REPLAY_NONCONFORMING_RECEIPT_DIR
 # every class an op_qualified certificate's leaves span; ``modelcheck`` is the typed
 # well-formedness checker, whose certificate is a positive premise of qualification
 PRODUCER_CLASSES = {"replay", "php", "go", "shen", "mut", "reviewer", "modelcheck"}
+#: Why a Souffle-specific assertion is skipped rather than failed: its absence is
+#: a fact about this machine, and the receipt's verdicts do not depend on it.
+SOUFFLE_ONLY = "this assertion is about the souffle interpreter; it is not on PATH here"
 
 
 def _nonconforming(document_dir: Path) -> None:
@@ -146,7 +149,7 @@ class _JoinCase(unittest.TestCase):
     join: replay_join.ReplayJoin
 
     def _undeclared(self) -> dict[str, dict[str, list[str]]]:
-        relations = dict(self.join.result.python.relations)
+        relations = dict(self.join.report().relations)
         return {op: replay_join.undeclared_tables(relations, None, self.join.run, op) for op in self.join.ops}
 
     def _expect_qualified(self, op: str) -> bool:
@@ -159,16 +162,17 @@ class _JoinCase(unittest.TestCase):
 
     def _has_certificate(self) -> bool:
         """A typed checker certified the model this run is judged against."""
-        return bool(dict(self.join.result.python.relations).get("model_well_formed"))
+        return bool(dict(self.join.report().relations).get("model_well_formed"))
 
     @classmethod
-    def _setup(cls, directory: Path, out_dir: Path) -> None:
+    def _setup(cls, directory: Path, out_dir: Path, reviewer_admissions=()) -> None:
+        """Evaluate every available kernel and retain external reviewer authority."""
         cls.directory = directory
         cls.out_dir = out_dir
         cls.replay_root = tempfile.mkdtemp(prefix="capcov-target-go-replay-diff-")
-        cls.join = replay_join.build(directory)
-        if cls.join.bundle is not None and shutil.which("souffle") is not None:
-            replay_join.evaluate_join(cls.join, cls.replay_root)
+        cls.join = replay_join.build(directory, reviewer_admissions=reviewer_admissions)
+        if cls.join.bundle is not None:
+            replay_join.evaluate_join(cls.join, cls.replay_root, evaluators="all")
         cls.artifacts = replay_join.write_artifacts(cls.join, cls.out_dir)
 
     @classmethod
@@ -182,11 +186,12 @@ class _JoinCase(unittest.TestCase):
 
     def _evaluated(self) -> None:
         self._exported()
-        self.assertIsNotNone(shutil.which("souffle"), "souffle must be on PATH: run inside the nix devShell")
         if self.join.mismatch is not None:
+            other = self.join.mismatch.souffle
             self.fail(f"kernels disagree; replay bundle: {self.join.mismatch.replay_path}; "
-                      f"souffle={self.join.mismatch.souffle.message[:400]}")
+                      f"souffle={other.message[:400] if other is not None else '(not run)'}")
         self.assertIsNotNone(self.join.result)
+        self.assertTrue(self.join.evaluators, "no evaluator ran")
 
     # -- shared assertions ------------------------------------------------------
 
@@ -213,14 +218,35 @@ class _JoinCase(unittest.TestCase):
         self.assertEqual(len(replay_join.summary(self.join)["assumption_ids"]), 1 + len(self.join.ops))
 
     def check_kernels(self) -> None:
+        """Every evaluator that ran produced the same closure and no failure.
+
+        With one evaluator that is one digest and no differential, which the
+        join says in words rather than by an equality that compares a thing with
+        itself; with two or three it is the differential.
+        """
         self._evaluated()
         self.assertTrue(self.join.result.matched)
-        self.assertEqual(self.join.result.python.canonical_digest, self.join.result.souffle.canonical_digest)
-        self.assertIsNone(self.join.result.python.operational_failure)
+        reports = self.join.closures()
+        self.assertEqual([report.backend for report in reports], list(self.join.evaluators))
+        self.assertEqual(len({report.canonical_digest for report in reports}), 1)
+        for report in reports:
+            self.assertIsNone(report.operational_failure, report.backend)
+        self.assertEqual(self.join.differential,
+                         "ran" if len(reports) > 1 else "not-run (single evaluator)")
+
+    @unittest.skipUnless(shutil.which("souffle"), SOUFFLE_ONLY)
+    def check_souffle_kernels(self) -> None:
+        """The interpreter really ran and really agreed -- the devShell half of the ask."""
+        self._evaluated()
+        self.assertIn("souffle", self.join.evaluators)
+        souffle = self.join.result.souffle
+        self.assertIsNotNone(souffle)
+        self.assertEqual(self.join.result.python.canonical_digest, souffle.canonical_digest)
+        self.assertEqual(self.join.differential, "ran")
 
     def check_corpus_constrains(self) -> None:
         self._evaluated()
-        relations = dict(self.join.result.python.relations)
+        relations = dict(self.join.report().relations)
         for op in self.join.ops:
             claim_id = self.join.claim_id("corpus-constrains", op)
             declared = [row for row in relations["mutant"] if row[2] == op]
@@ -230,7 +256,7 @@ class _JoinCase(unittest.TestCase):
                 self.assertTrue({row[1] for row in declared} <= killed, "a declared mutant was not killed")
                 self.assertEqual([row for row in relations["surviving_mutant"] if row[1] == op], [])
                 self.assertEqual(relations["kill_closure_gap"], ())
-                for report in (self.join.result.python, self.join.result.souffle):
+                for report in self.join.closures():
                     claim = next(c for c in report.claims if c.key == claim_id)
                     self.assertEqual((claim.semantic, claim.operational), ("supported", "complete"), report.backend)
                 cert = self.join.certificates[claim_id]
@@ -245,7 +271,7 @@ class _JoinCase(unittest.TestCase):
 
     def check_agreement_and_corpus_hygiene(self) -> None:
         self._evaluated()
-        relations = dict(self.join.result.python.relations)
+        relations = dict(self.join.report().relations)
         self.assertEqual(relations["php_model_disagree"], ())
         self.assertEqual(relations["go_model_disagree"], ())
         self.assertEqual(relations["surviving_mutant"], ())
@@ -260,7 +286,7 @@ class _JoinCase(unittest.TestCase):
     def check_undeclared_writes(self) -> None:
         """The companion undeclared_write claim states the actual write-set gap, side by side."""
         self._evaluated()
-        relations = dict(self.join.result.python.relations)
+        relations = dict(self.join.report().relations)
         for op in self.join.ops:
             claim_id = self.join.claim_id("undeclared-write", op)
             tables = self._undeclared()[op]
@@ -268,7 +294,7 @@ class _JoinCase(unittest.TestCase):
             print(f"\n{self.join.receipt_dir.name} {op}: undeclared tables php={tables['php']} go={tables['go']}")
             with self.subTest(op=op):
                 verdicts = {report.backend: next(c.semantic for c in report.claims if c.key == claim_id)
-                            for report in (self.join.result.python, self.join.result.souffle)}
+                            for report in self.join.closures()}
                 if derived:
                     self.assertEqual(set(verdicts.values()), {"supported"}, verdicts)
                     self.assertTrue(tables["php"] or tables["go"])
@@ -291,7 +317,7 @@ class _JoinCase(unittest.TestCase):
                 continue
             claim_id = self.join.claim_id("qualified", op)
             with self.subTest(op=op):
-                for report in (self.join.result.python, self.join.result.souffle):
+                for report in self.join.closures():
                     claim = next(c for c in report.claims if c.key == claim_id)
                     self.assertEqual((claim.semantic, claim.operational), ("unresolved", "complete"), report.backend)
                     named = [json.loads(item)["relation"] for item in claim.missing_premises if item.startswith("{")]
@@ -316,7 +342,7 @@ class _JoinCase(unittest.TestCase):
                 self.assertTrue(any(attempt["status"] == "blocked-by-presence"
                                     and attempt["relation"] == "undeclared_any"
                                     for attempt in attempts), attempts)
-        self.assertEqual({row[2] for row in dict(self.join.result.python.relations)["op_qualified"]},
+        self.assertEqual({row[2] for row in dict(self.join.report().relations)["op_qualified"]},
                          {op for op in self.join.ops if self._expect_qualified(op)} if self._has_certificate() else set())
 
     def _raw_undeclared(self) -> dict[str, dict[str, set[str]]]:
@@ -342,7 +368,7 @@ class _JoinCase(unittest.TestCase):
         """Exclusions are explicit reviewer assumptions; the closure-derived gap equals the raw one."""
         self._evaluated()
         summary = replay_join.summary(self.join)
-        relations = dict(self.join.result.python.relations)
+        relations = dict(self.join.report().relations)
         exclusion_rows = [record for record in self.join.bundle.evidence if record.atom.relation == "model_scope_exclusion"]
         for record in exclusion_rows:
             self.assertEqual(record.kind, "assumption")
@@ -383,7 +409,7 @@ class _JoinCase(unittest.TestCase):
         """The closure-derived gap equals the gap computed from the raw files (possibly empty); issue is never in it."""
         self._evaluated()
         raw = self._raw_undeclared()
-        relations = dict(self.join.result.python.relations)
+        relations = dict(self.join.report().relations)
         for op in self.join.ops:
             tables = self._undeclared()[op]
             with self.subTest(op=op):
@@ -414,7 +440,7 @@ class _JoinCase(unittest.TestCase):
         row rather than resting on that ordering alone.
         """
         self._evaluated()
-        relations = dict(self.join.result.python.relations)
+        relations = dict(self.join.report().relations)
         self.assertEqual(relations["model_well_formed"], (), "a real receipt carries no certificate yet")
         self.assertEqual(relations["model_checker_admitted"], (), "the reviewer admits no checker yet")
         self.assertIn("model_well_formed", replay_join.PENDING_PREMISES)
@@ -466,7 +492,7 @@ class _JoinCase(unittest.TestCase):
                                      f"qualified under {len(applied)} reviewer exclusions: " + ", ".join(applied))
                     self.assertEqual(entry["assumption_leaves"], len(applied))
                 self.assertTrue(entry["corpus_constrains"])
-                for report in (self.join.result.python, self.join.result.souffle):
+                for report in self.join.closures():
                     claim = next(c for c in report.claims if c.key == claim_id)
                     self.assertEqual((claim.semantic, claim.operational), ("supported", "complete"), report.backend)
                     self.assertEqual(claim.missing_premises, ())
@@ -481,7 +507,7 @@ class _JoinCase(unittest.TestCase):
                 self.assertFalse(explanation["truncated"])
                 self.assertEqual(set(explanation["leaves"]), set(cert["leaves"]))
                 self.assertTrue(set(explanation["shared_assumptions"]) & set(self.join.assumption_ids))
-        self.assertEqual({row[2] for row in dict(self.join.result.python.relations)["op_qualified"]}, set(self.join.ops))
+        self.assertEqual({row[2] for row in dict(self.join.report().relations)["op_qualified"]}, set(self.join.ops))
 
     def check_artifact_hygiene(self) -> dict:
         """The artifact contract every receipt owes: a join receipt, no paths, no source."""
@@ -554,7 +580,8 @@ class FixtureJoinTest(_JoinCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls._setup(fixture_cases.FIXTURE, Path(tempfile.mkdtemp(prefix="capcov-fixture-replay-out-")))
+        cls._setup(fixture_cases.FIXTURE, Path(tempfile.mkdtemp(prefix="capcov-fixture-replay-out-")),
+                   reviewer_admissions=fixture_cases.reviewer_admissions(fixture_cases.FIXTURE))
 
     def test_export(self) -> None:
         self.check_export()
@@ -562,6 +589,10 @@ class FixtureJoinTest(_JoinCase):
 
     def test_kernels(self) -> None:
         self.check_kernels()
+
+    def test_the_souffle_kernel_agrees_when_it_is_present(self) -> None:
+        """Skipped, never failed, when the interpreter is absent -- it is optional."""
+        self.check_souffle_kernels()
 
     def test_corpus_constrains(self) -> None:
         self.check_corpus_constrains()
@@ -666,6 +697,10 @@ class RealReceiptTest(_JoinCase):
     def test_kernels_agree_on_the_real_receipt(self) -> None:
         self.check_kernels()
 
+    def test_the_souffle_kernel_agrees_when_it_is_present(self) -> None:
+        """Skipped, never failed, when the interpreter is absent -- it is optional."""
+        self.check_souffle_kernels()
+
     def test_the_corpus_constrains_every_replayed_op_in_both_kernels(self) -> None:
         self.check_corpus_constrains()
 
@@ -752,13 +787,13 @@ class RepeatTapeReceiptTest(_JoinCase):
         self.check_kernels()
         self.assertEqual(self.join.receipt["run"], "271d2dde86a0")
         self.assertEqual(self.join.ops, ("delete-issue",))
-        relations = dict(self.join.result.python.relations)
+        relations = dict(self.join.report().relations)
         self.assertEqual({row[1] for row in relations["replay_request"]},
                          {"owner", "forbidden", "missing", "repeat"})
 
     def test_the_repeat_delete_claim_holds_on_real_rows(self) -> None:
         self._evaluated()
-        relations = dict(self.join.result.python.relations)
+        relations = dict(self.join.report().relations)
         run = self.join.run
         self.assertEqual(relations["repeat_delete"], ((run, "repeat", self.TARGET),))
         self.assertEqual(relations["first_delete_committed"], ((run, "owner", self.TARGET),),
@@ -803,7 +838,7 @@ class RepeatTapeReceiptTest(_JoinCase):
         # the cross-request gate op_qualified_rt now carries, on the only real tape that
         # has a repeat: the closure derives and no violation does, so the gate passes and
         # this receipt is blocked by its unbaselined corpus alone
-        relations = dict(self.join.result.python.relations)
+        relations = dict(self.join.report().relations)
         self.assertIn((self.join.run, "delete-issue"), set(relations["repeat_delete_closed"]))
         self.assertEqual(relations["repeat_delete_any"], ())
         self.assertEqual(relations["repeat_delete_violation"], ())
@@ -856,10 +891,10 @@ class LearnCampaignTest(_JoinCase):
         self.assertEqual(join.contract_findings, [])
         root = tempfile.mkdtemp(prefix="capcov-learn-variant-diff-")
         self.addCleanup(shutil.rmtree, root, True)
-        replay_join.evaluate_join(join, root)
+        replay_join.evaluate_join(join, root, evaluators="all")
         self.assertIsNone(join.mismatch, "kernels disagree on the variant")
         self.assertIsNotNone(join.result)
-        return join, join.result.python, dict(join.result.python.relations)
+        return join, join.report(), dict(join.report().relations)
 
     def test_the_committed_campaign_is_consistent_and_downgrades_nothing_replayed(self) -> None:
         self._evaluated()
@@ -878,7 +913,7 @@ class LearnCampaignTest(_JoinCase):
         self.assertFalse(entry["learn_unmodeled"])
         # and the op is still blocked only by the Stage D premise
         self.assertEqual(entry["blocking_premise"], {"relation": "model_well_formed", "holds": False})
-        relations = dict(self.join.result.python.relations)
+        relations = dict(self.join.report().relations)
         self.assertIn((self.join.run, "delete-issue"), set(relations["learn_unmodeled_gate_closed"]))
         self.assertNotIn((self.join.run, "delete-issue"), set(relations["learn_unmodeled_any"]))
         # the compatibility row the campaign is bound through
@@ -973,15 +1008,14 @@ class NoLearnReceiptTest(unittest.TestCase):
     """A receipt with no learn campaign is judged exactly as it was before one existed."""
 
     def test_absence_is_not_a_finding_and_licenses_the_downgrade_gate(self) -> None:
-        self.assertIsNotNone(shutil.which("souffle"), "souffle must be on PATH: run inside the nix devShell")
         join = replay_join.build(replay_join.REPEAT_RECEIPT_DIR)
         self.assertEqual(join.contract_findings, [])
         self.assertTrue(any("no learn campaign is bound" in m for m in join.exported.messages))
         root = tempfile.mkdtemp(prefix="capcov-no-learn-diff-")
         self.addCleanup(shutil.rmtree, root, True)
-        replay_join.evaluate_join(join, root)
+        replay_join.evaluate_join(join, root, evaluators="all")
         self.assertIsNone(join.mismatch)
-        relations = dict(join.result.python.relations)
+        relations = dict(join.report().relations)
         for name in ("learn_run", "learn_prediction", "learn_observation", "learn_unmodeled",
                      "learn_consistent", "learn_unmodeled_any"):
             self.assertEqual(relations[name], (), name)
@@ -1012,6 +1046,10 @@ class UnqualifiedFixtureTest(_JoinCase):
         self.check_kernels()
         self.check_corpus_constrains()
         self.check_agreement_and_corpus_hygiene()
+
+    def test_the_souffle_kernel_agrees_when_it_is_present(self) -> None:
+        """Skipped, never failed, when the interpreter is absent -- it is optional."""
+        self.check_souffle_kernels()
 
     def test_business_tables_the_model_does_not_declare_block_the_op(self) -> None:
         self.check_undeclared_writes()

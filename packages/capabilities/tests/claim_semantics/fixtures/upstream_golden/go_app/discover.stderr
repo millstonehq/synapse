@@ -1,0 +1,29 @@
+Traceback (most recent call last):
+  File "<upstream>/packages/capabilities/src/capcov/flows/discovery.py", line 365, in _discover_from_config
+    import tree_sitter as ts
+ModuleNotFoundError: No module named 'tree_sitter'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "<upstream>/packages/capabilities/src/capcov/__main__.py", line 3, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "<upstream>/packages/capabilities/src/capcov/cli.py", line 742, in main
+    return args.func(args)
+           ~~~~~~~~~^^^^^^
+  File "<upstream>/packages/capabilities/src/capcov/cli.py", line 185, in cmd_discover
+    _run_adapter(adapter, source_dir, target, name_match, config)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<upstream>/packages/capabilities/src/capcov/cli.py", line 110, in _run_adapter
+    return adapter.discover(source_dir, target, name_match=name_match, config=config)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<upstream>/packages/capabilities/src/capcov/adapters/treesitter_routes.py", line 123, in discover
+    inventory = flows_discovery._discover_from_config(
+        flows_cfg, Path(source_root), "capcov.toml"
+    )
+  File "<upstream>/packages/capabilities/src/capcov/flows/discovery.py", line 368, in _discover_from_config
+    raise ValueError("treesitter-routes needs the 'treesitter' extra") from exc
+ValueError: treesitter-routes needs the 'treesitter' extra

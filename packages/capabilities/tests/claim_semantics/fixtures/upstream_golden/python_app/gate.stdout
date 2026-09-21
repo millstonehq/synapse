@@ -1,0 +1,15 @@
+capcov gate: FAIL -- 4 unexplained
+
+  unexplained-static_only: crates
+    reachable from GET /v1/things/crates/{crate_id} and no exercise touched it. This is a coverage gap: write the test.
+
+  unexplained-static_only: ghosts
+    reachable from GET /lonely/ghosts and no exercise touched it. This is a coverage gap: write the test.
+
+  unexplained-static_only: widgets
+    reachable from GET /v1/things/widgets, POST /v1/things/widgets and no exercise touched it. This is a coverage gap: write the test.
+
+  unresolved-obligation: unresolved:load:driver
+    static reading did not resolve this to a surface or spec (driver): headless ELT load driver not yet implemented; this probe ships the contract, not the observation. It is part of the denominator, not outside it. Either the target declares it in capcov.toml, the adapter grows to read it, or you record in the exemptions file (cell "unresolved") why it stays unresolved.
+
+Each of these is a question with an answer: write the test, fix the adapter, delete the dead entity, or record why in an exemptions file (--exemptions).

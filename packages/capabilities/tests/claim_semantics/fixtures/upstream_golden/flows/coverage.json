@@ -1,0 +1,41 @@
+{
+  "assurance": "test-fixture",
+  "blocked": [],
+  "complete": true,
+  "excluded_surfaces": {
+    "count": 0,
+    "surfaces": []
+  },
+  "execution_scope": "full",
+  "failures": [],
+  "rows": [
+    {
+      "id": "edit",
+      "missing_outcomes": [],
+      "resolution": null,
+      "status": "covered",
+      "transitions": [
+        "edit"
+      ]
+    },
+    {
+      "id": "read",
+      "missing_outcomes": [],
+      "resolution": null,
+      "status": "covered",
+      "transitions": [
+        "history",
+        "login"
+      ]
+    }
+  ],
+  "scope": "fixture",
+  "summary": {
+    "covered": 2,
+    "unmapped": 0,
+    "unproven": 0
+  },
+  "target": "browser",
+  "unresolved": [],
+  "version": 1
+}

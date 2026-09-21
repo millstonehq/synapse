@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "subject_id": "capability:project.archive",
+  "subject": {
+    "definition": "An authorized user can archive a selected project.",
+    "route": "POST /projects/{project_id}/archive",
+    "static_chain": [
+      "ProjectHandler.archive",
+      "ProjectService.Archive",
+      "ProjectRepository.UpdateStatus"
+    ]
+  },
+  "candidates": [
+    {
+      "id": "ProjectRepository.UpdateStatus",
+      "description": "Changes the project status to archived.",
+      "evidence_ids": [
+        "static:route-reaches-project-status-update"
+      ]
+    },
+    {
+      "id": "AuditRepository.RecordRequest",
+      "description": "Records that the archive request occurred without changing project state.",
+      "evidence_ids": [
+        "static:route-reaches-audit"
+      ]
+    }
+  ],
+  "instructions": "Which candidate directly implements the modeled business outcome in `subject.definition`? Select `no_match` when every candidate is only incidental, observational, or unrelated.",
+  "presence_criteria": {
+    "true": "At least one candidate directly creates the modeled project outcome.",
+    "false": "All candidates are incidental, observational, supporting infrastructure, or unrelated."
+  },
+  "model": "jev-latest"
+}

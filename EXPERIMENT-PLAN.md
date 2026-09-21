@@ -5885,6 +5885,76 @@ Stage D (typed well-formedness of the model, section 18 decision) can now start:
 must satisfy is fixed, the fixture that must flip from pending to qualified is named, and shen1's
 in-flight units are landed.
 
+### 2026-09-17 integration iteration 4: secured typed producer and external admission
+
+Input checkpoint `79b50b3`; candidate lineage retained through `92148e1`.  The typed producer now
+executes a copied model snapshot, rejects escaping symlinks and nonliteral loader programs, and
+rechecks snapshot hashes after execution.  Model code only produces canonical literal units.  Each
+unit is shape-checked as exactly one recursively literal-only value and typechecked in a fresh
+process that never loads model code.  Published transcripts are synthesized from parsed isolated
+verdict fields, contain no raw model output or machine-local paths, and certificate runtime identity
+contains digests rather than executable paths.
+
+Reviewer admission is no longer read from `model_checkers.json` in the receipt.  The exporter
+defaults to no admission and accepts only caller-supplied reviewer entries pinned to the exact
+model, checker, checker version, and certificate digest.  The admission evidence depends on that
+certificate row.  This input is threaded through the join, assumptions CLI, and compiled judge;
+absence remains pending and never becomes support.
+
+Proof under the pinned devShell and shared heavy lock: the modelcheck, compiled-checker, and replay
+evidence-policy suites ran 34 tests in 136.311 seconds, exit 0, with one live-model test skipped.
+The cheap producer/export suite ran 65 tests, exit 0, with eight runtime tests skipped outside the
+shell.  Sol review found and drove closure of mutable-snapshot, symlink, protocol-spoof, transcript,
+and self-admission defects; final verdict READY.  Next action: produce a fresh checker artifact for
+the current model, create a separate exact-certificate reviewer admission, and drive it through the
+three-kernel judge.
+
+### 2026-09-17 integration iteration 5: first exact-certificate three-kernel qualification
+
+Input `a1778aa`.  The only committed model source tree digests to
+`5d893da33c10afd55175f142148d7247f483694a1506197c9f53875fb0ed8374`; the old
+synthetic receipt named `5f0d985d…`, so its placeholder was refused as stale.  A fresh checker run
+over the source emitted certificate `3feeda03…36d9`.  A temporary synthetic receipt was rebound to
+the exact model digest, received that exact fact, and was paired with a separate reviewer admission
+pinning model, checker `capcov-modelcheck`, version `1.0.0`, and certificate.
+
+The compiled judge command, with that external admission, exited 0.  Python, interpreted Souffle,
+and compiled Souffle matched at semantic digest `d790d36a…e12b`; the interpreted/compiled closure
+digest was `0ce6961f…076a`.  Rule-program digest `9addbe39…5974`; compiled binary
+`67b47247…c2fb`; `delete-issue` was supported/complete and qualified with no missing premises;
+certificate `9b20ce84…3a58`; repeat-delete had one expected not-found row and no violations.
+`learn_consistent` was absent, not inferred.  Packet `judge.json` digest `4e277849…248c`; a complete
+artifact privacy scan found none of the forbidden private markers.
+
+This is authoritative executable evidence for the synthetic receipt only.  It is not evidence that
+the downstream application model or a fresh producer receipt is qualified.  Next action: bind a Jev
+advisory to this exact judge without changing its verdict, then move the same packet flow to a fresh
+downstream receipt whose model sources are present and digest-matched.
+
+### 2026-09-17 integration iteration 6: exact offline Jev advisory binding
+
+Input `a42f3e6`.  A bounded offline Jev response was retained byte-for-byte and bound to the exact
+iteration-5 judge.  The advisory now embeds the canonical request, parsed response, and retained raw
+UTF-8 response; independently recomputable state, request, candidate, canonical-response, and
+raw-response digests bind those documents.  Replay accepts only exact nested schemas and requires the
+raw JSON to equal the parsed response.  The binding rejects a nominally supported judge whenever a
+required operation still carries a missing premise.
+
+The response file digest is `c32799b4…d4e0`; advisory assessment
+`jev:ba115bdb…ac39`, file digest `2185a282…b14d`; and binding
+`jev-judge:302319bb…2f8`, file digest `3d3d4020…8512`.  The binding retains the
+iteration-5 compiled binary digest `67b47247…c2fb`, exit 0, supported verdict, and explicit
+`advisory_may_change_verdict = false`.  Provenance is deliberately
+`offline-file-unattested`, `service_attested = false`; `jev-latest` remains a mutable alias.  Sol's
+final narrow review was READY after unknown nested fields and forged response-provenance digests were
+made rejecting cases.  Focused tests and the complete outgoing privacy scan are the publication gate
+for this checkpoint: the focused suite ran 21 tests, exit 0, in both the cheap host check and the
+pinned devShell; the outgoing diff and retained response/advisory/binding artifacts were clean.
+
+This advances advisory binding, not authority: the packet remains synthetic, has no learn campaign,
+and is not a fresh downstream gate or production qualification.  Next action: use current downstream
+main to produce a receipt for its exact commit, emit the typed model certificate, supply a separate
+exact-certificate reviewer admission, and run the same compiled judge through the downstream wrapper.
 ### 2026-09-17 PR #50 CI repaired: the judge's rule pack ships as package data; Stage D lands on the line
 
 Upstream's "Test and build capability package" job installs the wheel into a fresh prefix and
@@ -5903,8 +5973,9 @@ tests in 577.9s`, `OK (skipped=160)`. Stage D (`675a388`, `e6d2b8a`) and the
 pilot's widened pending shape (`d861154`) ride the same push.
 
 Certificate hygiene found on the way: the checker's runtime record carried the launcher and
-binary as absolute host paths; `e6d2b8a` records basenames and the binary's sha256 only, which
-is the evidence. The three fixture files (qualified: fact + certificate `65cffd45…9b`; unqualified:
+binary as absolute host paths; `e6d2b8a` replaced those paths with basenames and digests.  This
+integration keeps the stricter digest-only schema already enforced by certificate recheck, because
+even a host-controlled basename is not evidence. The three fixture files (qualified: fact + certificate `65cffd45…9b`; unqualified:
 ill-formed certificate `b377e6bc…`) sit on `agent/modelcheck-fixtures` `251433b` on
 `pyrex41/synapse`, not on the line: placing the fact without the reviewer's admitted row moves
 the qualified receipt's missing premise from `model_well_formed` to `model_checker_admitted`
@@ -5934,4 +6005,3 @@ optional cross-check", to land when the code does. Stage D's import footprint wa
 this: `import capcov.claims.modelcheck` loads only the pure IR/validation/verdict/output modules,
 shells out only inside `check()`, and names its missing runtime; `preflight(model_dir)` (to add)
 returns a status dict and never raises, for the `--model` profile to call.
-

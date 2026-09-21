@@ -1,0 +1,7 @@
+usage: capcov outcomes [-h] {run,check,coverage,gate} ...
+
+positional arguments:
+  {run,check,coverage,gate}
+
+options:
+  -h, --help            show this help message and exit

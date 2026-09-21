@@ -60,6 +60,8 @@ MODEL = "08380c9c336dc3f8e693aeea0589a60cfe808836a75bf2b815fa7cd8b39f0e7b"
 #: the corpus fixture's placeholder pair, never a real checker's output.
 SYNTHETIC_CHECKER = ("stage-d-typecheck", "0.1-pending")
 SYNTHETIC_CERTIFICATE = hashlib.sha256(b"pending: checker not yet built").hexdigest()
+SYNTHETIC_OPERATION_CERTIFICATE = hashlib.sha256(b"test-only delete-issue operation check").hexdigest()
+SYNTHETIC_BINARY = "b" * 64
 QUALIFIED = "claim-qualified-delete-issue"
 CONSTRAINS = "claim-corpus-constrains-delete-issue"
 APPLIED = "claim-exclusions-applied-delete-issue"
@@ -89,22 +91,47 @@ def _with_synthetic_certificate(source: Path, destination: Path) -> Path:
 
 
 def _add_synthetic_certificate(destination: Path) -> Path:
-    """Write the synthetic ``model_well_formed`` / ``model_checkers`` pair into a staged copy."""
+    """Write a synthetic ``model_well_formed`` fact into a staged copy."""
     model = json.loads((destination / "receipt.json").read_text())["model"]
     checker, version = SYNTHETIC_CHECKER
     (destination / "model_well_formed.json").write_text(json.dumps(
         {"producer": f"modelcheck {checker} {version} model:{model[:12]}",
          "rows": [{"model": model, "checker": checker, "checker_version": version,
+                   "checker_binary": SYNTHETIC_BINARY,
                    "certificate": SYNTHETIC_CERTIFICATE}]}, indent=1, sort_keys=True) + "\n")
-    (destination / "model_checkers.json").write_text(json.dumps(
-        {"producer": "reviewer synthetic test-local admitted model checkers",
-         "rows": [{"checker": checker, "checker_version": version}]}, indent=1, sort_keys=True) + "\n")
+    (destination / "model_operation_checked.json").write_text(json.dumps(
+        {"producer": f"modelcheck {checker} {version} model:{model[:12]}",
+         "rows": [{"model": model, "operation": "delete-issue", "checker": checker,
+                   "checker_version": version, "checker_binary": SYNTHETIC_BINARY,
+                   "certificate": SYNTHETIC_OPERATION_CERTIFICATE}]}, indent=1, sort_keys=True) + "\n")
     return destination
+
+
+def _synthetic_admissions(destination: Path) -> list[dict[str, str]]:
+    """Return the separate reviewer authority for the test-local certificate."""
+    model = json.loads((destination / "receipt.json").read_text())["model"]
+    checker, version = SYNTHETIC_CHECKER
+    return [{"producer": "reviewer synthetic test-local exact certificate review",
+             "model": model, "operation": "delete-issue", "checker": checker,
+             "checker_version": version, "checker_binary": SYNTHETIC_BINARY,
+             "certificate": SYNTHETIC_OPERATION_CERTIFICATE}]
 
 
 def _souffle() -> None:
     if shutil.which("souffle") is None:
         raise unittest.SkipTest("souffle must be on PATH: run inside the nix devShell")
+
+
+def _stand_in(python, souffle, matched: bool):
+    """An ``EvaluationResult``-shaped stand-in for the tests that poison a kernel.
+
+    ``reports`` is what the evaluator-aware code reads (``_closures``,
+    ``_primary``, ``_kernel_reports``); ``python``/``souffle`` are kept because
+    these tests name the kernel they doctored.
+    """
+    return SimpleNamespace(reports=(python, souffle), python=python, souffle=souffle,
+                           matched=matched, differential="ran",
+                           evaluators=("python", "souffle"))
 
 
 class _EvaluatedFixture(unittest.TestCase):
@@ -118,10 +145,13 @@ class _EvaluatedFixture(unittest.TestCase):
         _souffle()
         cls.replay_root = tempfile.mkdtemp(prefix="capcov-assumption-registry-")
         cls.staged = Path(tempfile.mkdtemp(prefix="capcov-assumption-registry-receipt-"))
-        cls.join = replay_join.build(_with_synthetic_certificate(FIXTURE, cls.staged / "receipt"))
+        receipt = _with_synthetic_certificate(FIXTURE, cls.staged / "receipt")
+        cls.join = replay_join.build(receipt, reviewer_admissions=_synthetic_admissions(receipt))
         if cls.join.bundle is None:
             raise AssertionError("CONTRACT FINDING: " + "; ".join(cls.join.contract_findings))
-        replay_join.evaluate_join(cls.join, cls.replay_root)
+        # both kernels, named: the evaluator set is chosen, never detected, and
+        # this class is the one that reads a souffle_digest out of an A3 document
+        replay_join.evaluate_join(cls.join, cls.replay_root, evaluators="python,souffle")
         if cls.join.mismatch is not None:
             raise AssertionError(f"kernels disagree; replay bundle: {cls.join.mismatch.replay_path}")
         cls.registry = replay_join.assumption_registry(cls.join)
@@ -515,10 +545,11 @@ class UnreferencedAssumptionTest(unittest.TestCase):
         path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         _add_synthetic_certificate(cls.directory)  # the premise this module is not about
         cls.replay_root = tempfile.mkdtemp(prefix="capcov-assumption-unreferenced-diff-")
-        cls.join = replay_join.build(cls.directory)
+        cls.join = replay_join.build(
+            cls.directory, reviewer_admissions=_synthetic_admissions(cls.directory))
         if cls.join.bundle is None:
             raise AssertionError("CONTRACT FINDING: " + "; ".join(cls.join.contract_findings))
-        replay_join.evaluate_join(cls.join, cls.replay_root)
+        replay_join.evaluate_join(cls.join, cls.replay_root, evaluators="python,souffle")
         if cls.join.mismatch is not None:
             raise AssertionError(f"kernels disagree; replay bundle: {cls.join.mismatch.replay_path}")
         cls.registry = replay_join.assumption_registry(cls.join)
@@ -621,29 +652,28 @@ class RefusalTest(_EvaluatedFixture):
         operation unusable on any bundle that already carries a refuted claim,
         which is exactly the bundle an invalidation is most worth asking about.
         """
-        real_compare = assumptions.compare
+        real_run = assumptions.run_evaluators
 
         def mask(report):
             claims = [SimpleNamespace(key=c.key, semantic="refuted" if c.key == CONSTRAINS else c.semantic,
                                       operational=c.operational, missing_premises=c.missing_premises)
                       for c in report.claims]
-            return SimpleNamespace(claims=claims, relations=report.relations,
+            return SimpleNamespace(backend=report.backend, claims=claims, relations=report.relations,
                                    canonical_digest=report.canonical_digest)
 
-        def poisoned(bundle, **kwargs):
-            result = real_compare(bundle, **kwargs)
-            return SimpleNamespace(python=mask(result.python), souffle=result.souffle,
-                                   matched=result.matched)
+        def poisoned(bundle, evaluators, **kwargs):
+            result = real_run(bundle, evaluators, **kwargs)
+            return _stand_in(mask(result.python), result.souffle, result.matched)
 
-        baseline = SimpleNamespace(python=mask(self.join.result.python),
-                                   souffle=self.join.result.souffle, matched=True)
-        assumptions.compare = poisoned
+        baseline = _stand_in(mask(self.join.result.python), self.join.result.souffle, True)
+        assumptions.run_evaluators = poisoned
         try:
             result = assumptions.invalidate(self.join.bundle, PINNED_EXCLUSION_IDS["redis"],
                                             replay_root=self.replay_root, baseline_result=baseline,
-                                            baseline_row_certificates=self.join.row_certificates)
+                                            baseline_row_certificates=self.join.row_certificates,
+                                            evaluators=self.join.evaluators)
         finally:
-            assumptions.compare = real_compare
+            assumptions.run_evaluators = real_run
         entry = result.claims[CONSTRAINS]
         self.assertEqual(entry["before"]["semantic"], "refuted")
         self.assertEqual(entry["after"]["semantic"], "refuted")
@@ -686,23 +716,23 @@ class RefusalTest(_EvaluatedFixture):
 
     def test_transition_to_refuted_is_a_finding(self) -> None:
         """If a kernel ever reported refuted after a drop, no document is written."""
-        real_compare = assumptions.compare
+        real_run = assumptions.run_evaluators
 
-        def poisoned(bundle, **kwargs):
-            result = real_compare(bundle, **kwargs)
+        def poisoned(bundle, evaluators, **kwargs):
+            result = real_run(bundle, evaluators, **kwargs)
             claims = [SimpleNamespace(key=c.key, semantic="refuted" if c.key == QUALIFIED else c.semantic,
                                       operational=c.operational, missing_premises=c.missing_premises)
                       for c in result.python.claims]
-            python = SimpleNamespace(claims=claims, relations=result.python.relations,
+            python = SimpleNamespace(backend="python", claims=claims, relations=result.python.relations,
                                      canonical_digest=result.python.canonical_digest)
-            return SimpleNamespace(python=python, souffle=result.souffle, matched=result.matched)
+            return _stand_in(python, result.souffle, result.matched)
 
-        assumptions.compare = poisoned
+        assumptions.run_evaluators = poisoned
         try:
             with self.assertRaises(InvalidationError) as caught:
                 replay_join.invalidate(self.join, PINNED_EXCLUSION_IDS["go_issue_outbox"], self.replay_root)
         finally:
-            assumptions.compare = real_compare
+            assumptions.run_evaluators = real_run
         self.assertIn("never a refutation", str(caught.exception))
         self.assertNotIn(PINNED_EXCLUSION_IDS["go_issue_outbox"], self.join.invalidations)
 
@@ -851,6 +881,8 @@ class CommandLineTest(unittest.TestCase):
         _souffle()
         cls.tmp = Path(tempfile.mkdtemp(prefix="capcov-assumption-cli-receipt-"))
         cls.receipt = _with_synthetic_certificate(FIXTURE, cls.tmp / "receipt")
+        cls.admissions = cls.tmp / "reviewer-admissions.json"
+        cls.admissions.write_text(json.dumps(_synthetic_admissions(cls.receipt), indent=2) + "\n")
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -863,8 +895,11 @@ class CommandLineTest(unittest.TestCase):
         from capcov.claims import cli
 
         buffer = io.StringIO()
+        arguments = list(argv)
+        if "--reviewer-admissions" not in arguments:
+            arguments.extend(["--reviewer-admissions", str(self.admissions)])
         with contextlib.redirect_stdout(buffer):
-            code = cli.main(list(argv))
+            code = cli.main(arguments)
         return code, buffer.getvalue()
 
     @staticmethod
@@ -896,6 +931,60 @@ class CommandLineTest(unittest.TestCase):
                              "a replay root the CLI made itself is removed when nothing needs it")
         finally:
             shutil.rmtree(out, ignore_errors=True)
+
+    def test_malformed_reviewer_admissions_refuse_without_a_traceback(self) -> None:
+        malformed = self.tmp / "malformed-admissions.json"
+        malformed.write_text("not-json\n", encoding="utf-8")
+        code, text = self._run(
+            "claims", "assumptions", "registry",
+            "--receipt", str(self.receipt),
+            "--reviewer-admissions", str(malformed),
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(text),
+                         {"refusal": "reviewer admissions are not readable JSON"})
+        self.assertNotIn(str(malformed), text)
+
+    def test_unreadable_reviewer_admissions_refuse_without_a_path(self) -> None:
+        missing = self.tmp / "missing-admissions.json"
+        code, text = self._run(
+            "claims", "assumptions", "registry",
+            "--receipt", str(self.receipt),
+            "--reviewer-admissions", str(missing),
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(text),
+                         {"refusal": "reviewer admissions are not readable JSON"})
+        self.assertNotIn(str(missing), text)
+
+    def test_non_utf8_reviewer_admissions_refuse_without_a_traceback(self) -> None:
+        malformed = self.tmp / "non-utf8-admissions.json"
+        malformed.write_bytes(b"\xff\xfe")
+        code, text = self._run(
+            "claims", "assumptions", "registry",
+            "--receipt", str(self.receipt),
+            "--reviewer-admissions", str(malformed),
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(text),
+                         {"refusal": "reviewer admissions are not readable JSON"})
+
+    def test_unrelated_oserror_is_not_mislabeled_as_bad_admissions(self) -> None:
+        from capcov.claims import cli
+
+        module = cli._join_module()
+        real = module.build
+
+        def raising(*args, **kwargs):
+            raise OSError("kernel unavailable")
+
+        module.build = raising
+        try:
+            with self.assertRaisesRegex(OSError, "kernel unavailable"):
+                self._run("claims", "assumptions", "registry",
+                          "--receipt", str(self.receipt))
+        finally:
+            module.build = real
 
     def test_a_kernel_disagreement_on_the_claims_is_exit_3(self) -> None:
         """``certify_claims`` raises ``AssertionError``; the contract calls that 3, not a traceback."""

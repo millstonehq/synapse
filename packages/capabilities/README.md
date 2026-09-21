@@ -16,6 +16,18 @@ coverage gates, and reports. Consumer repositories own reviewed behavior models,
 source scope, identities, startup/reset recipes, runtime fixtures, and target
 bindings. It works without a Synapse vault or a hosted service.
 
+The experimental claim-semantics workbench also includes a Jev advisory path
+for ranking a mechanically bounded candidate set before acquiring evidence:
+
+```sh
+JEV_API_KEY=... capcov experiment claims jev assess --request request.json
+```
+
+Its content-addressed output is explicitly an assumption: it may prioritize a
+runtime probe or human review, but cannot establish a fact, compatibility,
+completeness, coverage, or claim qualification. See
+`experiments/claim-semantics/jev/README.md`.
+
 ## Foundations
 
 Each mechanism has a lineage in testing and program-analysis literature.
@@ -113,6 +125,215 @@ error when a tool is absent. Install, per target language:
 
 capcov finds the indexer on `PATH` and locates the `scip` CLI via `$SCIP_CLI`, a
 binary dropped at `src/capcov/scip/vendor/scip`, or `PATH`.
+
+### Optional profiles (`--judge claims`)
+
+`capcov reconcile` and `capcov gate` judge with the four-cell reconcile. That is
+the default, it is stdlib-only, and it is what runs in CI. `--judge claims`
+**adds** an experimental **replay judge** beside it: as well as asking whether
+each capability was both derived and exercised, it judges a *replay receipt* — a
+recorded run of two systems against the same requests — with the claim kernels
+you name, certifies every claim row from every closure, and refuses to answer at
+all if they disagree.
+
+It adds a verdict; it does not replace the artifact's. A receipt names a run of
+the system under test and a coverage artifact names a source tree, and nothing in
+either names the other, so `gate` runs the four-cell gate too and passes only
+when **both** pass, and `judge.json` records the artifact it was handed
+(`gated_artifact`: its sha256, its source snapshot and its four-cell verdict).
+`--judge-out` must be outside `--receipt` — the judge writes a `receipt.json` of
+its own — and is refused by name when it is not.
+
+```sh
+capcov gate coverage.json --judge claims --receipt <evidence>/receipt-dir --judge-out judge/
+capcov reconcile capabilities.json observed.json --out coverage.json \
+    --judge claims --receipt <evidence>/receipt-dir
+```
+
+It can also be selected from `capcov.toml`, read from the working directory the
+artifact paths are relative to:
+
+```toml
+[judge]
+engine = "claims"        # "four-cell" (the default) or "claims"
+evaluator = "python"     # "python" (the default), "souffle", "souffle-compiled",
+                         # a comma list, or "all"
+model = "shen:model/"    # unset by default; PROFILE:DIR, see below
+```
+
+#### Which kernels judge (`--evaluator`)
+
+`--evaluator` names the kernels, and the default is `python` — the evaluator in
+this package, standard library only. It needs no external tool, which is why
+`--judge claims` works in any checkout:
+
+```sh
+capcov gate coverage.json --judge claims --receipt <evidence>/receipt-dir     # python alone
+capcov gate coverage.json --judge claims --receipt <evidence>/receipt-dir \
+    --evaluator python,souffle                                               # the differential
+capcov gate coverage.json --judge claims --receipt <evidence>/receipt-dir \
+    --evaluator all                        # every evaluator whose tool is present
+```
+
+**The differential runs only when two or more evaluators were asked for.** With
+one, there is nothing to compare, and `judge.json` says so rather than reporting
+an agreement: `"kernels": ["python"]`, `"differential": "not-run (single
+evaluator)"`. With two or more it is fail-closed exactly as before — any
+disagreement on the closure, on a claim row, on a certificate or on a recheck
+blocks the judgement and persists the bundle for replay. `all` means every
+evaluator whose tool is *here*, so it is the one spelling that never fails for a
+missing binary; naming `souffle` or `souffle-compiled` explicitly always does.
+
+#### Which model the judge binds to (`--model shen:DIR`)
+
+The replay judge signs a qualified verdict against a *model digest* and requires,
+as a positive premise, that the model at that digest is well formed
+(`model_well_formed`). Where that premise comes from is the caller's choice:
+
+* **no flag** — the default — the judge reads whatever `model_*` files the
+  receipt already carries. A receipt with none is *judged*, not refused: its ops
+  come out semantically `unresolved` with the model premises named as missing,
+  which is the honest answer to "was this model checked?". Nothing under
+  `capcov.claims.modelcheck` is imported.
+* **`--model shen:<model dir>`** runs Stage D's typed checker over that
+  directory *before* judging — the same run `capcov experiment claims modelcheck
+  --model DIR --out <receipt>/` performs — and writes
+  `modelcheck-certificate.json`, the transcript and, for a well-formed model
+  only, the `model_well_formed.json` the judge then reads:
+
+```sh
+capcov gate coverage.json --judge claims --receipt <evidence>/receipt-dir \
+    --model shen:<evidence>/model
+```
+
+An ill-formed model does not stop the run — the certificate says so, no fact is
+written, any stale one is removed, and the judge reports the premise as missing.
+A checker that reaches *no* verdict does stop it (exit 2): judging on could read
+a previous run's certificate and call it this model's. A certificate for a model
+the receipt does not name is a contract finding, never a premise.
+
+The profile needs the pinned `shen-go` runtime through the `bifrost` launcher
+(`$BIFROST_SHEN_GO`, `$SHEN_GO`, or `shen-go` on `PATH`). Asking for it where
+that is absent is refused before any work, in the `--resolver scip` shape:
+
+```
+capcov gate --judge claims: --model shen needs shen-go and the bifrost launcher is
+not on PATH; the shen-go binary is not on PATH, $SHEN_GO or $BIFROST_SHEN_GO.
+Install it with: enter the pinned devShell with `nix develop` (it pins shen-go) and
+put the bifrost launcher on PATH, or name the binary in $SHEN_GO; or drop --model
+and judge the model_* files the receipt already carries
+```
+
+#### The static producer profile (`--static scip`)
+
+```sh
+capcov experiment claims static --static scip --target <tree> --language go \
+    --out bundle.json
+```
+
+`--static scip` is the static half of the same idea. It indexes the tree with
+upstream's resolver (`capcov.scip.runner` + `resolve.hybrid_raw` +
+`blindspots.enumerate_blind_spots`), exports the bundle
+with `capcov.claims.static.scip_facts` exactly as before, and **additionally**
+emits two relations beside that export:
+
+The complete call-site census is read from the target tree. `--ast-raw` is an
+optional input for adapter AST facts; it does not supply or suppress the census.
+For Go and PHP, install the parser dependency with `pip install .[treesitter]`.
+The profile checks that parser before starting the SCIP indexer and exits with
+`census-unavailable` if the optional extra is missing. Python census uses only
+the standard library. The indexer and `scip` CLI remain separate external tools
+as described in the SCIP resolver section above.
+
+* `static_unresolved_call_site(index, file, line, symbol)` — the resolver's
+  enumerated `scip_residue` as rows rather than a count. `symbol` is the callee
+  as the source spells it, because an unresolved call site has no SCIP symbol.
+* `call_graph_closed(index, scope)` — the completeness witness for `static_edge`
+  over one scope, emitted **only** when the census was taken and that scope's
+  residue is empty. `scope` is a token of the export's own scope declaration:
+  `"*"` for every in-scope document, a package prefix, or one document path.
+
+`rules-static-closure-v1.json` (package data beside the frozen schema) layers on
+`rules-static-v1` and is what makes a *negative* static claim answerable: "route
+R does not reach table T" is **supported** when the call graph is closed and R
+reaches no such table, **refuted** when R does reach it (one positive reach is a
+counterexample and needs no completeness), and **unresolved** whenever the
+residue is not empty. The rows are attributed to producer class `scip`, and the
+export's own identity and bundle digest are untouched — the closure is a
+separate fragment merged with `combine`, so turning the profile on renumbers no
+existing evidence id. Where the SCIP toolchain is absent the profile refuses in
+`capcov discover --resolver scip`'s own words.
+
+#### The advisory profile (`capcov experiment claims jev`)
+
+`jev` is registered like the others and imported like the others — only when it
+is named. It is *advisory*: it asks a network service (`$JEV_API_KEY`) for
+patterns a reader weighs, and no claim, premise or verdict is derived from it, so
+a checkout without the module, the key or the network judges exactly the same.
+Naming it where it is not available answers with `profile-unavailable` and exit
+3, never an ImportError.
+
+`reconcile` still writes `coverage.json` either way — it is the producer of that
+artifact, and `--judge claims` changes who decides, not what is produced. The
+judge writes `judge.json` plus the per-row certificates into `--judge-out`
+(default `capcov-judge/`); that document names the kernels that ran (`kernels`),
+whether a differential ran (`differential`), and carries the judge's own six
+exit codes (0 qualified, 1 unsupported, 2 kernels disagree, 3 the receipt breaks the
+exporter's contract, 4 toolchain unavailable, 5 pending a premise nothing can
+satisfy yet), while the CLI itself answers the one question a gate asks: 0 when
+every op the verdict turns on is qualified, 1 otherwise.
+
+**Off unless asked, exactly like `--resolver scip`.** With no flag and no
+`[judge]` key, `capcov.cli` does not import `capcov.claims` at all — not the
+evaluator, not the rule packs, not the model checker — and `reconcile`/`gate`
+produce byte-identical output to the version before these options existed
+(pinned against upstream's own artifacts in
+`tests/claim_semantics/test_upstream_golden.py`). The experimental namespace
+`capcov experiment claims ...` is likewise registered lazily and never appears
+on the default path.
+
+**What fails, and how.** The `souffle` and `souffle-compiled` evaluators need
+the **external** Souffle 2.5 binary (`$SOUFFLE`, else `souffle` on `PATH`) — a
+binary, not a Python package, so as with the SCIP resolver there is no extra
+that can install it (the `judge` and `souffle` markers in `pyproject.toml` are
+empty and documentary). Asking for one that is not here never degrades to a
+smaller differential; it is checked before any work and refused with a named,
+actionable message:
+
+```
+capcov gate --judge claims: --evaluator souffle needs the Souffle 2.5 executable
+'souffle', which is not on PATH or $SOUFFLE. Install it with: install Souffle 2.5
+(https://souffle-lang.github.io/install) or enter the pinned devShell with
+`nix develop`; or use --evaluator python
+```
+
+Install it from <https://souffle-lang.github.io/install>, or run `nix develop`
+at the repository root — `flake.nix` pins it. Configuration mistakes are
+separated from verdicts by exit code: `--judge claims` with no `--receipt`, a
+`--receipt` that is not a receipt directory, an unknown `[judge] engine`, an
+unknown or absent `--evaluator`, an unknown `--model` profile or a model
+directory that is not there, or a `--receipt`/`--judge-out`/`--evaluator`/
+`--model` passed without `--judge claims` all exit **2** with a message naming
+the mistake, and judge nothing. A flag that silently did nothing is how a gate ends
+up green for the wrong reason.
+
+The same rule covers the config file. `reconcile` and `gate` never read
+`capcov.toml` before these flags existed, so one that cannot be parsed still
+must not turn a working default run into a failure — it is passed over, the exit
+code and stdout are the ones it always had, and the defaults stand. But it is
+not passed over in silence: a single line on **stderr** names the file, the
+parse error and what is deciding instead, because a project that opted in with
+`[judge] engine = "claims"` and later broke an unrelated line of that same file
+would otherwise get the four-cell gate's usual PASS with nothing anywhere saying
+the judge it believes is gating never ran. A well-formed `capcov.toml`, and no
+`capcov.toml` at all, are untouched — neither reaches that branch.
+
+`--quiet` governs the opt-in judge as it governs the rest of the command: it
+suppresses the per-op summary and the closing verdict line alike, leaving stdout
+exactly what it is without `--judge claims` at all. Nothing is lost by the
+silence — the verdict, the kernels and the judge's own exit code are in
+`judge.json`, and the process's exit code answers the gate's question either
+way. Diagnostics stay on stderr, which `--quiet` has never governed.
 
 Flow coverage retains the source obligation denominator and checks observed
 outcomes against a reviewed behavior model:
@@ -367,6 +588,11 @@ repository. Conformance tests use synthetic fixtures; do not add private source
 or real credentials. Run the unittest suite and build/install checks before a PR.
 The engine is distributed under the repository's MIT license, included in both
 Python distribution formats.
+
+The bounded qualification measurement runner records command and lock timing,
+cache state, and output identities without persisting argv, environment values,
+or host paths. Its limits and manifest format are documented in
+[`experiments/claim-semantics/qualification-measurement.md`](experiments/claim-semantics/qualification-measurement.md).
 
 ## Many worktrees, many agents, one machine
 

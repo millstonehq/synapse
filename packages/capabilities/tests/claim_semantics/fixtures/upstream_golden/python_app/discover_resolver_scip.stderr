@@ -1,0 +1,1 @@
+capcov discover --resolver scip: --resolver scip needs the python indexer 'scip-python', which is not on PATH. Install it with: npm install -g @sourcegraph/scip-python

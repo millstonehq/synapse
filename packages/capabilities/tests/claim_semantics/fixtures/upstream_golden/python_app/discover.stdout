@@ -1,0 +1,2 @@
+capcov discover: 3 entities, 5 surfaces, 3 entities bound, history 2 -> 2 -> 3 -> 3, 2 blind spots
+capcov discover: call edges 8 by import, 0 by name; residue 0 ambiguous (8 external, 0 chained, 0 builtin-shadowed; none of these are residue)

@@ -1,0 +1,8 @@
+usage: capcov report [-h] [--quiet] coverage
+
+positional arguments:
+  coverage
+
+options:
+  -h, --help  show this help message and exit
+  --quiet

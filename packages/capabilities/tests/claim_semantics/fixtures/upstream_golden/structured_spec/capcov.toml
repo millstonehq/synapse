@@ -1,0 +1,5 @@
+[capcov]
+adapter = "structured-spec"
+source = "src"
+document = "openapi.json"
+profile = "openapi"
