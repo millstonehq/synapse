@@ -440,6 +440,7 @@ def fragment(pairs: Iterable[OperationPair], pair_bundles: Mapping[str, Bundle],
              index: str, borrowed: Mapping[str, RelationDecl],
              describes_candidate: str | None) -> Bundle:
     """The join fragment: the runtime rows, the reviewer witness, and the rules."""
+    pairs = tuple(pairs)
     decls = {decl.name: decl for decl in relations(borrowed)}
     facts: list[Atom] = []
     evidence: list[Evidence] = []
@@ -490,7 +491,7 @@ def fragment(pairs: Iterable[OperationPair], pair_bundles: Mapping[str, Bundle],
                   evidence=tuple(evidence),
                   metadata=(("emitter", "capcov.vectors.static_join"),
                             ("index_digest", index),
-                            ("operations", len(tuple(pairs))),
+                            ("operations", len(pairs)),
                             ("producer_authority", "local-unattested")))
 
 
