@@ -38,6 +38,7 @@ built from the committed go_app golden index the way
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -213,6 +214,16 @@ class TheWitnessIsWhatBindsTests(_CliTestCase):
         self.assertEqual(section["join"]["describes_runs"], [])
         self.assertIsNone(section["routes"])
         self.assertIn("no index_describes_run row", section["join"]["message"])
+
+    def test_the_section_names_the_bundle_by_digest_and_carries_no_path(self) -> None:
+        """judge artifacts are publishable: the bundle is bytes, not a place."""
+        bundle = _Bundles.path("bound")
+        proc, document = self.gate("--static", str(bundle))
+        text = (self.out / "judge" / "judge.json").read_text(encoding="utf-8")
+        self.assertNotIn(str(bundle), text, proc.stdout)
+        self.assertNotIn(str(PACKAGE_ROOT), text)
+        self.assertEqual(document["static"]["bundle"]["sha256"],
+                         hashlib.sha256(bundle.read_bytes()).hexdigest())
 
     def test_the_join_never_moves_the_verdict_or_the_exit_code(self) -> None:
         """A static account is not an outcome: the receipt's verdict is unchanged."""
