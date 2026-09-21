@@ -264,6 +264,56 @@ separate fragment merged with `combine`, so turning the profile on renumbers no
 existing evidence id. Where the SCIP toolchain is absent the profile refuses in
 `capcov discover --resolver scip`'s own words.
 
+#### Class-hierarchy dispatch (`--dispatch cha`)
+
+```sh
+capcov experiment claims static --static scip --target <tree> --language go \
+    --dispatch cha --out bundle.json
+```
+
+A SCIP index resolves a call through an interface to the *interface's* member,
+not to the implementations that could run, so the site lands in the residue and
+`call_graph_closed` is withheld. `--dispatch cha` merges a fourth fragment
+(`rules-static-cha-v1`, `capcov.claims.static.cha`) that expands each such site
+through the index's own `is_implementation` relationships.
+
+**Measured, not assumed.** scip-go 0.2.7 does emit implementation relationships
+for Go interfaces — for the method (`SQL#Fetch().` → `Repo#Fetch.`) and for the
+type (`SQL#` → `Repo#`) — measured on `tests/fixtures/go_iface_app`, whose
+index is committed as `tests/fixtures/scip_go_iface_app_index.json`. The same
+measurement is why the caller side needs a relation of its own: scip-go types an
+interface member `MethodSpecification`, which `scip.map` classifies as a *term*,
+so the dispatch site never reaches `scip_may_reference`. An indexer no
+measurement covers (scip-python, scip-php today) is refused with
+`dispatch-unsupported` and exit 3 — "never measured" is not "emits none", and
+only one of those is a fact.
+
+* `static_interface_dispatch_site(index, caller, interface_symbol, path, line)`
+  — the call the index could not pin down, attributed to its innermost enclosing
+  definition by the same rule `scip_may_reference` uses.
+* `static_cha_unexpanded_site(index, path, line, interface_symbol, reason)` —
+  every site the expansion could not cover (`caller_unattributed`,
+  `no_implementation_in_index`, `implementation_out_of_scope`), enumerated,
+  never dropped.
+* `static_edge_cha(index, src, dst, via_interface)` — the expansion, and
+  `static_reaches_cha` the reachability over the resolved graph plus it.
+  `static_edge` is **never** widened: it is what `call_graph_closed` completes.
+* `static_edge_cha_closed(index)` — the expansion's own witness, emitted only
+  when nothing was enumerated as unexpanded *and* the scope is the whole index
+  (a slice does not export the relationship rows of the documents it drops, so
+  it cannot see the implementation it is missing).
+* `call_graph_closed_cha(index, scope)` — the call graph *with* the expansion:
+  emitted when that witness holds, the census was taken and every unresolved
+  call site in the scope is discharged by an expansion of that exact site. A
+  residue row that is not a dispatch site is never discharged.
+
+A CHA edge is a **may**-edge: the expansion over-approximates on the positive
+side and is only stronger on the negative one. So every verdict read off it is a
+separate row — `static_capability_op_cha`, `static_entity_dead_cha`,
+`static_entity_blocked_cha`, `static_convergence_cha`, `static_divergence_cha`,
+`static_absence_cha` — and nothing is merged into the relation it twins. Without
+the flag not one CHA row is emitted and the bundle is byte-for-byte what it was.
+
 #### The advisory profile (`capcov experiment claims jev`)
 
 `jev` is registered like the others and imported like the others — only when it

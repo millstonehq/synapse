@@ -41,9 +41,15 @@ residue is empty, the ``call_graph_closed`` witness a negative static claim need
 fragment beside those two: the capability map, the intended capability model and
 their closures (``rules-static-reflexion-v1``), which is what turns the call
 graph into a reflexion model.  Without the flag not one reflexion row is emitted
-and the bundle is what it was.  Exit 0 with a bundle, 2 for a usage refusal, 3
-for a named operational failure -- an absent SCIP toolchain reported in
-``capcov discover --resolver scip``'s own words among them.
+and the bundle is what it was.  ``--dispatch cha`` merges a fourth fragment
+(``rules-static-cha-v1``): the dynamic-dispatch sites the index resolves only to
+an interface member, expanded through its own implementation relationships into
+``static_edge_cha`` -- a separate relation, never a widening of ``static_edge``
+-- and every verdict read off the expanded graph as a separate ``*_cha`` row.
+Without the flag not one CHA row is emitted.  Exit 0 with a bundle, 2 for a usage
+refusal, 3 for a named operational failure -- an absent SCIP toolchain reported
+in ``capcov discover --resolver scip``'s own words, and an indexer no
+measurement says emits implementation relationships, among them.
 
 The advisory profile is reached the same way and is the one profile nothing may
 depend on::
@@ -405,6 +411,13 @@ def _jev_command(args) -> int:
 #: where the SCIP toolchain is absent gets that command's own refusal verbatim.
 STATIC_PROFILES = ("scip",)
 
+#: ``claims static --dispatch`` -- how a call through an interface is treated.
+#: ``none`` is the default and leaves the bundle exactly as it was; ``cha``
+#: merges the class-hierarchy fragment (``claims/static/cha.py``).
+DISPATCH_NONE = "none"
+DISPATCH_CHA = "cha"
+DISPATCH_MODES = (DISPATCH_NONE, DISPATCH_CHA)
+
 
 def _static_scope(value: str | None):
     """``all`` (default), ``package:PREFIX`` or ``documents:A.go,B.go``."""
@@ -433,6 +446,14 @@ def _static(args) -> int:
     empty, the ``call_graph_closed`` witness that lets a negative claim resolve.
     Nothing in ``capcov.scip`` is modified or re-implemented here; the export
     keeps its own identity, and the closure rows are merged beside it.
+
+    ``--dispatch cha`` adds one more fragment, ``static.cha``: the dispatch sites
+    the index resolves only to an interface member, the hierarchy expansion of
+    each into ``static_edge_cha``, the sites it could not expand, and the two
+    witnesses that expansion owns.  ``static_edge`` and ``call_graph_closed`` are
+    untouched -- the expanded graph is a second account, reported as ``*_cha``
+    rows -- and an indexer no measurement covers is refused rather than read as
+    emitting no relationships.
 
     The bundle written by ``--out`` carries the export, the closure rows and the
     closure pack's own rules; the derived relations it borrows are *declared*
@@ -541,9 +562,27 @@ def _static(args) -> int:
         _emit({"operational_failure": "static-export-failed", "status": exported.status,
                "messages": list(exported.messages)}, None)
         return 3
+    tree_digest = dict(dict(exported.bundle.metadata)["tree"])["digest"]
+    cha_fragment = None
+    if args.dispatch == DISPATCH_CHA:
+        from .static import cha
+
+        # The claim-time tree observation belongs to exactly one fragment: the
+        # reviewer's when there is one, this one otherwise, so `--dispatch cha`
+        # alone still derives the entity rows that rest on static_index_current.
+        try:
+            cha_fragment = cha.cha_bundle(exported.bundle, normalized, raw,
+                                          tree_digest=None if model else tree_digest)
+        except cha.DispatchUnsupported as exc:
+            _emit({"operational_failure": "dispatch-unsupported", "error": str(exc)}, None)
+            return 3
+        except (ValidationError, ValueError, KeyError) as exc:
+            _emit({"operational_failure": "static-dispatch-failed", "error": str(exc)}, None)
+            return 3
+    fragments = (cha_fragment,) if cha_fragment is not None else ()
     if model is None:
         try:
-            bundle = closure.attach(exported.bundle, raw)
+            bundle = closure.attach(exported.bundle, raw, *fragments)
         except (ValidationError, ValueError) as exc:
             _emit({"operational_failure": "static-closure-failed", "error": str(exc)}, None)
             return 3
@@ -554,7 +593,7 @@ def _static(args) -> int:
         try:
             bundle = reflexion.attach(
                 exported.bundle, model, closure.closure_bundle(exported.bundle, raw),
-                tree_digest=dict(dict(exported.bundle.metadata)["tree"])["digest"])
+                *fragments, tree_digest=tree_digest)
         except reflexion.ReflexionInputError as exc:
             # A map that does not line up with this index -- a symbol the index
             # does not have, or, when the map claims closure, an edge endpoint
@@ -572,6 +611,16 @@ def _static(args) -> int:
         rows[fact.relation] = rows.get(fact.relation, 0) + 1
     closed = sorted(fact.terms[1].value for fact in bundle.facts
                     if fact.relation == closure.CLOSED_RELATION)
+    dispatch_summary = {}
+    if cha_fragment is not None:
+        cha_metadata = dict(cha_fragment.metadata)
+        dispatch_summary = {
+            "dispatch": args.dispatch, "cha_pack": cha.PACK_ID,
+            cha.DISPATCH_RELATION: cha_metadata["dispatch_sites"],
+            cha.UNEXPANDED_RELATION: cha_metadata["unexpanded_sites"],
+            cha.EDGE_CLOSED_RELATION: cha_metadata["edge_cha_closed"],
+            cha.CLOSED_RELATION: list(cha_metadata["call_graph_closed_cha"]),
+        }
     _emit({"profile": args.static, "pack": closure.PACK_ID, "base_pack": closure.BASE_PACK_ID,
            "index": dict(exported.bundle.metadata)["index_digest"],
            "scope": {"kind": scope.kind, "values": scope.rows()},
@@ -579,7 +628,7 @@ def _static(args) -> int:
            closure.UNRESOLVED_RELATION: rows.get(closure.UNRESOLVED_RELATION, 0),
            closure.CLOSED_RELATION: closed,
            "row_counts": rows, "out": args.out,
-           **reflexion_summary,
+           **reflexion_summary, **dispatch_summary,
            "messages": list(exported.messages)}, None)
     return 0
 
@@ -704,6 +753,11 @@ def main(argv: list[str]) -> int:
     static.add_argument("--capability-edges", default=None, metavar="FILE",
                         help="reviewer capability model (the intended edges) compared with "
                              "the lifted call graph; needs --capability-map")
+    static.add_argument("--dispatch", default=DISPATCH_NONE, choices=DISPATCH_MODES,
+                        help="how a call through an interface is treated: none (default, the "
+                             "bundle is unchanged) or cha, which expands it through the index's "
+                             "implementation relationships into static_edge_cha and reports every "
+                             "verdict over the expanded graph as a separate *_cha row")
     static.add_argument("--out", default=None, help="write the combined bundle JSON here")
     mc = claims_sub.add_parser("modelcheck", help="Stage D: typed well-formedness of a Shen domain model")
     mc.add_argument("--model", required=True, help="model directory holding shen/load.shen")
