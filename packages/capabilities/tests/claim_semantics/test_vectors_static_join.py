@@ -162,6 +162,16 @@ def pair(**kwargs) -> static_join.OperationPair:
     return static_join.OperationPair(OPERATION, vectors, replay, surface, reason)
 
 
+def surfaceless_pair(**kwargs) -> static_join.OperationPair:
+    """The same recording, driven by a command: no route surface, so nothing to reach with."""
+    vectors, replay = artifacts(**kwargs)
+    surface, reason = static_join.operation_surface(
+        {"id": OPERATION, "kind": "command", "driver": "shell",
+         "request": {"mode": "command", "target": "sync"}})
+    assert surface is None, surface
+    return static_join.OperationPair(OPERATION, vectors, replay, surface, reason)
+
+
 def judged(pairs, bundle, *, describes=CANDIDATE, kernel: str = "python", **kwargs):
     judgment = static_join.judge(pairs, bundle, describes_candidate=describes, kernel=kernel,
                                  authority_runner=lambda _bundle: Authority(), **kwargs)
@@ -272,6 +282,16 @@ class TheAdvisorySideIsLicensedTests(unittest.TestCase):
         # the divergence side is unaffected: a positive write is still a write
         self.assertEqual(entry[static_join.DIVERGENCE_RELATION], [UNREACHED_TABLE])
 
+    def test_an_operation_with_no_surface_withholds_it_rather_than_settling_it(self) -> None:
+        """No surface means no row binds the operation to the index: silence, not a result."""
+        one = surfaceless_pair()
+        _judgment, report = judged([one], static())
+        entry = report["operations"][OPERATION]
+        self.assertTrue(entry["stores_closed"])
+        self.assertIsNone(entry["static_stores"])
+        self.assertIsNone(entry[static_join.UNEXERCISED_RELATION])
+        self.assertIn(one.surface_reason, entry["unexercised_withheld"])
+
     def test_the_advisory_row_never_moves_the_exit_code(self) -> None:
         """The only thing that does is a refuted divergence claim."""
         clean = pair(delta={f"rows.{REACHED_TABLE}": {"inserted": []}})
@@ -282,8 +302,8 @@ class TheAdvisorySideIsLicensedTests(unittest.TestCase):
 
 
 class ProducersStayDistinctTests(unittest.TestCase):
-    def _fragment(self, describes=CANDIDATE):
-        one = pair()
+    def _fragment(self, describes=CANDIDATE, **kwargs):
+        one = pair(**kwargs)
         from capcov.vectors import claims as vector_claims
 
         bundles = {OPERATION: vector_claims.build_bundle(one.vectors, one.replay)}
@@ -310,14 +330,21 @@ class ProducersStayDistinctTests(unittest.TestCase):
             self._resourced(static_join.DESCRIBES_RELATION, f"{REPLAY_PRODUCER} x"))
         self.assertTrue(any(issue.code == "evidence-producer" for issue in issues), issues)
 
+    def _classes(self, **kwargs) -> dict:
+        return {record.atom.relation: record.source.split(" ", 1)[0]
+                for record in self._fragment(**kwargs).evidence}
+
     def test_the_rows_each_side_owns_are_the_ones_it_could_know(self) -> None:
-        fragment = self._fragment()
-        classes = {record.atom.relation: record.source.split(" ", 1)[0]
-                   for record in fragment.evidence}
+        classes = self._classes()
         self.assertEqual(classes[static_join.STORE_CHANGED_RELATION], REPLAY_PRODUCER)
         self.assertEqual(classes[static_join.STORES_CLOSED_RELATION], REPLAY_PRODUCER)
         self.assertEqual(classes[static_join.OPERATION_SURFACE_RELATION], RECORDER_PRODUCER)
         self.assertEqual(classes[static_join.DESCRIBES_RELATION], static_join.REVIEWER_PRODUCER)
+        # what the comparison policy never compared is the recorder's own artifact, not a
+        # replay observation: an informational entry is the only thing that emits the row
+        uncompared = self._classes(
+            informational={f"rows.{UNWRITTEN_TABLE}": {"inserted": [{"id": 3}]}})
+        self.assertEqual(uncompared[static_join.STORE_UNCOMPARED_RELATION], RECORDER_PRODUCER)
 
     def test_every_written_store_row_depends_on_the_replay_pass_that_licensed_it(self) -> None:
         fragment = self._fragment()
@@ -377,6 +404,10 @@ class TheKernelIsTheCallersChoiceTests(unittest.TestCase):
                 authority_runner=lambda _b: Authority(), cache_dir=Path(directory))
         self.assertEqual([row[3] for row in rows(judgment, static_join.DIVERGENCE_RELATION)],
                          [UNREACHED_TABLE])
+        # the one negated rule, under the same closure the Python kernel used
+        self.assertEqual([row[3] for row in rows(judgment, static_join.UNEXERCISED_RELATION)],
+                         [UNWRITTEN_TABLE])
+        self.assertEqual(rows(judgment, static_join.STORES_CLOSED_RELATION), [(RUN, OPERATION)])
 
 
 class TheRecorderCanTakeTheStaticListTests(unittest.TestCase):

@@ -330,7 +330,7 @@ def relations(borrowed: Mapping[str, RelationDecl]) -> tuple[RelationDecl, ...]:
         RelationDecl(STORE_UNCOMPARED_RELATION,
                      (run, operation, Column("cell", "symbol"), Column("table", "symbol")),
                      modality="observation", binding="runtime", primitive=True,
-                     producer_classes=(REPLAY_PRODUCER,),
+                     producer_classes=(RECORDER_PRODUCER,),
                      context_indices=("run", "operation")),
         RelationDecl(STORE_TOUCHED_RELATION,
                      (run, operation, Column("table", "symbol")),
@@ -469,7 +469,7 @@ def fragment(pairs: Iterable[OperationPair], pair_bundles: Mapping[str, Bundle],
             depends = [passes[vector.cell]] if vector.cell in passes else []
             for table in uncompared_tables(vector):
                 add(STORE_UNCOMPARED_RELATION, (pair.run, pair.operation, vector.cell, table),
-                    replay_source, depends_on=depends)
+                    recorder_source, depends_on=depends)
             if not results[vector.id].passed:
                 continue
             for table in changed_tables(vector):
@@ -603,6 +603,10 @@ def document(judgment, pairs: Iterable[OperationPair], static: StaticBundle, *,
                             f"candidate the replay declared")
         if REACHES_TABLE_RELATION not in derivable:
             withheld.append(f"{REACHES_TABLE_RELATION} is not derivable in this bundle")
+        if pair.surface is None:
+            withheld.append(pair.surface_reason
+                            or f"the operation names no {HTTP_SURFACE_PREFIX} route surface, so "
+                               f"no {OPERATION_SURFACE_RELATION} row binds it to the index")
         stores = {}
         for table in sorted(written.get(key, ())):
             if (*key, table) in divergence:
