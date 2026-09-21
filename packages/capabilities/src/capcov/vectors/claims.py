@@ -251,13 +251,37 @@ def judge(vectors: VectorsArtifact, replay: ReplayArtifact, *,
           python_runner: Callable[[Bundle], KernelReport] | None = None,
           compiled_runner: Callable[[Bundle], KernelReport] | None = None,
           authority_runner: Callable[[Bundle], Any] = shen.authority) -> VectorJudgment:
-    """Judge with one selected kernel, or opt into the differential gate.
+    """Judge one vectors/replay pair with one selected kernel.
+
+    The kernel selection itself is ``judge_bundle``; this is that, over the
+    bundle ``build_bundle`` makes of exactly one recorded artifact and its
+    replay.
+    """
+    return judge_bundle(
+        build_bundle(vectors, replay), replay_root=replay_root, kernel=kernel,
+        checker=checker, cache_dir=cache_dir, executable=executable,
+        python_runner=python_runner, compiled_runner=compiled_runner,
+        authority_runner=authority_runner)
+
+
+def judge_bundle(bundle: Bundle, *,
+                 replay_root: str | Path = ".capcov/vector-claims",
+                 kernel: str = "souffle", checker: CompiledChecker | None = None,
+                 cache_dir: str | Path = ".capcov/compiled", executable: str = "souffle",
+                 python_runner: Callable[[Bundle], KernelReport] | None = None,
+                 compiled_runner: Callable[[Bundle], KernelReport] | None = None,
+                 authority_runner: Callable[[Bundle], Any] = shen.authority) -> VectorJudgment:
+    """Judge an already-built bundle with one selected kernel, or the differential gate.
 
     ``python`` executes only the Python evaluator. ``souffle`` executes only
     the compiled Souffle checker. ``differential`` is the explicit publication
     gate and runs Python, interpreted Souffle, and compiled Souffle.
+
+    Separate from ``judge`` because a bundle that joins a vectors pair to
+    another account (``vectors.static_join``) is judged by exactly this
+    selection, and a second copy of it is how two callers come to disagree
+    about what ``--kernel differential`` means.
     """
-    bundle = build_bundle(vectors, replay)
     if kernel not in ("python", "souffle", "differential"):
         raise ValueError("kernel must be 'python', 'souffle', or 'differential'")
     bundle = replace(bundle, metadata=(*bundle.metadata, ("claim_kernel", kernel)))
@@ -287,4 +311,4 @@ def judge(vectors: VectorsArtifact, replay: ReplayArtifact, *,
 
 
 __all__ = ["RECORDER_PRODUCER", "REPLAY_PRODUCER", "VectorClaimError",
-           "VectorJudgment", "artifact_digest", "build_bundle", "judge"]
+           "VectorJudgment", "artifact_digest", "build_bundle", "judge", "judge_bundle"]
