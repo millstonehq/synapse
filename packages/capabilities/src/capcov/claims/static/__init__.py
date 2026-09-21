@@ -13,7 +13,9 @@ and evidence keyed by that index's digest.
 
 ``runtime_receipt`` imports a retained target-go runtime receipt as typed evidence
 and the static/runtime join rules.  ``certificate`` / ``ground`` re-derive and
-explain engine-independent certificates (Stage C why / why-not).
+explain engine-independent certificates (Stage C why / why-not).  ``join`` binds
+a static bundle to a replay receipt for ``gate --judge claims --static``, through
+``index_describes_run`` and never otherwise.
 """
 
 from __future__ import annotations

@@ -16,6 +16,7 @@ import sys
 import time
 import uuid
 from pathlib import Path
+from typing import Any
 
 from . import artifacts
 from .adapters import load as load_adapter
@@ -752,15 +753,47 @@ def _judge_out(args: argparse.Namespace, command: str, receipt: Path) -> Path:
     return out_dir
 
 
+def _judge_static(args: argparse.Namespace, command: str) -> Any:
+    """The static bundle ``--static`` joins to the receipt, read before judging.
+
+    ``--static BUNDLE.json``, then ``[judge] static`` in capcov.toml, then
+    nothing -- and nothing is the default, in which the judge document is what
+    it was and no module under ``capcov.claims.static`` is even imported.
+
+    The bundle is read and validated *here*, before any judging: a path that is
+    not there, is not JSON, or is not a claim bundle is a named exit 2 about the
+    command line, the way an absent evaluator is, rather than a traceback partway
+    through a run or a static section that is silently empty.
+    """
+    value = getattr(args, "static", None)
+    source = "--static"
+    if value is None:
+        value = _judge_block(command).get("static")
+        source = "[judge] static in capcov.toml"
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise _JudgeUsage(
+            f"capcov {command} --judge claims: {source} names a static bundle file, "
+            f"got {value!r}"
+        )
+    from .claims.static import join as static_join
+
+    try:
+        return static_join.load(value)
+    except static_join.StaticBundleError as error:
+        raise _JudgeUsage(f"capcov {command} --judge claims: {source}: {error}") from error
+
+
 def _judge_setup(
     args: argparse.Namespace, command: str
-) -> tuple[str, tuple[str, ...], tuple[str, Path, str] | None, Path | None]:
-    """Resolve the engine, the evaluators, the model profile and the output
-    directory, and refuse an incoherent combination.
+) -> tuple[str, tuple[str, ...], tuple[str, Path, str] | None, Path | None, Any]:
+    """Resolve the engine, the evaluators, the model profile, the output
+    directory and the static bundle to join, and refuse an incoherent combination.
 
-    ``--receipt``, ``--judge-out``, ``--evaluator`` and ``--model`` say nothing
-    to the four-cell judge, so passing *any* of them without asking for the
-    claims judge is refused rather than silently ignored -- including a
+    ``--receipt``, ``--judge-out``, ``--evaluator``, ``--model`` and ``--static``
+    say nothing to the four-cell judge, so passing *any* of them without asking
+    for the claims judge is refused rather than silently ignored -- including a
     ``--judge-out`` that happens to spell the default, which is why the option
     defaults to ``None`` and the default is resolved in the claims branch below.
     A flag that does nothing is how a gate ends up green for the wrong reason.
@@ -779,16 +812,18 @@ def _judge_setup(
                 f"directory (no receipt.json in it)"
             )
         out_dir = _judge_out(args, command, Path(receipt))
-        return engine, _judge_evaluators(args, command), _judge_model(args, command), out_dir
+        return (engine, _judge_evaluators(args, command), _judge_model(args, command),
+                out_dir, _judge_static(args, command))
     for flag, value in (("--receipt", getattr(args, "receipt", None)),
                         ("--judge-out", getattr(args, "judge_out", None)),
                         ("--evaluator", getattr(args, "evaluator", None)),
-                        ("--model", getattr(args, "model", None))):
+                        ("--model", getattr(args, "model", None)),
+                        ("--static", getattr(args, "static", None))):
         if value is not None:
             raise _JudgeUsage(
                 f"capcov {command}: {flag} is only meaningful with --judge claims"
             )
-    return engine, (), None, None
+    return engine, (), None, None, None
 
 
 def _run_model_preflight(args: argparse.Namespace, command: str,
@@ -878,7 +913,8 @@ def _run_claims_judge(args: argparse.Namespace, command: str,
                       evaluators: tuple[str, ...],
                       model: tuple[str, Path, str] | None = None,
                       out_dir: Path | None = None,
-                      gated: dict | None = None) -> int:
+                      gated: dict | None = None,
+                      static: Any = None) -> int:
     """Judge the receipt with the claims judge and collapse its verdict to pass/fail.
 
     The one place `capcov.cli` reaches into `capcov.claims`, and it is reached
@@ -906,7 +942,8 @@ def _run_claims_judge(args: argparse.Namespace, command: str,
     out_dir = Path(out_dir if out_dir is not None else (args.judge_out or JUDGE_OUT_DEFAULT))
     try:
         document, diagnostics = claims_judge.judge_receipt(receipt, out_dir, [],
-                                                           evaluators=evaluators)
+                                                           evaluators=evaluators,
+                                                           static_bundle=static)
     except claims_judge.ReceiptContractFinding as error:
         # the receipt does not meet the exporter's contract: a finding about the
         # evidence, reported as one, never a traceback and never a verdict
@@ -931,6 +968,11 @@ def _run_claims_judge(args: argparse.Namespace, command: str,
     if not args.quiet and document["verdict"] in claims_judge.JUDGED_VERDICTS:
         for line in claims_judge.summary_lines(document):
             print(f"capcov {command} --judge claims: {line}")
+    if not args.quiet and static is not None:
+        from .claims.static import join as static_join
+
+        print(f"capcov {command} --judge claims: "
+              f"{static_join.summary_line(document[static_join.SECTION_KEY])}")
     for line in diagnostics:
         print(f"capcov {command} --judge claims: {line}", file=sys.stderr)
     exit_code = int(document["exit_code"])
@@ -953,7 +995,7 @@ def _run_claims_judge(args: argparse.Namespace, command: str,
 
 def cmd_reconcile(args: argparse.Namespace) -> int:
     try:
-        engine, evaluators, model, judge_out = _judge_setup(args, "reconcile")
+        engine, evaluators, model, judge_out, static = _judge_setup(args, "reconcile")
     except _JudgeUsage as error:
         print(str(error), file=sys.stderr)
         return 2
@@ -1048,13 +1090,14 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
     if engine == "claims" and rc == 0:
         out = Path(args.out)
         gated = (_gated_artifact(out, doc, "reconciled") if out.is_file() else None)
-        return _run_claims_judge(args, "reconcile", evaluators, model, judge_out, gated)
+        return _run_claims_judge(args, "reconcile", evaluators, model, judge_out, gated,
+                                 static)
     return rc
 
 
 def cmd_gate(args: argparse.Namespace) -> int:
     try:
-        engine, evaluators, model, judge_out = _judge_setup(args, "gate")
+        engine, evaluators, model, judge_out, static = _judge_setup(args, "gate")
     except _JudgeUsage as error:
         print(str(error), file=sys.stderr)
         return 2
@@ -1073,7 +1116,8 @@ def cmd_gate(args: argparse.Namespace) -> int:
     judged = _run_claims_judge(args, "gate", evaluators, model, judge_out,
                                _gated_artifact(Path(args.coverage), coverage,
                                                "pass" if rc == 0 else "fail",
-                                               len(failures)))
+                                               len(failures)),
+                               static)
     if rc != 0:
         print(
             "capcov gate --judge claims: the four-cell gate over this coverage "
@@ -1215,6 +1259,18 @@ def main(argv: list[str] | None = None) -> int:
             default=None,
             help="where --judge claims writes judge.json and the certificates "
             "(default: capcov-judge); must be outside --receipt",
+        )
+        p.add_argument(
+            "--static",
+            default=None,
+            metavar="BUNDLE.json",
+            help="join a static bundle (capcov experiment claims static --out, with "
+            "rules-static-v1 merged) to the receipt: judge.json gains a 'static' "
+            "section with the routes the index binds, the reflexion cells, the dead "
+            "and blocked entities and what is bound statically but never requested. "
+            "The bundle must carry index_describes_run for this run or it is reported "
+            "stale and not joined. It adds a section, never a verdict. Falls back to "
+            "[judge] static in capcov.toml.",
         )
 
     d = sub.add_parser("discover", help="static: entities, surfaces, bindings")

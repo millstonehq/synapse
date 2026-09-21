@@ -45,6 +45,7 @@ from typing import Any
 
 from .. import canonical_json, differential, souffle
 from ..souffle import compile as compiled
+from ..static import join as static_join
 from . import join as replay_join
 from . import pack as replay_pack
 from . import replay_facts
@@ -167,7 +168,7 @@ def op_entry(join: replay_join.ReplayJoin, summary: dict[str, Any], op: str) -> 
 
 def judge_document(join: replay_join.ReplayJoin, required: list[str], *,
                    verdict: str, exit_code: int, program_digest: str | None,
-                   findings: list[str]) -> dict[str, Any]:
+                   findings: list[str], static: dict[str, Any] | None = None) -> dict[str, Any]:
     receipt = join.receipt
     document: dict[str, Any] = {
         "schema": JUDGE_SCHEMA,
@@ -190,6 +191,11 @@ def judge_document(join: replay_join.ReplayJoin, required: list[str], *,
         "verdict": verdict,
         "exit_code": exit_code,
     }
+    if static is not None:
+        # what a static bundle the caller asked to join says about this run,
+        # beside the verdict and never part of it: a static path is not an
+        # outcome, so nothing here moves the exit code
+        document[static_join.SECTION_KEY] = static
     outcome = join.result if join.result is not None else join.mismatch
     if outcome is not None:
         timings = dict(getattr(outcome, "timings", ()))
@@ -289,7 +295,9 @@ def judge_receipt(receipt_dir: Path, out_dir: Path, required: list[str], *,
                   kernels: str | None = None, evaluators: Any = None,
                   cache_dir: str | Path = DEFAULT_CACHE_DIR,
                   executable: str | None = None,
-                  reviewer_admissions=()) -> tuple[dict[str, Any], list[str]]:
+                  reviewer_admissions=(),
+                  static_bundle: static_join.StaticBundle | None = None,
+                  ) -> tuple[dict[str, Any], list[str]]:
     """Judge ``receipt_dir``, write ``judge.json`` under ``out_dir``, print nothing.
 
     Returns ``(document, diagnostics)``: the judge document (whose ``exit_code``
@@ -304,15 +312,30 @@ def judge_receipt(receipt_dir: Path, out_dir: Path, required: list[str], *,
     document's ``kernels`` list, and ``differential`` says whether two or more of
     them were compared -- a judge that ran one kernel never reports a passed
     differential.
+
+    ``static_bundle`` is an optional static account of the same system
+    (``capcov.claims.static.join``): when one is passed, the document gains a
+    ``static`` section saying whether ``index_describes_run`` binds it to this
+    run and, when it does, what the index says about the run's surfaces.  It
+    never touches the verdict or the exit code.
     """
     receipt_dir = Path(receipt_dir)
     out_dir = Path(out_dir)
     diagnostics: list[str] = []
     join = read_join(receipt_dir, reviewer_admissions=reviewer_admissions)
+    static = None
+    if static_bundle is not None:
+        static = static_join.section(static_bundle, run=join.run,
+                                     **static_join.runtime_side(join.exported, join.run))
+        if static["join"]["status"] != static_join.JOIN_BOUND:
+            # an unjoined bundle is reported where a reader will see it, not
+            # only in judge.json: silence here is how a stale account gets read
+            # as a current one
+            diagnostics.append(f"static bundle not joined: {static['join']['message']}")
     if join.bundle is None:
         document = judge_document(join, required, verdict=VERDICT_CONTRACT_FINDING,
                                   exit_code=EXIT_CONTRACT, program_digest=None,
-                                  findings=join.contract_findings)
+                                  findings=join.contract_findings, static=static)
         out_dir.mkdir(parents=True, exist_ok=True)
         write_json(out_dir / JUDGE_FILE, document)
         diagnostics.extend(f"contract finding: {finding}" for finding in join.contract_findings)
@@ -330,7 +353,7 @@ def judge_receipt(receipt_dir: Path, out_dir: Path, required: list[str], *,
     except (souffle.SouffleUnavailable, JudgeToolsUnavailable) as exc:
         document = judge_document(join, required, verdict=VERDICT_UNAVAILABLE,
                                   exit_code=EXIT_UNAVAILABLE, program_digest=program_digest,
-                                  findings=join.contract_findings)
+                                  findings=join.contract_findings, static=static)
         document["message"] = str(exc)
         write_json(out_dir / JUDGE_FILE, document)
         diagnostics.append(f"toolchain unavailable: {exc}")
@@ -338,7 +361,7 @@ def judge_receipt(receipt_dir: Path, out_dir: Path, required: list[str], *,
     except compiled.CompileError as exc:
         document = judge_document(join, required, verdict=VERDICT_KERNEL_MISMATCH,
                                   exit_code=EXIT_KERNEL, program_digest=program_digest,
-                                  findings=join.contract_findings)
+                                  findings=join.contract_findings, static=static)
         document["message"] = str(exc)[-4000:]
         write_json(out_dir / JUDGE_FILE, document)
         diagnostics.append(f"compile failed: {str(exc)[-400:]}")
@@ -348,7 +371,7 @@ def judge_receipt(receipt_dir: Path, out_dir: Path, required: list[str], *,
         # certificate or a recheck: still a kernel disagreement, never a verdict
         document = judge_document(join, required, verdict=VERDICT_KERNEL_MISMATCH,
                                   exit_code=EXIT_KERNEL, program_digest=program_digest,
-                                  findings=join.contract_findings)
+                                  findings=join.contract_findings, static=static)
         document["message"] = str(exc)[-4000:]
         write_json(out_dir / JUDGE_FILE, document)
         diagnostics.append(f"kernels disagree on a certified claim row: {exc}")
@@ -368,7 +391,7 @@ def judge_receipt(receipt_dir: Path, out_dir: Path, required: list[str], *,
         document = judge_document(join, required, verdict=verdict,
                                   exit_code=(EXIT_UNAVAILABLE if unavailable else EXIT_KERNEL),
                                   program_digest=program_digest,
-                                  findings=join.contract_findings)
+                                  findings=join.contract_findings, static=static)
         if unavailable:
             document["message"] = (
                 f"{', '.join(unavailable)} could not be started: "
@@ -389,7 +412,8 @@ def judge_receipt(receipt_dir: Path, out_dir: Path, required: list[str], *,
         return document, diagnostics
     replay_join.write_artifacts(join, out_dir)
     document = judge_document(join, required, verdict=VERDICT_SUPPORTED, exit_code=EXIT_OK,
-                              program_digest=program_digest, findings=join.contract_findings)
+                              program_digest=program_digest,
+                              findings=join.contract_findings, static=static)
     unmet = unmet_ops(document["ops"], required)
     judged = required or sorted(document["ops"])
     if unmet or not judged:
