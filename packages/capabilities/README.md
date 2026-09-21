@@ -485,6 +485,215 @@ the narrowed denominator stays legible instead of implied by absence. This is a
 conservative source rule, not proof of runtime mounting or framework object
 identity. Runtime reconciliation remains required.
 
+### Static reflexion
+
+Seven optional pieces put a *reflexion model* (Murphy/Notkin/Sullivan) over the
+static account: the call graph as extracted, a reviewer's intended architecture,
+and the comparison of the two -- plus the closures that let an absence be `dead`
+rather than merely unobserved. Each piece is behind its own flag, each is
+additive, and each leaves the relation `call_graph_closed` completes
+(`static_edge`) exactly as it was. **Every one of them is off by default, and
+with the flag absent the behaviour is identical to capcov main** -- no module of
+the piece is even imported.
+
+**1. The reviewer's model and the reflexion verdicts** (`rules-static-reflexion-v1`)
+
+```sh
+capcov experiment claims static --static scip --target <tree> --language go \
+    --capability-map MAP.json [--capability-edges EDGES.json] --out bundle.json
+```
+
+`capability_map(index, symbol, capability)` and `capability_edge(index, src, dst)`
+are the reviewer's, producer class `reviewer`, each closed by its own witness
+(`capability_map_closed`, `capability_edge_closed`) and bound to one index by
+`capability_map_describes_index`. Derived: `static_low_edge` (the lift of
+`static_edge` through the map), `static_convergence`, `static_divergence` (needs
+the closed edge model), `static_absence` (needs `call_graph_closed` *and* the
+closed map), and the split of an entity a surface does not reach into
+`static_entity_dead` (closed) / `static_entity_blocked(index, surface, entity,
+via)` (an unresolved call site is reachable from the handler, and `via` names the
+symbol the doubt enters through) / `static_entity_unresolved` (residue with no
+owner to name).
+
+*Tools:* a SCIP indexer and the `scip` CLI, plus the tree-sitter census extra
+(`pip install .[treesitter]`). *When they are absent:* the census is checked
+before the indexer is started and answers
+`{"operational_failure": "census-unavailable", ...}` with exit 3; an absent
+toolchain answers `{"operational_failure": "scip-tools-unavailable", ...}` with
+exit 3, in `capcov discover --resolver scip`'s own words. A map naming a symbol
+this index does not declare, or a *closed* map that omits a symbol the index's
+edges run through, is `{"refusal": "..."}` with exit 2 -- naming the symbols is
+the only safe failure. With this flag absent, behavior is identical to capcov
+main.
+
+**2. The static bundle joined to the judge**
+
+```sh
+capcov gate --judge claims --receipt <dir> --static bundle.json
+```
+
+`judge.json` gains a `static` section: the routes the index binds, each
+capability's reflexion cell, `dead`, `blocked` (with its `via`), `unresolved`,
+and `static_only` (a surface the index binds that the run never requested --
+licensed only by the replay producer's own `replay_requests_closed`). The four
+cells, the verdicts and the exit code are untouched: a static path is not an
+outcome. Falls back to `[judge] static` in `capcov.toml`.
+
+*Tools:* none beyond the bundle. *When it is absent or wrong:* a path that is
+not there, is not JSON, or is not a claim bundle is
+`capcov gate --judge claims: --static: cannot read the static bundle '...'` with
+exit 2, before any judging; a bundle that does not carry `index_describes_run`
+for this run is reported `stale` and not joined, and one that cannot derive a
+reported relation names it in `underived` rather than reporting an empty list.
+With this flag absent, behavior is identical to capcov main.
+
+**3. The flow plan previewed against the static account**
+
+```sh
+capcov flows plan MODEL --target <tree> --out plan.json --static bundle.json
+```
+
+Each transition is annotated with what the bundle says about its obligation
+surfaces: the store set the route can reach, `surface_status` ∈
+`declared | undeclared | dead | blocked`, and whether an authz sink is on the
+path. Annotation only -- the plan is planned before the bundle is read, no
+scenario is pruned and `model_sha256` does not move, because a persistence
+assertion is an outcome and no static account retires it.
+
+*Tools:* none beyond the bundle. *When it is absent or wrong:* the command exits
+1 with `the static bundle did not evaluate: ...`, `the static bundle carries no
+scip_index and no static_route_declared_surface row`, or the multi-index
+refusal -- a preview
+against more than one index is more than one preview. With this flag absent,
+behavior is identical to capcov main.
+
+**4. Class-hierarchy dispatch** (`rules-static-cha-v1`)
+
+`--dispatch cha`, documented in full above: the dispatch sites a SCIP index
+resolves only to an interface member, expanded through the index's own
+`is_implementation` relationships into `static_edge_cha`, with
+`static_edge_cha_closed` and `call_graph_closed_cha` as its own witnesses and
+every verdict as a separate `*_cha` row.
+
+*Tools:* an indexer a measurement covers -- scip-go 0.2.7 today. *When it is
+absent:* an unmeasured indexer is `{"operational_failure":
+"dispatch-unsupported", ...}` with exit 3, naming what *was* measured and the
+remedy (`--dispatch none` still produces the resolved bundle), because "never
+measured" is not "emits none". With this flag absent, behavior is identical to
+capcov main.
+
+**5. Boundary vectors joined to the static store account**
+
+```sh
+capcov experiment claims vectors-static --vectors <dir> --replay <dir> \
+    --static bundle.json [--kernel python|souffle|differential] [--out report.json]
+```
+
+The recorded/replayed vector cells beside the tables the route can statically
+reach: `vector_store_divergence` (a delta in a table the route cannot reach --
+refuting, under `call_graph_closed`) and `vector_store_unexercised` (a reachable
+table no cell touched -- advisory, because `retry` and `invalid-input` expect no
+delta). Producer classes stay apart: `scip` for the paths,
+`capcov-vectors-replay-v1` for the outcomes.
+
+*Tools:* none for `--kernel python`; the `souffle` executable for
+`--kernel souffle` or `--kernel differential`. *When they are absent:* a missing
+or mismatched input is `{"refusal": "..."}` with exit 2, and anything else --
+an absent `souffle` under those two kernels among it -- is
+`{"operational_failure": "vectors-static-failed", ...}` with exit 3, carrying
+the evaluator's own message: never a silently single-kernel result reported as a
+differential. With this flag absent, behavior is identical to capcov main.
+
+**6. The incumbent's edge producer: PHPStan/Larastan** (`rules-static-phpstan-v1`,
+`rules-static-parity-v1`)
+
+On a Laravel-shaped PHP tree every `DB::`, `Auth::` and Eloquent static forward
+is `facade_magic` residue to a SCIP index, so `call_graph_closed` is never
+earned. `capcov.claims.static.phpstan_facts` reads the JSON report of the
+bundled collector (`phpstan/CapcovCallCollector.php`) and emits the *same*
+static schema with producer class `phpstan` -- never `scip`, because Larastan's
+resolution is itself an assumption about framework behaviour, and a PHPStan
+"call on mixed" *is* the residue, named at its site.
+`capcov.claims.static.parity` then compares two indexes in one bundle under a
+reviewer's `op_maps`: `static_parity`, `parity_static_only_incumbent` (a store
+the incumbent reaches and the candidate cannot -- a missing capability found
+before anything is run), `parity_blocked`, `parity_unresolved`.
+
+*Flag:* none on the command line today -- this piece is a library entry point,
+and nothing imports it unless a caller names it. *Tools:* PHP, PHPStan and
+Larastan, run against the incumbent tree with the bundled collector. *When they
+are absent:* there is no report to read, and reading a document that is not one
+is a named `ReportInputError` about the fact or kind at fault, never a partial
+index. With this flag absent, behavior is identical to capcov main.
+
+**7. Framework assumption rows** (`rules-static-framework-v1`)
+
+```sh
+capcov experiment claims static --static scip --target <tree> --language go \
+    --assumptions ASSUMPTIONS.json --out bundle.json
+```
+
+The edges a *framework* makes out of data, which no indexer can see: a `net/http`
+handler registered into a package-level registry by an `init()` and invoked by a
+loop at startup, a Laravel container `bind`/`singleton` or facade accessor
+Larastan cannot type (one it *can* type is a `larastan-container` edge of piece 6
+and must not be re-declared here), a FastAPI `Depends`. The document is
+reviewer-signed and looks like this:
+
+```json
+{
+  "schema_version": 1,
+  "reviewer": "who reviewed it",
+  "commit": "<the commit the review was signed against>",
+  "expires": "2026-12-31",
+  "closed": true,
+  "assumptions": [
+    {"src": "<caller symbol>", "dst": "<callee symbol>", "framework": "net/http",
+     "mechanism": "init-registry", "path": "api/jobs.go", "line": 20}
+  ]
+}
+```
+
+* `framework_edge(index, src, dst, framework, mechanism, path, line)` — producer
+  class `framework-assumption`, its own class: not `scip` (what an index said),
+  not `phpstan` (what an analyser typed), not `reviewer` (intent over symbols).
+  `(framework, mechanism)` is an enumerated vocabulary, so a reader can ask
+  whether the claim is true of that framework; anything else is refused.
+* `framework_assumption_unapplied(index, path, line, src, dst, reason)` — every
+  row the producer could not apply, enumerated, never dropped:
+  `co_located_residue` (the census gives that line a second unresolved callee,
+  and discharge is a `(path, line)` join, so the row is applied not at all),
+  `no_unresolved_site`, `document_out_of_scope`.
+* `static_edge_assumed(index, src, dst, framework)` and `static_reaches_assumed`
+  — the assumed account. `static_edge` is **never** widened.
+* `assumptions_closed(index, assumptions)` — the reviewer's own closure, emitted
+  only when the document says `closed`, every row was applied, and the scope is
+  the whole index. `call_graph_closed_assumed(index, scope)` — that, a census,
+  and every unresolved call site in the scope discharged by a row for that exact
+  site.
+* Every verdict over the assumed graph is a separate row:
+  `static_capability_op_assumed`, `static_entity_dead_assumed`,
+  `static_entity_blocked_assumed`, `static_convergence_assumed`,
+  `static_divergence_assumed`, `static_absence_assumed`.
+
+Each reviewed row is `Evidence.kind == "assumption"`, so
+`capcov experiment claims assumptions registry|invalidate` gives it a
+run-independent `asm:` id, lists the claims it carries, and can withdraw it:
+withdrawing the registry row takes `call_graph_closed_assumed` with it (a witness
+that says every site is covered rests on the rows that cover them), leaves the
+reviewer's closure standing, and re-derives `static_entity_blocked_assumed`
+naming the dispatcher the doubt re-enters through.
+
+*Tools:* none beyond the static profile's own. *When the document is wrong:* an
+expired review, a document signed against another commit than the index was
+taken at, an unenumerated framework or mechanism, a symbol this index does not
+declare, and a closed capability map that omits a symbol an assumed edge runs
+through are each `{"refusal": "..."}` with exit 2; anything else is
+`{"operational_failure": "static-assumptions-failed", ...}` with exit 3. An
+expired document is refused rather than used: an expired assumption is not a
+weaker assumption, it is one nobody has looked at since. With this flag absent,
+behavior is identical to capcov main.
+
 ## OpenAPI operation inventory
 
 An HTTP service in any language can supply a local OpenAPI JSON document:
