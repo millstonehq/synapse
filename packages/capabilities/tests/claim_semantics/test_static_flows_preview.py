@@ -38,15 +38,19 @@ builds them.
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import tempfile
 import unittest
+import warnings
 from pathlib import Path
 
 from capcov.claims.ir import canonical_dict, canonical_json
 from capcov.claims.static import closure, reflexion, scip_facts
 from capcov.flows import static_preview
 from capcov.flows.cli import main as flows_main
+from capcov.flows.model import STATIC_ANNOTATION_KEY
 from capcov.flows.model import plan as plan_model
 
 try:
@@ -73,6 +77,11 @@ UNDECLARED_SURFACE = go_app.UNDECLARED_SURFACE
 NON_SURFACE_OBLIGATION = "read"
 UNREACHED_ENTITY = "sessions"
 
+#: The route adapter's own account of a route site its allowlist dropped: the
+#: surface spelling ``route_site_excluded`` carries is the obligation spelling.
+EXCLUDED_ENTRY = {"method": "POST", "path": "/jobs",
+                  "reason": "off-verb candidate dropped by the allowlist"}
+
 #: The closure test's own residue and the symbol it sits on.
 RESIDUE = [{"file": "internal/service/service.go", "line": 12, "callee": "h.dispatch",
             "kind": "unresolved", "reason": "untyped receiver"}]
@@ -85,7 +94,7 @@ OPERATIONS = [["audit_logs", "create"], ["jobs", "read"]]
 TARGET = "browser"
 
 
-def _ast(residue=()) -> dict:
+def _ast(residue=(), *, excluded=(), inventory_closed: bool = True) -> dict:
     ast = go_app.ast_raw()
     ast["entities"].append({"name": UNREACHED_ENTITY, "symbol": "Session", "module": "",
                             "file": "models/models.go", "line": 19})
@@ -96,19 +105,34 @@ def _ast(residue=()) -> dict:
     })
     ast["_node_locations"][HANDLE_NODE] = ["api/jobs.go", HANDLE_LINE]
     ast["scip_residue"] = [dict(entry) for entry in residue]
+    surfaces = [dict(entry) for entry in excluded]
+    ast["excluded_surfaces"] = {"count": len(surfaces), "surfaces": surfaces}
+    if not inventory_closed:
+        # scip_facts.export_bundle emits `static_route_inventory_closed` only
+        # when the adapter enumerated its exclusions; with the key gone the
+        # route inventory is still derived and simply not closed.
+        del ast["excluded_surfaces"]
     return ast
 
 
-def _bundle_text(*, residue=(), packs: bool = True) -> str:
+def _bundle_text(*, residue=(), packs: bool = True, excluded=(),
+                 inventory_closed: bool = True, index_current: bool = True) -> str:
     """A static bundle as ``claims static --out`` writes one.
 
     ``packs=False`` leaves ``rules-static-v1`` out, which is the bundle the
     profile writes on its own: it declares ``static_edge`` and has no rule that
     heads it, so nothing downstream of it is derivable.
+
+    ``index_current=False`` is ``reflexion.attach``'s documented default: no
+    ``tree_digest``, so no ``source_tree_observed`` row and no
+    ``static_index_current`` -- the bundle asserts no observed tree, and
+    ``static_capability_op`` (gated on it) is empty for every surface at once.
+    ``inventory_closed=False`` withholds ``static_route_inventory_closed`` while
+    the route inventory itself is still derived.
     """
     from capcov.scip import runner
 
-    ast = _ast(residue)
+    ast = _ast(residue, excluded=excluded, inventory_closed=inventory_closed)
     raw = go_app.golden_raw()
     exported = scip_facts.export_bundle(
         go_app.normalized(raw), ast_raw=ast, source_root=go_app.GO_APP, language="go",
@@ -121,9 +145,9 @@ def _bundle_text(*, residue=(), packs: bool = True) -> str:
     extra = (closure.closure_bundle(exported.bundle, ast),)
     if packs:
         extra += (pack_bundle(),)
-    bundle = reflexion.attach(
-        exported.bundle, model, *extra,
-        tree_digest=dict(dict(exported.bundle.metadata)["tree"])["digest"])
+    tree_digest = (dict(dict(exported.bundle.metadata)["tree"])["digest"]
+                   if index_current else None)
+    bundle = reflexion.attach(exported.bundle, model, *extra, tree_digest=tree_digest)
     return canonical_json(canonical_dict(bundle)) + "\n"
 
 
@@ -253,15 +277,16 @@ class ADeadSurfaceIsFlaggedNeverPrunedTests(unittest.TestCase):
         self.assertEqual(sorted(self.annotation["transitions"]),
                          ["check-health", "create-job", "fetch-job", "read-something"])
 
-    def test_the_plan_under_the_flag_is_the_plan_without_it_plus_one_key(self) -> None:
-        """Annotation, not planning: the scenarios and the budget do not move."""
-        model = _model()
-        bare = plan_model(model, TARGET)
-        annotated = dict(bare, **{static_preview.KEY: self.annotation})
-        self.assertEqual(set(annotated) - set(bare), {static_preview.KEY})
-        for key in ("scenarios", "blocked", "unreachable", "model_sha256", "states_explored"):
-            with self.subTest(key=key):
-                self.assertEqual(annotated[key], bare[key])
+    def test_the_dead_transition_is_still_planned(self) -> None:
+        """Flagged, never pruned -- and the planner never saw the bundle at all.
+
+        That the annotated plan is the bare plan plus one key is proven
+        byte-wise against CLI output by ``TheDefaultPathIsUnchangedTests``'s
+        ``test_plan_with_the_flag_adds_the_annotation_and_moves_nothing_else``;
+        asserting it here against a dict this test built itself would assert
+        only that ``dict(...)`` copies.
+        """
+        bare = plan_model(_model(), TARGET)
         self.assertIn("check-health", [s["id"] for s in bare["scenarios"]],
                       "the dead-surface transition is still planned")
 
@@ -273,6 +298,9 @@ class DoubtIsNamedAndIsNotAFlagTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.residue = _annotation("residue", residue=RESIDUE)
         cls.unpacked = _annotation("unpacked", packs=False)
+        cls.uncurrent = _annotation("uncurrent", index_current=False)
+        cls.excluded = _annotation("excluded", excluded=(EXCLUDED_ENTRY,))
+        cls.unclosed = _annotation("unclosed-inventory", inventory_closed=False)
 
     def test_an_unresolved_site_on_the_path_makes_the_surface_blocked_and_names_it(self) -> None:
         entry = self.residue["surfaces"][SURFACE]
@@ -303,6 +331,50 @@ class DoubtIsNamedAndIsNotAFlagTests(unittest.TestCase):
             with self.subTest(surface=surface):
                 self.assertEqual(entry["status"], static_preview.STATUS_UNRESOLVED)
                 self.assertIn(static_preview.DECLARED_RELATION, entry["reason"])
+
+    def test_without_an_observed_tree_no_surface_is_dead_because_none_binds_anything(self) -> None:
+        """``static_capability_op`` is gated on ``static_index_current``.
+
+        Without a row of it the bind relation is empty for *every* surface while
+        the store-set closure witness still fires for every declared one, so the
+        route that demonstrably binds two stores would come back ``dead`` with
+        an empty, "closed" store set -- a negative verdict over the code
+        supported from the bundle's silence about the tree it read.
+        """
+        entry = self.uncurrent["surfaces"][SURFACE]
+        self.assertEqual(entry["status"], static_preview.STATUS_UNRESOLVED)
+        self.assertEqual(entry["stores"], [])
+        self.assertFalse(entry["stores_closed"],
+                         "an empty store set is not closed on an index nothing asserts current")
+        self.assertIn(static_preview.INDEX_CURRENT_RELATION, entry["reason"])
+        self.assertEqual(self.uncurrent["surfaces"][DEAD_SURFACE]["status"],
+                         static_preview.STATUS_UNRESOLVED)
+        self.assertEqual(self.uncurrent["underived"], [])
+        self.assertFalse(self.uncurrent["transitions"]["fetch-job"]["stores_closed"])
+        for name in ("fetch-job", "check-health"):
+            with self.subTest(transition=name):
+                self.assertNotIn(name, self.uncurrent["flagged"])
+
+    def test_an_excluded_route_site_is_unresolved_not_undeclared(self) -> None:
+        """The adapter enumerated it, so its absence from the declared set claims nothing."""
+        entry = self.excluded["surfaces"][UNDECLARED_SURFACE]
+        self.assertEqual(entry["status"], static_preview.STATUS_UNRESOLVED)
+        self.assertIn(static_preview.EXCLUDED_RELATION, entry["reason"])
+        self.assertIn(EXCLUDED_ENTRY["reason"], entry["reason"])
+        self.assertNotIn("create-job", self.excluded["flagged"])
+        self.assertTrue(self.excluded["route_inventory_closed"],
+                        "the inventory is closed; what changed is that it enumerates this site")
+
+    def test_without_the_inventory_witness_undeclared_becomes_unresolved(self) -> None:
+        """The closure gate on the second negation, with the route inventory intact."""
+        self.assertNotIn(static_preview.DECLARED_RELATION, self.unclosed["underived"])
+        self.assertEqual(self.unclosed["surfaces"][SURFACE]["operations"], OPERATIONS,
+                         "the inventory is still derived; only its closure is withheld")
+        self.assertFalse(self.unclosed["route_inventory_closed"])
+        entry = self.unclosed["surfaces"][UNDECLARED_SURFACE]
+        self.assertEqual(entry["status"], static_preview.STATUS_UNRESOLVED)
+        self.assertIn(static_preview.INVENTORY_CLOSED_RELATION, entry["reason"])
+        self.assertNotIn("create-job", self.unclosed["flagged"])
 
     def test_such_a_bundle_never_calls_a_surface_undeclared_or_flags_a_transition(self) -> None:
         """A completeness witness over a relation with no rule closes a silence."""
@@ -355,6 +427,33 @@ class TheDefaultPathIsUnchangedTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertFalse(out.exists())
 
+    def test_coverage_over_an_annotated_plan_is_the_coverage_over_the_bare_one(self) -> None:
+        """The rest of the pipeline reads the annotated plan as the plan it is.
+
+        ``reconcile`` re-derives the plan and demands equality, so a plan the
+        flag wrote would be refused by ``flows coverage`` -- and by
+        ``features/evidence.py`` -- with "plan does not match the derived
+        scenarios" if the annotation were folded into the comparison rather than
+        set aside.  "It annotates; it does not plan" has to hold downstream.
+        """
+        self.assertEqual(static_preview.KEY, STATIC_ANNOTATION_KEY)
+        _, bare = self.run_plan()
+        _, annotated = self.run_plan("--static", str(_Bundles.path("clean")))
+        inventory = self.work / "inventory.json"
+        inventory.write_text(json.dumps(_inventory()), encoding="utf-8")
+        documents = []
+        for name, source in (("bare", bare), ("annotated", annotated)):
+            out = self.work / f"coverage-{name}.json"
+            with warnings.catch_warnings(), contextlib.redirect_stdout(io.StringIO()):
+                warnings.simplefilter("ignore", DeprecationWarning)
+                code = flows_main(["coverage", str(inventory), str(self.model_path),
+                                   str(source), "--out", str(out)])
+            self.assertEqual(code, 0, f"flows coverage refused the {name} plan")
+            documents.append(out.read_text(encoding="utf-8"))
+        self.assertEqual(json.loads(documents[0])["summary"],
+                         {"covered": 0, "unproven": 4, "unmapped": 0})
+        self.assertEqual(documents[1], documents[0])
+
     def test_report_over_an_unannotated_plan_is_the_report_it_always_was(self) -> None:
         _, bare = self.run_plan()
         _, annotated = self.run_plan("--static", str(_Bundles.path("clean")))
@@ -383,6 +482,14 @@ class TheDefaultPathIsUnchangedTests(unittest.TestCase):
                       f"{', '.join(STORES)} | closed |", text)
         self.assertIn("Flagged for review: check-health, create-job.", text)
         self.assertIn(f"Not comparable with this index: {NON_SURFACE_OBLIGATION}.", text)
+
+
+def _inventory() -> dict:
+    """The obligation denominator of ``_model()``: one entry per obligation."""
+    return {"obligations": [{"id": SURFACE, "kind": "surface"},
+                            {"id": DEAD_SURFACE, "kind": "surface"},
+                            {"id": UNDECLARED_SURFACE, "kind": "surface"},
+                            {"id": NON_SURFACE_OBLIGATION}]}
 
 
 def _coverage() -> dict:

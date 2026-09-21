@@ -43,13 +43,26 @@ THE FOUR STATUSES, AND WHAT LICENSES EACH
                 inferred -- and it dominates ``bound``: a store set with a
                 blocked path is a lower bound, which ``stores_closed: false``
                 says beside it.
-``dead``        declared, binds no store, and the store set is closed
+``dead``        declared, binds no store, the store set is closed
                 (``static_route_reaches_table_closed``, which the closure pack
-                derives from ``call_graph_closed``).  The only negative status
-                over the code, and it carries the witness that licenses it.
+                derives from ``call_graph_closed``) *and* the index is current
+                (``static_index_current``).  Both, because the closure witness
+                completes ``static_route_reaches_table`` while the relation
+                negated here is ``static_capability_op``, which is itself gated
+                on ``static_index_current``: on a bundle that asserts no
+                observed tree, every surface binds nothing and the closure
+                witness still fires for all of them, so the pair is what makes
+                the empty store set a fact about the code rather than about the
+                bundle.  The only negative status over the code, and it carries
+                the witnesses that license it.
 ``undeclared``  the index declares no such surface, under its own
-                ``static_route_inventory_closed``.  The only negative status
-                over the route inventory, and likewise licensed.
+                ``static_route_inventory_closed``, *and* the producer's own
+                ``route_site_excluded`` enumeration does not name a route site
+                of this spelling.  An excluded route site is enumerated
+                information, not absent information, so a surface the adapter's
+                allowlist dropped is ``unresolved`` naming the exclusion and its
+                reason.  The only negative status over the route inventory, and
+                likewise licensed.
 ``unresolved``  everything else, with the reason in the surface's own words:
                 nothing was closed, so nothing is claimed.  An index that cannot
                 see a store is not an index that says there is none.
@@ -98,7 +111,14 @@ BIND_RELATION = "static_capability_op"
 REACHES_EQ_RELATION = "static_reaches_eq"
 UNRESOLVED_ON_RELATION = "static_unresolved_on"
 STORES_CLOSED_RELATION = "static_route_reaches_table_closed"
+#: ``static_capability_op`` is gated on this (rules-static-v1): without a row of
+#: it for the index, the bind relation is empty for *every* surface, so an empty
+#: store set says nothing about any one of them.
+INDEX_CURRENT_RELATION = "static_index_current"
 INVENTORY_CLOSED_RELATION = "static_route_inventory_closed"
+#: The route adapter's own enumeration of the route sites its allowlist dropped.
+#: Subtracted from the ``undeclared`` negation: a named exclusion is not silence.
+EXCLUDED_RELATION = "route_site_excluded"
 AUTHORIZED_RELATION = "static_route_authorized"
 AUTHZ_GAP_RELATION = "static_route_authorization_gap"
 AUTHZ_CLOSED_RELATION = "static_route_authorized_closed"
@@ -107,7 +127,8 @@ AUTHZ_CLOSED_RELATION = "static_route_authorized_closed"
 #: check a status against rather than a fact about this module's source.
 READ_RELATIONS = (DECLARED_RELATION, HANDLER_RELATION, BIND_RELATION,
                   REACHES_EQ_RELATION, UNRESOLVED_ON_RELATION, STORES_CLOSED_RELATION,
-                  INVENTORY_CLOSED_RELATION, AUTHORIZED_RELATION, AUTHZ_GAP_RELATION)
+                  INDEX_CURRENT_RELATION, INVENTORY_CLOSED_RELATION, EXCLUDED_RELATION,
+                  AUTHORIZED_RELATION, AUTHZ_GAP_RELATION)
 
 #: At most this many ``via`` symbols per surface, with ``via_total`` saying how
 #: many there were: a plan artifact is reviewed by a person, and an unbounded
@@ -189,13 +210,17 @@ def _authorization(surface: str, authorized: set[str], gaps: set[str],
 
 def _surface(surface: str, *, declared: frozenset[str], binds: dict[str, list[list[str]]],
              handlers: dict[str, list[str]], via: list[str], stores_closed: bool,
-             inventory_closed: bool, inventory_derivable: bool, derivable: frozenset[str],
+             index_current: bool, inventory_closed: bool, inventory_derivable: bool,
+             excluded_reason: str | None, derivable: frozenset[str],
              authorization: dict[str, Any]) -> dict[str, Any]:
     operations = sorted(binds.get(surface, ()))
     entry: dict[str, Any] = {
         "operations": operations,
         "stores": sorted({entity for entity, _verb in operations}),
-        "stores_closed": stores_closed,
+        # Closed means both: the store set is closed *and* the relation that
+        # would have carried a store is one this bundle could have derived a row
+        # of.  An empty set on an index nothing asserts current is a lower bound.
+        "stores_closed": stores_closed and index_current,
         "stores_closed_witness": STORES_CLOSED_RELATION,
         "handlers": sorted(handlers.get(surface, ())),
         "via": via[:VIA_LIMIT],
@@ -208,6 +233,14 @@ def _surface(surface: str, *, declared: frozenset[str], binds: dict[str, list[li
             entry["reason"] = (f"this bundle has no rule and no fact for "
                                f"{DECLARED_RELATION}, so it enumerates no surface to compare "
                                f"this obligation with; export it with the rule packs merged")
+            return entry
+        if excluded_reason is not None:
+            entry["status"] = STATUS_UNRESOLVED
+            entry["reason"] = (
+                f"the index declares no such surface, but {EXCLUDED_RELATION} enumerates a route "
+                f"site of this spelling its adapter excluded ({excluded_reason}): the inventory "
+                f"knows of it, so its absence from the declared set is not a claim that there is "
+                f"no such route")
             return entry
         entry["status"] = STATUS_UNDECLARED if inventory_closed else STATUS_UNRESOLVED
         entry["reason"] = (
@@ -226,14 +259,22 @@ def _surface(surface: str, *, declared: frozenset[str], binds: dict[str, list[li
         entry["status"] = STATUS_BOUND
         entry["reason"] = f"{BIND_RELATION} binds {len(operations)} operation(s) to this surface"
         return entry
-    if stores_closed:
+    if stores_closed and index_current:
         entry["status"] = STATUS_DEAD
-        entry["reason"] = (f"declared, no {BIND_RELATION} row, and {STORES_CLOSED_RELATION} "
-                           f"closes this surface's store set")
+        entry["reason"] = (f"declared, no {BIND_RELATION} row, {STORES_CLOSED_RELATION} "
+                           f"closes this surface's store set, and {INDEX_CURRENT_RELATION} "
+                           f"holds for this index")
         return entry
     entry["status"] = STATUS_UNRESOLVED
     missing = [name for name in (BIND_RELATION, STORES_CLOSED_RELATION,
                                  UNRESOLVED_ON_RELATION) if name not in derivable]
+    if stores_closed:
+        entry["reason"] = (
+            f"declared, no {BIND_RELATION} row, and no {INDEX_CURRENT_RELATION} row for this "
+            f"index: {BIND_RELATION} is gated on it, so this bundle binds no store to any "
+            f"surface and the empty set here is what it cannot see, not what the route does "
+            f"not touch")
+        return entry
     entry["reason"] = (f"declared, no {BIND_RELATION} row, and no {STORES_CLOSED_RELATION} row "
                        f"for it"
                        + (f"; underived here: {', '.join(missing)}" if missing else ""))
@@ -278,6 +319,14 @@ def annotate(static: StaticBundle, model: Mapping[str, Any]) -> dict[str, Any]:
     for src, dst in _rows(derived, REACHES_EQ_RELATION, index):
         reaches.setdefault(src, set()).add(dst)
     stores_closed = {row[0] for row in _rows(derived, STORES_CLOSED_RELATION, index)}
+    # arity 1, like the inventory witness below: a row of it for this index is
+    # the whole of what it says.  `static_capability_op` is gated on it, so
+    # without it the bind relation is empty for every surface at once -- which
+    # is a property of the bundle, never a verdict about a route.
+    index_current = bool(_rows(derived, INDEX_CURRENT_RELATION, index))
+    excluded: dict[str, str] = {}
+    for surface, reason in _rows(derived, EXCLUDED_RELATION, index):
+        excluded.setdefault(surface, reason)
     # arity 1: the witness is about the index and nothing else, so a row of it
     # for this index is the whole of what it says.  It licenses a negation over
     # `static_route_declared_surface`, so it licenses nothing at all in a bundle
@@ -309,8 +358,9 @@ def annotate(static: StaticBundle, model: Mapping[str, Any]) -> dict[str, Any]:
                 surfaces[surface] = _surface(
                     surface, declared=declared, binds=binds, handlers=handlers,
                     via=via_of(surface), stores_closed=surface in stores_closed,
-                    inventory_closed=inventory_closed,
-                    inventory_derivable=inventory_derivable, derivable=derivable,
+                    index_current=index_current, inventory_closed=inventory_closed,
+                    inventory_derivable=inventory_derivable,
+                    excluded_reason=excluded.get(surface), derivable=derivable,
                     authorization=_authorization(surface, authorized, gaps, derivable))
         stores = sorted({store for surface in compared
                          for store in surfaces[surface]["stores"]})
@@ -391,7 +441,8 @@ def report_lines(annotation: Mapping[str, Any]) -> list[str]:
     return lines
 
 
-__all__ = ["KEY", "JOIN_KEY", "STATUS_BOUND", "STATUS_BLOCKED", "STATUS_DEAD",
+__all__ = ["KEY", "JOIN_KEY", "INDEX_CURRENT_RELATION", "EXCLUDED_RELATION",
+           "STATUS_BOUND", "STATUS_BLOCKED", "STATUS_DEAD",
            "STATUS_UNDECLARED", "STATUS_UNRESOLVED", "FLAGGED_STATUSES", "AUTHZ_AUTHORIZED",
            "AUTHZ_GAP", "AUTHZ_UNRESOLVED", "READ_RELATIONS", "VIA_LIMIT",
            "StaticPreviewError", "StaticBundleError", "load", "annotate", "summary_line",

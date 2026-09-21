@@ -17,6 +17,13 @@ import re
 import warnings
 from collections import deque
 
+#: The one key ``flows plan --static BUNDLE.json`` writes *beside* the plan --
+#: an annotation about the code, never part of the derived plan. Spelled here as
+#: a literal so the default path imports no static machinery; it is
+#: ``capcov.flows.static_preview.KEY``, and the preview's own suite pins the two
+#: spellings equal.
+STATIC_ANNOTATION_KEY = "static"
+
 
 def digest(value: object) -> str:
     return hashlib.sha256(
@@ -336,7 +343,14 @@ def reconcile(
     if execution_plan["model_sha256"] != digest(model):
         raise ValueError("plan was built from a different model")
     expected = plan(model, execution_plan["target"], execution_plan.get("max_states", 10000))
-    if expected != execution_plan:
+    # `flows plan --static BUNDLE.json` writes one annotation key beside the
+    # plan (`capcov.flows.static_preview.KEY`) and moves nothing inside it, so
+    # the plan it writes must still reconcile: compare the derived plan with the
+    # annotation set aside, never with it folded in. The digest checks (below,
+    # and in the browser probe) still hash the plan file as handed over, so an
+    # annotated plan is bound to its run exactly as a bare one is.
+    if expected != {key: value for key, value in execution_plan.items()
+                    if key != STATIC_ANNOTATION_KEY}:
         raise ValueError("plan does not match the derived scenarios")
     obligations = {o["id"]: o for o in inventory["obligations"]}
     if len(obligations) != len(inventory["obligations"]):
