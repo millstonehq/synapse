@@ -1,0 +1,1827 @@
+{
+  "base_pack": "rules-static-v1",
+  "borrowed_declarations": [
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "scope",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "static_edge",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "call_graph_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "scip"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "verb",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_capability_op",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_edge",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_entity",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_index_current",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_reaches_eq",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_route_handler",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "scope_kind",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "scope_value",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_scope",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_site_owner",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "file",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_unresolved_call_site",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "scip"
+      ]
+    }
+  ],
+  "closure_pack": "rules-static-closure-v1",
+  "derived": [
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "static_absence",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_absence_unresolved",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_convergence",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "static_divergence",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "via",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "static_entity_blocked",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_entity_bound",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "static_entity_bound",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "static_entity_bound_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "static_entity_dead",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_entity_unbound_in_index",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_low_edge",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "static_low_edge",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "static_low_edge_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_model_edge_unlifted",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_unresolved_on",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    }
+  ],
+  "description": "Opt-in reflexion layer over rules-static-v1 and rules-static-closure-v1: a reviewer-owned capability map and capability model, each closed by its own witness and bound to one static index by a compatibility witness; the lift of static_edge through the map (static_low_edge) and the reflexion verdicts convergence/divergence/absence over it; and the split of an entity a surface does not reach into dead (the call graph is closed) and blocked (an unresolved call site is reachable from the handler, named by the via column).",
+  "id": "rules-static-reflexion-v1",
+  "primitives": [
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "capability_edge",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "capability_edge",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "capability_edge_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "capability",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "capability_map",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "capability_map",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "capability_map_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "map",
+          "type": "digest"
+        },
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [
+        "map",
+        "index"
+      ],
+      "compatibility_targets": [
+        "capability_map",
+        "static_edge"
+      ],
+      "completes": null,
+      "context_indices": [
+        "map",
+        "index"
+      ],
+      "finite": false,
+      "modality": "compatibility",
+      "name": "capability_map_describes_index",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "body": [
+        {
+          "relation": "static_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "X"
+            },
+            {
+              "variable": "Y"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "X"
+            },
+            {
+              "variable": "A"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Y"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map_describes_index",
+          "terms": [
+            {
+              "variable": "Map"
+            },
+            {
+              "variable": "IX"
+            }
+          ]
+        },
+        {
+          "left": {
+            "variable": "A"
+          },
+          "operator": "!=",
+          "right": {
+            "variable": "B"
+          }
+        }
+      ],
+      "head": {
+        "relation": "static_low_edge",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_low_edge_lifted_through_the_map"
+    },
+    {
+      "body": [
+        {
+          "relation": "capability_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map_describes_index",
+          "terms": [
+            {
+              "variable": "Map"
+            },
+            {
+              "variable": "IX"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_low_edge_closed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_low_edge_closed_over_a_closed_map"
+    },
+    {
+      "body": [
+        {
+          "relation": "capability_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "static_low_edge_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "static_low_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_model_edge_unlifted",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_model_edge_unlifted_under_a_closed_lift"
+    },
+    {
+      "body": [
+        {
+          "relation": "capability_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "static_low_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_convergence",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_convergence_model_edge_exhibited"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_low_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "capability_edge_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "capability_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_divergence",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_divergence_under_a_closed_model"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_model_edge_unlifted",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "static_scope",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "type": "symbol",
+              "value": "all"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "call_graph_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_absence",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_absence_all"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_model_edge_unlifted",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "static_scope",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "type": "symbol",
+              "value": "package_prefix"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "call_graph_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_absence",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_absence_package_prefix"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_model_edge_unlifted",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "static_unresolved_on",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "N"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_absence_unresolved",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_absence_unresolved_residue_on_the_index"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_unresolved_call_site",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "Callee"
+            }
+          ]
+        },
+        {
+          "relation": "static_site_owner",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "N"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_unresolved_on",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "N"
+          }
+        ]
+      },
+      "name": "static_unresolved_on_owning_symbol"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_capability_op",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            },
+            {
+              "variable": "Verb"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_bound",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_bound_from_the_capability_op"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_route_handler",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "H"
+            }
+          ]
+        },
+        {
+          "relation": "static_entity",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "E"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "T"
+            }
+          ]
+        },
+        {
+          "relation": "static_index_current",
+          "terms": [
+            {
+              "variable": "IX"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_bound_closed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_bound_closed_over_a_current_index"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_route_handler",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "H"
+            }
+          ]
+        },
+        {
+          "relation": "static_entity",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "E"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "T"
+            }
+          ]
+        },
+        {
+          "relation": "static_entity_bound_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "static_entity_bound",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_unbound_in_index",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_unbound_in_index_exhibits_no_op"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_entity_unbound_in_index",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        },
+        {
+          "relation": "static_scope",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "type": "symbol",
+              "value": "all"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "call_graph_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_dead",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_dead_all"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_entity_unbound_in_index",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        },
+        {
+          "relation": "static_scope",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "type": "symbol",
+              "value": "package_prefix"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "call_graph_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_dead",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_dead_package_prefix"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_entity_unbound_in_index",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        },
+        {
+          "relation": "static_route_handler",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "H"
+            }
+          ]
+        },
+        {
+          "relation": "static_reaches_eq",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "H"
+            },
+            {
+              "variable": "N"
+            }
+          ]
+        },
+        {
+          "relation": "static_unresolved_on",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "N"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_blocked",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          },
+          {
+            "variable": "N"
+          }
+        ]
+      },
+      "name": "static_entity_blocked_by_a_reachable_unresolved_site"
+    }
+  ],
+  "schema_version": 1
+}

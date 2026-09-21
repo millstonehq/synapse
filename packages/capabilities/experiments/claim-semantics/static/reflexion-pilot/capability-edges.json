@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "closed": true,
+  "edges": [
+    [
+      "jobs_api",
+      "jobs_service"
+    ],
+    [
+      "jobs_service",
+      "jobs_store"
+    ],
+    [
+      "jobs_service",
+      "audit_store"
+    ],
+    [
+      "jobs_store",
+      "gorm"
+    ],
+    [
+      "audit_store",
+      "gorm"
+    ],
+    [
+      "jobs_api",
+      "metrics"
+    ]
+  ]
+}
