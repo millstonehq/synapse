@@ -59,6 +59,9 @@ The souffle sections skip, by name, where the executable is absent.
 """
 from __future__ import annotations
 
+import contextlib
+import io
+import json
 import os
 import shutil
 import tempfile
@@ -696,6 +699,39 @@ class ARowThatCannotBeAppliedIsEnumeratedTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             result = compare(bundle, replay_root=str(Path(tmp) / "unapplied"))
             self.assertTrue(result.matched, result.replay_path)
+
+
+class TheFlagIsReachedFromTheCliTests(unittest.TestCase):
+    """``claims static --assumptions``: the document is read before anything runs.
+
+    A document that cannot be read is a statement about the command line, so it
+    is answered where the command line is -- with exit 2, before the indexer is
+    started and before the toolchain is even checked, which is why this runs
+    without one.
+    """
+
+    def _run(self, path: str) -> tuple[int, dict]:
+        from capcov.claims.cli import main as claims_main
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = claims_main(["claims", "static", "--static", "scip",
+                                  "--target", str(go_app.GO_APP), "--language", "go",
+                                  "--assumptions", path])
+        return status, json.loads(output.getvalue())
+
+    def test_an_absent_document_is_a_usage_refusal_naming_the_file(self) -> None:
+        status, document = self._run("/nonexistent/assumptions.json")
+        self.assertEqual(status, 2)
+        self.assertIn("/nonexistent/assumptions.json", document["refusal"])
+
+    def test_an_unenumerated_mechanism_is_refused_before_the_indexer_starts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "assumptions.json"
+            path.write_text(json.dumps(_document(_row(mechanism="magic"))), encoding="utf-8")
+            status, document = self._run(str(path))
+        self.assertEqual(status, 2)
+        self.assertIn("unknown net/http mechanism 'magic'", document["refusal"])
 
 
 if __name__ == "__main__":  # pragma: no cover
