@@ -52,9 +52,13 @@ claim that the graph is complete.
 
 PRODUCER
 --------
-Both relations are declared with producer class ``scip`` and their evidence
-sources begin with it: the rows are the resolver's, not the exporter's opinion
-of them.  The residue rows name the indexer that produced the index
+Both relations are declared with the producer classes that can know this
+closure -- ``scip`` (this module) and ``phpstan``
+(``phpstan_facts.closure_fragment``, which emits the same two relations from a
+PHPStan collector's census of a PHP tree) -- and each row's evidence source
+begins with the one that wrote it: the rows are the producer's, not the
+exporter's opinion of them.  No third class may write them: a reviewer or a
+replay cannot know that a call graph is complete.  The residue rows name the indexer that produced the index
 (``scip scip-go 0.2.7``); the witness names the emission contract that was
 checked (``scip capcov.claims.static.closure call-graph-closed-v1``), the same
 shape ``scip_facts`` uses for its own witnesses.
@@ -85,6 +89,9 @@ BASE_PACK_ID = "rules-static-v1"
 #: Producer class of every row this module emits (``schema_replay_v1``'s
 #: convention: the class is the first word of ``Evidence.source``).
 PRODUCER_CLASS = "scip"
+#: Every class the two relations admit, in declaration order: the producers that
+#: can take a call-site census and therefore know whether the graph is closed.
+PRODUCER_CLASSES = ("phpstan", "scip")
 EMITTER = "capcov.claims.static.closure"
 #: The witness's emission contract, named in its evidence source.
 WITNESS_CALL_GRAPH = "call-graph-closed-v1"
@@ -263,7 +270,7 @@ def attach(export: Bundle, ast_raw: Mapping[str, Any], *bundles: Bundle,
                    validate=validate, **combine_kwargs)
 
 
-__all__ = ["PACK_NAME", "PACK_ID", "BASE_PACK_ID", "PRODUCER_CLASS", "EMITTER",
+__all__ = ["PACK_NAME", "PACK_ID", "BASE_PACK_ID", "PRODUCER_CLASS", "PRODUCER_CLASSES", "EMITTER",
            "WITNESS_CALL_GRAPH", "UNRESOLVED_RELATION", "CLOSED_RELATION", "SCOPE_TOKEN_ALL",
            "ClosureInputError", "load_pack", "pack_relations", "pack_bundle", "relation_decls",
            "require_scip_tools", "scope_tokens", "residue_rows", "closure_bundle", "attach"]

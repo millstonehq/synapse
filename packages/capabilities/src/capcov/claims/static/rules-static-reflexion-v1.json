@@ -28,6 +28,7 @@
       "polarity": "positive",
       "primitive": true,
       "producer_classes": [
+        "phpstan",
         "scip"
       ]
     },
@@ -342,6 +343,7 @@
       "polarity": "positive",
       "primitive": true,
       "producer_classes": [
+        "phpstan",
         "scip"
       ]
     }

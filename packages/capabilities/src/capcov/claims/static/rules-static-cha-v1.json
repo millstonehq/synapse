@@ -535,6 +535,7 @@
       "polarity": "positive",
       "primitive": true,
       "producer_classes": [
+        "phpstan",
         "scip"
       ]
     }

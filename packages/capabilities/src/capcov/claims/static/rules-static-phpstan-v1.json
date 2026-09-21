@@ -1,0 +1,138 @@
+{
+  "base_pack": "rules-static-v1",
+  "borrowed_declarations": [
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_edge",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    }
+  ],
+  "derived": [],
+  "description": "Opt-in incumbent-edge layer over rules-static-v1: the PHPStan/Larastan collector's resolved call edges as phpstan_call_edge, carrying the resolution kind that produced each one, and the single rule that lifts them into static_edge so every rule over the call graph applies to a PHP index unchanged.",
+  "id": "rules-static-phpstan-v1",
+  "primitives": [
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "caller",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "callee",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        },
+        {
+          "context": false,
+          "name": "kind",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "phpstan_call_edge",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "phpstan"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "body": [
+        {
+          "relation": "phpstan_call_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "K"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_edge",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_edge_from_a_phpstan_resolved_call"
+    }
+  ],
+  "schema_version": 1
+}

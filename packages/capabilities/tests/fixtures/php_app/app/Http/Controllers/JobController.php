@@ -18,4 +18,8 @@ class JobController
         $this->repo->get($id);
         $this->repo->writeAudit($id);
     }
+
+    public function listJobs()
+    {
+    }
 }

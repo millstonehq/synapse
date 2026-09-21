@@ -1,0 +1,57 @@
+# capcov's incumbent edge producer, as a PHPStan configuration.
+#
+#   phpstan analyse -c phpstan-capcov.neon --error-format=json <paths> > report.json
+#
+# Every message this configuration produces is one `capcov-fact:` payload;
+# `capcov.claims.static.phpstan_facts` reads those and ignores the rest, so the
+# same command may be run with a project's own rules and levels switched on.
+# Level 0 is enough for the facts themselves -- the rules read types from the
+# scope, not from the level's checks -- and a higher level only types more
+# receivers, which turns `unresolved` rows into resolved edges and never the
+# other way round.
+#
+# The three tables below are the framework assumptions, in one place and out of
+# the code: which classes are facades and what they resolve to, which base class
+# makes a static call an Eloquent forward and to which builder, and which class
+# registers routes. A project that names its own puts them here; nothing in the
+# rules is hard-coded to Laravel.
+parameters:
+    level: 0
+    # Relative to this file: PHPStan resolves config paths against the config's
+    # own directory, so the rule classes are defined before the container is
+    # built and the configuration needs no composer autoloader of its own.
+    bootstrapFiles:
+        - CapcovCallCollector.php
+    capcov:
+        facades:
+            Illuminate\Support\Facades\DB: Illuminate\Database\Query\Builder
+            Illuminate\Support\Facades\Auth: Illuminate\Auth\AuthManager
+            Illuminate\Support\Facades\Gate: Illuminate\Contracts\Auth\Access\Gate
+        models:
+            Illuminate\Database\Eloquent\Model: Illuminate\Database\Eloquent\Builder
+            App\Models\Model: Illuminate\Database\Eloquent\Builder
+        routes:
+            - Illuminate\Support\Facades\Route
+            - Route
+
+services:
+    -
+        class: Capcov\PHPStan\CapcovFileCollector
+        arguments: [%currentWorkingDirectory%]
+        tags: [phpstan.rules.rule]
+    -
+        class: Capcov\PHPStan\CapcovClassCollector
+        arguments: [%currentWorkingDirectory%]
+        tags: [phpstan.rules.rule]
+    -
+        class: Capcov\PHPStan\CapcovMethodCollector
+        arguments: [%currentWorkingDirectory%]
+        tags: [phpstan.rules.rule]
+    -
+        class: Capcov\PHPStan\CapcovCallCollector
+        arguments: [%currentWorkingDirectory%, %capcov.facades%, %capcov.models%, %capcov.routes%]
+        tags: [phpstan.rules.rule]
+    -
+        class: Capcov\PHPStan\CapcovRouteCollector
+        arguments: [%currentWorkingDirectory%, %capcov.routes%]
+        tags: [phpstan.rules.rule]

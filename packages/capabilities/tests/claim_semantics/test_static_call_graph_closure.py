@@ -166,7 +166,10 @@ class ClosurePackIsALayerTests(unittest.TestCase):
         self.assertEqual(set(primitives), {closure.UNRESOLVED_RELATION, closure.CLOSED_RELATION})
         for name, item in primitives.items():
             with self.subTest(relation=name):
-                self.assertEqual(item["producer_classes"], [closure.PRODUCER_CLASS])
+                # Both producers that can take a call-site census, and no
+                # other: the SCIP resolver and the PHPStan collector.
+                self.assertEqual(item["producer_classes"], list(closure.PRODUCER_CLASSES))
+                self.assertIn(closure.PRODUCER_CLASS, item["producer_classes"])
                 self.assertTrue(item["primitive"])
                 self.assertEqual(item["context_indices"], ["index"])
         self.assertEqual(primitives[closure.CLOSED_RELATION]["modality"], "completeness")

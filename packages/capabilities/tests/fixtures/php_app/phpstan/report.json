@@ -1,0 +1,295 @@
+{
+  "totals": {
+    "errors": 0,
+    "file_errors": 41
+  },
+  "files": {
+    "app/Http/Controllers/JobController.php": {
+      "errors": 7,
+      "messages": [
+        {
+          "message": "capcov-fact:{\"fact\": \"analysed\", \"path\": \"app/Http/Controllers/JobController.php\"}",
+          "line": 1,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"symbol\", \"symbol\": \"App\\\\Http\\\\Controllers\\\\JobController\", \"kind\": \"class\", \"category\": \"type\", \"display\": \"JobController\", \"line\": 7, \"path\": \"app/Http/Controllers/JobController.php\"}",
+          "line": 7,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"symbol\", \"symbol\": \"App\\\\Http\\\\Controllers\\\\JobController::__construct\", \"kind\": \"method\", \"category\": \"callable\", \"display\": \"__construct\", \"line\": 11, \"path\": \"app/Http/Controllers/JobController.php\"}",
+          "line": 11,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"symbol\", \"symbol\": \"App\\\\Http\\\\Controllers\\\\JobController::getJob\", \"kind\": \"method\", \"category\": \"callable\", \"display\": \"getJob\", \"line\": 16, \"path\": \"app/Http/Controllers/JobController.php\"}",
+          "line": 16,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"call\", \"caller\": \"App\\\\Http\\\\Controllers\\\\JobController::getJob\", \"callee\": \"App\\\\Repositories\\\\JobRepository::get\", \"kind\": \"direct\", \"line\": 18, \"path\": \"app/Http/Controllers/JobController.php\"}",
+          "line": 18,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"call\", \"caller\": \"App\\\\Http\\\\Controllers\\\\JobController::getJob\", \"callee\": \"App\\\\Repositories\\\\JobRepository::writeAudit\", \"kind\": \"direct\", \"line\": 19, \"path\": \"app/Http/Controllers/JobController.php\"}",
+          "line": 19,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"symbol\", \"symbol\": \"App\\\\Http\\\\Controllers\\\\JobController::listJobs\", \"kind\": \"method\", \"category\": \"callable\", \"display\": \"listJobs\", \"line\": 22, \"path\": \"app/Http/Controllers/JobController.php\"}",
+          "line": 22,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        }
+      ]
+    },
+    "app/Models/AuditLog.php": {
+      "errors": 3,
+      "messages": [
+        {
+          "message": "capcov-fact:{\"fact\": \"analysed\", \"path\": \"app/Models/AuditLog.php\"}",
+          "line": 1,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"symbol\", \"symbol\": \"App\\\\Models\\\\AuditLog\", \"kind\": \"class\", \"category\": \"type\", \"display\": \"AuditLog\", \"line\": 5, \"path\": \"app/Models/AuditLog.php\"}",
+          "line": 5,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"entity\", \"entity\": \"App\\\\Models\\\\AuditLog\", \"table\": \"audit_logs\", \"line\": 7, \"path\": \"app/Models/AuditLog.php\"}",
+          "line": 7,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        }
+      ]
+    },
+    "app/Models/Job.php": {
+      "errors": 3,
+      "messages": [
+        {
+          "message": "capcov-fact:{\"fact\": \"analysed\", \"path\": \"app/Models/Job.php\"}",
+          "line": 1,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"symbol\", \"symbol\": \"App\\\\Models\\\\Job\", \"kind\": \"class\", \"category\": \"type\", \"display\": \"Job\", \"line\": 5, \"path\": \"app/Models/Job.php\"}",
+          "line": 5,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"entity\", \"entity\": \"App\\\\Models\\\\Job\", \"table\": \"jobs\", \"line\": 7, \"path\": \"app/Models/Job.php\"}",
+          "line": 7,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        }
+      ]
+    },
+    "app/Models/Model.php": {
+      "errors": 4,
+      "messages": [
+        {
+          "message": "capcov-fact:{\"fact\": \"analysed\", \"path\": \"app/Models/Model.php\"}",
+          "line": 1,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"symbol\", \"symbol\": \"App\\\\Models\\\\Model\", \"kind\": \"class\", \"category\": \"type\", \"display\": \"Model\", \"line\": 5, \"path\": \"app/Models/Model.php\"}",
+          "line": 5,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"symbol\", \"symbol\": \"App\\\\Models\\\\Model::find\", \"kind\": \"method\", \"category\": \"callable\", \"display\": \"find\", \"line\": 7, \"path\": \"app/Models/Model.php\"}",
+          "line": 7,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"symbol\", \"symbol\": \"App\\\\Models\\\\Model::create\", \"kind\": \"method\", \"category\": \"callable\", \"display\": \"create\", \"line\": 12, \"path\": \"app/Models/Model.php\"}",
+          "line": 12,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        }
+      ]
+    },
+    "app/Repositories/JobRepository.php": {
+      "errors": 12,
+      "messages": [
+        {
+          "message": "capcov-fact:{\"fact\": \"analysed\", \"path\": \"app/Repositories/JobRepository.php\"}",
+          "line": 1,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"symbol\", \"symbol\": \"App\\\\Repositories\\\\JobRepository\", \"kind\": \"class\", \"category\": \"type\", \"display\": \"JobRepository\", \"line\": 9, \"path\": \"app/Repositories/JobRepository.php\"}",
+          "line": 9,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"symbol\", \"symbol\": \"App\\\\Repositories\\\\JobRepository::get\", \"kind\": \"method\", \"category\": \"callable\", \"display\": \"get\", \"line\": 11, \"path\": \"app/Repositories/JobRepository.php\"}",
+          "line": 11,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"call\", \"caller\": \"App\\\\Repositories\\\\JobRepository::get\", \"callee\": \"App\\\\Models\\\\Model::find\", \"kind\": \"direct\", \"line\": 13, \"path\": \"app/Repositories/JobRepository.php\"}",
+          "line": 13,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"op\", \"verb\": \"read\", \"entity\": \"App\\\\Models\\\\Job\", \"line\": 13, \"caller\": \"App\\\\Repositories\\\\JobRepository::get\", \"path\": \"app/Repositories/JobRepository.php\"}",
+          "line": 13,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"symbol\", \"symbol\": \"App\\\\Repositories\\\\JobRepository::writeAudit\", \"kind\": \"method\", \"category\": \"callable\", \"display\": \"writeAudit\", \"line\": 16, \"path\": \"app/Repositories/JobRepository.php\"}",
+          "line": 16,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"call\", \"caller\": \"App\\\\Repositories\\\\JobRepository::writeAudit\", \"callee\": \"App\\\\Models\\\\Model::create\", \"kind\": \"direct\", \"line\": 18, \"path\": \"app/Repositories/JobRepository.php\"}",
+          "line": 18,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"op\", \"verb\": \"create\", \"entity\": \"App\\\\Models\\\\AuditLog\", \"line\": 18, \"caller\": \"App\\\\Repositories\\\\JobRepository::writeAudit\", \"path\": \"app/Repositories/JobRepository.php\"}",
+          "line": 18,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"call\", \"caller\": \"App\\\\Repositories\\\\JobRepository::writeAudit\", \"callee\": \"Illuminate\\\\Database\\\\Query\\\\Builder::insert\", \"kind\": \"larastan-facade\", \"line\": 19, \"path\": \"app/Repositories/JobRepository.php\"}",
+          "line": 19,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"call\", \"caller\": \"App\\\\Repositories\\\\JobRepository::writeAudit\", \"callee\": \"Illuminate\\\\Database\\\\Query\\\\Builder::table\", \"kind\": \"larastan-facade\", \"line\": 19, \"path\": \"app/Repositories/JobRepository.php\"}",
+          "line": 19,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"entity\", \"entity\": \"audit_trail\", \"table\": \"audit_trail\", \"line\": 19, \"path\": \"app/Repositories/JobRepository.php\"}",
+          "line": 19,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"op\", \"verb\": \"create\", \"entity\": \"audit_trail\", \"line\": 19, \"caller\": \"App\\\\Repositories\\\\JobRepository::writeAudit\", \"path\": \"app/Repositories/JobRepository.php\"}",
+          "line": 19,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        }
+      ]
+    },
+    "app/Support/LegacyBridge.php": {
+      "errors": 3,
+      "messages": [
+        {
+          "message": "capcov-fact:{\"fact\": \"analysed\", \"path\": \"app/Support/LegacyBridge.php\"}",
+          "line": 1,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"symbol\", \"symbol\": \"App\\\\Support\\\\LegacyBridge\", \"kind\": \"class\", \"category\": \"type\", \"display\": \"LegacyBridge\", \"line\": 5, \"path\": \"app/Support/LegacyBridge.php\"}",
+          "line": 5,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"symbol\", \"symbol\": \"App\\\\Support\\\\LegacyBridge::__call\", \"kind\": \"method\", \"category\": \"callable\", \"display\": \"__call\", \"line\": 7, \"path\": \"app/Support/LegacyBridge.php\"}",
+          "line": 7,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        }
+      ]
+    },
+    "app/Support/LegacyGateway.php": {
+      "errors": 6,
+      "messages": [
+        {
+          "message": "capcov-fact:{\"fact\": \"analysed\", \"path\": \"app/Support/LegacyGateway.php\"}",
+          "line": 1,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"symbol\", \"symbol\": \"App\\\\Support\\\\LegacyGateway\", \"kind\": \"class\", \"category\": \"type\", \"display\": \"LegacyGateway\", \"line\": 7, \"path\": \"app/Support/LegacyGateway.php\"}",
+          "line": 7,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"symbol\", \"symbol\": \"App\\\\Support\\\\LegacyGateway::__construct\", \"kind\": \"method\", \"category\": \"callable\", \"display\": \"__construct\", \"line\": 11, \"path\": \"app/Support/LegacyGateway.php\"}",
+          "line": 11,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"symbol\", \"symbol\": \"App\\\\Support\\\\LegacyGateway::purge\", \"kind\": \"method\", \"category\": \"callable\", \"display\": \"purge\", \"line\": 16, \"path\": \"app/Support/LegacyGateway.php\"}",
+          "line": 16,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"call\", \"caller\": \"App\\\\Support\\\\LegacyGateway::purge\", \"callee\": \"Illuminate\\\\Database\\\\Eloquent\\\\Builder::where\", \"kind\": \"larastan-model-forward\", \"line\": 18, \"path\": \"app/Support/LegacyGateway.php\"}",
+          "line": 18,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"unresolved\", \"callee\": \"App\\\\Support\\\\LegacyBridge->purge\", \"reason\": \"magic-call\", \"line\": 20, \"caller\": \"App\\\\Support\\\\LegacyGateway::purge\", \"path\": \"app/Support/LegacyGateway.php\"}",
+          "line": 20,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        }
+      ]
+    },
+    "routes/web.php": {
+      "errors": 3,
+      "messages": [
+        {
+          "message": "capcov-fact:{\"fact\": \"analysed\", \"path\": \"routes/web.php\"}",
+          "line": 1,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"route\", \"surface\": \"http:GET /jobs/{id}\", \"handler\": \"App\\\\Http\\\\Controllers\\\\JobController::getJob\", \"line\": 6, \"path\": \"routes/web.php\"}",
+          "line": 6,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        },
+        {
+          "message": "capcov-fact:{\"fact\": \"route\", \"surface\": \"http:GET /jobs\", \"handler\": \"App\\\\Http\\\\Controllers\\\\JobController::listJobs\", \"line\": 7, \"path\": \"routes/web.php\"}",
+          "line": 7,
+          "ignorable": false,
+          "identifier": "capcov.fact"
+        }
+      ]
+    }
+  },
+  "errors": []
+}
