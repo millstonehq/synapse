@@ -1797,6 +1797,17 @@
               "variable": "L"
             }
           ]
+        },
+        {
+          "relation": "assumptions_describe_index",
+          "terms": [
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "IX"
+            }
+          ]
         }
       ],
       "head": {

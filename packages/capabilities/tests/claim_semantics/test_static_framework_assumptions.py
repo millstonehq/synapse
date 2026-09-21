@@ -1,6 +1,6 @@
 """Framework assumptions: a reviewed edge, and what it is allowed to settle.
 
-Seven properties, one per section.
+Eight properties, one per section.
 
 1. **A document, not a note.**  Every row names its framework, its mechanism and
    the file:line it stands for; the document names its reviewer, the commit it
@@ -45,6 +45,10 @@ Seven properties, one per section.
    closure standing, and re-derives ``static_entity_blocked_assumed`` naming the
    dispatcher again.  Nothing becomes dead: a dropped assumption is a missing
    premise, never a verdict.
+   Withdrawing instead the document's *binding to this index* does the same for
+   the same reason: every reviewed row stops applying here, so the coverage
+   witness -- which says every site is covered by a row of this document for
+   this index -- loses its basis and goes with it.
 
 7. **A row the producer cannot apply is enumerated, and the witness goes.**  A
    site the census gives a second unresolved callee is applied not at all
@@ -54,6 +58,13 @@ Seven properties, one per section.
    ``framework_assumption_unapplied`` row with its reason, each withholds
    ``assumptions_closed``, and the resolved account is byte-identical with the
    fragment merged and without it.
+
+8. **A reviewer's model lifted through the assumed edge.**  With the document
+   the lift exhibits the four edges the code has and reports the one the
+   reviewer intended and the code does not have -- under the map's, the edge
+   model's, the document's and the producer's closures at once.  One more
+   unresolved site than the document covers takes the last of those away and
+   the same row comes back as ``static_absence_unresolved_assumed``.
 
 The souffle sections skip, by name, where the executable is absent.
 """
@@ -113,6 +124,25 @@ CO_LOCATED_RESIDUE = [{"file": DISPATCH_PATH, "line": DISPATCH_LINE,
                        "callee": "reflect.ValueOf(fn).Call", "kind": "unresolved",
                        "reason": "reflection"}]
 
+#: A reviewer's high-level model of the fixture: every symbol the code's edges
+#: and the assumed edge run through is mapped, so a closed map lifts completely.
+CAPABILITY_MAP = {go_app.REGISTER: "bootstrap", DISPATCHER: "bootstrap",
+                  HANDLER: "jobs_api", go_app.FETCH: "jobs_service",
+                  go_app.REPO_GET: "jobs_store", go_app.REPO_WRITE: "jobs_store",
+                  go_app.DB_FIRST: "gorm", go_app.DB_CREATE: "gorm"}
+#: The four edges the code exhibits once the assumed edge joins the graph, plus
+#: one the reviewer intended and the code does not have.
+MODEL_EDGES = [["bootstrap", "jobs_api"], ["jobs_api", "jobs_service"],
+               ["jobs_service", "jobs_store"], ["jobs_store", "gorm"],
+               ["jobs_api", "metrics"]]
+LIFTED_EDGES = [["bootstrap", "jobs_api"], ["jobs_api", "jobs_service"],
+                ["jobs_service", "jobs_store"], ["jobs_store", "gorm"]]
+#: ``bootstrap -> jobs_api`` is the lift of the *assumed* edge: without the
+#: document the reviewer's first edge is not exhibited at all.
+ABSENT_MODEL_EDGE = [["jobs_api", "metrics"]]
+#: An edge the code has and this model omits -- a divergence under a closed one.
+UNMODELLED_EDGE = ["jobs_store", "gorm"]
+
 REVIEWER = "a reviewer <review@example.invalid>"
 COMMIT = "0" * 40
 EXPIRES = "2999-01-01"
@@ -155,6 +185,15 @@ def _ast(residue=None, *, registry_route: bool = True) -> dict:
     return ast
 
 
+def _model(*, edges=None, closed: bool = True,
+           edges_closed: bool = True) -> reflexion.CapabilityModel:
+    """The reviewer model above, optionally open or missing one declared edge."""
+    return reflexion.model_from_documents(
+        {"schema_version": 1, "closed": closed, "capabilities": dict(CAPABILITY_MAP)},
+        {"schema_version": 1, "closed": edges_closed,
+         "edges": [list(edge) for edge in (MODEL_EDGES if edges is None else edges)]})
+
+
 def _export(ast: dict):
     result = go_app.export(ast=ast)
     assert result.status == "complete", result.messages
@@ -178,7 +217,7 @@ def _bundle(ast: dict, assumptions: framework.AssumptionSet | None = None, *,
         observed = Bundle(export.relations, facts=(atom,), evidence=(record,))
         return combine(export, observed, *fragments, validate=True), index
     return framework.attach(export, ast, assumptions, *fragments, model=model,
-                            tree_digest=None if model else tree), index
+                            tree_digest=tree), index
 
 
 def _closure_of(bundle: Bundle) -> dict[str, list[list]]:
@@ -615,6 +654,63 @@ class WithdrawingTheRowPutsItBackTests(unittest.TestCase):
                                  _payload(self.before, relation))
 
 
+class WithdrawingTheBindingTakesTheWitnessTests(unittest.TestCase):
+    """Section 6, the other withdrawal: the document's binding to this index.
+
+    ``assumptions_describe_index`` is what makes the document a statement about
+    *this* index.  Withdraw it and every reviewed row stops applying here -- so
+    the residue site it covered is undischarged again, and the coverage witness
+    ("every unresolved site in this scope is covered by a reviewed row of this
+    document for this index") has lost its basis and must go with it.  What
+    survives is the reviewer's own ``assumptions_closed``, a statement about the
+    document and not about this index, which is exactly what turns the
+    uncovered site into a named doubt rather than into silence: nothing becomes
+    dead because a premise was dropped.
+    """
+
+    def setUp(self) -> None:
+        self.bundle, self.index = _bundle(_ast(), _assumptions())
+        self.before = _closure_of(self.bundle)
+        describes = [record for record in assumption_registry.assumption_records(self.bundle)
+                     if record.atom.relation == framework.DESCRIBES_RELATION]
+        self.assertEqual(len(describes), 1, "one binding, one thing to withdraw")
+        self.reduced = assumption_registry.withdraw(self.bundle, [describes[0].id])
+        self.after = _closure_of(self.reduced)
+
+    def test_the_assumed_edges_stop_applying_to_this_index(self) -> None:
+        self.assertEqual(_payload(self.before, "static_edge_assumed"),
+                         [[DISPATCHER, HANDLER, "net/http"]])
+        self.assertEqual(_payload(self.after, "static_edge_assumed"), [])
+
+    def test_the_coverage_witness_goes_with_the_binding(self) -> None:
+        self.assertEqual(_payload(self.before, framework.CALL_GRAPH_CLOSED_RELATION), [["*"]])
+        self.assertEqual(_payload(self.after, framework.CALL_GRAPH_CLOSED_RELATION), [])
+        self.assertEqual(_payload(self.after, framework.CLOSED_RELATION),
+                         _payload(self.before, framework.CLOSED_RELATION),
+                         "the reviewer's closure is about the document, not this index")
+
+    def test_the_site_is_undischarged_rather_than_covered_by_a_row_for_nothing(self) -> None:
+        self.assertEqual(_payload(self.after, "static_assumed_site_undischarged"),
+                         [[DISPATCH_PATH, DISPATCH_LINE]])
+
+    def test_the_doubt_comes_back_and_nothing_becomes_dead(self) -> None:
+        self.assertEqual(_payload(self.before, "static_entity_dead_assumed"),
+                         [[REGISTRY_SURFACE, UNREACHED_ENTITY],
+                          [RESOLVED_SURFACE, UNREACHED_ENTITY]])
+        self.assertEqual(_payload(self.after, "static_entity_dead_assumed"), [])
+        self.assertEqual(_payload(self.after, "static_entity_blocked_assumed"),
+                         [[REGISTRY_SURFACE, "audit_logs", DISPATCHER],
+                          [REGISTRY_SURFACE, "jobs", DISPATCHER],
+                          [REGISTRY_SURFACE, UNREACHED_ENTITY, DISPATCHER]])
+
+    def test_the_resolved_account_never_moved(self) -> None:
+        for relation in ("static_edge", "static_capability_op", "static_entity_blocked",
+                         closure.CLOSED_RELATION):
+            with self.subTest(relation=relation):
+                self.assertEqual(_payload(self.after, relation),
+                                 _payload(self.before, relation))
+
+
 class ARowThatCannotBeAppliedIsEnumeratedTests(unittest.TestCase):
     """Section 7."""
 
@@ -698,6 +794,104 @@ class ARowThatCannotBeAppliedIsEnumeratedTests(unittest.TestCase):
         bundle, _ = _bundle(_ast(REGISTRY_RESIDUE + CO_LOCATED_RESIDUE), _assumptions())
         with tempfile.TemporaryDirectory() as tmp:
             result = compare(bundle, replay_root=str(Path(tmp) / "unapplied"))
+            self.assertTrue(result.matched, result.replay_path)
+
+
+class ReflexionBesideTheAssumptionTests(unittest.TestCase):
+    """Section 8: the reviewer's model lifted through the assumed edge.
+
+    Without the document the reviewer's ``jobs_api -> metrics`` cannot be called
+    absent at all: the registry's dispatch site is residue, so
+    ``call_graph_closed`` is withheld and the resolved account reports it
+    unresolved.  With it, the same lift converges on the four edges the code has
+    and reports exactly one absence.
+
+    That absence is the one negation in this pack that is a claim about the
+    *code* ("the code does not have an edge the reviewer intended"), so it is
+    licensed by three witnesses at once: the reviewer's ``capability_map_closed``
+    and ``capability_edge_closed``, their ``assumptions_closed``, and the
+    producer's ``call_graph_closed_assumed``.  Withhold the last -- one more
+    unresolved site than the document covers -- and the same row comes back as
+    ``static_absence_unresolved_assumed`` instead.
+    """
+
+    def setUp(self) -> None:
+        self.bundle, self.index = _bundle(_ast(), _assumptions(), model=_model())
+        self.relations = _closure_of(self.bundle)
+
+    def test_the_index_is_observed_so_the_entity_account_is_not_vacuous(self) -> None:
+        """The helper emits the claim-time tree observation with a model too."""
+        self.assertEqual(_payload(self.relations, "source_tree_observed"), [[]])
+        self.assertEqual(_payload(self.relations, "static_capability_op_assumed"),
+                         [[REGISTRY_SURFACE, "audit_logs", "create"],
+                          [REGISTRY_SURFACE, "jobs", "read"],
+                          [RESOLVED_SURFACE, "audit_logs", "create"],
+                          [RESOLVED_SURFACE, "jobs", "read"]])
+
+    def test_the_lift_matches_the_resolved_one_and_the_closure_does_not(self) -> None:
+        """What the assumption moves here is the closure, not the lift.
+
+        ``bootstrap -> jobs_api`` is already exhibited without the document --
+        the registry's ``Register`` holds the handler as a value -- so both
+        lifts carry the same four edges.  The resolved account still cannot say
+        the reviewer's fifth edge is missing, because its dispatch site is
+        residue and ``call_graph_closed`` is withheld; the assumed account can.
+        """
+        self.assertEqual(_payload(self.relations, "static_low_edge_assumed"), LIFTED_EDGES)
+        self.assertEqual(_payload(self.relations, "static_low_edge"), LIFTED_EDGES)
+        self.assertEqual(_payload(self.relations, "static_absence_unresolved"),
+                         ABSENT_MODEL_EDGE)
+
+    def test_convergence_and_absence_under_the_assumed_closure(self) -> None:
+        self.assertEqual(_payload(self.relations, "static_convergence_assumed"), LIFTED_EDGES)
+        self.assertEqual(_payload(self.relations, "static_model_edge_unlifted_assumed"),
+                         ABSENT_MODEL_EDGE)
+        self.assertEqual(_payload(self.relations, "static_absence_assumed"), ABSENT_MODEL_EDGE)
+        self.assertEqual(_payload(self.relations, "static_absence_unresolved_assumed"), [])
+        self.assertEqual(_payload(self.relations, "static_divergence_assumed"), [],
+                         "this model declares every edge the lift exhibits")
+        self.assertEqual(_payload(self.relations, "static_absence"), [],
+                         "the resolved account cannot close over the dispatch site")
+
+    def test_an_edge_the_model_omits_is_a_divergence_under_a_closed_model(self) -> None:
+        edges = [edge for edge in MODEL_EDGES if edge != UNMODELLED_EDGE]
+        relations = _closure_of(_bundle(_ast(), _assumptions(), model=_model(edges=edges))[0])
+        self.assertEqual(_payload(relations, "static_divergence_assumed"), [UNMODELLED_EDGE])
+        self.assertEqual(_payload(relations, "static_convergence_assumed"),
+                         [edge for edge in LIFTED_EDGES if edge != UNMODELLED_EDGE])
+
+    def test_an_open_model_licenses_no_negation(self) -> None:
+        relations = _closure_of(_bundle(_ast(), _assumptions(),
+                                        model=_model(closed=False, edges_closed=False))[0])
+        self.assertEqual(_payload(relations, "static_low_edge_assumed"), LIFTED_EDGES,
+                         "what is exhibited needs no closure")
+        for relation in ("static_low_edge_closed_assumed", "static_model_edge_unlifted_assumed",
+                         "static_absence_assumed", "static_divergence_assumed"):
+            with self.subTest(relation=relation):
+                self.assertEqual(_payload(relations, relation), [])
+
+    def test_an_undischarged_site_turns_the_absence_into_a_question(self) -> None:
+        """The producer's witness withheld: a site no reviewed row covers."""
+        ast = _ast(REGISTRY_RESIDUE + [{"file": "internal/service/service.go", "line": 12,
+                                        "callee": "h.dispatch", "kind": "unresolved",
+                                        "reason": "dynamic"}])
+        relations = _closure_of(_bundle(ast, _assumptions(), model=_model())[0])
+        self.assertEqual(_payload(relations, framework.CLOSED_RELATION),
+                         _payload(self.relations, framework.CLOSED_RELATION),
+                         "the reviewer said their set is complete; that has not changed")
+        self.assertEqual(_payload(relations, framework.CALL_GRAPH_CLOSED_RELATION), [])
+        self.assertEqual(_payload(relations, "static_absence_assumed"), [])
+        self.assertEqual(_payload(relations, "static_absence_unresolved_assumed"),
+                         ABSENT_MODEL_EDGE)
+        self.assertEqual(_payload(relations, "static_convergence_assumed"), LIFTED_EDGES,
+                         "the lift does not move; only what is closed does")
+
+    @unittest.skipUnless(_HAVE_SOUFFLE, "needs the souffle executable")
+    def test_both_kernels_agree(self) -> None:
+        from capcov.claims.differential import compare
+
+        with tempfile.TemporaryDirectory() as tmp:
+            result = compare(self.bundle, replay_root=str(Path(tmp) / "assumed-model"))
             self.assertTrue(result.matched, result.replay_path)
 
 

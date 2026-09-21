@@ -527,9 +527,10 @@ def assumptions_bundle(export: Bundle, ast_raw: Mapping[str, Any], assumptions: 
     # depend on the INDEX and not on the edge rows: withdrawing one edge must
     # leave the closure standing, so the site it used to cover comes back as
     # undischarged rather than as nothing at all.
-    emit(DESCRIBES_RELATION, [document_digest, index],
-         f"{PRODUCER_CLASS} {signature} {CONTRACT_DESCRIBES} {document_digest}",
-         kind="assumption")
+    describes_id = emit(DESCRIBES_RELATION, [document_digest, index],
+                        f"{PRODUCER_CLASS} {signature} {CONTRACT_DESCRIBES} "
+                        f"{document_digest}",
+                        kind="assumption")
     scope_kind = dict(metadata["scope"]).get("kind")
     closed = bool(assumptions.closed) and not unapplied and scope_kind == scip_facts.SCOPE_ALL
     if closed:
@@ -546,12 +547,14 @@ def assumptions_bundle(export: Bundle, ast_raw: Mapping[str, Any], assumptions: 
             if any(path in documents for path, _ in undischarged):
                 continue
             # The witness is "every unresolved site in this scope is covered by
-            # a row", so it rests on those rows: withdrawing one must take the
+            # a reviewed row of THIS document for THIS index", so it rests on
+            # those rows AND on the binding: withdrawing one must take the
             # witness with it, or a site nothing covers any more would still be
             # inside a closed call graph and its entity would read as dead.
             add(CALL_GRAPH_CLOSED_RELATION, [token], witness_source,
-                rests_on=[eid for site, ids in covered.items() if site[0] in documents
-                          for eid in ids])
+                rests_on=[describes_id,
+                          *(eid for site, ids in covered.items() if site[0] in documents
+                            for eid in ids)])
             closed_tokens.append(token)
 
     if tree_digest is not None:
