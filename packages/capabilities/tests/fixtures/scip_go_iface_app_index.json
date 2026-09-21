@@ -1,0 +1,901 @@
+{
+  "documents": [
+    {
+      "language": "go",
+      "occurrences": [
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            0,
+            8,
+            11
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/api`/",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            2,
+            8,
+            41
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "enclosing_range": [
+            5,
+            0,
+            7,
+            1
+          ],
+          "range": [
+            5,
+            5,
+            13
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/api`/GetThing().",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            5,
+            14,
+            18
+          ],
+          "symbol": "local 0",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            5,
+            19,
+            24
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            5,
+            25,
+            29
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Repo#",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            5,
+            31,
+            33
+          ],
+          "symbol": "local 1",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            5,
+            39,
+            44
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            5,
+            45,
+            50
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Thing#",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            6,
+            8,
+            12
+          ],
+          "symbol": "local 0",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            6,
+            13,
+            18
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Repo#Fetch.",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            6,
+            19,
+            21
+          ],
+          "symbol": "local 1",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "enclosing_range": [
+            10,
+            0,
+            12,
+            1
+          ],
+          "range": [
+            10,
+            5,
+            13
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/api`/Register().",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            11,
+            1,
+            7
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/api`/handle().",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            11,
+            28,
+            36
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/api`/GetThing().",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "enclosing_range": [
+            14,
+            0,
+            67
+          ],
+          "range": [
+            14,
+            5,
+            11
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/api`/handle().",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            14,
+            12,
+            19
+          ],
+          "symbol": "local 2",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            14,
+            28,
+            29
+          ],
+          "symbol": "local 3",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            14,
+            35,
+            40
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            14,
+            41,
+            45
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Repo#",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            14,
+            52,
+            57
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            14,
+            58,
+            63
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Thing#",
+          "symbol_roles": 8
+        }
+      ],
+      "relative_path": "api/api.go",
+      "symbols": [
+        {
+          "display_name": "api",
+          "kind": 35,
+          "signature_documentation": {
+            "language": "go",
+            "text": "package api"
+          },
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/api`/"
+        },
+        {
+          "display_name": "GetThing",
+          "documentation": [
+            "GetThing is the route handler; it dispatches through the interface."
+          ],
+          "kind": 17,
+          "signature_documentation": {
+            "language": "go",
+            "text": "func GetThing(repo store.Repo, id int) store.Thing"
+          },
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/api`/GetThing()."
+        },
+        {
+          "display_name": "Register",
+          "documentation": [
+            "Register mounts the route."
+          ],
+          "kind": 17,
+          "signature_documentation": {
+            "language": "go",
+            "text": "func Register()"
+          },
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/api`/Register()."
+        },
+        {
+          "display_name": "handle",
+          "kind": 17,
+          "signature_documentation": {
+            "language": "go",
+            "text": "func handle(pattern string, h func(store.Repo, int) store.Thing)"
+          },
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/api`/handle()."
+        },
+        {
+          "display_name": "h",
+          "kind": 61,
+          "signature_documentation": {
+            "language": "go",
+            "text": "var h func(Repo, int) Thing"
+          },
+          "symbol": "local 3"
+        },
+        {
+          "display_name": "repo",
+          "kind": 61,
+          "signature_documentation": {
+            "language": "go",
+            "text": "var repo Repo"
+          },
+          "symbol": "local 0"
+        },
+        {
+          "display_name": "id",
+          "kind": 61,
+          "signature_documentation": {
+            "language": "go",
+            "text": "var id int"
+          },
+          "symbol": "local 1"
+        },
+        {
+          "display_name": "pattern",
+          "kind": 61,
+          "signature_documentation": {
+            "language": "go",
+            "text": "var pattern string"
+          },
+          "symbol": "local 2"
+        }
+      ]
+    },
+    {
+      "language": "go",
+      "occurrences": [
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            0,
+            8,
+            13
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            3,
+            5,
+            10
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Thing#",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            4,
+            1,
+            3
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Thing#ID.",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            8,
+            5,
+            9
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Repo#",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            9,
+            1,
+            6
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Repo#Fetch.",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            9,
+            7,
+            9
+          ],
+          "symbol": "local 0",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            9,
+            15,
+            20
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Thing#",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            13,
+            5,
+            8
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/SQL#",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            16,
+            6,
+            7
+          ],
+          "symbol": "local 1",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            16,
+            9,
+            12
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/SQL#",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "enclosing_range": [
+            16,
+            0,
+            18,
+            1
+          ],
+          "range": [
+            16,
+            14,
+            19
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/SQL#Fetch().",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            16,
+            20,
+            22
+          ],
+          "symbol": "local 2",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            16,
+            28,
+            33
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Thing#",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            17,
+            8,
+            13
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/query().",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            17,
+            14,
+            16
+          ],
+          "symbol": "local 2",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            21,
+            5,
+            11
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Memory#",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            24,
+            6,
+            7
+          ],
+          "symbol": "local 3",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            24,
+            9,
+            15
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Memory#",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "enclosing_range": [
+            24,
+            0,
+            26,
+            1
+          ],
+          "range": [
+            24,
+            17,
+            22
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Memory#Fetch().",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            24,
+            23,
+            25
+          ],
+          "symbol": "local 4",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            24,
+            31,
+            36
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Thing#",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            25,
+            8,
+            13
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Thing#",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            25,
+            14,
+            16
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Thing#ID.",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            25,
+            18,
+            20
+          ],
+          "symbol": "local 4",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "enclosing_range": [
+            28,
+            0,
+            49
+          ],
+          "range": [
+            28,
+            5,
+            10
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/query().",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            28,
+            11,
+            13
+          ],
+          "symbol": "local 5",
+          "symbol_roles": 1
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            28,
+            19,
+            24
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Thing#",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            28,
+            34,
+            39
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Thing#",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            28,
+            40,
+            42
+          ],
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Thing#ID.",
+          "symbol_roles": 8
+        },
+        {
+          "TypedEnclosingRange": null,
+          "TypedRange": null,
+          "range": [
+            28,
+            44,
+            46
+          ],
+          "symbol": "local 5",
+          "symbol_roles": 8
+        }
+      ],
+      "relative_path": "store/store.go",
+      "symbols": [
+        {
+          "display_name": "store",
+          "kind": 35,
+          "signature_documentation": {
+            "language": "go",
+            "text": "package store"
+          },
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/"
+        },
+        {
+          "display_name": "Thing",
+          "documentation": [
+            "Thing is the stored entity."
+          ],
+          "kind": 49,
+          "signature_documentation": {
+            "language": "go",
+            "text": "type Thing struct{ ID int }"
+          },
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Thing#"
+        },
+        {
+          "display_name": "Repo",
+          "documentation": [
+            "Repo is what a handler is handed: the dispatch through it is dynamic."
+          ],
+          "kind": 21,
+          "signature_documentation": {
+            "language": "go",
+            "text": "type Repo interface{ Fetch(id int) Thing }"
+          },
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Repo#"
+        },
+        {
+          "display_name": "SQL",
+          "documentation": [
+            "SQL is the storage-backed implementation."
+          ],
+          "kind": 49,
+          "relationships": [
+            {
+              "is_implementation": true,
+              "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Repo#"
+            }
+          ],
+          "signature_documentation": {
+            "language": "go",
+            "text": "type SQL struct{}"
+          },
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/SQL#"
+        },
+        {
+          "display_name": "Fetch",
+          "documentation": [
+            "Fetch reads one row of the things table."
+          ],
+          "kind": 26,
+          "relationships": [
+            {
+              "is_implementation": true,
+              "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Repo#Fetch."
+            }
+          ],
+          "signature_documentation": {
+            "language": "go",
+            "text": "func (*SQL).Fetch(id int) Thing"
+          },
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/SQL#Fetch()."
+        },
+        {
+          "display_name": "Fetch",
+          "documentation": [
+            "Fetch answers from memory and reads nothing."
+          ],
+          "kind": 26,
+          "relationships": [
+            {
+              "is_implementation": true,
+              "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Repo#Fetch."
+            }
+          ],
+          "signature_documentation": {
+            "language": "go",
+            "text": "func (*Memory).Fetch(id int) Thing"
+          },
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Memory#Fetch()."
+        },
+        {
+          "display_name": "query",
+          "kind": 17,
+          "signature_documentation": {
+            "language": "go",
+            "text": "func query(id int) Thing"
+          },
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/query()."
+        },
+        {
+          "display_name": "ID",
+          "kind": 15,
+          "signature_documentation": {
+            "language": "go",
+            "text": "struct field ID int"
+          },
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Thing#ID."
+        },
+        {
+          "display_name": "Fetch",
+          "kind": 67,
+          "signature_documentation": {
+            "language": "go",
+            "text": "func (Repo).Fetch(id int) Thing"
+          },
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Repo#Fetch."
+        },
+        {
+          "display_name": "Memory",
+          "documentation": [
+            "Memory is a second implementation that touches no store."
+          ],
+          "kind": 49,
+          "relationships": [
+            {
+              "is_implementation": true,
+              "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Repo#"
+            }
+          ],
+          "signature_documentation": {
+            "language": "go",
+            "text": "type Memory struct{}"
+          },
+          "symbol": "scip-go gomod github.com/example/ifacesvc . `github.com/example/ifacesvc/store`/Memory#"
+        },
+        {
+          "display_name": "id",
+          "kind": 61,
+          "signature_documentation": {
+            "language": "go",
+            "text": "var id int"
+          },
+          "symbol": "local 0"
+        },
+        {
+          "display_name": "s",
+          "kind": 61,
+          "signature_documentation": {
+            "language": "go",
+            "text": "var s *SQL"
+          },
+          "symbol": "local 1"
+        },
+        {
+          "display_name": "id",
+          "kind": 61,
+          "signature_documentation": {
+            "language": "go",
+            "text": "var id int"
+          },
+          "symbol": "local 2"
+        },
+        {
+          "display_name": "m",
+          "kind": 61,
+          "signature_documentation": {
+            "language": "go",
+            "text": "var m *Memory"
+          },
+          "symbol": "local 3"
+        },
+        {
+          "display_name": "id",
+          "kind": 61,
+          "signature_documentation": {
+            "language": "go",
+            "text": "var id int"
+          },
+          "symbol": "local 4"
+        },
+        {
+          "display_name": "id",
+          "kind": 61,
+          "signature_documentation": {
+            "language": "go",
+            "text": "var id int"
+          },
+          "symbol": "local 5"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "text_document_encoding": 1,
+    "tool_info": {
+      "arguments": [
+        "--output",
+        "index.scip"
+      ],
+      "name": "scip-go",
+      "version": "0.2.7"
+    }
+  }
+}

@@ -1,0 +1,3088 @@
+{
+  "base_pack": "rules-static-v1",
+  "borrowed_declarations": [
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "capability_edge",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "capability_edge",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "capability_edge_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "capability",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "capability_map",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "capability_map",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "capability_map_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "map",
+          "type": "digest"
+        },
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [
+        "map",
+        "index"
+      ],
+      "compatibility_targets": [
+        "capability_map",
+        "static_edge"
+      ],
+      "completes": null,
+      "context_indices": [
+        "map",
+        "index"
+      ],
+      "finite": false,
+      "modality": "compatibility",
+      "name": "capability_map_describes_index",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "related",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "kind",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "scip_relationship",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_edge",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_entity",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_index_current",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "verb",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_op_owner",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_reaches",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_root",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_route_handler",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "scope_kind",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "scope_value",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_scope",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_site_owner",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "file",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_unresolved_call_site",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "scip"
+      ]
+    }
+  ],
+  "closure_pack": "rules-static-closure-v1",
+  "derived": [
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "static_absence_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_absence_unresolved_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "verb",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_capability_op_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_cha_site_discharged",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "static_cha_site_discharged",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "static_cha_site_discharged_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_cha_site_undischarged",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_convergence_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "static_divergence_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "via_interface",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_edge_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "via",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "static_entity_blocked_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_entity_bound_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "static_entity_bound_cha",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "static_entity_bound_closed_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "static_entity_dead_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_entity_unbound_in_index_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_entity_unresolved_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_low_edge_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "static_low_edge_cha",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "static_low_edge_closed_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_model_edge_unlifted_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "verb",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_path_to_storage_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_reaches_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_reaches_cha_eq",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_unresolved_on_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    }
+  ],
+  "description": "Opt-in class-hierarchy-analysis layer over rules-static-v1, rules-static-closure-v1 and rules-static-reflexion-v1: the dynamic-dispatch sites a SCIP index resolves only to an interface member, expanded through the index's own implementation relationships into static_edge_cha -- a relation of its own, never a widening of static_edge, which call_graph_closed completes. static_reaches_cha is reachability over the resolved graph plus those expansions; every verdict read off it is reported as a separate *_cha row, because a CHA edge is a may-edge: it over-approximates on the positive side (an expansion need not be realisable) and is therefore only stronger on the negative side (an entity no expansion reaches). Its own witnesses: static_edge_cha_closed (every dispatch site in the index expanded, nothing enumerated as unexpanded) and call_graph_closed_cha (that, and every unresolved call site in the scope discharged by an expansion of the site itself).",
+  "id": "rules-static-cha-v1",
+  "primitives": [
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "scope",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "static_reaches_cha",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "call_graph_closed_cha",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "scip"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        },
+        {
+          "context": false,
+          "name": "interface_symbol",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "reason",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_cha_unexpanded_site",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "scip"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "static_edge_cha",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "static_edge_cha_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "scip"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "caller",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "interface_symbol",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_interface_dispatch_site",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "scip"
+      ]
+    }
+  ],
+  "reflexion_pack": "rules-static-reflexion-v1",
+  "rules": [
+    {
+      "body": [
+        {
+          "relation": "static_interface_dispatch_site",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "From"
+            },
+            {
+              "variable": "Iface"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            }
+          ]
+        },
+        {
+          "relation": "scip_relationship",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "To"
+            },
+            {
+              "variable": "Iface"
+            },
+            {
+              "type": "symbol",
+              "value": "implementation"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_edge_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "From"
+          },
+          {
+            "variable": "To"
+          },
+          {
+            "variable": "Iface"
+          }
+        ]
+      },
+      "name": "static_edge_cha_expanded_through_an_implementation"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_reaches",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "R"
+            },
+            {
+              "variable": "D"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_reaches_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "R"
+          },
+          {
+            "variable": "D"
+          }
+        ]
+      },
+      "name": "static_reaches_cha_contains_the_resolved_graph"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_root",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "R"
+            }
+          ]
+        },
+        {
+          "relation": "static_edge_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "R"
+            },
+            {
+              "variable": "D"
+            },
+            {
+              "variable": "Iface"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_reaches_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "R"
+          },
+          {
+            "variable": "D"
+          }
+        ]
+      },
+      "name": "static_reaches_cha_base_dispatch"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_reaches_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "R"
+            },
+            {
+              "variable": "Mid"
+            }
+          ]
+        },
+        {
+          "relation": "static_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Mid"
+            },
+            {
+              "variable": "D"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_reaches_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "R"
+          },
+          {
+            "variable": "D"
+          }
+        ]
+      },
+      "name": "static_reaches_cha_step"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_reaches_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "R"
+            },
+            {
+              "variable": "Mid"
+            }
+          ]
+        },
+        {
+          "relation": "static_edge_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Mid"
+            },
+            {
+              "variable": "D"
+            },
+            {
+              "variable": "Iface"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_reaches_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "R"
+          },
+          {
+            "variable": "D"
+          }
+        ]
+      },
+      "name": "static_reaches_cha_step_dispatch"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_root",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "R"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_reaches_cha_eq",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "R"
+          },
+          {
+            "variable": "R"
+          }
+        ]
+      },
+      "name": "static_reaches_cha_eq_refl"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_reaches_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "R"
+            },
+            {
+              "variable": "D"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_reaches_cha_eq",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "R"
+          },
+          {
+            "variable": "D"
+          }
+        ]
+      },
+      "name": "static_reaches_cha_eq_step"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_unresolved_call_site",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "Callee"
+            }
+          ]
+        },
+        {
+          "relation": "static_interface_dispatch_site",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "From"
+            },
+            {
+              "variable": "Iface"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            }
+          ]
+        },
+        {
+          "relation": "static_edge_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "From"
+            },
+            {
+              "variable": "To"
+            },
+            {
+              "variable": "Iface"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_cha_site_discharged",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "P"
+          },
+          {
+            "variable": "L"
+          }
+        ]
+      },
+      "name": "static_cha_site_discharged_by_an_expansion"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_unresolved_call_site",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "Callee"
+            }
+          ]
+        },
+        {
+          "relation": "static_edge_cha_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_cha_site_discharged_closed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "P"
+          },
+          {
+            "variable": "L"
+          }
+        ]
+      },
+      "name": "static_cha_site_discharged_closed_over_a_closed_expansion"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_unresolved_call_site",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "Callee"
+            }
+          ]
+        },
+        {
+          "relation": "static_cha_site_discharged_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "static_cha_site_discharged",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_cha_site_undischarged",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "P"
+          },
+          {
+            "variable": "L"
+          }
+        ]
+      },
+      "name": "static_cha_site_undischarged_under_a_closed_expansion"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_cha_site_undischarged",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            }
+          ]
+        },
+        {
+          "relation": "static_site_owner",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "N"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_unresolved_on_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "N"
+          }
+        ]
+      },
+      "name": "static_unresolved_on_cha_owning_symbol"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_route_handler",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "H"
+            }
+          ]
+        },
+        {
+          "relation": "static_reaches_cha_eq",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "H"
+            },
+            {
+              "variable": "N"
+            }
+          ]
+        },
+        {
+          "relation": "static_op_owner",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "N"
+            },
+            {
+              "variable": "E"
+            },
+            {
+              "variable": "Verb"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_path_to_storage_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          },
+          {
+            "variable": "Verb"
+          }
+        ]
+      },
+      "name": "static_path_to_storage_cha"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_path_to_storage_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            },
+            {
+              "variable": "Verb"
+            }
+          ]
+        },
+        {
+          "relation": "static_index_current",
+          "terms": [
+            {
+              "variable": "IX"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_capability_op_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          },
+          {
+            "variable": "Verb"
+          }
+        ]
+      },
+      "name": "static_capability_op_cha"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_capability_op_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            },
+            {
+              "variable": "Verb"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_bound_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_bound_cha_from_the_capability_op"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_route_handler",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "H"
+            }
+          ]
+        },
+        {
+          "relation": "static_entity",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "E"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "T"
+            }
+          ]
+        },
+        {
+          "relation": "static_index_current",
+          "terms": [
+            {
+              "variable": "IX"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_bound_closed_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_bound_closed_cha_over_a_current_index"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_route_handler",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "H"
+            }
+          ]
+        },
+        {
+          "relation": "static_entity",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "E"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "T"
+            }
+          ]
+        },
+        {
+          "relation": "static_entity_bound_closed_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "static_entity_bound_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_unbound_in_index_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_unbound_in_index_cha_exhibits_no_op"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_entity_unbound_in_index_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        },
+        {
+          "relation": "static_scope",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "type": "symbol",
+              "value": "all"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "call_graph_closed_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "static_edge_cha_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_dead_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_dead_cha_all"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_entity_unbound_in_index_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        },
+        {
+          "relation": "static_scope",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "type": "symbol",
+              "value": "package_prefix"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "call_graph_closed_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "static_edge_cha_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_dead_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_dead_cha_package_prefix"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_entity_unbound_in_index_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        },
+        {
+          "relation": "static_route_handler",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "H"
+            }
+          ]
+        },
+        {
+          "relation": "static_reaches_cha_eq",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "H"
+            },
+            {
+              "variable": "N"
+            }
+          ]
+        },
+        {
+          "relation": "static_unresolved_on_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "N"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_blocked_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          },
+          {
+            "variable": "N"
+          }
+        ]
+      },
+      "name": "static_entity_blocked_cha_by_a_reachable_undischarged_site"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_entity_unbound_in_index_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        },
+        {
+          "relation": "static_cha_site_undischarged",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_unresolved_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_unresolved_cha_while_a_site_is_undischarged"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "X"
+            },
+            {
+              "variable": "Y"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "X"
+            },
+            {
+              "variable": "A"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Y"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map_describes_index",
+          "terms": [
+            {
+              "variable": "Map"
+            },
+            {
+              "variable": "IX"
+            }
+          ]
+        },
+        {
+          "left": {
+            "variable": "A"
+          },
+          "operator": "!=",
+          "right": {
+            "variable": "B"
+          }
+        }
+      ],
+      "head": {
+        "relation": "static_low_edge_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_low_edge_cha_lifted_through_the_map"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_edge_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "X"
+            },
+            {
+              "variable": "Y"
+            },
+            {
+              "variable": "Iface"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "X"
+            },
+            {
+              "variable": "A"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Y"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map_describes_index",
+          "terms": [
+            {
+              "variable": "Map"
+            },
+            {
+              "variable": "IX"
+            }
+          ]
+        },
+        {
+          "left": {
+            "variable": "A"
+          },
+          "operator": "!=",
+          "right": {
+            "variable": "B"
+          }
+        }
+      ],
+      "head": {
+        "relation": "static_low_edge_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_low_edge_cha_lifted_through_a_dispatch"
+    },
+    {
+      "body": [
+        {
+          "relation": "capability_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            }
+          ]
+        },
+        {
+          "relation": "static_edge_cha_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map_describes_index",
+          "terms": [
+            {
+              "variable": "Map"
+            },
+            {
+              "variable": "IX"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_low_edge_closed_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_low_edge_closed_cha_over_a_closed_map_and_expansion"
+    },
+    {
+      "body": [
+        {
+          "relation": "capability_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "static_low_edge_closed_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "static_low_edge_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_model_edge_unlifted_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_model_edge_unlifted_cha_under_a_closed_lift"
+    },
+    {
+      "body": [
+        {
+          "relation": "capability_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "static_low_edge_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_convergence_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_convergence_cha_model_edge_exhibited"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_low_edge_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "capability_edge_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "capability_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_divergence_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_divergence_cha_under_a_closed_model"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_model_edge_unlifted_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "static_scope",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "type": "symbol",
+              "value": "all"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "call_graph_closed_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "static_edge_cha_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_absence_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_absence_cha_all"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_model_edge_unlifted_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "static_scope",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "type": "symbol",
+              "value": "package_prefix"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "call_graph_closed_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "static_edge_cha_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_absence_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_absence_cha_package_prefix"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_model_edge_unlifted_cha",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "static_cha_site_undischarged",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_absence_unresolved_cha",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_absence_unresolved_cha_undischarged_site"
+    }
+  ],
+  "schema_version": 1
+}
