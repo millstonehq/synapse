@@ -1,0 +1,1330 @@
+{
+  "base_pack": "rules-static-v1",
+  "borrowed_declarations": [
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_index_current",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": true,
+      "modality": "derived",
+      "name": "static_route_declared_surface",
+      "nonempty": true,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_route_handler",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_reaches_eq",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_route_reaches_table",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "static_route_reaches_table",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "static_route_reaches_table_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "file",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_unresolved_call_site",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "phpstan",
+        "scip"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_unresolved_on",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    }
+  ],
+  "closure_pack": "rules-static-closure-v1",
+  "derived": [
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "incumbent_surface",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "op_maps_incumbent",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "op_maps_incumbent",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "op_maps_incumbent_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "candidate",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "candidate_surface",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "parity_incumbent_table",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "static_route_reaches_table",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "parity_reach_in_index_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "candidate",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "candidate_surface",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "parity_table_unreached_in_index",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_parity",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "parity_static_only_incumbent",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "via",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "parity_blocked",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "parity_unresolved",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "incumbent_surface",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "parity_route_unmapped",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    }
+  ],
+  "description": "Opt-in static parity layer: one reviewer-owned operation map (which incumbent route answers the same operation as which candidate route), asserted against two static indexes in one bundle, and the verdicts that join licenses -- the stores both sides reach, a store only the incumbent reaches under the candidate's own call-graph closure, the same question left open by the candidate's residue (blocked, naming the symbol the doubt enters through), and an incumbent route a closed map does not cover.",
+  "id": "rules-static-parity-v1",
+  "primitives": [
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "op",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "incumbent_surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "candidate_surface",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "op_maps",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "op_maps",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "op_maps_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "map",
+          "type": "digest"
+        },
+        {
+          "context": true,
+          "name": "incumbent",
+          "type": "digest"
+        },
+        {
+          "context": true,
+          "name": "candidate",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [
+        "incumbent",
+        "candidate"
+      ],
+      "compatibility_targets": [
+        "parity_incumbent_table",
+        "parity_reach_in_index_closed",
+        "parity_table_unreached_in_index",
+        "static_index_current",
+        "static_reaches_eq",
+        "static_route_handler",
+        "static_route_reaches_table",
+        "static_route_reaches_table_closed",
+        "static_unresolved_call_site",
+        "static_unresolved_on"
+      ],
+      "completes": null,
+      "context_indices": [
+        "map",
+        "incumbent",
+        "candidate"
+      ],
+      "finite": false,
+      "modality": "compatibility",
+      "name": "op_maps_describes_indexes",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    }
+  ],
+  "reflexion_pack": "rules-static-reflexion-v1",
+  "rules": [
+    {
+      "body": [
+        {
+          "relation": "op_maps",
+          "terms": [
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "OP"
+            },
+            {
+              "variable": "SI"
+            },
+            {
+              "variable": "SC"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "op_maps_incumbent",
+        "terms": [
+          {
+            "variable": "I"
+          },
+          {
+            "variable": "SI"
+          }
+        ]
+      },
+      "name": "op_maps_incumbent_projected"
+    },
+    {
+      "body": [
+        {
+          "relation": "op_maps_closed",
+          "terms": [
+            {
+              "variable": "I"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "op_maps_incumbent_closed",
+        "terms": [
+          {
+            "variable": "I"
+          }
+        ]
+      },
+      "name": "op_maps_incumbent_closed_with_the_map"
+    },
+    {
+      "body": [
+        {
+          "relation": "op_maps",
+          "terms": [
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "OP"
+            },
+            {
+              "variable": "SI"
+            },
+            {
+              "variable": "SC"
+            }
+          ]
+        },
+        {
+          "relation": "op_maps_describes_indexes",
+          "terms": [
+            {
+              "variable": "Map"
+            },
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "C"
+            }
+          ]
+        },
+        {
+          "relation": "static_route_reaches_table",
+          "terms": [
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "SI"
+            },
+            {
+              "variable": "T"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "parity_incumbent_table",
+        "terms": [
+          {
+            "variable": "I"
+          },
+          {
+            "variable": "OP"
+          },
+          {
+            "variable": "T"
+          },
+          {
+            "variable": "C"
+          },
+          {
+            "variable": "SC"
+          }
+        ]
+      },
+      "name": "parity_incumbent_table_under_the_map"
+    },
+    {
+      "body": [
+        {
+          "relation": "parity_incumbent_table",
+          "terms": [
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "OP"
+            },
+            {
+              "variable": "T"
+            },
+            {
+              "variable": "C"
+            },
+            {
+              "variable": "SC"
+            }
+          ]
+        },
+        {
+          "relation": "op_maps_describes_indexes",
+          "terms": [
+            {
+              "variable": "Map"
+            },
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "C"
+            }
+          ]
+        },
+        {
+          "relation": "static_index_current",
+          "terms": [
+            {
+              "variable": "C"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "parity_reach_in_index_closed",
+        "terms": [
+          {
+            "variable": "C"
+          },
+          {
+            "variable": "SC"
+          },
+          {
+            "variable": "T"
+          }
+        ]
+      },
+      "name": "parity_reach_in_index_closed_over_a_current_candidate"
+    },
+    {
+      "body": [
+        {
+          "relation": "parity_incumbent_table",
+          "terms": [
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "OP"
+            },
+            {
+              "variable": "T"
+            },
+            {
+              "variable": "C"
+            },
+            {
+              "variable": "SC"
+            }
+          ]
+        },
+        {
+          "relation": "op_maps_describes_indexes",
+          "terms": [
+            {
+              "variable": "Map"
+            },
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "C"
+            }
+          ]
+        },
+        {
+          "relation": "parity_reach_in_index_closed",
+          "terms": [
+            {
+              "variable": "C"
+            },
+            {
+              "variable": "SC"
+            },
+            {
+              "variable": "T"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "static_route_reaches_table",
+          "terms": [
+            {
+              "variable": "C"
+            },
+            {
+              "variable": "SC"
+            },
+            {
+              "variable": "T"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "parity_table_unreached_in_index",
+        "terms": [
+          {
+            "variable": "I"
+          },
+          {
+            "variable": "OP"
+          },
+          {
+            "variable": "T"
+          },
+          {
+            "variable": "C"
+          },
+          {
+            "variable": "SC"
+          }
+        ]
+      },
+      "name": "parity_table_unreached_in_the_candidate_index"
+    },
+    {
+      "body": [
+        {
+          "relation": "parity_incumbent_table",
+          "terms": [
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "OP"
+            },
+            {
+              "variable": "T"
+            },
+            {
+              "variable": "C"
+            },
+            {
+              "variable": "SC"
+            }
+          ]
+        },
+        {
+          "relation": "op_maps_describes_indexes",
+          "terms": [
+            {
+              "variable": "Map"
+            },
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "C"
+            }
+          ]
+        },
+        {
+          "relation": "static_route_reaches_table",
+          "terms": [
+            {
+              "variable": "C"
+            },
+            {
+              "variable": "SC"
+            },
+            {
+              "variable": "T"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_parity",
+        "terms": [
+          {
+            "variable": "I"
+          },
+          {
+            "variable": "OP"
+          },
+          {
+            "variable": "T"
+          }
+        ]
+      },
+      "name": "static_parity_both_sides_reach_the_table"
+    },
+    {
+      "body": [
+        {
+          "relation": "parity_table_unreached_in_index",
+          "terms": [
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "OP"
+            },
+            {
+              "variable": "T"
+            },
+            {
+              "variable": "C"
+            },
+            {
+              "variable": "SC"
+            }
+          ]
+        },
+        {
+          "relation": "op_maps_describes_indexes",
+          "terms": [
+            {
+              "variable": "Map"
+            },
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "C"
+            }
+          ]
+        },
+        {
+          "relation": "static_route_reaches_table_closed",
+          "terms": [
+            {
+              "variable": "C"
+            },
+            {
+              "variable": "SC"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "parity_static_only_incumbent",
+        "terms": [
+          {
+            "variable": "I"
+          },
+          {
+            "variable": "OP"
+          },
+          {
+            "variable": "T"
+          }
+        ]
+      },
+      "name": "parity_static_only_incumbent_under_the_candidate_closure"
+    },
+    {
+      "body": [
+        {
+          "relation": "parity_table_unreached_in_index",
+          "terms": [
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "OP"
+            },
+            {
+              "variable": "T"
+            },
+            {
+              "variable": "C"
+            },
+            {
+              "variable": "SC"
+            }
+          ]
+        },
+        {
+          "relation": "op_maps_describes_indexes",
+          "terms": [
+            {
+              "variable": "Map"
+            },
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "C"
+            }
+          ]
+        },
+        {
+          "relation": "static_route_handler",
+          "terms": [
+            {
+              "variable": "C"
+            },
+            {
+              "variable": "SC"
+            },
+            {
+              "variable": "H"
+            }
+          ]
+        },
+        {
+          "relation": "static_reaches_eq",
+          "terms": [
+            {
+              "variable": "C"
+            },
+            {
+              "variable": "H"
+            },
+            {
+              "variable": "N"
+            }
+          ]
+        },
+        {
+          "relation": "static_unresolved_on",
+          "terms": [
+            {
+              "variable": "C"
+            },
+            {
+              "variable": "N"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "parity_blocked",
+        "terms": [
+          {
+            "variable": "I"
+          },
+          {
+            "variable": "OP"
+          },
+          {
+            "variable": "T"
+          },
+          {
+            "variable": "N"
+          }
+        ]
+      },
+      "name": "parity_blocked_by_a_reachable_unresolved_site"
+    },
+    {
+      "body": [
+        {
+          "relation": "parity_table_unreached_in_index",
+          "terms": [
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "OP"
+            },
+            {
+              "variable": "T"
+            },
+            {
+              "variable": "C"
+            },
+            {
+              "variable": "SC"
+            }
+          ]
+        },
+        {
+          "relation": "op_maps_describes_indexes",
+          "terms": [
+            {
+              "variable": "Map"
+            },
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "C"
+            }
+          ]
+        },
+        {
+          "relation": "static_unresolved_call_site",
+          "terms": [
+            {
+              "variable": "C"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "Callee"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "parity_unresolved",
+        "terms": [
+          {
+            "variable": "I"
+          },
+          {
+            "variable": "OP"
+          },
+          {
+            "variable": "T"
+          }
+        ]
+      },
+      "name": "parity_unresolved_while_the_candidate_has_residue"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_route_declared_surface",
+          "terms": [
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "SI"
+            }
+          ]
+        },
+        {
+          "relation": "op_maps_incumbent_closed",
+          "terms": [
+            {
+              "variable": "I"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "op_maps_incumbent",
+          "terms": [
+            {
+              "variable": "I"
+            },
+            {
+              "variable": "SI"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "parity_route_unmapped",
+        "terms": [
+          {
+            "variable": "I"
+          },
+          {
+            "variable": "SI"
+          }
+        ]
+      },
+      "name": "parity_route_unmapped_under_a_closed_map"
+    }
+  ],
+  "schema_version": 1
+}
