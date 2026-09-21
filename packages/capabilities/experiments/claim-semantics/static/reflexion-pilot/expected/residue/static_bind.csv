@@ -1,0 +1,2 @@
+6a00434ab702e21c53f442a1cc631a4094949ee64ebae599102492aa9e6c832f	http:GET /jobs/{id}	audit_logs	create
+6a00434ab702e21c53f442a1cc631a4094949ee64ebae599102492aa9e6c832f	http:GET /jobs/{id}	jobs	read

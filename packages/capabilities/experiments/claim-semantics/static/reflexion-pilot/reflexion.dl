@@ -1,0 +1,33 @@
+// Reflexion over capcov's static facts (go_app). EDB = rows the existing packs already derive.
+.decl static_edge(ix:symbol, src:symbol, dst:symbol)                      .input static_edge
+.decl static_route_handler(ix:symbol, surface:symbol, handler:symbol)     .input static_route_handler
+.decl static_op_owner(ix:symbol, sym:symbol, entity:symbol, verb:symbol)  .input static_op_owner
+.decl static_site_owner(ix:symbol, path:symbol, line:number, sym:symbol)  .input static_site_owner
+.decl static_entity(ix:symbol, entity:symbol, path:symbol, line:number, table:symbol) .input static_entity
+.decl static_unresolved_call_site(ix:symbol, path:symbol, line:number, callee:symbol) .input static_unresolved_call_site
+.decl call_graph_closed(ix:symbol, scope:symbol)                           .input call_graph_closed
+.decl maps(sym:symbol, cap:symbol)      .input maps       // hand-authored high-level map
+.decl high_edge(a:symbol, b:symbol)     .input high_edge  // hand-authored high-level model
+.decl reaches(ix:symbol, a:symbol, b:symbol)                                .output reaches
+reaches(IX,A,B) :- static_edge(IX,A,B).
+reaches(IX,A,C) :- reaches(IX,A,B), static_edge(IX,B,C).
+.decl static_bind(ix:symbol, surface:symbol, entity:symbol, verb:symbol)   .output static_bind
+static_bind(IX,S,E,V) :- static_route_handler(IX,S,H), static_op_owner(IX,H,E,V).
+static_bind(IX,S,E,V) :- static_route_handler(IX,S,H), reaches(IX,H,N), static_op_owner(IX,N,E,V).
+.decl low_edge(ix:symbol, a:symbol, b:symbol)                              .output low_edge
+low_edge(IX,CA,CB) :- static_edge(IX,X,Y), maps(X,CA), maps(Y,CB), CA != CB.
+.decl convergence(ix:symbol, a:symbol, b:symbol)                           .output convergence
+.decl divergence(ix:symbol, a:symbol, b:symbol)                            .output divergence
+.decl absence(ix:symbol, a:symbol, b:symbol)                               .output absence
+.decl absence_unresolved(ix:symbol, a:symbol, b:symbol)                    .output absence_unresolved
+convergence(IX,A,B) :- high_edge(A,B), low_edge(IX,A,B).
+divergence(IX,A,B)  :- low_edge(IX,A,B), !high_edge(A,B).
+absence(IX,A,B)     :- high_edge(A,B), call_graph_closed(IX,"*"), !low_edge(IX,A,B).   // negation gated by the witness
+absence_unresolved(IX,A,B) :- high_edge(A,B), static_route_handler(IX,_,_), !low_edge(IX,A,B), !call_graph_closed(IX,"*").
+.decl unresolved_on(ix:symbol, sym:symbol)                                 .output unresolved_on
+unresolved_on(IX,N) :- static_unresolved_call_site(IX,P,L,_), static_site_owner(IX,P,L,N).
+.decl dead(ix:symbol, surface:symbol, entity:symbol)                       .output dead
+.decl blocked(ix:symbol, surface:symbol, entity:symbol, via:symbol)        .output blocked
+dead(IX,S,E)      :- static_route_handler(IX,S,_), static_entity(IX,E,_,_,_), call_graph_closed(IX,"*"), !static_bind(IX,S,E,_).
+blocked(IX,S,E,N) :- static_route_handler(IX,S,H), static_entity(IX,E,_,_,_), !static_bind(IX,S,E,_),
+                     (N = H ; reaches(IX,H,N)), unresolved_on(IX,N).

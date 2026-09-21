@@ -1,0 +1,7 @@
+scip-go gomod github.com/example/jobsvc . `github.com/example/jobsvc/api`/GetJob().	jobs_api
+scip-go gomod github.com/example/jobsvc . `github.com/example/jobsvc/api`/Register().	bootstrap
+scip-go gomod github.com/example/jobsvc . `github.com/example/jobsvc/internal/service`/Service#Fetch().	jobs_service
+scip-go gomod github.com/example/jobsvc . `github.com/example/jobsvc/internal/jobs`/Repo#Get().	jobs_store
+scip-go gomod github.com/example/jobsvc . `github.com/example/jobsvc/internal/jobs`/Repo#Write().	audit_store
+scip-go gomod github.com/example/jobsvc . `github.com/example/jobsvc/gorm`/DB#First().	gorm
+scip-go gomod github.com/example/jobsvc . `github.com/example/jobsvc/gorm`/DB#Create().	gorm
