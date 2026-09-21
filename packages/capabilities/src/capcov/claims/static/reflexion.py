@@ -66,13 +66,27 @@ apart by name:
    scope.  Drop the witness -- inject one unresolved call site -- and they go
    empty: the question stops being settled, and that is the honest answer.
 
-``static_entity_blocked(index, surface, entity, via)`` is what is said instead:
-the index exhibits no binding, and an unresolved call site sits on a symbol
-reachable from the handler.  ``via`` names that symbol, so "unresolved" comes
-with the place the doubt enters.  ``static_absence_unresolved`` is the same
-service for a model edge: the model declares it, the lift does not exhibit it,
-and the index has residue, so absence is unsettled.  Both are the weakest
-status, and neither is ever read as a verdict.
+What is said instead depends on how much is known about the residue, and both
+cases are said, because an entity or a model edge that appears in no relation at
+all is indistinguishable from one nothing applies to:
+
+*The residue site has an owning symbol* (``static_site_owner``, which
+``scip_facts`` emits only for a site whose enclosing symbol the index resolved).
+``static_entity_blocked(index, surface, entity, via)``: the index exhibits no
+binding, and an unresolved call site sits on a symbol reachable from the
+handler.  ``via`` names that symbol, so "unresolved" comes with the place the
+doubt enters.
+
+*The residue site has no owner* -- scip-php's synthesized enclosing symbols, a
+module-scope call, anything the exporter could not attribute.  There is no
+``via`` to name and no reachability to test, so the weaker
+``static_entity_unresolved(index, surface, entity)`` is what is derived: the
+index has residue, so this entity's absence is not settled either.
+
+``static_absence_unresolved`` is the same service for a model edge -- the model
+declares it, the lift does not exhibit it, and the index has residue -- and it
+is gated on the residue *row*, not on its owner, so it holds in both cases.  All
+three are the weakest status, and none is ever read as a verdict.
 
 PRODUCER
 --------
@@ -115,6 +129,8 @@ MAP_CLOSED_RELATION = "capability_map_closed"
 EDGE_RELATION = "capability_edge"
 EDGE_CLOSED_RELATION = "capability_edge_closed"
 DESCRIBES_RELATION = "capability_map_describes_index"
+#: The export relation whose endpoints a closed map has to cover.
+INDEX_EDGE_RELATION = "scip_may_reference"
 
 #: The model document's schema version, carried in the file and checked here.
 MODEL_SCHEMA_VERSION = 1
@@ -254,6 +270,29 @@ def unknown_symbols(export: Bundle, model: CapabilityModel) -> tuple[str, ...]:
     return tuple(symbol for symbol in model.symbols if symbol not in known)
 
 
+def edge_endpoint_symbols(export: Bundle) -> frozenset[str]:
+    """Every symbol this index's edges run through (``scip_may_reference``).
+
+    These are the symbols the lift has to carry.  ``index_symbols`` is the
+    larger set -- everything the index declares, most of which no edge touches.
+    """
+    return frozenset(value
+                     for fact in export.facts if fact.relation == INDEX_EDGE_RELATION
+                     for value in (fact.terms[1].value, fact.terms[2].value))
+
+
+def unmapped_edge_symbols(export: Bundle, model: CapabilityModel) -> tuple[str, ...]:
+    """Edge endpoints the map omits -- what a map claiming closure may not have.
+
+    The mirror of ``unknown_symbols``: that one asks whether every mapped symbol
+    is in the index, this one whether every symbol the index's edges run through
+    is in the map.  Only the second can turn a real edge into a ``static_absence``.
+    """
+    mapped = frozenset(model.symbols)
+    return tuple(sorted(symbol for symbol in edge_endpoint_symbols(export)
+                        if symbol not in mapped))
+
+
 def _metadata(export: Bundle) -> dict[str, Any]:
     metadata = dict(export.metadata)
     for key in ("index_digest", "producers"):
@@ -273,6 +312,15 @@ def model_bundle(export: Bundle, model: CapabilityModel, *,
     a real edge into a silent ``static_absence``.  Naming the symbols is the
     only safe failure, and it is a refusal rather than a dropped row.
 
+    Refuses the other direction too, and only when the map says ``closed``: a
+    symbol the index's edges run through that the map does not carry.  The
+    witness ``capability_map_closed`` is what licenses ``static_absence``, and
+    it is the reviewer's say-so; a map that declares completeness while omitting
+    an edge endpoint fails to lift that edge and then reports it absent from
+    code that demonstrably has it.  Coverage is the one part of that say-so this
+    module can check, so it checks it before the witness is emitted.  An open
+    map is free to be partial: it licenses no negation.
+
     ``tree_digest`` is for a caller that has just indexed the tree it is
     describing (the ``--static scip`` profile has): it adds the frozen
     ``source_tree_observed`` claim-time row, without which ``static_index_current``
@@ -287,6 +335,12 @@ def model_bundle(export: Bundle, model: CapabilityModel, *,
             f"the capability map names {len(missing)} symbol(s) this index does not "
             f"declare: {', '.join(missing[:5])}"
             + (" ..." if len(missing) > 5 else ""))
+    unmapped = unmapped_edge_symbols(export, model) if model.closed else ()
+    if unmapped:
+        raise ReflexionInputError(
+            f"the capability map declares closure but does not map {len(unmapped)} "
+            f"symbol(s) this index's edges run through: {', '.join(unmapped[:5])}"
+            + (" ..." if len(unmapped) > 5 else ""))
     decls = relation_decls()
     depends_on = tuple(sorted(
         record.id for record in export.evidence
@@ -376,4 +430,5 @@ __all__ = ["PACK_NAME", "PACK_ID", "BASE_PACK_ID", "CLOSURE_PACK_ID", "PRODUCER_
            "DESCRIBES_RELATION", "MODEL_SCHEMA_VERSION", "TREE_OBSERVATION_SOURCE",
            "ReflexionInputError", "CapabilityModel", "load_pack", "pack_relations",
            "pack_bundle", "relation_decls", "model_from_documents", "load_model",
-           "index_symbols", "unknown_symbols", "model_bundle", "attach"]
+           "index_symbols", "unknown_symbols", "edge_endpoint_symbols",
+           "unmapped_edge_symbols", "model_bundle", "attach", "INDEX_EDGE_RELATION"]

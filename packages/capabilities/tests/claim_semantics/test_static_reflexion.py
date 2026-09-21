@@ -12,8 +12,11 @@ Five properties, one per section.
 2. **The reviewer owns the model, and says so.**  Every emitted row carries
    producer class ``reviewer`` and depends on the index's own evidence; the two
    closure witnesses appear only when the model documents declare closure; and a
-   map naming a symbol the index does not have is refused, naming the symbols,
-   rather than silently lifting nothing for them.
+   map that does not line up with the index is refused, naming the symbols,
+   rather than silently lifting nothing for them -- in both directions: a mapped
+   symbol the index does not declare, and (only when the map claims closure) a
+   symbol the index's edges run through that the map does not carry.  The second
+   is the one that can fabricate a ``static_absence`` about a real edge.
 
 3. **The reflexion rows on go_app are the pilot's rows.**  Clean census:
    6 lifted edges, 5 convergences, one divergence (``bootstrap -> jobs_api``,
@@ -28,7 +31,14 @@ Five properties, one per section.
    ``static_absence_unresolved`` and ``static_entity_blocked(..., via)``, which
    names ``Service#Fetch`` -- the symbol the unresolved site sits on.  The lifted
    edges, the convergences and the divergence do not move: the residue changes
-   what is closed, not what is reached.
+   what is closed, not what is reached.  With residue at a site no symbol owns
+   (``UNATTRIBUTED_RESIDUE``) there is no ``via``, and the weaker
+   ``static_entity_unresolved`` is what is said: the doubt is reported either
+   way, because an entity in no relation at all reads as "not applicable".
+
+   The other closure gate is ``static_index_current``: with no
+   ``source_tree_observed`` row the entity relations that rest on it are empty,
+   so an unobserved index cannot call a live table dead.
 
 5. **A model that does not claim closure closes nothing.**  Drop ``closed`` from
    the two documents and every negation over them stays unresolved: no
@@ -79,6 +89,12 @@ RESIDUE = [{"file": "internal/service/service.go", "line": 12, "callee": "h.disp
 #: The symbol that site sits on -- what ``static_entity_blocked``'s ``via`` names.
 VIA = ("scip-go gomod github.com/example/jobsvc . "
        "`github.com/example/jobsvc/internal/service`/Service#Fetch().")
+#: One unresolved call site the exporter cannot attribute to any symbol: the
+#: models file declares types, so no definition encloses line 19 and
+#: ``static_site_owner`` has no row for it.  This is the ordinary case for
+#: scip-php (synthesized enclosing symbols) and for module-scope calls.
+UNATTRIBUTED_RESIDUE = [{"file": "models/models.go", "line": 19, "callee": "x.dyn",
+                         "kind": "unresolved", "reason": "untyped receiver"}]
 
 LIFTED_EDGES = [["audit_store", "gorm"], ["bootstrap", "jobs_api"],
                 ["jobs_api", "jobs_service"], ["jobs_service", "audit_store"],
@@ -116,6 +132,17 @@ def _model(*, closed: bool = True, edges_closed: bool = True) -> reflexion.Capab
     return reflexion.model_from_documents(map_document, edges_document)
 
 
+def _partial_model(*, closed: bool) -> reflexion.CapabilityModel:
+    """The pilot's model with one edge endpoint (``Service#Fetch``) dropped."""
+    map_document = dict(read_json(MAP_DOCUMENT), closed=closed)
+    map_document["capabilities"] = {symbol: capability
+                                    for symbol, capability
+                                    in map_document["capabilities"].items()
+                                    if symbol != VIA}
+    return reflexion.model_from_documents(
+        map_document, dict(read_json(EDGES_DOCUMENT), closed=closed))
+
+
 def _ast(residue=()) -> dict:
     """go_app's tree-sitter side plus the third entity and a chosen residue."""
     ast = go_app.ast_raw()
@@ -136,16 +163,26 @@ def _export(ast: dict):
     return result
 
 
+#: ``_bundle``'s default: observe the tree the export actually indexed.
+_OBSERVED = object()
+
+
 def _bundle(ast: dict, model: reflexion.CapabilityModel | None = None, *,
-            claims=()) -> tuple[Bundle, str]:
-    """Export + closure fragment + reflexion fragment + the base pack's rules."""
+            claims=(), tree_digest=_OBSERVED) -> tuple[Bundle, str]:
+    """Export + closure fragment + reflexion fragment + the base pack's rules.
+
+    ``tree_digest=None`` builds the same bundle with no ``source_tree_observed``
+    row -- an index nobody has observed against a tree -- which is what
+    ``static_index_current`` gates on.
+    """
     exported = _export(ast)
     index = dict(exported.bundle.metadata)["index_digest"]
+    observed = (dict(dict(exported.bundle.metadata)["tree"])["digest"]
+                if tree_digest is _OBSERVED else tree_digest)
     bundle = reflexion.attach(
         exported.bundle, model if model is not None else _model(),
         closure.closure_bundle(exported.bundle, ast), pack_bundle(),
-        tree_digest=dict(dict(exported.bundle.metadata)["tree"])["digest"],
-        claims=list(claims))
+        tree_digest=observed, claims=list(claims))
     return bundle, index
 
 
@@ -237,7 +274,7 @@ class ReflexionPackIsALayerTests(unittest.TestCase):
 class TheReviewerOwnsTheModelTests(unittest.TestCase):
     def test_the_documents_become_rows_keyed_on_the_index(self) -> None:
         bundle, index = _bundle(_ast())
-        self.assertEqual(len(_rows(bundle, reflexion.MAP_RELATION)), 7)
+        self.assertEqual(len(_rows(bundle, reflexion.MAP_RELATION)), 8)
         self.assertEqual(_rows(bundle, reflexion.EDGE_RELATION),
                          sorted(LIFTED_EDGES[:0] + [list(edge) for edge in _model().edges]))
         self.assertEqual(_rows(bundle, reflexion.MAP_CLOSED_RELATION), [[]])
@@ -251,7 +288,7 @@ class TheReviewerOwnsTheModelTests(unittest.TestCase):
         bundle, _ = _bundle(_ast(), _model(closed=False, edges_closed=False))
         self.assertEqual(_rows(bundle, reflexion.MAP_CLOSED_RELATION), [])
         self.assertEqual(_rows(bundle, reflexion.EDGE_CLOSED_RELATION), [])
-        self.assertEqual(len(_rows(bundle, reflexion.MAP_RELATION)), 7,
+        self.assertEqual(len(_rows(bundle, reflexion.MAP_RELATION)), 8,
                          "the map itself is unaffected; only the claim of completeness is")
 
     def test_an_absent_edge_document_leaves_the_map_alone(self) -> None:
@@ -275,7 +312,7 @@ class TheReviewerOwnsTheModelTests(unittest.TestCase):
                                                reflexion.EDGE_RELATION,
                                                reflexion.EDGE_CLOSED_RELATION,
                                                reflexion.DESCRIBES_RELATION)]
-        self.assertEqual(len(emitted), 7 + 1 + 6 + 1 + 1)
+        self.assertEqual(len(emitted), 8 + 1 + 6 + 1 + 1)
         for record in emitted:
             with self.subTest(evidence=record.id):
                 self.assertEqual(record.source.split(" ", 1)[0], reflexion.PRODUCER_CLASS)
@@ -305,6 +342,44 @@ class TheReviewerOwnsTheModelTests(unittest.TestCase):
         with self.assertRaises(reflexion.ReflexionInputError) as caught:
             reflexion.model_bundle(exported.bundle, stale)
         self.assertIn("Removed()", str(caught.exception))
+
+    def test_a_closed_map_that_omits_an_edge_endpoint_is_refused_by_name(self) -> None:
+        """The other direction, and the one that can fabricate an absence.
+
+        ``capability_map_closed`` is the reviewer's say-so, and it is what
+        licenses ``static_absence``.  Drop one symbol the index's edges run
+        through, keep ``closed: true``, and the edges through it lift nothing --
+        so model edges the code does exhibit would be reported absent.  Coverage
+        of the edge endpoints is the part of that say-so this module can check.
+        """
+        exported = _export(_ast())
+        with self.assertRaises(reflexion.ReflexionInputError) as caught:
+            reflexion.model_bundle(exported.bundle, _partial_model(closed=True))
+        message = str(caught.exception)
+        self.assertIn("Service#Fetch()", message)
+        self.assertIn("closure", message)
+        self.assertEqual(reflexion.unmapped_edge_symbols(exported.bundle,
+                                                         _partial_model(closed=True)),
+                         (VIA,))
+
+    def test_the_same_partial_map_is_read_when_it_claims_nothing(self) -> None:
+        """A map that does not claim closure may be as partial as it likes.
+
+        It licenses no negation, so the rows it fails to lift cost nothing:
+        ``static_absence`` is empty because there is no closed lift, not because
+        the code was consulted.
+        """
+        bundle, _ = _bundle(_ast(), _partial_model(closed=False))
+        self.assertEqual(len(_rows(bundle, reflexion.MAP_RELATION)), 7)
+        self.assertEqual(_rows(bundle, reflexion.MAP_CLOSED_RELATION), [])
+        relations = _closure_of(bundle)
+        self.assertEqual(_payload(relations, "static_low_edge"),
+                         [["audit_store", "gorm"], ["bootstrap", "jobs_api"],
+                          ["jobs_store", "gorm"]],
+                         "the three edges through the unmapped symbol do not lift")
+        self.assertEqual(_payload(relations, "static_low_edge_closed"), [])
+        self.assertEqual(_payload(relations, "static_model_edge_unlifted"), [])
+        self.assertEqual(_payload(relations, "static_absence"), [])
 
     def test_a_document_that_does_not_say_what_it_is_gets_no_benefit_of_the_doubt(self) -> None:
         for document, reason in (
@@ -415,6 +490,53 @@ class OneUnresolvedCallSiteTests(unittest.TestCase):
             self.assertTrue(result.matched, result.replay_path)
 
 
+class ResidueNoSymbolOwnsTests(unittest.TestCase):
+    """The same doubt, at a site the exporter could not attribute to a symbol.
+
+    ``scip_facts`` emits ``static_site_owner`` only for a site whose enclosing
+    definition the index resolved, so on PHP -- where scip-php synthesizes
+    enclosing symbols -- and at module scope it is empty by construction.  The
+    witness is withheld either way; what must not happen is that the doubt then
+    goes unreported, leaving a downstream judge to read silence as "nothing to
+    say".
+    """
+
+    def setUp(self) -> None:
+        self.bundle, self.index = _bundle(_ast(UNATTRIBUTED_RESIDUE))
+        self.relations = _closure_of(self.bundle)
+
+    def test_the_site_has_no_owner_and_the_call_graph_is_not_closed(self) -> None:
+        self.assertEqual(len(_rows(self.bundle, "static_unresolved_call_site")), 1)
+        self.assertEqual(_payload(self.relations, "static_unresolved_on"), [],
+                         "no definition encloses models/models.go:19")
+        self.assertEqual(_payload(self.relations, closure.CLOSED_RELATION), [])
+
+    def test_absence_is_still_reported_as_unresolved(self) -> None:
+        self.assertEqual(_payload(self.relations, "static_absence"), [])
+        self.assertEqual(_payload(self.relations, "static_absence_unresolved"), ABSENCE,
+                         "the doubt is the residue row, not the symbol under it")
+
+    def test_the_entity_is_neither_dead_nor_silent(self) -> None:
+        self.assertEqual(_payload(self.relations, "static_entity_dead"), [])
+        self.assertEqual(_payload(self.relations, "static_entity_blocked"), [],
+                         "there is no via to name")
+        self.assertEqual(_payload(self.relations, "static_entity_unresolved"),
+                         [[go_app.SURFACE, UNREACHED_ENTITY]])
+
+    def test_what_is_reached_does_not_move(self) -> None:
+        self.assertEqual(_payload(self.relations, "static_low_edge"), LIFTED_EDGES)
+        self.assertEqual(_payload(self.relations, "static_convergence"), CONVERGENCE)
+        self.assertEqual(_payload(self.relations, "static_capability_op"), CAPABILITY_OPS)
+
+    def test_an_attributed_site_says_both(self) -> None:
+        """The attributed case is the stronger one: blocked *and* unresolved."""
+        relations = _closure_of(_bundle(_ast(RESIDUE))[0])
+        self.assertEqual(_payload(relations, "static_entity_blocked"),
+                         [[go_app.SURFACE, UNREACHED_ENTITY, VIA]])
+        self.assertEqual(_payload(relations, "static_entity_unresolved"),
+                         [[go_app.SURFACE, UNREACHED_ENTITY]])
+
+
 class AModelWithoutClosureSettlesNothingTests(unittest.TestCase):
     def setUp(self) -> None:
         self.open_model = _model(closed=False, edges_closed=False)
@@ -433,6 +555,26 @@ class AModelWithoutClosureSettlesNothingTests(unittest.TestCase):
         self.assertEqual(_payload(relations, "static_low_edge_closed"), [])
         self.assertEqual(_payload(relations, "static_model_edge_unlifted"), [])
         self.assertEqual(_payload(relations, "static_absence"), [])
+
+    def test_an_unobserved_index_settles_nothing_about_an_entity(self) -> None:
+        """``static_index_current`` is the other closure gate, and it holds.
+
+        ``static_entity_bound_closed`` is "this index is current, so what it does
+        not exhibit it does not have"; without a ``source_tree_observed`` row
+        nobody has checked the index against the tree, and every entity relation
+        that rests on it must stay empty -- otherwise a stale index reports the
+        tables the route really reads and writes as dead code.  The lift is a
+        statement about the index alone, so it does not move.
+        """
+        bundle, _ = _bundle(_ast(), tree_digest=None)
+        relations = _closure_of(bundle)
+        for relation in ("static_index_current", "static_entity_bound_closed",
+                         "static_entity_unbound_in_index", "static_entity_dead",
+                         "static_entity_blocked"):
+            with self.subTest(relation=relation):
+                self.assertEqual(_payload(relations, relation), [])
+        self.assertEqual(_payload(relations, "static_low_edge"), LIFTED_EDGES)
+        self.assertEqual(_payload(relations, "static_convergence"), CONVERGENCE)
 
     def test_no_edge_closure_means_no_divergence(self) -> None:
         bundle, _ = _bundle(_ast(), _model(closed=True, edges_closed=False))
@@ -509,7 +651,7 @@ class LiveReflexionProfileTests(unittest.TestCase):
             document = json.loads(proc.stdout)
             self.assertEqual(document["reflexion_pack"], reflexion.PACK_ID)
             self.assertEqual(document["model_digest"], _model().digest)
-            self.assertEqual((document["capability_map"], document["capability_edge"]), (7, 6))
+            self.assertEqual((document["capability_map"], document["capability_edge"]), (8, 6))
             self.assertTrue(document["capability_map_closed"])
             self.assertTrue(document["capability_edge_closed"])
             # go_app has no dynamic dispatch: the real census closes the scope, so

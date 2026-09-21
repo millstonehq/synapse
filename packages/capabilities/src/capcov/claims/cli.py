@@ -556,8 +556,10 @@ def _static(args) -> int:
                 exported.bundle, model, closure.closure_bundle(exported.bundle, raw),
                 tree_digest=dict(dict(exported.bundle.metadata)["tree"])["digest"])
         except reflexion.ReflexionInputError as exc:
-            # A map naming a symbol this index does not have is a usage error,
-            # and saying which symbols is the only safe way to fail.
+            # A map that does not line up with this index -- a symbol the index
+            # does not have, or, when the map claims closure, an edge endpoint
+            # the map does not carry -- is a usage error, and saying which
+            # symbols is the only safe way to fail.
             _emit({"refusal": str(exc)}, None)
             return 2
         except (ValidationError, ValueError) as exc:

@@ -660,6 +660,39 @@
         },
         {
           "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_entity_unresolved",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
           "name": "src",
           "type": "symbol"
         },
@@ -1373,13 +1406,19 @@
           ]
         },
         {
-          "relation": "static_unresolved_on",
+          "relation": "static_unresolved_call_site",
           "terms": [
             {
               "variable": "IX"
             },
             {
-              "variable": "N"
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "Callee"
             }
           ]
         }
@@ -1821,6 +1860,56 @@
         ]
       },
       "name": "static_entity_blocked_by_a_reachable_unresolved_site"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_entity_unbound_in_index",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        },
+        {
+          "relation": "static_unresolved_call_site",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "C"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_unresolved",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_unresolved_while_the_index_has_residue"
     }
   ],
   "schema_version": 1

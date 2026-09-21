@@ -23,7 +23,12 @@ Run:
 Findings: `static_bind` = `static_capability_op` = `fixpoint.bind`
 (`{jobs:read, audit_logs:create}`) in both variants; the residue variant turns
 `absence(jobs_api,metrics)` into `absence_unresolved` and `dead(sessions)` into
-`blocked(sessions via Service#Fetch)`.  The rules here gate every negation on
+`blocked(sessions via Service#Fetch)` — the pilot's unresolved site is one the
+exporter could attribute to a symbol, so there is a `via` to name.  A site with
+no owning symbol (scip-php's synthesized enclosing symbols, a module-scope call)
+withholds the witness just the same but names no `via`; the landed pack reports
+that case as `static_absence_unresolved` and `static_entity_unresolved` rather
+than leaving it silent.  The rules here gate every negation on
 `call_graph_closed`; a production pack must additionally attribute `maps` and
 `high_edge` to a reviewer producer class and put them behind their own closure.
 
@@ -31,7 +36,11 @@ Findings: `static_bind` = `static_capability_op` = `fixpoint.bind`
 is that production pack: the same rows, with `maps`/`high_edge` as
 `capability_map`/`capability_edge` under producer class `reviewer`, a closure
 witness each, and `capability_map_describes_index` binding the model document to
-the index.  `facts/{maps,high_edge}.facts` are kept as the experiment's record;
+the index.  `capability-map.json` also carries `api/handle()` — the pilot's
+`maps.facts` omitted it, and a map that declares `closed: true` while omitting a
+symbol the index's edges run through is refused by the landed pack, because the
+edges through it would lift nothing and be reported absent from the code.
+`facts/{maps,high_edge}.facts` are kept as the experiment's record;
 `capability-map.json` / `capability-edges.json` are the same model as documents
 the profile reads:
 
