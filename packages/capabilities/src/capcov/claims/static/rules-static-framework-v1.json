@@ -1,0 +1,3118 @@
+{
+  "base_pack": "rules-static-v1",
+  "borrowed_declarations": [
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "capability_edge",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "capability_edge",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "capability_edge_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "capability",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "capability_map",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "capability_map",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "capability_map_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "map",
+          "type": "digest"
+        },
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [
+        "map",
+        "index"
+      ],
+      "compatibility_targets": [
+        "capability_map",
+        "static_edge"
+      ],
+      "completes": null,
+      "context_indices": [
+        "map",
+        "index"
+      ],
+      "finite": false,
+      "modality": "compatibility",
+      "name": "capability_map_describes_index",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "reviewer"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_edge",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        },
+        {
+          "context": false,
+          "name": "table",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_entity",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_index_current",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "verb",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_op_owner",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_reaches",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_root",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_route_handler",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "scope_kind",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "scope_value",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_scope",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_site_owner",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "file",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "static_unresolved_call_site",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "phpstan",
+        "scip"
+      ]
+    }
+  ],
+  "closure_pack": "rules-static-closure-v1",
+  "derived": [
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "static_absence_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_absence_unresolved_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_assumed_site_discharged",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "static_assumed_site_discharged",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "static_assumed_site_discharged_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_assumed_site_undischarged",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "verb",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_capability_op_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_convergence_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "static_divergence_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "framework",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_edge_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "via",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "static_entity_blocked_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_entity_bound_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "static_entity_bound_assumed",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "static_entity_bound_closed_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "claim",
+      "name": "static_entity_dead_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_entity_unbound_in_index_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_entity_unresolved_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_low_edge_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "static_low_edge_assumed",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "static_low_edge_closed_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_model_edge_unlifted_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "surface",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "entity",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "verb",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_path_to_storage_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_reaches_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_reaches_assumed_eq",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "symbol",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "derived",
+      "name": "static_unresolved_on_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": false,
+      "producer_classes": []
+    }
+  ],
+  "description": "Opt-in framework-assumption layer over rules-static-v1, rules-static-closure-v1 and rules-static-reflexion-v1: reviewer-signed rows saying that a framework binds a caller to a callee no indexer can see -- a net/http mux registered through an init()-time registry, a Laravel container binding or facade accessor Larastan cannot type, a FastAPI Depends -- each naming its framework, its mechanism and the file:line it stands for, and each carried by a document bound to one index and to one commit with an expiry. The rows are ADDITIVE: they feed static_edge_assumed, a relation of its own, and never widen static_edge, which call_graph_closed completes. static_reaches_assumed is reachability over the resolved graph plus those edges, and every verdict read off it is reported as a separate *_assumed row, because an assumed edge is somebody's say-so about a framework, not something the index exhibited. Its own witnesses: assumptions_closed (the reviewer says the set is complete and every row was applied) and call_graph_closed_assumed (that, and every unresolved call site in the scope discharged by a reviewed row for that exact site).",
+  "id": "rules-static-framework-v1",
+  "primitives": [
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "assumptions",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "static_edge_assumed",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "assumptions_closed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "framework-assumption"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "assumptions",
+          "type": "digest"
+        },
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        }
+      ],
+      "compatibility_context_indices": [
+        "assumptions",
+        "index"
+      ],
+      "compatibility_targets": [
+        "framework_edge",
+        "static_edge"
+      ],
+      "completes": null,
+      "context_indices": [
+        "assumptions",
+        "index"
+      ],
+      "finite": false,
+      "modality": "compatibility",
+      "name": "assumptions_describe_index",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "framework-assumption"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "scope",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": "static_reaches_assumed",
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "completeness",
+      "name": "call_graph_closed_assumed",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "framework-assumption"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "reason",
+          "type": "symbol"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "observation",
+      "name": "framework_assumption_unapplied",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "framework-assumption"
+      ]
+    },
+    {
+      "binding": "static",
+      "columns": [
+        {
+          "context": true,
+          "name": "index",
+          "type": "digest"
+        },
+        {
+          "context": false,
+          "name": "src",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "dst",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "framework",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "mechanism",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "path",
+          "type": "symbol"
+        },
+        {
+          "context": false,
+          "name": "line",
+          "type": "unsigned"
+        }
+      ],
+      "compatibility_context_indices": [],
+      "compatibility_targets": [],
+      "completes": null,
+      "context_indices": [
+        "index"
+      ],
+      "finite": false,
+      "modality": "assumption",
+      "name": "framework_edge",
+      "nonempty": false,
+      "polarity": "positive",
+      "primitive": true,
+      "producer_classes": [
+        "framework-assumption"
+      ]
+    }
+  ],
+  "reflexion_pack": "rules-static-reflexion-v1",
+  "rules": [
+    {
+      "body": [
+        {
+          "relation": "framework_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "From"
+            },
+            {
+              "variable": "To"
+            },
+            {
+              "variable": "F"
+            },
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            }
+          ]
+        },
+        {
+          "relation": "assumptions_describe_index",
+          "terms": [
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "IX"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_edge_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "From"
+          },
+          {
+            "variable": "To"
+          },
+          {
+            "variable": "F"
+          }
+        ]
+      },
+      "name": "static_edge_assumed_from_a_reviewed_framework_row"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_reaches",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "R"
+            },
+            {
+              "variable": "D"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_reaches_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "R"
+          },
+          {
+            "variable": "D"
+          }
+        ]
+      },
+      "name": "static_reaches_assumed_contains_the_resolved_graph"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_root",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "R"
+            }
+          ]
+        },
+        {
+          "relation": "static_edge_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "R"
+            },
+            {
+              "variable": "D"
+            },
+            {
+              "variable": "F"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_reaches_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "R"
+          },
+          {
+            "variable": "D"
+          }
+        ]
+      },
+      "name": "static_reaches_assumed_base_framework_edge"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_reaches_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "R"
+            },
+            {
+              "variable": "Mid"
+            }
+          ]
+        },
+        {
+          "relation": "static_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Mid"
+            },
+            {
+              "variable": "D"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_reaches_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "R"
+          },
+          {
+            "variable": "D"
+          }
+        ]
+      },
+      "name": "static_reaches_assumed_step"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_reaches_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "R"
+            },
+            {
+              "variable": "Mid"
+            }
+          ]
+        },
+        {
+          "relation": "static_edge_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Mid"
+            },
+            {
+              "variable": "D"
+            },
+            {
+              "variable": "F"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_reaches_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "R"
+          },
+          {
+            "variable": "D"
+          }
+        ]
+      },
+      "name": "static_reaches_assumed_step_framework_edge"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_root",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "R"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_reaches_assumed_eq",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "R"
+          },
+          {
+            "variable": "R"
+          }
+        ]
+      },
+      "name": "static_reaches_assumed_eq_refl"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_reaches_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "R"
+            },
+            {
+              "variable": "D"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_reaches_assumed_eq",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "R"
+          },
+          {
+            "variable": "D"
+          }
+        ]
+      },
+      "name": "static_reaches_assumed_eq_step"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_unresolved_call_site",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "Callee"
+            }
+          ]
+        },
+        {
+          "relation": "framework_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "From"
+            },
+            {
+              "variable": "To"
+            },
+            {
+              "variable": "F"
+            },
+            {
+              "variable": "M"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_assumed_site_discharged",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "P"
+          },
+          {
+            "variable": "L"
+          }
+        ]
+      },
+      "name": "static_assumed_site_discharged_by_a_reviewed_row_for_that_site"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_unresolved_call_site",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "Callee"
+            }
+          ]
+        },
+        {
+          "relation": "assumptions_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_assumed_site_discharged_closed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "P"
+          },
+          {
+            "variable": "L"
+          }
+        ]
+      },
+      "name": "static_assumed_site_discharged_closed_over_a_closed_assumption_set"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_unresolved_call_site",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "Callee"
+            }
+          ]
+        },
+        {
+          "relation": "static_assumed_site_discharged_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "static_assumed_site_discharged",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_assumed_site_undischarged",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "P"
+          },
+          {
+            "variable": "L"
+          }
+        ]
+      },
+      "name": "static_assumed_site_undischarged_under_a_closed_assumption_set"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_assumed_site_undischarged",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            }
+          ]
+        },
+        {
+          "relation": "static_site_owner",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "N"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_unresolved_on_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "N"
+          }
+        ]
+      },
+      "name": "static_unresolved_on_assumed_owning_symbol"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_route_handler",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "H"
+            }
+          ]
+        },
+        {
+          "relation": "static_reaches_assumed_eq",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "H"
+            },
+            {
+              "variable": "N"
+            }
+          ]
+        },
+        {
+          "relation": "static_op_owner",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "N"
+            },
+            {
+              "variable": "E"
+            },
+            {
+              "variable": "Verb"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_path_to_storage_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          },
+          {
+            "variable": "Verb"
+          }
+        ]
+      },
+      "name": "static_path_to_storage_assumed"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_path_to_storage_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            },
+            {
+              "variable": "Verb"
+            }
+          ]
+        },
+        {
+          "relation": "static_index_current",
+          "terms": [
+            {
+              "variable": "IX"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_capability_op_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          },
+          {
+            "variable": "Verb"
+          }
+        ]
+      },
+      "name": "static_capability_op_assumed"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_capability_op_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            },
+            {
+              "variable": "Verb"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_bound_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_bound_assumed_from_the_capability_op"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_route_handler",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "H"
+            }
+          ]
+        },
+        {
+          "relation": "static_entity",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "E"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "T"
+            }
+          ]
+        },
+        {
+          "relation": "static_index_current",
+          "terms": [
+            {
+              "variable": "IX"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_bound_closed_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_bound_closed_assumed_over_a_current_index"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_route_handler",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "H"
+            }
+          ]
+        },
+        {
+          "relation": "static_entity",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "E"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            },
+            {
+              "variable": "T"
+            }
+          ]
+        },
+        {
+          "relation": "static_entity_bound_closed_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "static_entity_bound_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_unbound_in_index_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_unbound_in_index_assumed_exhibits_no_op"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_entity_unbound_in_index_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        },
+        {
+          "relation": "static_scope",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "type": "symbol",
+              "value": "all"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "call_graph_closed_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "assumptions_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_dead_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_dead_assumed_all"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_entity_unbound_in_index_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        },
+        {
+          "relation": "static_scope",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "type": "symbol",
+              "value": "package_prefix"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "call_graph_closed_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "assumptions_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_dead_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_dead_assumed_package_prefix"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_entity_unbound_in_index_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        },
+        {
+          "relation": "static_route_handler",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "H"
+            }
+          ]
+        },
+        {
+          "relation": "static_reaches_assumed_eq",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "H"
+            },
+            {
+              "variable": "N"
+            }
+          ]
+        },
+        {
+          "relation": "static_unresolved_on_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "N"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_blocked_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          },
+          {
+            "variable": "N"
+          }
+        ]
+      },
+      "name": "static_entity_blocked_assumed_by_a_reachable_undischarged_site"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_entity_unbound_in_index_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "S"
+            },
+            {
+              "variable": "E"
+            }
+          ]
+        },
+        {
+          "relation": "static_assumed_site_undischarged",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_entity_unresolved_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "S"
+          },
+          {
+            "variable": "E"
+          }
+        ]
+      },
+      "name": "static_entity_unresolved_assumed_while_a_site_is_undischarged"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "X"
+            },
+            {
+              "variable": "Y"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "X"
+            },
+            {
+              "variable": "A"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Y"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map_describes_index",
+          "terms": [
+            {
+              "variable": "Map"
+            },
+            {
+              "variable": "IX"
+            }
+          ]
+        },
+        {
+          "comparison": {
+            "left": {
+              "variable": "A"
+            },
+            "operator": "!=",
+            "right": {
+              "variable": "B"
+            }
+          }
+        }
+      ],
+      "head": {
+        "relation": "static_low_edge_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_low_edge_assumed_lifted_through_the_map"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_edge_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "X"
+            },
+            {
+              "variable": "Y"
+            },
+            {
+              "variable": "F"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "X"
+            },
+            {
+              "variable": "A"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Y"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map_describes_index",
+          "terms": [
+            {
+              "variable": "Map"
+            },
+            {
+              "variable": "IX"
+            }
+          ]
+        },
+        {
+          "comparison": {
+            "left": {
+              "variable": "A"
+            },
+            "operator": "!=",
+            "right": {
+              "variable": "B"
+            }
+          }
+        }
+      ],
+      "head": {
+        "relation": "static_low_edge_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_low_edge_assumed_lifted_through_a_framework_edge"
+    },
+    {
+      "body": [
+        {
+          "relation": "capability_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            }
+          ]
+        },
+        {
+          "relation": "assumptions_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Asm"
+            }
+          ]
+        },
+        {
+          "relation": "capability_map_describes_index",
+          "terms": [
+            {
+              "variable": "Map"
+            },
+            {
+              "variable": "IX"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_low_edge_closed_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_low_edge_closed_assumed_over_a_closed_map_and_assumption_set"
+    },
+    {
+      "body": [
+        {
+          "relation": "capability_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "static_low_edge_closed_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "static_low_edge_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_model_edge_unlifted_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_model_edge_unlifted_assumed_under_a_closed_lift"
+    },
+    {
+      "body": [
+        {
+          "relation": "capability_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "static_low_edge_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_convergence_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_convergence_assumed_model_edge_exhibited"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_low_edge_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "capability_edge_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            }
+          ]
+        },
+        {
+          "negated": true,
+          "relation": "capability_edge",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_divergence_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_divergence_assumed_under_a_closed_model"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_model_edge_unlifted_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "static_scope",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "type": "symbol",
+              "value": "all"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "call_graph_closed_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "assumptions_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Asm"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_absence_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_absence_assumed_all"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_model_edge_unlifted_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "static_scope",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "type": "symbol",
+              "value": "package_prefix"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "call_graph_closed_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Scope"
+            }
+          ]
+        },
+        {
+          "relation": "assumptions_closed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "Asm"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_absence_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_absence_assumed_package_prefix"
+    },
+    {
+      "body": [
+        {
+          "relation": "static_model_edge_unlifted_assumed",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "A"
+            },
+            {
+              "variable": "B"
+            }
+          ]
+        },
+        {
+          "relation": "static_assumed_site_undischarged",
+          "terms": [
+            {
+              "variable": "IX"
+            },
+            {
+              "variable": "P"
+            },
+            {
+              "variable": "L"
+            }
+          ]
+        }
+      ],
+      "head": {
+        "relation": "static_absence_unresolved_assumed",
+        "terms": [
+          {
+            "variable": "IX"
+          },
+          {
+            "variable": "A"
+          },
+          {
+            "variable": "B"
+          }
+        ]
+      },
+      "name": "static_absence_unresolved_assumed_undischarged_site"
+    }
+  ],
+  "schema_version": 1
+}

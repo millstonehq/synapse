@@ -46,10 +46,19 @@ and the bundle is what it was.  ``--dispatch cha`` merges a fourth fragment
 an interface member, expanded through its own implementation relationships into
 ``static_edge_cha`` -- a separate relation, never a widening of ``static_edge``
 -- and every verdict read off the expanded graph as a separate ``*_cha`` row.
-Without the flag not one CHA row is emitted.  Exit 0 with a bundle, 2 for a usage
-refusal, 3 for a named operational failure -- an absent SCIP toolchain reported
-in ``capcov discover --resolver scip``'s own words, and an indexer no
-measurement says emits implementation relationships, among them.
+Without the flag not one CHA row is emitted.  ``--assumptions FILE.json`` merges
+a fifth fragment (``rules-static-framework-v1``): reviewer-signed
+``framework_edge`` rows for the edges a framework makes out of data and no
+indexer can see (a ``net/http`` init-time registry, a Laravel container binding
+or facade accessor, a FastAPI ``Depends``), each naming its framework, its
+mechanism and the file:line it stands for, and the whole document bound to one
+commit with an expiry.  They feed ``static_edge_assumed`` -- never
+``static_edge`` -- and every verdict over the assumed graph is a separate
+``*_assumed`` row.  Without the flag not one assumption row is emitted.  Exit 0
+with a bundle, 2 for a usage refusal, 3 for a named operational failure -- an
+absent SCIP toolchain reported in ``capcov discover --resolver scip``'s own
+words, and an indexer no measurement says emits implementation relationships,
+among them.
 
 The advisory profile is reached the same way and is the one profile nothing may
 depend on::
@@ -447,6 +456,13 @@ def _static(args) -> int:
     Nothing in ``capcov.scip`` is modified or re-implemented here; the export
     keeps its own identity, and the closure rows are merged beside it.
 
+    ``--assumptions FILE.json`` adds ``static.framework``: the reviewer-signed
+    framework rows for edges no indexer can see, their two witnesses, and every
+    verdict over the assumed graph as a separate ``*_assumed`` row.
+    ``static_edge`` and ``call_graph_closed`` are untouched, an expired document
+    is refused rather than used, and a document signed against another commit
+    than the one this index was taken at is refused by name.
+
     ``--dispatch cha`` adds one more fragment, ``static.cha``: the dispatch sites
     the index resolves only to an interface member, the hierarchy expansion of
     each into ``static_edge_cha``, the sites it could not expand, and the two
@@ -501,6 +517,15 @@ def _static(args) -> int:
                              "capability_map_closed": model.closed,
                              "capability_edge": len(model.edges),
                              "capability_edge_closed": model.edges_closed}
+    assumptions = None
+    if args.assumptions:
+        from .static import framework
+
+        try:
+            assumptions = framework.load_assumptions(args.assumptions)
+        except framework.AssumptionsInputError as exc:
+            _emit({"refusal": str(exc)}, None)
+            return 2
     ast_raw = {}
     if args.ast_raw:
         try:
@@ -585,7 +610,26 @@ def _static(args) -> int:
         except (ValidationError, ValueError, KeyError) as exc:
             _emit({"operational_failure": "static-dispatch-failed", "error": str(exc)}, None)
             return 3
-    fragments = (cha_fragment,) if cha_fragment is not None else ()
+    assumptions_fragment = None
+    if assumptions is not None:
+        # The claim-time tree observation belongs to exactly one fragment; the
+        # reviewer's model owns it when there is one, the dispatch expansion
+        # next, and this fragment only when it is the one that adds it.
+        try:
+            assumptions_fragment = framework.assumptions_bundle(
+                exported.bundle, raw, assumptions, model=model,
+                tree_digest=None if (model or cha_fragment is not None) else tree_digest)
+        except (framework.AssumptionsInputError, framework.MapCoverageUnsatisfied) as exc:
+            # An expired document, one signed against another commit, a symbol
+            # this index does not declare, or a closed map that omits an
+            # endpoint an assumed edge runs through: all usage, all named.
+            _emit({"refusal": str(exc)}, None)
+            return 2
+        except (ValidationError, ValueError, KeyError) as exc:
+            _emit({"operational_failure": "static-assumptions-failed", "error": str(exc)}, None)
+            return 3
+    fragments = tuple(fragment for fragment in (cha_fragment, assumptions_fragment)
+                      if fragment is not None)
     if model is None:
         try:
             bundle = closure.attach(exported.bundle, raw, *fragments)
@@ -627,6 +671,25 @@ def _static(args) -> int:
             cha.EDGE_CLOSED_RELATION: cha_metadata["edge_cha_closed"],
             cha.CLOSED_RELATION: list(cha_metadata["call_graph_closed_cha"]),
         }
+    assumptions_summary = {}
+    if assumptions_fragment is not None:
+        fragment_metadata = dict(assumptions_fragment.metadata)
+        assumptions_summary = {
+            "assumptions_pack": framework.PACK_ID,
+            "assumptions_digest": fragment_metadata["assumptions_digest"],
+            "assumptions_reviewer": fragment_metadata["reviewer"],
+            "assumptions_commit": fragment_metadata["commit"],
+            # False is not "wrong commit" -- it is "this index names no commit,
+            # so nothing checked the one the reviewer signed against".
+            "assumptions_commit_verified": fragment_metadata["commit_verified"],
+            "assumptions_expires": fragment_metadata["expires"],
+            framework.EDGE_RELATION: fragment_metadata["applied_rows"],
+            framework.UNAPPLIED_RELATION: fragment_metadata["unapplied_rows"],
+            framework.CLOSED_RELATION: fragment_metadata["assumptions_closed"],
+            framework.CALL_GRAPH_CLOSED_RELATION:
+                list(fragment_metadata["call_graph_closed_assumed"]),
+            "assumption_ids": sorted(set(framework.assumption_ids(assumptions_fragment).values())),
+        }
     _emit({"profile": args.static, "pack": closure.PACK_ID, "base_pack": closure.BASE_PACK_ID,
            "index": dict(exported.bundle.metadata)["index_digest"],
            "scope": {"kind": scope.kind, "values": scope.rows()},
@@ -634,7 +697,7 @@ def _static(args) -> int:
            closure.UNRESOLVED_RELATION: rows.get(closure.UNRESOLVED_RELATION, 0),
            closure.CLOSED_RELATION: closed,
            "row_counts": rows, "out": args.out,
-           **reflexion_summary, **dispatch_summary,
+           **reflexion_summary, **dispatch_summary, **assumptions_summary,
            "messages": list(exported.messages)}, None)
     return 0
 
@@ -816,6 +879,13 @@ def main(argv: list[str]) -> int:
                              "bundle is unchanged) or cha, which expands it through the index's "
                              "implementation relationships into static_edge_cha and reports every "
                              "verdict over the expanded graph as a separate *_cha row")
+    static.add_argument("--assumptions", default=None, metavar="FILE",
+                        help="a reviewer-signed framework-assumption document (schema_version 1: "
+                             "reviewer, commit, expires, closed, assumptions[]): the edges a "
+                             "framework makes out of data and no indexer can see, each naming "
+                             "its framework, its mechanism and the file:line it stands for. They "
+                             "feed static_edge_assumed and never widen static_edge; every "
+                             "verdict over the assumed graph is a separate *_assumed row")
     static.add_argument("--out", default=None, help="write the combined bundle JSON here")
     vectors_static = claims_sub.add_parser(
         "vectors-static", help="join boundary vectors and their replay to a static bundle: "
