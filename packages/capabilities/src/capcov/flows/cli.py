@@ -70,6 +70,10 @@ def main(argv: list[str]) -> int:
     p.add_argument("--check", action="store_true")
     p.add_argument("--max-states", type=int, default=10000,
                    help="positive reachable-state budget; exhaustion fails without a complete plan")
+    p.add_argument("--static", metavar="BUNDLE.json",
+                   help="annotate the plan with what a static bundle says about each "
+                        "obligation surface (store set, status, authz sink); annotation only -- "
+                        "the plan itself is unchanged and nothing is pruned")
     catalog = sub.add_parser(
         "catalog", help="derive flow families and source dependency candidates"
     )
@@ -136,7 +140,18 @@ def main(argv: list[str]) -> int:
                 out.parent.mkdir(parents=True, exist_ok=True)
                 out.write_text(render_catalog(result, args.focus))
         elif args.command == "plan":
-            result = plan(read(args.model), args.target, args.max_states)
+            # The model is read once and planned first: `plan` is not passed the
+            # bundle, so the plan under `--static` is the plan without it, and
+            # the annotation is a key beside it.
+            model = read(args.model)
+            result = plan(model, args.target, args.max_states)
+            if args.static:
+                from . import static_preview
+
+                annotation = static_preview.annotate(
+                    static_preview.load(args.static), model)
+                result[static_preview.KEY] = annotation
+                print(static_preview.summary_line(annotation))
         elif args.command == "run":
             _deprecated("run")
             if not runner:
@@ -241,6 +256,13 @@ def main(argv: list[str]) -> int:
             for scenario in execution_plan["scenarios"]:
                 steps = " → ".join(s["transition"] for s in scenario["steps"])
                 lines.append(f"- **{scenario['id']}**: {steps}")
+            # Annotation, and only when the plan carries one: a plan produced
+            # without --static has no `static` key and this report is the report
+            # it always was, byte for byte.
+            if execution_plan.get("static"):
+                from . import static_preview
+
+                lines.extend(static_preview.report_lines(execution_plan["static"]))
             lines.extend(["", "## Blocked flows", ""])
             for blocked in coverage["blocked"]:
                 lines.append(f"- {blocked['transition']}: {blocked['reason']}")

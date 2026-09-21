@@ -230,8 +230,11 @@ def runtime_side(exported: Any, run: str) -> dict[str, Any]:
     return {"routes": routes, "routes_closed": closed}
 
 
-def _derivable(bundle: Bundle) -> frozenset[str]:
+def derivable_relations(bundle: Bundle) -> frozenset[str]:
     """Relations this bundle can produce a row of, transitively over rule bodies.
+
+    Public for the same reason ``closure`` is: one reader of a bundle, one
+    answer to "can this bundle derive that at all".
 
     A relation is derivable when the bundle carries a fact of it, when its
     declaration is *primitive* -- an EDB relation whose producer owns the
@@ -270,7 +273,14 @@ def _derivable(bundle: Bundle) -> frozenset[str]:
     return frozenset(derivable)
 
 
-def _closure(bundle: Bundle) -> dict[str, list[tuple]]:
+def closure(bundle: Bundle) -> dict[str, list[tuple]]:
+    """Every relation of the bundle, evaluated under ``LIMITS`` by the stdlib kernel.
+
+    Public because the flows static preview (``capcov.flows.static_preview``)
+    asks a bundle the same two questions this module does -- what it derives,
+    and what it can derive at all -- and asking them twice in two spellings is
+    how the two answers drift apart.
+    """
     from ..evaluator import evaluate
 
     report = evaluate(bundle, LIMITS)
@@ -381,22 +391,22 @@ def section(static: StaticBundle, *, run: str, routes: Iterable[str],
     if join["status"] != JOIN_BOUND:
         return document
     try:
-        closure = _closure(static.bundle)
+        derived = closure(static.bundle)
     except (ValueError, RecursionError) as exc:
         # the bundle validated and then would not evaluate: an operational
         # failure of this join, named, with no rows and no effect on the verdict
         document["error"] = str(exc)[:4000]
         return document
     indexes = set(join["indexes"])
-    derivable = _derivable(static.bundle)
+    derivable = derivable_relations(static.bundle)
 
     def rows(relation: str) -> list[list[Any]]:
-        return sorted([list(row[1:]) for row in closure.get(relation, ())
+        return sorted([list(row[1:]) for row in derived.get(relation, ())
                        if row[0] in indexes])
 
     #: The indexes each witness carries a row for, among the joined ones.  Read
     #: out of the closure, so a witness a rule derives counts as one.
-    carried = {name: {row[0] for row in closure.get(name, ())} for name in CLOSURE_WITNESSES}
+    carried = {name: {row[0] for row in derived.get(name, ())} for name in CLOSURE_WITNESSES}
     document["closure_witnesses"] = {name: sorted(indexes & carried[name])
                                      for name in CLOSURE_WITNESSES}
     withheld: dict[str, list[str]] = {}
@@ -488,4 +498,5 @@ __all__ = ["SECTION_KEY", "KERNEL", "LIMITS", "DESCRIBES_RELATION", "REQUEST_REL
            "CELL_RELATIONS", "CALL_GRAPH_CLOSED_RELATION", "MAP_CLOSED_RELATION",
            "EDGE_CLOSED_RELATION", "CLOSURE_WITNESSES", "WITNESSED_BY",
            "UNDERIVED_REASON", "ROUTE_SHAPE", "StaticBundleError", "StaticBundle",
-           "load", "runtime_side", "section", "summary_line"]
+           "load", "runtime_side", "section", "summary_line", "closure",
+           "derivable_relations"]
