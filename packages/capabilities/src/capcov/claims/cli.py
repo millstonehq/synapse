@@ -639,6 +639,58 @@ def _static(args) -> int:
     return 0
 
 
+VECTOR_KERNELS = ("python", "souffle", "differential")
+
+
+def _vectors_static(args) -> int:
+    """``claims vectors-static`` -- boundary vectors joined to a static bundle.
+
+    One bundle: every recorded operation's vectors and its replay (exactly as
+    ``claims.build_bundle`` validates them), the static account of the same
+    system, and the rules that compare what the candidate wrote with what its
+    routes can reach.  The kernel is ``vectors.claims``' own selection, so
+    ``--kernel differential`` here means what it means there.
+
+    Exit 0 when the join produced a judgment and no store diverged, 1 when a
+    ``vector_store_divergence`` claim was refuted (a table the candidate wrote
+    that the route's closed store set does not contain), 2 for a usage refusal
+    and 3 for a named operational failure -- an absent Shen authority runtime or
+    Souffle among them.  ``static_store_unexercised`` is advisory and never
+    moves this exit code.
+    """
+    from . import shen
+    from ..vectors import static_join
+    from ..vectors.claims import VectorClaimError
+
+    try:
+        pairs = static_join.read_pairs(args.vectors, args.replay)
+        static = static_join.load(args.static)
+    except (static_join.VectorStaticError, static_join.StaticBundleError) as exc:
+        _emit({"refusal": str(exc)}, None)
+        return 2
+    try:
+        judgment = static_join.judge(pairs, static,
+                                     describes_candidate=args.describes_candidate,
+                                     kernel=args.kernel)
+    except (static_join.VectorStaticError, VectorClaimError, ValidationError,
+            ValueError) as exc:
+        _emit({"refusal": str(exc)} if isinstance(exc, static_join.VectorStaticError)
+              else {"operational_failure": "vectors-static-failed", "error": str(exc)}, None)
+        return 2 if isinstance(exc, static_join.VectorStaticError) else 3
+    except shen.ShenUnavailable as exc:
+        _emit({"operational_failure": exc.operational_failure, "error": str(exc)}, None)
+        return 3
+    except shen.ShenFailure as exc:
+        _emit({"operational_failure": exc.kind, "error": exc.message}, None)
+        return 3
+    document = static_join.document(judgment, pairs, static,
+                                    describes_candidate=args.describes_candidate,
+                                    kernel=args.kernel)
+    _emit(document, args.out)
+    print(static_join.summary_line(document), file=sys.stderr)
+    return 1 if document["divergence_claims_refuted"] else 0
+
+
 def _modelcheck(args) -> int:
     try:
         modelcheck = _profile("modelcheck")
@@ -765,6 +817,27 @@ def main(argv: list[str]) -> int:
                              "implementation relationships into static_edge_cha and reports every "
                              "verdict over the expanded graph as a separate *_cha row")
     static.add_argument("--out", default=None, help="write the combined bundle JSON here")
+    vectors_static = claims_sub.add_parser(
+        "vectors-static", help="join boundary vectors and their replay to a static bundle: "
+                               "the store-parity precheck")
+    vectors_static.add_argument("--vectors", required=True, metavar="DIR",
+                                help="the recorder's output directory "
+                                     "(<DIR>/<operation>/vectors.json)")
+    vectors_static.add_argument("--replay", required=True, metavar="DIR",
+                                help="the replay output directory "
+                                     "(<DIR>/<operation>/replay.json)")
+    vectors_static.add_argument("--static", required=True, metavar="BUNDLE",
+                                help="the static bundle written by 'claims static --out', "
+                                     "with the closure rule pack merged")
+    vectors_static.add_argument(
+        "--describes-candidate", default=None, metavar="SHA256",
+        help="the reviewer's assertion that this index describes the replayed binary "
+             "(index_describes_candidate); it must equal the replay's own "
+             "candidate_sha256. Without it every divergence claim stays unresolved")
+    vectors_static.add_argument("--kernel", default="python", choices=VECTOR_KERNELS,
+                                help="which kernel judges the joined bundle (default python); "
+                                     "souffle and differential need the Souffle toolchain")
+    vectors_static.add_argument("--out", default=None, help="also write the report JSON here")
     mc = claims_sub.add_parser("modelcheck", help="Stage D: typed well-formedness of a Shen domain model")
     mc.add_argument("--model", required=True, help="model directory holding shen/load.shen")
     mc.add_argument("--out", default=None,
@@ -780,6 +853,8 @@ def main(argv: list[str]) -> int:
         return _modelcheck(args)
     if args.tool == "static":
         return _static(args)
+    if args.tool == "vectors-static":
+        return _vectors_static(args)
 
     try:
         shen = _profile("shen")

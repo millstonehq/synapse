@@ -49,6 +49,13 @@ from .fixture import ObservingFixture
 from . import diff, drivers, normalize, templates
 from .schema import Cell, DriverGap, Operation, Request, StepSpec, Vector, VectorsArtifact, gap
 
+#: Provenance key written only when a recording took its compared-store list
+#: from a static account instead of the consumer's inputs (``record``'s
+#: ``static_declared``).  Absent otherwise, so the default path's artifacts --
+#: and their digests -- are exactly what they were.
+DECLARED_SOURCE_KEY = "declared_stores_source"
+DECLARED_SOURCE_STATIC = "static"
+
 VECTORS_FILE = "vectors.json"
 REPLAY_FILE = "replay.json"
 VECTORS_KIND = "vectors"
@@ -285,6 +292,7 @@ def record(
     provenance: Mapping | None = None,
     informational: Iterable[str] = (),
     log: Callable[[str], None] | None = None,
+    static_declared: Mapping[str, object] | None = None,
 ) -> dict:
     """Record every operation's vectors against the oracle; one artifact per operation.
 
@@ -292,6 +300,14 @@ def record(
     "gaps_recorded"}``. ``provenance`` is whatever the consumer knows about the
     incumbent (a snapshot hash, a seed hash, a version); the recorder adds the
     template and normalization versions and hashes of the manifest and inputs.
+
+    ``static_declared`` is the opt-in: a map from operation id to a ``declared``
+    value taken from a static account of the candidate
+    (``vectors.static_join.declared_stores``, which returns one only for a
+    surface whose store set the index *closed*).  An operation it names records
+    against that list instead of the inputs' ``declared``, and its artifact says
+    so under ``provenance[DECLARED_SOURCE_KEY]``; an operation it does not name,
+    and the default ``None``, are byte-for-byte what they were.
     """
     out_dir = Path(out_dir)
     say = log or (lambda line: None)
@@ -311,6 +327,15 @@ def record(
     for op in operations:
         cells, gaps = templates.cells_for(op, manifest, inputs)
         declared = templates.declared_for(op, inputs)
+        op_prov = prov
+        given = None if static_declared is None else static_declared.get(op.id)
+        if given is not None:
+            # The static list replaces the inputs' declaration, and the artifact
+            # carries where it came from: a compared-store list is the whole of
+            # what a vector can be refuted over, so a reader must never have to
+            # guess whether a reviewer or an index chose it.
+            declared = given
+            op_prov = {**prov, DECLARED_SOURCE_KEY: DECLARED_SOURCE_STATIC}
         never = informational_for(op, inputs, informational)
         inputs_entry = templates.inputs_for(op, inputs)
         vectors: list[Vector] = []
@@ -342,7 +367,7 @@ def record(
             operation=op.id,
             template_version=templates.TEMPLATE_VERSION,
             declared_stores=declared,
-            provenance=prov,
+            provenance=op_prov,
             vectors=vectors,
             gaps=gaps,
             required_cells=sorted({cell.id for cell in cells} | {item["cell"] for item in gaps}),
