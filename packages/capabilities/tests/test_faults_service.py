@@ -200,5 +200,66 @@ class FaultMenuTest(unittest.TestCase):
             self.service.read(KEY, "actor-1")
 
 
+class LateApplyTest(unittest.TestCase):
+    """A delayed write is judged against what its sender had seen when it sent it."""
+
+    def setUp(self) -> None:
+        self.service = FakeService()
+        self.service.inject(DelayApply(50))
+        with self.assertRaises(ResponseLost):
+            self.service.write(KEY, "old", "actor-1")
+
+    def overwrote(self) -> list[tuple[int, str]]:
+        truth = self.service.ground_truth()
+        return [(a.seq, a.actor) for a in truth.overwrote_unread]
+
+    def test_a_late_write_replaces_a_value_its_sender_read_after_sending(self) -> None:
+        self.service.write(KEY, "new", "actor-2")
+        self.assertEqual(self.service.read(KEY, "actor-1"), "new")
+        self.service.heal()
+        self.assertEqual(self.service.ground_truth().final, {KEY: "old"})
+        self.assertEqual(self.overwrote(), [(2, "actor-1")])
+
+    def test_a_late_write_replaces_its_senders_own_later_write(self) -> None:
+        self.service.write(KEY, "new", "actor-1")
+        self.service.heal()
+        self.assertEqual(self.service.ground_truth().final, {KEY: "old"})
+        self.assertEqual(self.overwrote(), [(2, "actor-1")])
+
+    def test_a_late_write_replaces_another_actors_write_its_sender_never_read(self) -> None:
+        self.service.write(KEY, "new", "actor-2")
+        self.service.heal()
+        self.assertEqual(self.overwrote(), [(2, "actor-1")])
+
+    def test_a_late_write_onto_an_unchanged_key_is_not_reported(self) -> None:
+        self.service.heal()
+        self.assertEqual(self.overwrote(), [])
+
+    def test_a_request_records_what_its_sender_had_seen(self) -> None:
+        self.service.write(KEY, "new", "actor-2")
+        self.service.read(KEY, "actor-1")
+        self.service.write(KEY, "newer", "actor-1")
+        self.assertEqual([(r.method, r.actor, r.seen) for r in self.service.ground_truth().requests],
+                         [("write", "actor-1", 0), ("write", "actor-2", 0), ("read", "actor-1", 0),
+                          ("write", "actor-1", 1)])
+
+    def test_pending_writes_are_listed_and_leave_the_log_read_incomplete(self) -> None:
+        truth = self.service.ground_truth()
+        self.assertEqual([(r.id, r.key) for r in truth.pending], [(1, KEY)])
+        self.assertFalse(self.service.changes().complete)
+        self.service.heal()
+        self.assertEqual(self.service.ground_truth().pending, ())
+        self.assertTrue(self.service.changes().complete)
+
+
+class ApplyTwiceOverwriteTest(unittest.TestCase):
+    def test_the_second_apply_of_one_request_is_not_an_unread_overwrite(self) -> None:
+        service = FakeService()
+        service.write(KEY, "draft", "actor-2")
+        service.inject(ApplyTwice())
+        service.write(KEY, "public", "actor-1")
+        self.assertEqual([a.seq for a in service.ground_truth().overwrote_unread], [2])
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

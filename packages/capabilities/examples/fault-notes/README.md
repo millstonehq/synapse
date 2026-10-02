@@ -29,13 +29,16 @@ From `packages/capabilities`:
 uv run --frozen --extra faults-property sh scripts/check-fault-harness.sh
 ```
 
-The script copies this directory twice. The first copy must pass under every
-crash point, each fault on the menu combined with every crash point, every
+The script copies this directory three times. The first copy must pass under
+every crash point, each fault on the menu combined with every crash point, every
 schedule of at most five rules, and 100 Hypothesis examples. The second copy is
 patched with `tests/fixtures/faults/resend-after-unknown.patch`, which makes
 recovery send without reading the change log; the script requires exit 1 and
 `effect_applied_twice` from the crash-point runs, the enumerator, Hypothesis and
-`capcov faults check`.
+`capcov faults check`. The third copy is patched with
+`tests/fixtures/faults/judge-before-settle.patch`, which removes the `heal()`
+before recovery, so the `DelayApply` run is judged while its write is pending;
+the script requires exit 1 and `unresolved` naming `applied_closed`.
 
 To run the scenario directly:
 

@@ -55,10 +55,18 @@ matching call.
 
 `advance(ticks)` and `heal()` release delayed writes and withheld entries.
 `ground_truth()` returns the final values, every applied write with the request
-that caused it, and every write that replaced a value its sender had not read.
-`ChangeRead.complete` is false while an entry is withheld. A real service does
-not report that; the checker uses it to decide whether a missing entry means
-anything.
+that caused it, every write that replaced a value its sender had not read, and
+`pending`: the requests the service accepted and has not applied.
+
+A write replaced an unread value when the key changed after the last read or
+write its sender had made of that key when it sent the request. `Request.seen`
+records that sequence number at the moment of sending, so a `DelayApply` write
+that lands after its sender read or wrote a newer value is reported. The second
+apply of one `ApplyTwice` request is not reported.
+
+`ChangeRead.complete` is false while an entry is withheld or a write is pending.
+A real service does not report that; the checker uses it to decide whether a
+missing entry means anything.
 
 ## Crash boundaries
 
@@ -86,6 +94,12 @@ calls `check(state, history)`. The first run it returns has no crash.
 `setup`, `operation`, `recover` and `invariants`. `finish()` abandons work in
 flight, runs recovery, closes the history and returns the failed invariants.
 
+A step that lets one of `expected_errors` escape (by default `ServiceError`)
+ends its operation, and recovery and the invariants judge what it left. Any
+other exception from a step raises `UnexpectedStepError`, with the original as
+`__cause__` and, under the enumerator, the rules that led to it in `schedule`.
+A schedule in which the program fails on a defect therefore has no verdict.
+
 `enumerate_schedules(factory, depth)` tries every schedule up to `depth` rules
 and returns the shortest one that fails, or `None`. `hypothesis_machine(factory)`
 returns a Hypothesis `RuleBasedStateMachine` subclass; it needs the
@@ -105,9 +119,16 @@ returns a Hypothesis `RuleBasedStateMachine` subclass; it needs the
 | `consumer` | `intent`, `recorded`, `settled`, `overwrite_reported`, and `intents_closed`, `recorded_closed`, `settled_closed`, `reports_closed` |
 
 A completeness fact is emitted only when its input says it is complete:
-`History.complete_flag`, `ChangeRead.complete`, `FinalRead.complete`,
-`Rows.complete`. `finals_closed(run)` is emitted when every store with a final
+`History.complete_flag`, `ChangeRead.complete`, `ServiceFacts.applied_complete`,
+`FinalRead.complete`, `Rows.complete`. No flag defaults to true:
+`FinalRead(store, rows)` and `Rows(rows)` are incomplete until the caller passes
+`complete=True`. `finals_closed(run)` is emitted when every store with a final
 read or an intent has a complete final read.
+
+`applied_closed` is emitted only when the fake service holds no pending write.
+While one is pending, `changes_closed` is withheld too and the service's own
+final values are an incomplete final read, so every invariant that reads the
+service is `unresolved`. Call `heal()` or `advance()` before the final reads.
 
 The consumer rows come from the program's own primary store, through `Finals`:
 
@@ -143,6 +164,14 @@ needs one, a rule deriving `violated(Run, "mine")`, a rule deriving
 `violated_closed(Run, "mine")` from the completeness relations it depends on,
 and `invariant_claim(run, "mine")`.
 
+`ExtraFacts(relation, rows)` in `extra` supplies facts for a relation declared
+in the same `extra`. The relation must be primitive, have the context column
+`run` first, and admit the producer class `consumer` (or declare none). Rows
+leave `run` out and are checked for arity and column type, as the built-in
+facts are. A completeness relation is closed with one empty row:
+`ExtraFacts("mine_closed", [()])`. `extra` cannot supply facts for a relation
+of the pack or declare one again.
+
 ## Command line
 
 ```sh
@@ -154,12 +183,22 @@ service)`. Exit 0 when every invariant is supported, 1 when any is violated or
 unresolved, 2 on invalid input or when `--engine both` finds no Souffle, 3 when
 the two kernels disagree.
 
+The `service` object of `f.json` must carry the boolean `applied_complete`, an
+`applied` origin of `request` or `outside`, and string digests in `final`.
+Anything else exits 2.
+
 ## Limits
 
 - One external service per run, one thread, logical time. The fake service does
   not model a network.
 - Two operations interleave by nesting: the second actor runs between two steps
   of the first. Recovery runs only while no operation is in flight.
+- Recovery is not crashed and is not given a lost response: `explore` and
+  `FaultMachine` hand it a `Boundaries` with no plan. `heal()` drops queued
+  service faults, so a scenario that heals before recovery runs recovery
+  against a healthy service. A fault still queued when recovery starts does
+  fire on recovery's calls. A recovery that must survive its own crash needs a
+  scenario that runs it as the operation under test.
 - Intents are matched to stores by `(store, key, value digest)`. Two intents of
   one run must differ in at least one of the three.
 - `orphan_change` compares the value a key holds after a write with the intent's

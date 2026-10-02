@@ -17,7 +17,7 @@ from typing import Any, Callable, Iterable, Sequence
 
 from .crash import Boundaries, Step
 from .history import History
-from .service import ResponseLost
+from .service import ResponseLost, ServiceError
 
 RULES = ("start_operation", "run_next_step", "crash", "drop_response",
          "run_recovery", "start_second_actor")
@@ -25,6 +25,19 @@ RULES = ("start_operation", "run_next_step", "crash", "drop_response",
 
 class HypothesisUnavailable(RuntimeError):
     """``hypothesis_machine`` needs the ``faults-property`` extra, which is not installed."""
+
+
+class UnexpectedStepError(RuntimeError):
+    """A step raised an exception the machine does not list in ``expected_errors``.
+
+    The program under test failed on a defect, so the schedule has no verdict.
+    The original exception is ``__cause__``.  ``schedule`` holds the rules that
+    led to it when :func:`enumerate_schedules` was driving.
+    """
+
+    def __init__(self, message: str, schedule: tuple[str, ...] = ()) -> None:
+        super().__init__(message)
+        self.schedule = schedule
 
 
 @dataclass
@@ -63,6 +76,10 @@ class FaultMachine:
     recovery_actor = "recovery"
     #: Stores whose responses ``drop_response`` may lose; ``None`` means any store.
     lossy_stores: Iterable[str] | None = None
+    #: Exceptions a step may let escape.  One of these ends the operation and
+    #: leaves what it did to recovery and the invariants.  Any other exception
+    #: is raised as :class:`UnexpectedStepError`.
+    expected_errors: tuple[type[BaseException], ...] = (ServiceError,)
 
     def __init__(self) -> None:
         self.history = self.new_history()
@@ -93,7 +110,11 @@ class FaultMachine:
         """Let delayed work land before the final recovery.  Does nothing by default."""
 
     def lost_response(self) -> BaseException:
-        """The exception a caller sees when a response is lost."""
+        """The exception a caller sees when a response is lost.
+
+        A subclass that returns something other than a ``ServiceError`` adds
+        its type to ``expected_errors``.
+        """
         return ResponseLost("no response")
 
     def invariants(self) -> Sequence[str]:
@@ -139,10 +160,14 @@ class FaultMachine:
         step = running.steps.pop(0)
         try:
             step.run(self.state, running.actor, self.boundaries)
-        except Exception:
-            # The program let an error escape: the operation is over, and what
-            # it left behind is for recovery and the invariants to judge.
+        except tuple(self.expected_errors):
+            # The program let a service error escape: the operation is over, and
+            # what it left behind is for recovery and the invariants to judge.
             running.steps.clear()
+        except Exception as exc:
+            raise UnexpectedStepError(
+                f"step {step.name!r} of operation {running.op} ({running.actor}) raised "
+                f"{type(exc).__name__}: {exc}") from exc
         if not running.steps:
             self._running.pop()
         return True
@@ -195,7 +220,9 @@ def enumerate_schedules(factory: Callable[[], FaultMachine], depth: int,
     Schedules are tried in order of length, and within a length in the order of
     ``rules``, so the answer is deterministic.  A schedule containing a rule
     that had nothing to act on is skipped, because it equals a shorter one.
-    Returns ``None`` when no schedule fails.
+    Returns ``None`` when no schedule fails.  A step that raises an exception
+    outside the machine's ``expected_errors`` stops the search with
+    :class:`UnexpectedStepError`.
     """
     if depth < 0:
         raise ValueError("depth must not be negative")
@@ -207,8 +234,12 @@ def enumerate_schedules(factory: Callable[[], FaultMachine], depth: int,
         following: list[tuple[str, ...]] = []
         for schedule in frontier:
             machine = factory()
-            if not all(getattr(machine, rule)() for rule in schedule):
-                continue
+            try:
+                if not all(getattr(machine, rule)() for rule in schedule):
+                    continue
+            except UnexpectedStepError as exc:
+                exc.schedule = schedule
+                raise
             failures = machine.finish()
             if failures:
                 return FailingSchedule(schedule, tuple(failures))
@@ -252,5 +283,5 @@ def hypothesis_machine(factory: Callable[[], FaultMachine]) -> type:
     return type("FaultStateMachine", (stateful.RuleBasedStateMachine,), namespace)
 
 
-__all__ = ["RULES", "HypothesisUnavailable", "FailingSchedule", "FaultMachine",
-           "enumerate_schedules", "hypothesis_machine"]
+__all__ = ["RULES", "HypothesisUnavailable", "UnexpectedStepError", "FailingSchedule",
+           "FaultMachine", "enumerate_schedules", "hypothesis_machine"]

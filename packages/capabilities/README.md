@@ -341,8 +341,9 @@ uv run --frozen --extra faults-property sh scripts/check-fault-harness.sh
 
 `check` exits 0 when every invariant is supported, 1 when any is violated or
 unresolved, and 2 on invalid input. The script runs the worked example in
-`examples/fault-notes`, then applies a patch to a temporary copy and requires the
-harness to reject it as `effect_applied_twice`.
+`examples/fault-notes`, then applies two patches to temporary copies. It requires
+the harness to reject a resend after an unknown outcome as `effect_applied_twice`
+and to leave a run judged with a write still pending `unresolved`.
 
 The harness uses the standard library only and is never imported by `discover`,
 `reconcile` or `gate`. Hypothesis is the optional `faults-property` extra. The

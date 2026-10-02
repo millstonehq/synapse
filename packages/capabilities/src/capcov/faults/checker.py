@@ -7,10 +7,16 @@ reads) and the rows the consumer reports about its own bookkeeping.
 
 Absence only means something when the input it is absent from was complete.  A
 completeness fact is therefore emitted only when its input says so:
-``History.complete_flag``, ``ChangeRead.complete``, ``FinalRead.complete`` or
-``Rows.complete``.  An invariant whose completeness facts are missing comes back
-``unresolved`` with the missing relation named, and an unresolved invariant
-fails the run exactly as a violated one does.
+``History.complete_flag``, ``ChangeRead.complete``,
+``ServiceFacts.applied_complete``, ``FinalRead.complete`` or ``Rows.complete``.
+None of these flags defaults to true.  An invariant whose completeness facts are
+missing comes back ``unresolved`` with the missing relation named, and an
+unresolved invariant fails the run exactly as a violated one does.
+
+The fake service's applied writes are complete only when it holds no accepted
+write it has still to apply.  While one is pending, ``applied_closed`` and
+``changes_closed`` are withheld and the service's own final values are an
+incomplete final read.
 
 :func:`check` evaluates the bundle with ``capcov.claims.evaluator`` and, with
 ``engine="both"``, also with Souffle through ``capcov.claims.differential``.
@@ -27,7 +33,8 @@ import tempfile
 from typing import Any, Iterable, Mapping, Sequence
 
 from ..claims.ir import (Atom, Bundle, Claim, Constant, Context, Evidence, EvidenceMapping,
-                         OutputTemplate, RelationDecl, Rule, TemplateValue, bundle_from_json)
+                         OutputTemplate, RelationDecl, Rule, TemplateValue, TypeName,
+                         bundle_from_json)
 from .history import EFFECT_KIND, Digest, History, value_digest
 from .service import ChangeEntry, ChangeRead, FakeService
 
@@ -59,20 +66,36 @@ class SouffleRequired(RuntimeError):
 class FinalRead:
     """The final contents of one store: ``rows`` maps key to value.
 
-    ``complete`` says the read covered the whole store.  Leave it false for a
-    partial listing; the checker then refuses to conclude anything from a key
-    being absent.
+    ``complete=True`` says the read covered the whole store.  It is false
+    unless the caller says so; the checker then refuses to conclude anything
+    from a key being absent.
     """
     store: str
     rows: Mapping[str, Any]
-    complete: bool = True
+    complete: bool = False
 
 
 @dataclass(frozen=True)
 class Rows:
-    """Rows of one consumer relation, and whether they are all of them."""
+    """Rows of one consumer relation.  ``complete=True`` says they are all of them."""
     rows: tuple[tuple[Any, ...], ...] = ()
-    complete: bool = True
+    complete: bool = False
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "rows", tuple(tuple(row) for row in self.rows))
+
+
+@dataclass(frozen=True)
+class ExtraFacts:
+    """Rows of a relation the consumer declares in ``extra``.
+
+    ``relation`` names a primitive ``RelationDecl`` passed in the same
+    ``extra``, whose first column is the context column ``run``.  Each row
+    leaves ``run`` out; the checker adds it.  A completeness relation is closed
+    by one empty row: ``ExtraFacts("mine_closed", [()])``.
+    """
+    relation: str
+    rows: tuple[tuple[Any, ...], ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "rows", tuple(tuple(row) for row in self.rows))
@@ -80,12 +103,18 @@ class Rows:
 
 @dataclass(frozen=True)
 class ServiceFacts:
-    """What one external service contributes: its log read and its ground truth."""
+    """What one external service contributes: its log read and its ground truth.
+
+    ``applied`` rows are ``(seq, request, key, value digest, origin)`` with
+    origin ``request`` or ``outside``.  ``applied_complete`` is true only when
+    the service held no accepted write still to be applied; it has no default.
+    """
     store: str
     changes: ChangeRead
     applied: tuple[tuple[int, int, str, str, str], ...]
     overwrote_unread: tuple[tuple[int, str], ...]
     final: Mapping[str, str]
+    applied_complete: bool
 
     @classmethod
     def from_service(cls, service: FakeService) -> "ServiceFacts":
@@ -93,7 +122,8 @@ class ServiceFacts:
         return cls(service.name, service.changes(),
                    tuple((a.seq, a.request, a.key, a.value, a.origin) for a in truth.applied),
                    tuple((a.seq, a.key) for a in truth.overwrote_unread),
-                   {key: value_digest(value) for key, value in truth.final.items()})
+                   {key: value_digest(value) for key, value in truth.final.items()},
+                   not truth.pending)
 
 
 @dataclass(frozen=True)
@@ -130,6 +160,7 @@ _CONSUMER_CLOSED = {"intent": "intents_closed", "recorded": "recorded_closed",
 #: Column positions of consumer rows (after ``run``) that hold a value to digest.
 _CONSUMER_VALUE_COLUMNS = {"intent": (4,)}
 _CONSUMER_ARITY = {"intent": 5, "recorded": 2, "settled": 1, "overwrite_reported": 2}
+ORIGINS = ("request", "outside")
 
 
 # --- the pack -------------------------------------------------------------
@@ -209,6 +240,10 @@ class _Facts:
         values = (self.run, *row)
         if len(values) != declaration.arity:
             raise FaultCheckError(f"{relation} takes {declaration.arity - 1} columns, got {len(row)}")
+        for value, column in zip(values, declaration.columns):
+            if not _fits(value, column.type):
+                raise FaultCheckError(
+                    f"{relation}.{column.name} takes {column.type.value}, got {value!r}")
         atom = Atom(relation, tuple(Constant(value, column.type)
                                     for value, column in zip(values, declaration.columns)))
         if atom not in self.atoms:
@@ -217,6 +252,18 @@ class _Facts:
 
     def has(self, relation: str) -> bool:
         return any(atom.relation == relation for atom in self.atoms)
+
+
+def _fits(value: Any, type_name: TypeName) -> bool:
+    """Whether ``value`` is a constant of column type ``type_name``."""
+    if type_name in {TypeName.SYMBOL, TypeName.DIGEST}:
+        return isinstance(value, str)
+    if type_name is TypeName.BOOLEAN:
+        return isinstance(value, bool)
+    if type_name in {TypeName.INTEGER, TypeName.UNSIGNED, TypeName.TIMESTAMP}:
+        return (isinstance(value, int) and not isinstance(value, bool)
+                and (type_name is TypeName.INTEGER or value >= 0))
+    return True
 
 
 def _history_facts(facts: _Facts, history: History) -> None:
@@ -236,7 +283,28 @@ def _history_facts(facts: _Facts, history: History) -> None:
         facts.add("ops_closed", (), "history", "close")
 
 
+def _validate_service(service: ServiceFacts) -> None:
+    if not isinstance(service.store, str) or not service.store:
+        raise FaultCheckError("service store must be a non-empty string")
+    if not isinstance(service.applied_complete, bool) or not isinstance(service.changes.complete, bool):
+        raise FaultCheckError("service applied_complete and changes.complete must be booleans")
+    for row in service.applied:
+        if len(row) != 5:
+            raise FaultCheckError(f"service applied rows take 5 columns, got {len(row)}")
+        if row[4] not in ORIGINS:
+            raise FaultCheckError(f"service applied origin must be one of {ORIGINS}, got {row[4]!r}")
+    for row in service.overwrote_unread:
+        if len(row) != 2:
+            raise FaultCheckError(f"service overwrote_unread rows take 2 columns, got {len(row)}")
+    if not isinstance(service.final, Mapping):
+        raise FaultCheckError("service final must map each key to a digest")
+    for key, digest in service.final.items():
+        if not isinstance(key, str) or not isinstance(digest, str):
+            raise FaultCheckError(f"service final must map a string key to a digest, got {key!r}: {digest!r}")
+
+
 def _service_facts(facts: _Facts, service: ServiceFacts) -> None:
+    _validate_service(service)
     store = service.store
     for entry in service.changes.entries:
         entry = ChangeEntry(*entry)
@@ -248,7 +316,26 @@ def _service_facts(facts: _Facts, service: ServiceFacts) -> None:
         facts.add("applied", (store, seq, request, key, value, origin), "ground-truth", store)
     for seq, key in service.overwrote_unread:
         facts.add("overwrote_unread", (store, seq, key), "ground-truth", store)
-    facts.add("applied_closed", (), "ground-truth", store)
+    if service.applied_complete:
+        facts.add("applied_closed", (), "ground-truth", store)
+
+
+def _extra_facts(facts: _Facts, items: Sequence[ExtraFacts], declared: Mapping[str, RelationDecl]) -> None:
+    for item in items:
+        declaration = declared.get(item.relation)
+        if declaration is None:
+            raise FaultCheckError(
+                f"extra facts name {item.relation!r}, which extra does not declare; "
+                "facts of the pack's relations come from the run, not from extra")
+        if not declaration.primitive:
+            raise FaultCheckError(f"{item.relation!r} is derived and takes no facts")
+        if (declaration.context_indices != ("run",) or not declaration.columns
+                or declaration.columns[0].name != "run"):
+            raise FaultCheckError(f"{item.relation!r} needs the context column 'run' first")
+        if declaration.producer_classes and "consumer" not in declaration.producer_classes:
+            raise FaultCheckError(f"{item.relation!r} does not admit the producer class 'consumer'")
+        for row in item.rows:
+            facts.add(item.relation, row, "consumer", item.relation)
 
 
 def _consumer_rows(name: str, rows: Rows) -> list[tuple[Any, ...]]:
@@ -266,15 +353,19 @@ def build_bundle(history: History, service: FakeService | ServiceFacts | None, f
     """One run as a claims bundle.
 
     ``service`` is the fake service the run used, or the :class:`ServiceFacts`
-    read from it.  The service's own final values are added as a complete final
-    read of its store unless ``finals`` already reads that store.  With
-    ``service=None`` no service fact and no ``applied_closed`` is emitted, so
-    every invariant that reads the service stays unresolved.
+    read from it.  The service's own final values are added as a final read of
+    its store unless ``finals`` already reads that store; that read is complete
+    only when the service holds no pending write.  ``applied_closed`` is emitted
+    only then too.  With ``service=None`` no service fact and no
+    ``applied_closed`` is emitted, so every invariant that reads the service
+    stays unresolved.
 
-    ``extra`` adds a consumer's own ``RelationDecl``, ``Rule``, ``Claim`` and
-    ``OutputTemplate`` values.  A consumer invariant ``mine`` is two rules,
-    ``violated(Run, "mine")`` and ``violated_closed(Run, "mine")``, plus
-    ``invariant_claim(run, "mine")``.
+    ``extra`` adds a consumer's own ``RelationDecl``, ``Rule``, ``Claim``,
+    ``OutputTemplate`` and :class:`ExtraFacts` values.  A consumer invariant
+    ``mine`` is two rules, ``violated(Run, "mine")`` and
+    ``violated_closed(Run, "mine")``, plus ``invariant_claim(run, "mine")``.
+    ``ExtraFacts`` supplies rows for a relation declared in the same ``extra``
+    and never for a relation of the pack.
     """
     if pack is None:
         base, invariants = _shipped()
@@ -283,11 +374,16 @@ def build_bundle(history: History, service: FakeService | ServiceFacts | None, f
         invariants = tuple((item["name"], tuple(item["requires"])) for item in pack["invariants"])
     extras = tuple(extra)
     unknown = [item for item in extras
-               if not isinstance(item, (RelationDecl, Rule, Claim, OutputTemplate))]
+               if not isinstance(item, (RelationDecl, Rule, Claim, OutputTemplate, ExtraFacts))]
     if unknown:
-        raise FaultCheckError(
-            f"extra accepts RelationDecl, Rule, Claim and OutputTemplate, got {type(unknown[0]).__name__}")
-    relations = (*base.relations, *(item for item in extras if isinstance(item, RelationDecl)))
+        raise FaultCheckError("extra accepts RelationDecl, Rule, Claim, OutputTemplate and ExtraFacts, "
+                              f"got {type(unknown[0]).__name__}")
+    own = [item for item in extras if isinstance(item, RelationDecl)]
+    pack_names = {relation.name for relation in base.relations}
+    clashes = sorted({relation.name for relation in own} & pack_names)
+    if clashes or len({relation.name for relation in own}) != len(own):
+        raise FaultCheckError(f"extra declares a relation twice or redeclares the pack's: {clashes}")
+    relations = (*base.relations, *own)
     by_name = {relation.name: relation for relation in relations}
     run = finals.run
     facts = _Facts(run, by_name)
@@ -300,7 +396,8 @@ def build_bundle(history: History, service: FakeService | ServiceFacts | None, f
             _service_facts(facts, service_facts)
             if all(read.store != service_facts.store for read in reads):
                 reads.append(FinalRead(service_facts.store,
-                                       {key: Digest(value) for key, value in service_facts.final.items()}))
+                                       {key: Digest(value) for key, value in service_facts.final.items()},
+                                       complete=service_facts.applied_complete))
         stores = [read.store for read in reads]
         if len(stores) != len(set(stores)):
             raise FaultCheckError("a store has more than one final read")
@@ -324,6 +421,8 @@ def build_bundle(history: History, service: FakeService | ServiceFacts | None, f
         open_stores = sorted(({read.store for read in reads} | intent_stores) - complete_stores)
         if not open_stores:
             facts.add("finals_closed", (), "final-read", "all-stores")
+        _extra_facts(facts, [item for item in extras if isinstance(item, ExtraFacts)],
+                     {relation.name: relation for relation in own})
     except (TypeError, ValueError) as exc:
         if isinstance(exc, FaultCheckError):
             raise
@@ -492,6 +591,7 @@ def finals_to_json(finals: Finals, service: FakeService | ServiceFacts | None = 
             "changes": {"complete": facts.changes.complete,
                         "entries": [list(entry) for entry in facts.changes.entries]},
             "applied": [list(row) for row in facts.applied],
+            "applied_complete": facts.applied_complete,
             "overwrote_unread": [list(row) for row in facts.overwrote_unread],
             "final": dict(sorted(facts.final.items()))}}
     for name in CONSUMER_RELATIONS:
@@ -535,7 +635,9 @@ def finals_from_json(text: str) -> tuple[Finals, ServiceFacts | None]:
                            _boolean(raw_service["changes"]["complete"])),
                 tuple(tuple(row) for row in raw_service["applied"]),
                 tuple(tuple(row) for row in raw_service["overwrote_unread"]),
-                dict(raw_service["final"]))
+                dict(raw_service["final"]),
+                _boolean(raw_service["applied_complete"]))
+            _validate_service(service)
         return Finals(reads=reads, run=document["run"], **consumer), service
     except (KeyError, TypeError, ValueError, AttributeError) as exc:
         raise FaultCheckError(f"invalid finals document: {exc}") from exc
@@ -548,6 +650,6 @@ def _boolean(value: Any) -> bool:
 
 
 __all__ = ["PACK_ID", "PACK_NAME", "DEFAULT_RUN", "ENGINES", "FaultCheckError", "SouffleRequired",
-           "FinalRead", "Rows", "ServiceFacts", "Finals", "read_pack_text", "load_pack",
+           "FinalRead", "Rows", "ExtraFacts", "ServiceFacts", "Finals", "read_pack_text", "load_pack",
            "pack_relations", "pack_bundle", "invariant_names", "build_bundle", "invariant_claim",
            "Verdict", "Verdicts", "check", "finals_to_json", "finals_from_json"]

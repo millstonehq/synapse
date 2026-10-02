@@ -1,7 +1,7 @@
-"""The worked example ``examples/fault-notes``: the baseline passes, the mutant is found.
+"""The worked example ``examples/fault-notes``: the baseline passes, each mutant is found.
 
-The mutant exists only in a temporary copy of the example, made by applying
-``tests/fixtures/faults/resend-after-unknown.patch`` to it.
+A mutant exists only in a temporary copy of the example, made by applying a
+patch from ``tests/fixtures/faults`` to it.
 """
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from capcov.faults.machine import enumerate_schedules
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE = PACKAGE_ROOT / "examples" / "fault-notes"
 PATCH = PACKAGE_ROOT / "tests" / "fixtures" / "faults" / "resend-after-unknown.patch"
+PENDING_PATCH = PACKAGE_ROOT / "tests" / "fixtures" / "faults" / "judge-before-settle.patch"
 MODULES = ("notes_app", "scenario")
 
 
@@ -128,6 +129,51 @@ class MutantTest(unittest.TestCase):
 
     def test_a_refused_send_is_still_sent_once(self) -> None:
         self.assertEqual(failures(self.scenario, lambda: faults.Refuse(503)), [])
+
+
+class JudgedBeforeSettleTest(unittest.TestCase):
+    """The scenario no longer lets delayed work land before recovery and the verdict."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.directory = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(cls.directory.cleanup)
+        cls.copy = Path(cls.directory.name) / "fault-notes"
+        shutil.copytree(EXAMPLE, cls.copy, ignore=shutil.ignore_patterns("__pycache__"))
+        with PENDING_PATCH.open("rb") as patch:
+            subprocess.run(["patch", "-s", "-F", "0", "-p1", "-d", str(cls.copy)],
+                           stdin=patch, check=True)
+        cls.scenario = load_example(cls.copy)
+
+    def test_the_patch_removes_only_the_settle_step(self) -> None:
+        original = (EXAMPLE / "scenario.py").read_text(encoding="utf-8")
+        mutant = (self.copy / "scenario.py").read_text(encoding="utf-8")
+        self.assertEqual((original.count("world.index.heal()"), mutant.count("world.index.heal()")),
+                         (1, 0))
+        self.assertEqual((original.count("self.state.index.heal()"),
+                          mutant.count("self.state.index.heal()")), (1, 1))
+
+    def test_a_pending_write_leaves_the_run_unresolved_naming_applied_closed(self) -> None:
+        captured = []
+
+        def judge(world, history):
+            captured.append(world)
+            return self.scenario.judge(world, history)
+
+        explorations = explore(self.scenario.scenario(self.scenario.FAULTS["delay-apply"]),
+                               self.scenario.notes_app.recover, judge)
+        healthy, world = explorations[0].result, captured[0]
+        self.assertEqual(len(world.index.ground_truth().pending), 1)
+        self.assertEqual(len(world.index.ground_truth().applied), 1)
+        self.assertFalse(healthy.ok)
+        for name in ("effect_applied_twice", "silent_overwrite", "split_outcome"):
+            self.assertEqual(healthy[name].status, "unresolved", name)
+            self.assertIn({"relation": "applied_closed"}, healthy[name].missing_premises, name)
+        world.index.heal()
+        self.assertEqual(len(world.index.ground_truth().applied), 2)
+
+    def test_a_run_with_no_fault_holds_no_pending_write_and_still_passes(self) -> None:
+        self.assertEqual(failures(self.scenario), [])
 
 
 class LazyImportTest(unittest.TestCase):

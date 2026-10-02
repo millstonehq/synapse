@@ -50,19 +50,26 @@ def new_history() -> History:
 
 
 def finals(world: World) -> checker.Finals:
-    """Final reads of the primary and object stores, and the publisher's own bookkeeping."""
+    """Final reads of the primary and object stores, and the publisher's own bookkeeping.
+
+    Each read below selects a whole table or the whole object store, which is
+    what ``complete=True`` states.
+    """
     db = world.db
     notes = {row[0]: {"body": row[1], "state": row[2]}
              for row in db.execute("SELECT id, body, state FROM notes")}
     intents = db.execute("SELECT id, op, store, key, value, status, outcome FROM intents").fetchall()
     return checker.Finals(
-        reads=(checker.FinalRead(PRIMARY, notes),
-               checker.FinalRead(OBJECTS, dict(world.objects.objects))),
+        reads=(checker.FinalRead(PRIMARY, notes, complete=True),
+               checker.FinalRead(OBJECTS, dict(world.objects.objects), complete=True)),
         intent=checker.Rows(tuple((row[0], row[1], row[2], row[3], json.loads(row[4]))
-                                  for row in intents)),
-        recorded=checker.Rows(tuple((row[0], row[6]) for row in intents if row[6] is not None)),
-        settled=checker.Rows(tuple((row[0],) for row in intents if row[5] == "settled")),
-        overwrite_reported=checker.Rows(tuple(db.execute("SELECT store, seq FROM overwrites"))))
+                                  for row in intents), complete=True),
+        recorded=checker.Rows(tuple((row[0], row[6]) for row in intents if row[6] is not None),
+                              complete=True),
+        settled=checker.Rows(tuple((row[0],) for row in intents if row[5] == "settled"),
+                             complete=True),
+        overwrite_reported=checker.Rows(tuple(db.execute("SELECT store, seq FROM overwrites")),
+                                        complete=True))
 
 
 def judge(world: World, history: History, engine: str = "python") -> checker.Verdicts:

@@ -1,13 +1,19 @@
 #!/bin/sh
 # Run the fault-notes example in disposable copies: the baseline must pass under
-# every crash point, every fault, bounded schedules and Hypothesis; the mutant,
-# made by patching a copy, must be rejected by name. The mutant never exists in
+# every crash point, every fault, bounded schedules and Hypothesis; each mutant,
+# made by patching a copy, must be rejected by name. A mutant never exists in
 # the working source. Hypothesis is required: run with `--extra faults-property`.
+#
+# resend-after-unknown: recovery sends without reading the change log. Rejected
+#   as effect_applied_twice.
+# judge-before-settle: the scenario judges a run while the fake service still
+#   holds a delayed write. Left unresolved for want of applied_closed.
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 EXAMPLE="$ROOT/examples/fault-notes"
 PATCH="$ROOT/tests/fixtures/faults/resend-after-unknown.patch"
+PENDING_PATCH="$ROOT/tests/fixtures/faults/judge-before-settle.patch"
 PYTHON=${CAPCOV_PYTHON:-python}
 ENGINE=${CAPCOV_FAULTS_ENGINE:-python}
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/capcov-fault-harness.XXXXXX")
@@ -64,3 +70,18 @@ if [ "$status" -ne 1 ] || ! grep -Eq '^violated +effect_applied_twice ' "$WORK/m
 fi
 grep -E '^violated +effect_applied_twice ' "$WORK/mutant-check.log"
 echo 'PASS mutant: resend after an unknown outcome rejected as effect_applied_twice'
+
+cp -R "$EXAMPLE" "$WORK/pending"
+patch -s -F 0 -p1 -d "$WORK/pending" < "$PENDING_PATCH"
+status=0
+(cd "$WORK/pending" && "$PYTHON" scenario.py --engine "$ENGINE" --depth 1 --examples 1) \
+  > "$WORK/pending.log" 2>&1 || status=$?
+if [ "$status" -ne 1 ] || ! grep -Eq \
+    "^FAIL silent_overwrite unresolved \[fault=delay-apply crash=none\] .*applied_closed" \
+    "$WORK/pending.log"; then
+  cat "$WORK/pending.log"
+  echo "FAIL a run judged with a write pending was not left unresolved (exit $status)" >&2
+  exit 1
+fi
+grep -E '^FAIL silent_overwrite unresolved \[fault=delay-apply crash=none\] ' "$WORK/pending.log"
+echo 'PASS mutant: a run judged with a write pending is unresolved, naming applied_closed'

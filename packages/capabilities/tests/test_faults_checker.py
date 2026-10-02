@@ -13,15 +13,25 @@ from unittest.mock import patch
 from capcov.claims.ir import Atom, Claim, Column, Constant, RelationDecl, Rule, Variable
 from capcov.claims.validation import validate_bundle
 from capcov.faults import checker
-from capcov.faults.checker import FinalRead, Finals, Rows
+from capcov.faults.checker import ExtraFacts, FinalRead, Finals, Rows, ServiceFacts
 from capcov.faults.cli import main as faults_main
-from capcov.faults.history import History
-from capcov.faults.service import (ApplyTwice, DelayChangeEntry, EditBeforeNextWrite, FakeService,
-                                   classify)
+from capcov.faults.history import History, Result
+from capcov.faults.service import (ApplyTwice, DelayApply, DelayChangeEntry, EditBeforeNextWrite,
+                                   FakeService, ResponseLost, classify)
 
 OP, INTENT, KEY = "publish:note-1", "note-1/visibility", "visibility/note-1"
 INVARIANTS = ("effect_applied_twice", "orphan_change", "lost_acknowledgement", "silent_overwrite",
               "unsettled_effect", "split_outcome")
+
+
+def closed(rows: tuple = ()) -> Rows:
+    """All the rows of one consumer relation."""
+    return Rows(rows, complete=True)
+
+
+def whole(store: str, rows: dict) -> FinalRead:
+    """A final read that covered the whole store."""
+    return FinalRead(store, rows, complete=True)
 
 
 class Run:
@@ -30,11 +40,11 @@ class Run:
     def __init__(self) -> None:
         self.history = History(classify=classify)
         self.service = FakeService(self.history.clock, name="index")
-        self.intent: Rows | None = Rows(((INTENT, OP, "index", KEY, "public"),))
-        self.recorded: Rows | None = Rows(((INTENT, "applied"),))
-        self.settled: Rows | None = Rows(((INTENT,),))
-        self.reported: Rows | None = Rows(())
-        self.reads: tuple[FinalRead, ...] = (FinalRead("objects", {}),)
+        self.intent: Rows | None = closed(((INTENT, OP, "index", KEY, "public"),))
+        self.recorded: Rows | None = closed(((INTENT, "applied"),))
+        self.settled: Rows | None = closed(((INTENT,),))
+        self.reported: Rows | None = closed(())
+        self.reads: tuple[FinalRead, ...] = (whole("objects", {}),)
 
     def publish(self, *, writes: int = 1, read: bool = True) -> "Run":
         with self.history.operation(OP, "actor-1", "publish", "note-1"):
@@ -98,16 +108,16 @@ class InvariantTest(unittest.TestCase):
         run = Run().publish()
         run.service.inject(EditBeforeNextWrite("visibility/note-9", "private"))
         run.service.read("visibility/note-9", "actor-1")
-        run.intent = Rows((*run.intent.rows, ("note-9/visibility", "publish:note-9", "index",
+        run.intent = closed((*run.intent.rows, ("note-9/visibility", "publish:note-9", "index",
                                               "visibility/note-9", "public")))
-        run.recorded = Rows((*run.recorded.rows, ("note-9/visibility", "applied")))
-        run.settled = Rows((*run.settled.rows, ("note-9/visibility",)))
+        run.recorded = closed((*run.recorded.rows, ("note-9/visibility", "applied")))
+        run.settled = closed((*run.settled.rows, ("note-9/visibility",)))
         run.service.write("visibility/note-9", "public", "actor-1")
         self.assertEqual(statuses(run.verdicts())["orphan_change"], "supported")
 
     def test_an_acknowledged_operation_whose_effect_is_absent_is_a_lost_acknowledgement(self) -> None:
         run = Run().publish(writes=0)
-        run.recorded = Rows(())
+        run.recorded = closed(())
         verdicts = run.verdicts()
         self.assertEqual(statuses(verdicts), all_supported_except(lost_acknowledgement="violated"))
         self.assertEqual(verdicts["lost_acknowledgement"].violations, (("run-1", OP, INTENT),))
@@ -117,7 +127,7 @@ class InvariantTest(unittest.TestCase):
         with self.assertRaises(TimeoutError):
             with run.history.operation(OP, "actor-1", "publish", "note-1"):
                 raise TimeoutError("timed out")
-        run.recorded = Rows(())
+        run.recorded = closed(())
         self.assertEqual(statuses(run.verdicts())["lost_acknowledgement"], "supported")
 
     def test_an_unreported_overwrite_of_an_unread_value_is_silent(self) -> None:
@@ -131,12 +141,12 @@ class InvariantTest(unittest.TestCase):
         run = Run()
         run.service.inject(EditBeforeNextWrite(KEY, "private"))
         run.publish()
-        run.reported = Rows((("index", 2),))
+        run.reported = closed((("index", 2),))
         self.assertEqual(statuses(run.verdicts()), all_supported_except())
 
     def test_an_intent_nobody_settled_is_an_unsettled_effect(self) -> None:
         run = Run().publish()
-        run.settled = Rows(())
+        run.settled = closed(())
         verdicts = run.verdicts()
         self.assertEqual(statuses(verdicts), all_supported_except(unsettled_effect="violated"))
         self.assertEqual(verdicts["unsettled_effect"].violations, (("run-1", INTENT),))
@@ -152,18 +162,18 @@ class InvariantTest(unittest.TestCase):
 
     def test_recorded_absent_but_present_is_a_split_outcome(self) -> None:
         run = Run().publish()
-        run.recorded = Rows(((INTENT, "absent"),))
+        run.recorded = closed(((INTENT, "absent"),))
         self.assertEqual(statuses(run.verdicts()), all_supported_except(split_outcome="violated"))
 
     def test_an_intent_in_another_store_is_judged_against_that_stores_final_read(self) -> None:
         run = Run().publish()
         snapshot = ("note-1/snapshot", OP, "objects", "snapshots/note-1", "first draft")
-        run.intent = Rows((*run.intent.rows, snapshot))
-        run.recorded = Rows((*run.recorded.rows, ("note-1/snapshot", "applied")))
-        run.settled = Rows((*run.settled.rows, ("note-1/snapshot",)))
+        run.intent = closed((*run.intent.rows, snapshot))
+        run.recorded = closed((*run.recorded.rows, ("note-1/snapshot", "applied")))
+        run.settled = closed((*run.settled.rows, ("note-1/snapshot",)))
         self.assertEqual(statuses(run.verdicts()),
                          all_supported_except(lost_acknowledgement="violated", split_outcome="violated"))
-        run.reads = (FinalRead("objects", {"snapshots/note-1": "first draft"}),)
+        run.reads = (whole("objects", {"snapshots/note-1": "first draft"}),)
         self.assertEqual(statuses(run.verdicts()), all_supported_except())
 
 
@@ -207,7 +217,7 @@ class CompletenessTest(unittest.TestCase):
     def test_an_intent_in_a_store_with_no_final_read_names_the_store(self) -> None:
         run = Run().publish()
         run.reads = ()
-        run.intent = Rows((*run.intent.rows, ("note-1/snapshot", OP, "objects", "snapshots/note-1", "x")))
+        run.intent = closed((*run.intent.rows, ("note-1/snapshot", OP, "objects", "snapshots/note-1", "x")))
         self.assertEqual(run.verdicts()["split_outcome"].missing_premises,
                          ({"relation": "final_closed", "store": "objects"},))
 
@@ -234,13 +244,86 @@ class CompletenessTest(unittest.TestCase):
 
     def test_no_service_leaves_the_service_invariants_unresolved(self) -> None:
         run = Run()
-        run.intent, run.recorded, run.settled = Rows(()), Rows(()), Rows(())
+        run.intent, run.recorded, run.settled = closed(()), closed(()), closed(())
         verdicts = run.verdicts(service=None)
         self.assertEqual(statuses(verdicts), all_supported_except(
             effect_applied_twice="unresolved", orphan_change="unresolved",
             lost_acknowledgement="unresolved", silent_overwrite="unresolved",
             split_outcome="unresolved"))
         self.assertIn({"relation": "applied_closed"}, verdicts["silent_overwrite"].missing_premises)
+
+
+def pending_run() -> Run:
+    """One write accepted and not applied; the program recorded it absent and settled it."""
+    run = Run()
+    run.service.inject(DelayApply(50))
+    token = run.history.invoke(OP, "actor-1", "publish", "note-1")
+    try:
+        run.service.write(KEY, "public", "actor-1")
+    except ResponseLost:
+        run.history.complete(token, Result.INFO, error="ResponseLost")
+    run.recorded = closed(((INTENT, "absent"),))
+    return run
+
+
+class PendingWriteTest(unittest.TestCase):
+    def test_absence_is_not_concluded_while_a_write_is_pending(self) -> None:
+        verdicts = pending_run().verdicts()
+        self.assertEqual(statuses(verdicts), all_supported_except(
+            effect_applied_twice="unresolved", orphan_change="unresolved",
+            lost_acknowledgement="unresolved", silent_overwrite="unresolved",
+            split_outcome="unresolved"))
+        for name in ("effect_applied_twice", "lost_acknowledgement", "silent_overwrite",
+                     "split_outcome"):
+            self.assertIn({"relation": "applied_closed"}, verdicts[name].missing_premises, name)
+        self.assertEqual(verdicts["orphan_change"].missing_premises, ({"relation": "changes_closed"},))
+        self.assertIn({"relation": "final_closed", "store": "index"},
+                      verdicts["split_outcome"].missing_premises)
+        self.assertFalse(verdicts.ok)
+
+    def test_the_same_run_is_a_split_outcome_once_the_write_lands(self) -> None:
+        run = pending_run()
+        run.service.heal()
+        verdicts = run.verdicts()
+        self.assertEqual(statuses(verdicts), all_supported_except(split_outcome="violated"))
+        self.assertEqual(verdicts["split_outcome"].violations, (("run-1", INTENT),))
+
+    def test_service_facts_carry_whether_a_write_is_pending(self) -> None:
+        run = pending_run()
+        self.assertFalse(ServiceFacts.from_service(run.service).applied_complete)
+        run.service.heal()
+        self.assertTrue(ServiceFacts.from_service(run.service).applied_complete)
+        with self.assertRaises(TypeError):
+            ServiceFacts("index", run.service.changes(), (), (), {})  # type: ignore[call-arg]
+
+    def test_a_late_write_over_a_value_its_sender_read_is_a_silent_overwrite(self) -> None:
+        run = pending_run()
+        run.recorded = closed(((INTENT, "applied"),))
+        run.service.write(KEY, "private", "actor-2")
+        run.service.read(KEY, "actor-1")
+        run.service.heal()
+        verdicts = run.verdicts()
+        self.assertEqual(verdicts["silent_overwrite"].status, "violated")
+        self.assertEqual(verdicts["silent_overwrite"].violations, (("run-1", "index", 2),))
+
+
+class CompletenessDefaultTest(unittest.TestCase):
+    def test_no_completeness_flag_defaults_to_true(self) -> None:
+        self.assertFalse(Rows(()).complete)
+        self.assertFalse(Rows().complete)
+        self.assertFalse(FinalRead("objects", {}).complete)
+
+    def test_rows_passed_without_the_flag_leave_their_invariants_unresolved(self) -> None:
+        run = Run().publish()
+        run.settled = Rows(((INTENT,),))
+        run.reads = (FinalRead("objects", {}),)
+        verdicts = run.verdicts()
+        self.assertEqual(statuses(verdicts), all_supported_except(
+            unsettled_effect="unresolved", lost_acknowledgement="unresolved",
+            split_outcome="unresolved"))
+        self.assertEqual(verdicts["unsettled_effect"].missing_premises, ({"relation": "settled_closed"},))
+        self.assertIn({"relation": "final_closed", "store": "objects"},
+                      verdicts["split_outcome"].missing_premises)
 
 
 class BundleShapeTest(unittest.TestCase):
@@ -334,7 +417,7 @@ class ExtraTest(unittest.TestCase):
         run = Run().publish()
         verdicts = run.verdicts(extra=self.extra())
         self.assertEqual(verdicts["draft_left"].status, "supported")
-        run.reads = (*run.reads, FinalRead("primary", {"note-1": "draft"}))
+        run.reads = (*run.reads, whole("primary", {"note-1": "draft"}))
         verdicts = run.verdicts(extra=self.extra())
         self.assertEqual((verdicts["draft_left"].status, verdicts["draft_left"].violations),
                          ("violated", (("run-1", "note-1"),)))
@@ -345,6 +428,98 @@ class ExtraTest(unittest.TestCase):
             Run().publish().bundle(extra=("not an IR value",))
 
 
+class ExtraFactsTest(unittest.TestCase):
+    """A consumer supplies rows for the relations it declares in ``extra``."""
+
+    def extra(self, *facts: ExtraFacts) -> tuple:
+        run, key = Variable("Run"), Variable("Key")
+        symbol = lambda value: Constant(value, "symbol")  # noqa: E731
+        context = {"producer_classes": ("consumer",), "context_indices": ("run",)}
+        return (
+            RelationDecl("checked", (Column("run", "symbol", True), Column("key", "symbol")),
+                         **context),
+            RelationDecl("check_pass", (Column("run", "symbol", True), Column("number", "unsigned")),
+                         **context),
+            RelationDecl("checks_closed", (Column("run", "symbol", True),), modality="completeness",
+                         completes="checked", **context),
+            RelationDecl("unchecked", (Column("run", "symbol", True), Column("key", "symbol")),
+                         modality="derived", primitive=False, context_indices=("run",)),
+            Rule(Atom("unchecked", (run, key)),
+                 (Atom("intent", (run, Variable("Intent"), Variable("Op"), Variable("Store"), key,
+                                  Variable("Value"))),
+                  Atom("checks_closed", (run,)),
+                  Atom("checked", (run, key), negated=True)), "unchecked"),
+            Rule(Atom("violated", (run, symbol("unchecked"))), (Atom("unchecked", (run, key)),),
+                 "violated_unchecked"),
+            Rule(Atom("violated_closed", (run, symbol("unchecked"))),
+                 (Atom("intents_closed", (run,)), Atom("checks_closed", (run,))),
+                 "violated_closed_unchecked"),
+            checker.invariant_claim("run-1", "unchecked"),
+            *facts,
+        )
+
+    def verdict(self, *facts: ExtraFacts) -> checker.Verdict:
+        return Run().publish().verdicts(extra=self.extra(*facts))["unchecked"]
+
+    def test_supplied_rows_are_facts_of_the_declared_relation(self) -> None:
+        bundle = Run().publish().bundle(extra=self.extra(
+            ExtraFacts("checked", [(KEY,)]), ExtraFacts("check_pass", [(7,)]),
+            ExtraFacts("checks_closed", [()])))
+        self.assertEqual(validate_bundle(bundle), ())
+        rows = {fact.relation: tuple(term.value for term in fact.terms) for fact in bundle.facts
+                if fact.relation in {"checked", "check_pass", "checks_closed"}}
+        self.assertEqual(rows, {"checked": ("run-1", KEY), "check_pass": ("run-1", 7),
+                                "checks_closed": ("run-1",)})
+        sources = {record.source for record in bundle.evidence if record.atom.relation == "checked"}
+        self.assertEqual(sources, {"consumer checked"})
+
+    def test_the_consumer_invariant_is_judged_from_them(self) -> None:
+        closed_fact = ExtraFacts("checks_closed", [()])
+        self.assertEqual(self.verdict(ExtraFacts("checked", [(KEY,)]), closed_fact).status,
+                         "supported")
+        violated = self.verdict(ExtraFacts("checked", [("visibility/note-2",)]), closed_fact)
+        self.assertEqual((violated.status, violated.violations), ("violated", (("run-1", KEY),)))
+
+    def test_without_the_consumers_completeness_fact_the_invariant_is_unresolved(self) -> None:
+        self.assertEqual(self.verdict(ExtraFacts("checked", [(KEY,)])).status, "unresolved")
+        self.assertEqual(self.verdict().status, "unresolved")
+
+    def test_rows_are_validated_like_the_built_in_facts(self) -> None:
+        refused = {
+            "arity": ExtraFacts("checked", [(KEY, 1)]),
+            "symbol column": ExtraFacts("checked", [(7,)]),
+            "unsigned column": ExtraFacts("check_pass", [("first",)]),
+            "negative unsigned": ExtraFacts("check_pass", [(-1,)]),
+            "boolean as unsigned": ExtraFacts("check_pass", [(True,)]),
+            "undeclared relation": ExtraFacts("archived", [(KEY,)]),
+            "derived relation": ExtraFacts("unchecked", [(KEY,)]),
+            "pack relation": ExtraFacts("applied_closed", [()]),
+            "pack consumer relation": ExtraFacts("settled", [(INTENT,)]),
+        }
+        for name, facts in refused.items():
+            with self.subTest(name), self.assertRaises(checker.FaultCheckError):
+                Run().publish().bundle(extra=self.extra(facts))
+
+    def test_a_pending_write_cannot_be_closed_through_extra(self) -> None:
+        with self.assertRaises(checker.FaultCheckError):
+            pending_run().bundle(extra=(ExtraFacts("applied_closed", [()]),))
+
+    def test_a_pack_relation_cannot_be_redeclared(self) -> None:
+        redeclared = RelationDecl("applied_closed", (Column("run", "symbol", True),),
+                                  modality="completeness", completes="applied",
+                                  producer_classes=("consumer",), context_indices=("run",))
+        with self.assertRaises(checker.FaultCheckError):
+            Run().publish().bundle(extra=(redeclared, ExtraFacts("applied_closed", [()])))
+
+    def test_a_relation_without_the_run_context_or_the_consumer_producer_is_refused(self) -> None:
+        no_run = RelationDecl("noted", (Column("key", "symbol"),))
+        other = RelationDecl("probed", (Column("run", "symbol", True),), producer_classes=("probe",),
+                             context_indices=("run",))
+        for declaration in (no_run, other):
+            with self.subTest(declaration.name), self.assertRaises(checker.FaultCheckError):
+                Run().publish().bundle(extra=(declaration, ExtraFacts(declaration.name, [()])))
+
+
 class EngineTest(unittest.TestCase):
     def bundles(self) -> dict[str, object]:
         overwritten = Run()
@@ -352,9 +527,9 @@ class EngineTest(unittest.TestCase):
         withheld = Run()
         withheld.service.inject(DelayChangeEntry(50))
         unsettled = Run().publish()
-        unsettled.settled = Rows(())
+        unsettled.settled = closed(())
         absent = Run().publish()
-        absent.recorded = Rows(((INTENT, "absent"),))
+        absent.recorded = closed(((INTENT, "absent"),))
         lost = Run().publish(writes=0)
         orphan = Run().publish()
         orphan.service.write("visibility/note-2", "public", "actor-1")
@@ -458,6 +633,38 @@ class CliTest(unittest.TestCase):
         self.assertIn("invalid finals document", err)
         (self.root / "h.json").write_text("not a history\n", encoding="utf-8")
         self.assertEqual(self.run_cli(argv)[0], 2)
+
+    def test_a_pending_write_survives_the_round_trip_and_exits_1(self) -> None:
+        status, out, _ = self.run_cli(self.write(pending_run()))
+        self.assertEqual(status, 1)
+        self.assertRegex(out, r'(?m)^unresolved +silent_overwrite +\[\{"relation": "applied_closed"\}\]$')
+        document = json.loads((self.root / "f.json").read_text(encoding="utf-8"))
+        self.assertIs(document["service"]["applied_complete"], False)
+
+    def edited(self, edit) -> tuple[int, str]:
+        argv = self.write(Run().publish())
+        document = json.loads((self.root / "f.json").read_text(encoding="utf-8"))
+        edit(document)
+        (self.root / "f.json").write_text(json.dumps(document), encoding="utf-8")
+        status, _, err = self.run_cli(argv)
+        return status, err
+
+    def test_exit_2_on_a_finals_document_whose_service_facts_are_malformed(self) -> None:
+        def drop_flag(document): del document["service"]["applied_complete"]
+        def flag_as_text(document): document["service"]["applied_complete"] = "yes"
+        def bad_origin(document): document["service"]["applied"][0][4] = "bogus-origin"
+        def short_row(document): document["service"]["applied"][0].pop()
+        def number_digest(document): document["service"]["final"][KEY] = 3
+        def text_seq(document): document["service"]["applied"][0][0] = "one"
+        for edit in (drop_flag, flag_as_text, bad_origin, short_row, number_digest, text_seq):
+            with self.subTest(edit.__name__):
+                status, err = self.edited(edit)
+                self.assertEqual(status, 2)
+                self.assertIn("capcov faults:", err)
+                self.assertNotIn("Traceback", err)
+
+    def test_an_untouched_document_still_exits_0(self) -> None:
+        self.assertEqual(self.edited(lambda document: None)[0], 0)
 
     def test_exit_2_on_an_invalid_rule_pack(self) -> None:
         argv = self.write(Run().publish())

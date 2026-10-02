@@ -8,9 +8,15 @@ behaviour has to build it from what the service does offer: reads, and a change
 log.
 
 The service keeps what a real one never shows its callers: every applied write
-with the request that caused it, and every write that replaced a value its
-sender had not read.  :meth:`FakeService.ground_truth` returns that record, and
-the checker compares the caller's own bookkeeping against it.
+with the request that caused it, every write that replaced a value its sender
+had not read, and every accepted write it has not applied yet.
+:meth:`FakeService.ground_truth` returns that record, and the checker compares
+the caller's own bookkeeping against it.
+
+A write replaced an unread value when the key changed after the last read or
+write its sender had made of that key when it sent the request.  A delayed
+write that lands after its sender has read or written a newer value is
+therefore reported.
 
 Faults are queued with :meth:`FakeService.inject` and consumed by the next call
 they match, in the order they were queued.
@@ -113,13 +119,18 @@ Fault = (Refuse | LoseResponse | DelayApply | ApplyTwice | EditBeforeNextWrite
 
 @dataclass(frozen=True)
 class Request:
-    """One call a caller made.  ``value`` is the argument, not the stored result."""
+    """One call a caller made.  ``value`` is the argument, not the stored result.
+
+    ``seen`` is the sequence number of the last write to ``key`` that ``actor``
+    had read or made when it sent this request, and 0 when it had seen none.
+    """
     id: int
     method: str
     key: str
     actor: str
     at: int
     value: Any = None
+    seen: int = 0
 
 
 @dataclass(frozen=True)
@@ -154,9 +165,10 @@ class ChangeEntry(NamedTuple):
 class ChangeRead:
     """One read of the change log.
 
-    ``complete`` is false while any entry is withheld.  A real service does not
-    report this; it is the harness's knowledge, and the checker uses it to
-    decide whether the absence of an entry means anything.
+    ``complete`` is false while any entry is withheld or any accepted write is
+    still to be applied.  A real service does not report this; it is the
+    harness's knowledge, and the checker uses it to decide whether the absence
+    of an entry means anything.
     """
     entries: tuple[ChangeEntry, ...]
     complete: bool
@@ -164,10 +176,12 @@ class ChangeRead:
 
 @dataclass(frozen=True)
 class GroundTruth:
+    """``pending`` holds the requests the service accepted and has not applied."""
     final: Mapping[str, Any]
     applied: tuple[Applied, ...]
     overwrote_unread: tuple[Applied, ...]
     requests: tuple[Request, ...]
+    pending: tuple[Request, ...]
 
 
 @dataclass
@@ -214,6 +228,7 @@ class FakeService:
         self.name = name
         self._values: dict[str, Any] = {}
         self._last_seq: dict[str, int] = {}
+        self._last_applied: dict[str, Applied] = {}
         self._seen: dict[tuple[str, str], int] = {}
         self._requests: list[Request] = []
         self._applied: list[Applied] = []
@@ -262,7 +277,7 @@ class FakeService:
         now = self.clock.now()
         visible = tuple(entry for due, entry in self._log
                         if due <= now and (key is None or entry.key == key))
-        return ChangeRead(visible, all(due <= now for due, _ in self._log))
+        return ChangeRead(visible, not self._pending and all(due <= now for due, _ in self._log))
 
     # --- harness API --------------------------------------------------------
 
@@ -290,7 +305,8 @@ class FakeService:
 
     def ground_truth(self) -> GroundTruth:
         return GroundTruth(dict(self._values), tuple(self._applied),
-                           tuple(self._overwrote), tuple(self._requests))
+                           tuple(self._overwrote), tuple(self._requests),
+                           tuple(pending.request for pending in self._pending))
 
     # --- internals ----------------------------------------------------------
 
@@ -307,7 +323,8 @@ class FakeService:
         return None
 
     def _call(self, method: str, key: str, value: Any, actor: str) -> Any:
-        request = Request(len(self._requests) + 1, method, key, actor, self.clock.tick(), value)
+        request = Request(len(self._requests) + 1, method, key, actor, self.clock.tick(), value,
+                          self._seen.get((actor, key), 0))
         self._requests.append(request)
         token = None
         if self.history is not None:
@@ -390,11 +407,17 @@ class FakeService:
         at = self.clock.tick()
         applied = Applied(seq, request.id, key, value_digest(request.value),
                           value_digest(result), request.actor, at, origin, request.method)
-        if (origin == "request" and request.method == "write" and key in self._values
-                and self._last_seq.get(key, 0) > self._seen.get((request.actor, key), 0)):
+        previous = self._last_applied.get(key)
+        # Compared with what the sender had seen when it sent the request, not
+        # with what it has seen by now.  A second apply of the same request
+        # (ApplyTwice) replaces the request's own value and is not reported.
+        if (origin == "request" and request.method == "write" and previous is not None
+                and previous.seq > request.seen
+                and not (previous.origin == "request" and previous.request == request.id)):
             self._overwrote.append(applied)
         self._values[key] = result
         self._last_seq[key] = seq
+        self._last_applied[key] = applied
         self._seen[(request.actor, key)] = seq
         self._applied.append(applied)
         visible_at, self._hold_next_entry = self._hold_next_entry or at, None

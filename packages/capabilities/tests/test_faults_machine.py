@@ -9,7 +9,7 @@ from unittest.mock import patch
 from capcov.faults.crash import Boundaries, Step
 from capcov.faults.history import History
 from capcov.faults.machine import (RULES, FailingSchedule, FaultMachine, HypothesisUnavailable,
-                                   enumerate_schedules, hypothesis_machine)
+                                   UnexpectedStepError, enumerate_schedules, hypothesis_machine)
 from capcov.faults.service import ResponseLost
 
 _HAVE_HYPOTHESIS = importlib.util.find_spec("hypothesis") is not None
@@ -160,6 +160,53 @@ class HypothesisMachineTest(unittest.TestCase):
         with self.assertRaises(AssertionError) as raised:
             run_state_machine_as_test(hypothesis_machine(CarelessMachine), settings=options)
         self.assertIn("sent_twice", str(raised.exception))
+
+
+class BrokenStepMachine(CounterMachine):
+    """An operation whose only step fails on a defect before it records anything."""
+    error: type[Exception] = AttributeError
+
+    def operation(self, actor: str, number: int) -> list[Step]:
+        def broken(world: Counter, actor: str, boundaries: Boundaries) -> None:
+            raise self.error("defect")
+        return [Step("broken", broken)]
+
+
+class RefusedStepMachine(BrokenStepMachine):
+    error = ResponseLost
+
+
+class DeclaredStepMachine(BrokenStepMachine):
+    expected_errors = (AttributeError,)
+
+
+class StepErrorTest(unittest.TestCase):
+    def test_an_unexpected_exception_from_a_step_is_not_a_passing_schedule(self) -> None:
+        with self.assertRaises(UnexpectedStepError) as raised:
+            enumerate_schedules(BrokenStepMachine, 4)
+        self.assertIsInstance(raised.exception.__cause__, AttributeError)
+        self.assertIn("broken", str(raised.exception))
+        self.assertEqual(raised.exception.schedule, ("start_operation", "run_next_step"))
+
+    def test_a_service_error_ends_the_operation(self) -> None:
+        machine = RefusedStepMachine()
+        machine.start_operation()
+        self.assertTrue(machine.run_next_step())
+        self.assertFalse(machine.applicable("run_next_step"))
+        self.assertIsNone(enumerate_schedules(RefusedStepMachine, 3))
+
+    def test_a_subclass_declares_the_errors_it_expects(self) -> None:
+        self.assertIsNone(enumerate_schedules(DeclaredStepMachine, 3))
+
+    @unittest.skipUnless(_HAVE_HYPOTHESIS, "hypothesis (the faults-property extra) is not installed")
+    def test_hypothesis_fails_on_an_unexpected_exception(self) -> None:
+        from hypothesis import settings
+        from hypothesis.stateful import run_state_machine_as_test
+
+        options = settings(max_examples=20, stateful_step_count=6, deadline=None, database=None,
+                           derandomize=True)
+        with self.assertRaises(UnexpectedStepError):
+            run_state_machine_as_test(hypothesis_machine(BrokenStepMachine), settings=options)
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -22,7 +22,7 @@ from typing import Any
 
 _EXPORTS = {
     "history": ("History", "LogicalClock", "Result", "Digest", "value_digest", "HistoryError"),
-    "service": ("FakeService", "ChangeRead", "ChangeEntry", "GroundTruth", "Refused",
+    "service": ("FakeService", "ChangeRead", "ChangeEntry", "GroundTruth", "ServiceError", "Refused",
                 "ResponseLost", "Ambiguous", "Refuse", "LoseResponse", "DelayApply",
                 "ApplyTwice", "EditBeforeNextWrite", "DelayChangeEntry", "AmbiguousError",
                 "DuplicateOnConcurrentCreate"),
@@ -30,8 +30,8 @@ _EXPORTS = {
               "boundary_context", "crash_points", "Step", "run_steps", "Scenario",
               "Exploration", "explore"),
     "machine": ("FaultMachine", "FailingSchedule", "enumerate_schedules", "hypothesis_machine",
-                "HypothesisUnavailable"),
-    "checker": ("FinalRead", "Rows", "Finals", "ServiceFacts", "build_bundle", "check",
+                "HypothesisUnavailable", "UnexpectedStepError"),
+    "checker": ("FinalRead", "Rows", "ExtraFacts", "Finals", "ServiceFacts", "build_bundle", "check",
                 "invariant_claim", "invariant_names", "Verdict", "Verdicts",
                 "FaultCheckError", "SouffleRequired", "finals_to_json", "finals_from_json"),
 }
