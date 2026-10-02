@@ -203,7 +203,7 @@ def cmd_discover(args: argparse.Namespace) -> int:
         )
 
     # Optional hybrid: rent SCIP as the resolver for the call graph, keep the AST
-    # pass as everything else (entities, surfaces, the enumerated blind spots).
+    # pass for the entities, the surfaces and the enumerated blind spots.
     # The AST adapter always runs first -- it is the fallback and the enumerator;
     # SCIP only re-sources `_calls` and adds its resolved-edges + residue. It
     # re-sources ONE adapter's graph, so it is undefined across an adapters merge.
@@ -669,12 +669,18 @@ def main(argv: list[str] | None = None) -> int:
         from .claims.cli import main as experiment_main
 
         return experiment_main(actual[1:])
+    if actual and actual[0] == "faults":
+        # Test support, loaded on demand: discover / reconcile / gate never import it.
+        from .faults.cli import main as faults_main
+
+        return faults_main(actual[1:])
     parser = argparse.ArgumentParser(prog="capcov", description=__doc__)
     parser.add_argument("--quiet", action="store_true")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("flows", help="source obligations, flow planning, and browser outcome evidence")
     sub.add_parser("outcomes", help="scoped behavior obligations and fresh pytest evidence")
     sub.add_parser("features", help="FODA feature-model validation, configuration check, coverage rollup")
+    sub.add_parser("faults", help="judge a recorded fault-injection run against the invariant pack")
 
     def common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--target", default=".", help="the project root")

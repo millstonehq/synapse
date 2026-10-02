@@ -50,6 +50,10 @@ probe-python = ["sqlalchemy>=2.0", "pytest>=8"]
 # code -- and core discovery stays stdlib-only, this extra is never imported by
 # `capcov gate`.
 treesitter = ["tree-sitter>=0.25,<0.27", "tree-sitter-language-pack>=0.7"]
+# `capcov.faults` is standard library only. This extra is for
+# `capcov.faults.machine.hypothesis_machine`, which imports Hypothesis inside the
+# function; the explicit enumerator beside it needs nothing.
+faults-property = ["hypothesis>=6.100"]
 #
 # The other two probes (`capcov observe --probe browser|load`) declare no pip
 # extra, for the same reason the SCIP resolver below declares none: their real
@@ -88,3 +92,4 @@ where = ["src"]
 [tool.setuptools.package-data]
 "capcov.claims.static" = ["*.json"]
 "capcov.claims.replay" = ["*.json"]
+"capcov.faults" = ["*.json"]
