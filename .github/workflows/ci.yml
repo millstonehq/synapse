@@ -64,6 +64,9 @@ jobs:
       - name: Verify the real Go flow gates and its fault control is rejected
         timeout-minutes: 10
         run: uv run --frozen --extra treesitter sh scripts/check-real-go-flow.sh
+      - name: Verify the fault harness passes its example and rejects the resend mutant
+        timeout-minutes: 8
+        run: uv run --frozen --extra faults-property sh scripts/check-fault-harness.sh
       - name: Build distributions
         run: uv build
       - name: Verify wheel, entry points, and release version
