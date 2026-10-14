@@ -1,11 +1,12 @@
 # Synapse capabilities
 
-Standalone capability engine, developed and released from the Synapse monorepo.
+Capcov development moved to [millstonehq/capcov](https://github.com/millstonehq/capcov).
+Follow that repository's [contribution guide](https://github.com/millstonehq/capcov/blob/main/CONTRIBUTING.md)
+for engine changes, issues and releases.
 
-The canonical implementation lives in `packages/capabilities` in
-[Synapse](https://github.com/millstonehq/synapse). Consumers pin a commit
-or release and retain only their models, recipes, adapters specific to their own
-application, and evidence. Do not vendor another independently edited engine.
+This directory is the legacy implementation retained for existing source pins.
+Consumers own application models, recipes and execution evidence; new engine
+changes belong in the standalone capcov repository.
 
 Optional, standalone capability discovery and model-based testing engine. The
 Python import package and `capcov` command preserve the existing consumer
@@ -652,10 +653,3 @@ bring it into view, verify that both endpoints can be hit within it, and perform
 an actual mouse press/move/release. They must release the button on failure and
 must not replace the gesture with direct application-state mutation. Subsequent
 assertions still establish the outcome; declaring a drag grants no coverage.
-
-### Optional REA evidence discovery
-
-[The REA importer](src/capcov_contrib/REA.md) reads saved reverse-engineering
-Evidence through the existing plugin seam. It adds packaged JavaScript application
-and recorded HAR API candidates with provenance and unresolved findings. Imported
-findings never supply passing runtime evidence or inferred CRUD coverage.
