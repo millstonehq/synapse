@@ -652,3 +652,10 @@ bring it into view, verify that both endpoints can be hit within it, and perform
 an actual mouse press/move/release. They must release the button on failure and
 must not replace the gesture with direct application-state mutation. Subsequent
 assertions still establish the outcome; declaring a drag grants no coverage.
+
+### Optional REA evidence discovery
+
+[The REA importer](src/capcov_contrib/REA.md) reads saved reverse-engineering
+Evidence through the existing plugin seam. It adds packaged JavaScript application
+and recorded HAR API candidates with provenance and unresolved findings. Imported
+findings never supply passing runtime evidence or inferred CRUD coverage.

@@ -3,3 +3,5 @@ recursive-include scripts *.sh
 recursive-include tests *.py *.patch
 recursive-include src/capcov/claims/static *.json
 recursive-include src/capcov/claims/replay *.json
+include tests/fixtures/rea-api-view.json tests/fixtures/rea-api-view.README.md
+include src/capcov_contrib/REA.md
