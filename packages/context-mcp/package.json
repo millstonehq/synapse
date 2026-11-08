@@ -41,14 +41,14 @@
   "author": "Millstone",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "glob": "^11.1.0",
     "ignore": "^6.0.2",
     "tiktoken": "^1.0.22"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
-    "tsx": "^4.23.13",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
   },
